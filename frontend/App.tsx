@@ -26,6 +26,8 @@ const CatalogPage = lazy(() => import('./pages/CatalogPage'));
 const ProductDetailsPage = lazy(() => import('./pages/ProductDetailsPage'));
 const ContactPage = lazy(() => import('./pages/ContactPage'));
 const ServicesPage = lazy(() => import('./pages/ServicesPage'));
+const BlogHomePage = lazy(() => import('./pages/BlogHomePage'));
+const BlogArticlePage = lazy(() => import('./pages/BlogArticlePage'));
 
 // ── Главна страница ──────────────────────────────────
 const HomePage = () => (
@@ -62,12 +64,17 @@ function App() {
     <Suspense fallback={<PageLoader />}>
       <Navbar />
       <AnimatePresence mode="wait">
-        <Routes location={location} key={location.pathname}>
+        <Routes location={location}>
           <Route path="/" element={<PageTransition><HomePage /></PageTransition>} />
           <Route path="/catalog" element={<PageTransition><CatalogPage /></PageTransition>} />
           <Route path="/product/:id" element={<PageTransition><ProductDetailsPage /></PageTransition>} />
           <Route path="/contact" element={<PageTransition><ContactPage /></PageTransition>} />
           <Route path="/services" element={<PageTransition><ServicesPage /></PageTransition>} />
+          <Route path="/blog" element={<PageTransition><BlogHomePage /></PageTransition>} />
+          <Route path="/blog/kategoria/:slug" element={<PageTransition><BlogHomePage /></PageTransition>} />
+          <Route path="/blog/tag/:slug" element={<PageTransition><BlogHomePage /></PageTransition>} />
+          <Route path="/blog/tursi" element={<PageTransition><BlogHomePage /></PageTransition>} />
+          <Route path="/blog/:slug" element={<PageTransition><BlogArticlePage /></PageTransition>} />
           <Route path="*" element={<PageTransition><HomePage /></PageTransition>} />
         </Routes>
       </AnimatePresence>

@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Блог за Климатици | Smolyan Klima</title>
+    <link>https://smolyanklima.bg/blog</link>
+    <description>Експертни съвети за избор, монтаж и поддръжка на климатици в Смолян и региона. Новини, сравнения и полезни статии.</description>
+    <language>bg</language>
+    <lastBuildDate>Thu, 01 May 2026 12:00:00 +0300</lastBuildDate>
+    <atom:link href="https://smolyanklima.bg/rss.xml" rel="self" type="application/rss+xml"/>
+    <image>
+      <url>https://smolyanklima.bg/logo.png</url>
+      <title>Smolyan Klima</title>
+      <link>https://smolyanklima.bg</link>
+    </image>
+    
+    <item>
+      <title>Климатик за отопление през зимата - Колко струва и кога си струва?</title>
+      <link>https://smolyanklima.bg/blog/klimatik-za-otoplenie-zima-stoinost-sravnenie</link>
+      <guid isPermaLink="true">https://smolyanklima.bg/blog/klimatik-za-otoplenie-zima-stoinost-sravnenie</guid>
+      <pubDate>Thu, 01 May 2026 14:00:00 +0300</pubDate>
+      <category>Енергийна ефективност</category>
+      <description>Климатикът е най-евтиният начин за отопление? Реална сметка за зимата в Смолян, COP коефициент, до колко градуса работи и сравнение с парно и ток.</description>
+    </item>
+    
+    <item>
+      <title>Wi-Fi климатик - Smart управление и приложения през 2026</title>
+      <link>https://smolyanklima.bg/blog/wi-fi-klimatik-smart-upravlenie-prilojeniya</link>
+      <guid isPermaLink="true">https://smolyanklima.bg/blog/wi-fi-klimatik-smart-upravlenie-prilojeniya</guid>
+      <pubDate>Thu, 01 May 2026 10:00:00 +0300</pubDate>
+      <category>Новини</category>
+      <description>Открийте силата на Wi-Fi климатика. Управлявайте от телефона, създавайте графици, пестете ток. Сравнение на приложенията на Daikin, Mitsubishi, LG.</description>
+    </item>
+    
+    <item>
+      <title>Климатикът не охлажда - 8 причини и бързи решения</title>
+      <link>https://smolyanklima.bg/blog/klimatik-ne-ohlazhda-prichini-resheniya</link>
+      <guid isPermaLink="true">https://smolyanklima.bg/blog/klimatik-ne-ohlazhda-prichini-resheniya</guid>
+      <pubDate>Wed, 30 Apr 2026 18:00:00 +0300</pubDate>
+      <category>Ремонт</category>
+      <description>Климатикът не охлажда? Открийте 8-те най-чести причини и научете как да ги отстраните сами. Спешни решения за горещи дни и кога да повикате техник.</description>
+    </item>
+    
+    <item>
+      <title>Най-тихите климатици за спалня - Топ 5 за 2026</title>
+      <link>https://smolyanklima.bg/blog/naj-tihite-klimatici-za-spalnya-top-5-2026</link>
+      <guid isPermaLink="true">https://smolyanklima.bg/blog/naj-tihite-klimatici-za-spalnya-top-5-2026</guid>
+      <pubDate>Wed, 30 Apr 2026 16:00:00 +0300</pubDate>
+      <category>Съвети при избор</category>
+      <description>Търсите тих климатик за спалня? Разгледайте топ 5 най-тихи модели с под 20 dB шум. Сравнение, decibel нива и съвети за спокоен сън.</description>
+    </item>
+    
+    <item>
+      <title>Климатик втора употреба vs Нов - Кое е по-добро за вас?</title>
+      <link>https://smolyanklima.bg/blog/klimatik-vtora-upotreba-vs-nov-sravnenie</link>
+      <guid isPermaLink="true">https://smolyanklima.bg/blog/klimatik-vtora-upotreba-vs-nov-sravnenie</guid>
+      <pubDate>Wed, 30 Apr 2026 14:00:00 +0300</pubDate>
+      <category>Съвети при избор</category>
+      <description>Кога си струва да купите климатик втора употреба и кога нов е по-добър избор? Разлики в цената, гаранцията, разхода на ток и рисковете.</description>
+    </item>
+    
+    <item>
+      <title>Инверторен vs Конвенционален климатик - Кое да изберем през 2026</title>
+      <link>https://smolyanklima.bg/blog/invertoren-vs-konvencionalen-klimatik-izbor</link>
+      <guid isPermaLink="true">https://smolyanklima.bg/blog/invertoren-vs-konvencionalen-klimatik-izbor</guid>
+      <pubDate>Wed, 30 Apr 2026 12:00:00 +0300</pubDate>
+      <category>Сравнения</category>
+      <description>Детайлно сравнение на инверторен и конвенционален климатик. Разход на ток, шум, цени и кое е по-добро за вас през 2026.</description>
+    </item>
+    
+    <item>
+      <title>Профилактика на климатик - Пълно ръководство по месеци за 2026</title>
+      <link>https://smolyanklima.bg/blog/profilaktika-na-klimatik-kalendar</link>
+      <guid isPermaLink="true">https://smolyanklima.bg/blog/profilaktika-na-klimatik-kalendar</guid>
+      <pubDate>Mon, 28 Apr 2026 16:00:00 +0300</pubDate>
+      <category>Профилактика</category>
+      <description>Кога и как да почиствате климатика си? Месечен календар за профилактика, съвети за поддръжка и разходи за сервиз.</description>
+    </item>
+    
+    <item>
+      <title>Колко ток харчи климатикът? Калкулатор и икономия през 2026</title>
+      <link>https://smolyanklima.bg/blog/kolko-tok-harchi-klimatik-kalkulator</link>
+      <guid isPermaLink="true">https://smolyanklima.bg/blog/kolko-tok-harchi-klimatik-kalkulator</guid>
+      <pubDate>Mon, 28 Apr 2026 14:00:00 +0300</pubDate>
+      <category>Енергийна ефективност</category>
+      <description>Реални сметки за консумация на ток от климатик. Калкулатор за разходи, сравнение между модели и съвети за икономия.</description>
+    </item>
+    
+    <item>
+      <title>Климатикът тече вода - 5 причини и бързи решения през 2026</title>
+      <link>https://smolyanklima.bg/blog/klimatik-teche-voda-prichini-resheniya</link>
+      <guid isPermaLink="true">https://smolyanklima.bg/blog/klimatik-teche-voda-prichini-resheniya</guid>
+      <pubDate>Mon, 28 Apr 2026 12:00:00 +0300</pubDate>
+      <category>Ремонт</category>
+      <description>Защо капе водата от климатика? 5-те най-чести причини и как да ги отстраните сами. Кога е нормално и кога трябва техник.</description>
+    </item>
+    
+    <item>
+      <title>Монтаж на климатик цени Смолян 2026 - Пълно ръководство</title>
+      <link>https://smolyanklima.bg/blog/montaj-na-klimatik-smolyan-ceni</link>
+      <guid isPermaLink="true">https://smolyanklima.bg/blog/montaj-na-klimatik-smolyan-ceni</guid>
+      <pubDate>Mon, 28 Apr 2026 10:00:00 +0300</pubDate>
+      <category>Монтаж</category>
+      <description>Цени за монтаж на климатик в Смолян през 2026. Какво включва стандартният монтаж, допълнителни услуги и съвети при избор на екип.</description>
+    </item>
+    
+    <item>
+      <title>Най-добрите климатици за Смолян и планински регион през 2026</title>
+      <link>https://smolyanklima.bg/blog/naj-dobrite-klimatici-za-smolyan</link>
+      <guid isPermaLink="true">https://smolyanklima.bg/blog/naj-dobrite-klimatici-za-smolyan</guid>
+      <pubDate>Mon, 28 Apr 2026 08:00:00 +0300</pubDate>
+      <category>Регионални</category>
+      <description>Кои климатици работят най-добре в планинския климат на Смолян? Топ модели за студени зими и горещи лета в Родопите.</description>
+    </item>
+    
+    <item>
+      <title>Как да изберем климатик за 25 кв.м. - Пълно ръководство 2026</title>
+      <link>https://smolyanklima.bg/blog/kak-da-izberem-klimatik-za-25-kv-m</link>
+      <guid isPermaLink="true">https://smolyanklima.bg/blog/kak-da-izberem-klimatik-za-25-kv-m</guid>
+      <pubDate>Mon, 28 Apr 2026 06:00:00 +0300</pubDate>
+      <category>Съвети при избор</category>
+      <description>Избор на климатик за 25 кв.м. - мощност, марки, цени и какво да търсите през 2026. Експертни съвети от Smolyan Klima.</description>
+    </item>
+  </channel>
+</rss>

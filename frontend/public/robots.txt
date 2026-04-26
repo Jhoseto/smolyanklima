@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Allow: /blog/
+Allow: /catalog/
+Allow: /services/
+Allow: /contact/
+
+Disallow: /admin/
+Disallow: /api/
+Disallow: /*?*
+
+Sitemap: https://smolyanklima.bg/sitemap.xml
