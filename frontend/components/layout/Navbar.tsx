@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Link, useLocation } from 'react-router-dom';
 import { Menu, X, Phone } from 'lucide-react';
 import { Button } from '../ui/Button';
 
@@ -17,13 +18,16 @@ export const Navbar = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  const location = useLocation();
+  const isHome = location.pathname === '/';
+
   const navLinks = [
-    { name: 'Начало', href: '#home' },
-    { name: 'Каталог', href: '/catalog' },
-    { name: 'Услуги', href: '#services' },
-    { name: 'Проекти', href: '#projects' },
-    { name: 'FAQ', href: '#faq' },
-    { name: 'Контакти', href: '#contact-info' },
+    { name: 'Начало', href: '/', isRouter: true },
+    { name: 'Каталог', href: '/catalog', isRouter: true },
+    { name: 'Услуги', href: isHome ? '#services' : '/services', isRouter: !isHome },
+    { name: 'Проекти', href: isHome ? '#projects' : '/#projects', isRouter: false },
+    { name: 'FAQ', href: isHome ? '#faq' : '/#faq', isRouter: false },
+    { name: 'Контакти', href: isHome ? '#contact-info' : '/contact', isRouter: !isHome },
   ];
 
   return (
@@ -42,13 +46,27 @@ export const Navbar = () => {
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center gap-8">
             {navLinks.map((link) => (
-              <a
-                key={link.name}
-                href={link.href}
-                className="text-sm font-semibold text-gray-700 hover:text-[#FF4D00] transition-colors"
-              >
-                {link.name}
-              </a>
+              link.isRouter ? (
+                <Link
+                  key={link.name}
+                  to={link.href}
+                  className={`text-sm font-semibold transition-colors ${
+                    location.pathname === link.href
+                      ? 'text-[#FF4D00]'
+                      : 'text-gray-700 hover:text-[#FF4D00]'
+                  }`}
+                >
+                  {link.name}
+                </Link>
+              ) : (
+                <a
+                  key={link.name}
+                  href={link.href}
+                  className="text-sm font-semibold text-gray-700 hover:text-[#FF4D00] transition-colors"
+                >
+                  {link.name}
+                </a>
+              )
             ))}
           </nav>
 
@@ -86,13 +104,24 @@ export const Navbar = () => {
           >
             <div className="px-4 py-6 space-y-4">
               {navLinks.map((link) => (
-                <a
-                  key={link.name}
-                  href={link.href}
-                  className="block text-lg font-semibold text-gray-900 hover:text-[#FF4D00]"
-                >
-                  {link.name}
-                </a>
+                link.isRouter ? (
+                  <Link
+                    key={link.name}
+                    to={link.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="block text-lg font-semibold text-gray-900 hover:text-[#FF4D00]"
+                  >
+                    {link.name}
+                  </Link>
+                ) : (
+                  <a
+                    key={link.name}
+                    href={link.href}
+                    className="block text-lg font-semibold text-gray-900 hover:text-[#FF4D00]"
+                  >
+                    {link.name}
+                  </a>
+                )
               ))}
               <div className="pt-4 border-t border-gray-100 space-y-4">
                 <div className="flex items-center gap-2 text-gray-900 font-bold text-lg">

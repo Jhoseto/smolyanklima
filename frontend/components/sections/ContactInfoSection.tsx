@@ -47,7 +47,7 @@ export const ContactInfoSection = () => {
   return (
     <section className="py-24 bg-[#FAFAFA] relative overflow-hidden" id="contact-info">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        
+
         <div className="text-center mb-16">
           <motion.span
             initial={{ opacity: 0, y: 10 }}
@@ -79,7 +79,7 @@ export const ContactInfoSection = () => {
         </div>
 
         <div className="grid lg:grid-cols-12 gap-8 lg:gap-12 items-stretch">
-          
+
           {/* Left Side: Contact Cards */}
           <div className="lg:col-span-5 grid sm:grid-cols-2 lg:grid-cols-1 gap-4 h-full">
             {contactCards.map((card, idx) => (
@@ -97,7 +97,7 @@ export const ContactInfoSection = () => {
               >
                 {/* Hover Background Gradient */}
                 <div className={`absolute inset-0 bg-gradient-to-r ${card.color} opacity-0 group-hover:opacity-5 transition-opacity duration-300`} />
-                
+
                 <div className={`w-14 h-14 rounded-2xl bg-gray-50 flex items-center justify-center shrink-0 group-hover:bg-gradient-to-br ${card.color} transition-all duration-300 shadow-sm group-hover:shadow-lg`}>
                   <card.icon className="w-6 h-6 text-gray-600 group-hover:text-white transition-colors duration-300" />
                 </div>
@@ -120,14 +120,14 @@ export const ContactInfoSection = () => {
             {/* The Map */}
             <div className="relative w-full h-full rounded-[2.5rem] overflow-hidden flex-grow group">
               {/* Note: Iframe uses the exact embed code provided by the user, zoomed out slightly */}
-              <iframe 
+              <iframe
                 src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d10000.564603335378!2d24.73404725883082!3d41.56851624537425!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x14ac50b6e42fae4f%3A0xdb4fcdc658cc6bda!2z0KHQvNC-0LvRj9C9INCa0LvQuNC80LAg0JXQntCe0JQ!5e0!3m2!1sen!2sbg!4v1777175712092!5m2!1sen!2sbg"
                 className="absolute inset-0 w-full h-full border-0 grayscale-[20%] contrast-125 transition-all duration-700 group-hover:grayscale-0 group-hover:scale-105"
                 allowFullScreen={false}
                 loading="lazy"
                 referrerPolicy="no-referrer-when-downgrade"
               />
-              
+
               {/* Glass Overlay Top */}
               <div className="absolute top-4 left-4 sm:left-6 flex justify-between items-start pointer-events-none z-10">
                 <div className="bg-white/80 backdrop-blur-md px-4 sm:px-6 py-3 sm:py-4 rounded-2xl shadow-lg border border-white/50 pointer-events-auto">
@@ -142,7 +142,7 @@ export const ContactInfoSection = () => {
 
               {/* Glass Overlay Bottom (Navigation Button) */}
               <div className="absolute bottom-6 left-4 right-4 sm:left-6 sm:right-6 flex justify-center pointer-events-none z-10">
-                <a 
+                <a
                   href={mapLink}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -152,7 +152,7 @@ export const ContactInfoSection = () => {
                   Навигирай до нас
                 </a>
               </div>
-              
+
               {/* Map inner shadow for depth */}
               <div className="absolute inset-0 shadow-[inset_0_0_40px_rgba(0,0,0,0.1)] pointer-events-none rounded-[2.5rem]" />
             </div>

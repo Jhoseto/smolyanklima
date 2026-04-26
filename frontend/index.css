@@ -4,6 +4,7 @@
 
 @theme {
   --font-sans: 'Inter', sans-serif;
+  --font-outfit: 'Outfit', sans-serif;
   --color-primary: #FF4D00;
   --color-primary-hover: #E64500;
 }

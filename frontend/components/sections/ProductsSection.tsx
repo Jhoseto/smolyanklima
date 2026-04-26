@@ -1,10 +1,11 @@
 import React from 'react';
 import { motion } from 'motion/react';
+import { Link } from 'react-router-dom';
 import { Star, Zap, Snowflake, Repeat, ShoppingCart, Check, ChevronRight } from 'lucide-react';
 
 const products = [
   {
-    id: 1,
+    id: "daikin-perfera",
     brand: "DAIKIN",
     model: "Perfera FTXM25R",
     type: "Стенен климатик",
@@ -25,7 +26,7 @@ const products = [
     imgBg: "bg-gray-50"
   },
   {
-    id: 2,
+    id: "mitsubishi-msz-ln25vgw",
     brand: "MITSUBISHI",
     model: "MSZ-LN35VG",
     type: "Стенен климатик",
@@ -46,7 +47,7 @@ const products = [
     imgBg: "bg-white"
   },
   {
-    id: 3,
+    id: "samsung-windfree",
     brand: "SAMSUNG",
     model: "WindFree Comfort",
     type: "Стенен климатик",
@@ -67,7 +68,7 @@ const products = [
     imgBg: "bg-gray-100"
   },
   {
-    id: 4,
+    id: "gree-fairy-12",
     brand: "GREE",
     model: "Fairy GWH12ACC",
     type: "Стенен климатик",
@@ -88,7 +89,7 @@ const products = [
     imgBg: "bg-white"
   },
   {
-    id: 5,
+    id: "daikin-sensira-18",
     brand: "DAIKIN",
     model: "Sensira FTXF35D",
     type: "Стенен климатик",
@@ -109,7 +110,7 @@ const products = [
     imgBg: "bg-gray-50"
   },
   {
-    id: 6,
+    id: "fujitsu-asyg12kmtb",
     brand: "FUJITSU",
     model: "ASYG12KMTB",
     type: "Стенен климатик",
@@ -200,7 +201,9 @@ export const ProductsSection = () => {
 
                 <div className="mb-4">
                   <p className="text-xs font-bold text-[#00B4D8] uppercase tracking-wider mb-1">{product.brand}</p>
-                  <h3 className="text-[1.35rem] font-bold text-gray-900 leading-tight mb-1">{product.model}</h3>
+                  <Link to={`/product/${product.id}`} className="block group/title">
+                    <h3 className="text-[1.35rem] font-bold text-gray-900 leading-tight mb-1 group-hover/title:text-[#FF4D00] transition-colors">{product.model}</h3>
+                  </Link>
                   <p className="text-sm text-gray-500">{product.type}</p>
                 </div>
 
@@ -249,12 +252,14 @@ export const ProductsSection = () => {
                   </a>
                 </div>
 
-                {/* Bottom Link */}
                 <div className="text-center pt-4 border-t border-gray-100">
-                  <a href="#" className="inline-flex items-center text-xs font-semibold text-gray-500 hover:text-[#FF4D00] transition-colors">
+                  <Link 
+                    to={`/product/${product.id}`} 
+                    className="inline-flex items-center text-xs font-semibold text-gray-500 hover:text-[#FF4D00] transition-colors"
+                  >
                     Виж пълни характеристики
                     <ChevronRight className="w-3.5 h-3.5 ml-1" />
-                  </a>
+                  </Link>
                 </div>
 
               </div>

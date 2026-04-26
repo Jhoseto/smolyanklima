@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
+import { Link } from 'react-router-dom';
 import { Phone, ArrowRight, CheckCircle2, Zap, ShieldCheck, BadgeCheck } from 'lucide-react';
 import { BrandsSection } from './BrandsSection';
 
@@ -51,15 +52,18 @@ export const HeroSection = () => {
 
             {/* Description */}
             <p className="text-[1.1rem] text-[#374151] mb-10 leading-relaxed font-medium">
-              Продажба, монтаж и сервиз на климатици от водещи марки. Над 25 години опит, стотици доволни клиенти в Смолян и региона.
+              Продажба, монтаж и сервиз на климатици от водещи марки. Над 25 години опит, стотици доволни клиенти от цялата страна.
             </p>
 
             {/* Buttons */}
             <div className="flex flex-wrap items-center gap-4 mb-12">
-              <button className="h-14 px-8 rounded-full bg-gradient-to-r from-[#FF5722] to-[#FF2A4D] text-white font-bold text-lg flex items-center gap-2 hover:shadow-lg hover:shadow-red-500/30 hover:scale-[1.02] transition-all">
+              <Link 
+                to="/catalog"
+                className="h-14 px-8 rounded-full bg-gradient-to-r from-[#FF5722] to-[#FF2A4D] text-white font-bold text-lg flex items-center gap-2 hover:shadow-lg hover:shadow-red-500/30 hover:scale-[1.02] transition-all"
+              >
                 Разгледай продукти
                 <ArrowRight className="w-5 h-5" />
-              </button>
+              </Link>
 
               <button className="h-14 px-8 rounded-full bg-transparent border border-gray-200 text-[#111827] font-bold text-lg flex items-center gap-2 hover:bg-gray-50 transition-all">
                 <Phone className="w-5 h-5 text-[#00B4D8]" />
@@ -147,7 +151,7 @@ export const HeroSection = () => {
           </motion.div>
 
         </div>
-        
+
         <div className="mt-0 lg:mt-[-20px] relative z-20">
           <BrandsSection />
         </div>

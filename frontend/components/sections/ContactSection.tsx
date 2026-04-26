@@ -2,7 +2,19 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Send, Clock, ShieldCheck, CheckCircle, Check, Sparkles } from 'lucide-react';
 
-export const ContactSection = () => {
+interface ContactSectionProps {
+  subtitle?: string;
+  titleLight?: string;
+  titleBold?: string;
+  hideTitle?: boolean;
+}
+
+export const ContactSection = ({
+  subtitle = "БЪРЗА ЗАЯВКА",
+  titleLight = "Заявете вашата",
+  titleBold = "услуга",
+  hideTitle = false
+}: ContactSectionProps) => {
   const [isSubmitted, setIsSubmitted] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -28,37 +40,39 @@ export const ContactSection = () => {
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
 
         {/* Headline */}
-        <div className="text-center mb-16">
-          <motion.span
-            initial={{ opacity: 0, y: 10 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-[#FF4D00] text-[10px] font-bold tracking-[0.3em] uppercase mb-5 block"
-          >
-            БЪРЗА ЗАЯВКА
-          </motion.span>
+        {!hideTitle && (
+          <div className="text-center mb-16">
+            <motion.span
+              initial={{ opacity: 0, y: 10 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="text-[#FF4D00] text-[10px] font-bold tracking-[0.3em] uppercase mb-5 block"
+            >
+              {subtitle}
+            </motion.span>
 
-          <motion.h2
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ delay: 0.1 }}
-            className="font-outfit text-[2.5rem] md:text-[3.25rem] leading-[1.1] tracking-tight"
-          >
-            <span className="relative inline-block mr-3">
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00B4D8] to-[#0077B6] drop-shadow-sm font-extralight block">
-                Заявете вашата
+            <motion.h2
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.1 }}
+              className="font-outfit text-[2.5rem] md:text-[3.25rem] leading-[1.1] tracking-tight"
+            >
+              <span className="relative inline-block mr-3">
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00B4D8] to-[#0077B6] drop-shadow-sm font-extralight block">
+                  {titleLight}
+                </span>
+                <div className="absolute -bottom-1 left-0 right-0 h-1 bg-gradient-to-r from-[#00B4D8]/0 via-[#00B4D8] to-[#00B4D8]/0 opacity-30 rounded-full" />
               </span>
-              <div className="absolute -bottom-1 left-0 right-0 h-1 bg-gradient-to-r from-[#00B4D8]/0 via-[#00B4D8] to-[#00B4D8]/0 opacity-30 rounded-full" />
-            </span>
-            <span className="relative inline-block whitespace-nowrap">
-              <span className="absolute -inset-1 blur-lg bg-gradient-to-r from-[#FF4D00]/20 to-[#FF2A4D]/20 opacity-60"></span>
-              <span className="relative text-transparent bg-clip-text bg-gradient-to-r from-[#FF4D00] via-[#FF6A00] to-[#FF2A4D] font-black uppercase drop-shadow-sm">
-                услуга
+              <span className="relative inline-block whitespace-nowrap">
+                <span className="absolute -inset-1 blur-lg bg-gradient-to-r from-[#FF4D00]/20 to-[#FF2A4D]/20 opacity-60"></span>
+                <span className="relative text-transparent bg-clip-text bg-gradient-to-r from-[#FF4D00] via-[#FF6A00] to-[#FF2A4D] font-black uppercase drop-shadow-sm">
+                  {titleBold}
+                </span>
               </span>
-            </span>
-          </motion.h2>
-        </div>
+            </motion.h2>
+          </div>
+        )}
 
         {/* Split Layout Container */}
         <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-stretch">
