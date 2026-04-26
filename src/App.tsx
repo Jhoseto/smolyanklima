@@ -13,7 +13,9 @@ import { StatsSection } from './components/sections/StatsSection';
 import { TestimonialsSection } from './components/sections/TestimonialsSection';
 import { ProjectsSection } from './components/sections/ProjectsSection';
 import { ContactSection } from './components/sections/ContactSection';
+import { ContactInfoSection } from './components/sections/ContactInfoSection';
 import { FAQSection } from './components/sections/FAQSection';
+import { BrandsSection } from './components/sections/BrandsSection';
 import { Footer } from './components/layout/Footer';
 
 function App() {
@@ -30,6 +32,7 @@ function App() {
         <TestimonialsSection />
         <ProjectsSection />
         <ContactSection />
+        <ContactInfoSection />
         <FAQSection />
       </main>
 

@@ -46,25 +46,34 @@ export const FAQSection = () => {
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: true }}
             className="inline-flex items-center justify-center p-3 bg-gray-50 rounded-2xl mb-6 shadow-sm border border-gray-100"
           >
-            <MessageCircle className="w-6 h-6 text-[#00B4D8]" />
+            <MessageCircle className="w-6 h-6 text-[#FF4D00]" />
           </motion.div>
           <motion.span
             initial={{ opacity: 0, y: 10 }}
             whileInView={{ opacity: 1, y: 0 }}
-            className="text-transparent bg-clip-text bg-gradient-to-r from-[#00B4D8] to-[#0077B6] font-bold tracking-[0.2em] text-[10px] uppercase mb-4 block"
+            viewport={{ once: true }}
+            className="text-[#FF4D00] text-[10px] font-bold tracking-[0.3em] uppercase mb-5 block"
           >
             ПОМОЩЕН ЦЕНТЪР
           </motion.span>
           <motion.h2
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
-            className="text-[2.5rem] md:text-[3.5rem] font-black text-gray-900 mb-6 leading-[1.1] tracking-tight"
+            viewport={{ once: true }}
+            className="font-outfit text-[2.5rem] md:text-[3.25rem] leading-[1.1] tracking-tight mb-6"
           >
-            Често задавани <span className="relative inline-block whitespace-nowrap">
-              <span className="absolute -inset-1 blur-lg bg-gradient-to-r from-[#FF4D00]/30 to-[#FF2A4D]/30 opacity-70"></span>
-              <span className="relative text-transparent bg-clip-text bg-gradient-to-r from-[#FF4D00] via-[#FF6A00] to-[#FF2A4D] drop-shadow-sm">
+            <span className="relative inline-block mr-3">
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00B4D8] to-[#0077B6] drop-shadow-sm font-extralight block">
+                Често задавани
+              </span>
+              <div className="absolute -bottom-1 left-0 right-0 h-1 bg-gradient-to-r from-[#00B4D8]/0 via-[#00B4D8] to-[#00B4D8]/0 opacity-30 rounded-full" />
+            </span>
+            <span className="relative inline-block whitespace-nowrap">
+              <span className="absolute -inset-1 blur-lg bg-gradient-to-r from-[#FF4D00]/20 to-[#FF2A4D]/20 opacity-60"></span>
+              <span className="relative text-transparent bg-clip-text bg-gradient-to-r from-[#FF4D00] via-[#FF6A00] to-[#FF2A4D] font-black uppercase drop-shadow-sm">
                 въпроси
               </span>
             </span>
@@ -72,6 +81,7 @@ export const FAQSection = () => {
           <motion.p
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
             transition={{ delay: 0.1 }}
             className="text-gray-500 text-lg leading-relaxed max-w-2xl mx-auto"
           >
@@ -104,7 +114,7 @@ export const FAQSection = () => {
                     {faq.question}
                   </span>
                   <div className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-500 ${isOpen
-                      ? 'bg-gradient-to-br from-[#FF4D00] to-[#FF2A4D] text-white shadow-lg shadow-[#FF4D00]/30 rotate-180'
+                      ? 'bg-gradient-to-r from-[#FF4D00] via-[#FF6A00] to-[#FF2A4D] text-white shadow-lg shadow-[#FF4D00]/30 rotate-180'
                       : 'bg-[#00B4D8]/10 text-[#0077B6] group-hover:bg-[#00B4D8]/20 group-hover:text-[#00B4D8]'
                     }`}>
                     <ChevronDown className="w-5 h-5" />
@@ -132,7 +142,7 @@ export const FAQSection = () => {
 
                 {/* Active left border accent */}
                 <div
-                  className={`absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-[#FF4D00] to-[#FF2A4D] transition-transform duration-500 origin-top ${isOpen ? 'scale-y-100' : 'scale-y-0'
+                  className={`absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-[#FF4D00] via-[#FF6A00] to-[#FF2A4D] transition-transform duration-500 origin-top ${isOpen ? 'scale-y-100' : 'scale-y-0'
                     }`}
                 />
               </motion.div>
@@ -156,12 +166,12 @@ export const FAQSection = () => {
               Нашите експерти са на разположение да отговорят на всички ваши въпроси. Свържете се с нас за персонална консултация.
             </p>
             <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
-              <a href="#contact" className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-[#FF4D00] via-[#FF6A00] to-[#FF2A4D] text-white rounded-xl font-bold hover:shadow-lg hover:shadow-[#FF4D00]/20 transition-all hover:-translate-y-0.5 flex items-center justify-center gap-2">
+              <a href="#contact" className="w-full sm:w-auto px-8 h-14 bg-gradient-to-r from-[#FF4D00] via-[#FF6A00] to-[#FF2A4D] text-white rounded-full font-bold text-lg hover:shadow-[0_10px_30px_rgba(255,77,0,0.4)] transition-all hover:-translate-y-0.5 flex items-center justify-center gap-2">
                 Свържете се с нас
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight className="w-5 h-5" />
               </a>
-              <a href="tel:0888585816" className="w-full sm:w-auto px-8 py-4 bg-white/10 text-white border border-white/20 rounded-xl font-bold hover:bg-white/20 transition-all flex items-center justify-center gap-2 backdrop-blur-sm">
-                <MessageCircle className="w-4 h-4" />
+              <a href="tel:0888585816" className="w-full sm:w-auto px-8 h-14 bg-white/10 text-white border border-white/20 rounded-full font-bold text-lg hover:bg-white/20 transition-all flex items-center justify-center gap-2 backdrop-blur-sm">
+                <MessageCircle className="w-5 h-5" />
                 0888 58 58 16
               </a>
             </div>

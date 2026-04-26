@@ -20,6 +20,7 @@ export const Navbar = () => {
     { name: 'Каталог', href: '/catalog' },
     { name: 'Услуги', href: '#services' },
     { name: 'Проекти', href: '#projects' },
+    { name: 'FAQ', href: '#faq' },
     { name: 'Контакти', href: '#contact' },
   ];
 
@@ -96,7 +97,7 @@ export const Navbar = () => {
               <div className="pt-4 border-t border-gray-100 space-y-4">
                 <div className="flex items-center gap-2 text-gray-900 font-bold text-lg">
                   <Phone className="w-5 h-5 text-[#FF4D00]" />
-                  088 123 4567
+                  0888 58 58 16
                 </div>
                 <Button className="w-full">Заяви оглед</Button>
               </div>

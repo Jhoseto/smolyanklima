@@ -33,10 +33,17 @@ export const Footer = () => {
           <div>
             <h3 className="text-lg font-bold mb-6">Бързи връзки</h3>
             <ul className="space-y-4">
-              {['Начало', 'Продукти', 'Услуги', 'Галерия', 'Контакти'].map((item) => (
-                <li key={item}>
-                  <a href="#" className="text-gray-400 hover:text-white transition-colors text-sm font-medium">
-                    {item}
+              {[
+                { name: 'Начало', href: '#home' },
+                { name: 'Каталог', href: '/catalog' },
+                { name: 'Услуги', href: '#services' },
+                { name: 'Проекти', href: '#projects' },
+                { name: 'FAQ', href: '#faq' },
+                { name: 'Контакти', href: '#contact' }
+              ].map((item) => (
+                <li key={item.name}>
+                  <a href={item.href} className="text-gray-400 hover:text-[#FF4D00] transition-colors text-sm font-medium">
+                    {item.name}
                   </a>
                 </li>
               ))}
@@ -49,7 +56,7 @@ export const Footer = () => {
             <ul className="space-y-4">
               {['Продажба на климатици', 'Професионален монтаж', 'Профилактика и почистване', 'Сервиз и ремонт', 'Оглед и консултация'].map((item) => (
                 <li key={item}>
-                  <a href="#" className="text-gray-400 hover:text-white transition-colors text-sm font-medium">
+                  <a href="#services" className="text-gray-400 hover:text-[#FF4D00] transition-colors text-sm font-medium">
                     {item}
                   </a>
                 </li>
@@ -67,7 +74,7 @@ export const Footer = () => {
               </li>
               <li className="flex gap-3 text-gray-400">
                 <Phone className="w-5 h-5 text-[#FF4D00] shrink-0" />
-                <span className="text-sm">+359 88 123 4567<br/>+359 89 765 4321</span>
+                <span className="text-sm">0888 58 58 16</span>
               </li>
               <li className="flex gap-3 text-gray-400">
                 <Mail className="w-5 h-5 text-[#FF4D00] shrink-0" />

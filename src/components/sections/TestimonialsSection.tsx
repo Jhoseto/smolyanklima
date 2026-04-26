@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Star, Quote, ArrowRight } from 'lucide-react';
+import { Star, Quote, ArrowRight, Check } from 'lucide-react';
 
 const reviews = [
   {
@@ -72,24 +72,37 @@ export const TestimonialsSection = () => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 mb-16">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-8 text-center md:text-left">
+        <div className="flex flex-col lg:flex-row items-center justify-between gap-12 text-center lg:text-left">
           <div className="max-w-2xl">
             <motion.span
               initial={{ opacity: 0, y: 10 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              className="text-[#FF4D00] text-xs font-bold tracking-[0.3em] uppercase mb-4 block"
+              className="text-[#FF4D00] text-[10px] font-bold tracking-[0.3em] uppercase mb-5 block"
             >
-              ОТЗИВИ
+              ОТЗИВИ ОТ КЛИЕНТИ
             </motion.span>
+
             <motion.h2
-              initial={{ opacity: 0, y: 10 }}
+              initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: 0.1 }}
-              className="text-4xl md:text-5xl font-black text-gray-900 mb-6 tracking-tight"
+              className="font-outfit text-[2.5rem] md:text-[3.25rem] leading-[1.1] tracking-tight"
             >
-              Доверието на <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#FF4D00] to-[#FF2A4D]">нашите клиенти</span>
+              <span className="relative inline-block">
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00B4D8] to-[#0077B6] drop-shadow-sm font-extralight block">
+                  Доверието на
+                </span>
+                <div className="absolute -bottom-1 left-0 right-0 h-1 bg-gradient-to-r from-[#00B4D8]/0 via-[#00B4D8] to-[#00B4D8]/0 opacity-30 rounded-full" />
+              </span>
+              <br />
+              <span className="relative inline-block whitespace-nowrap">
+                <span className="absolute -inset-1 blur-lg bg-gradient-to-r from-[#FF4D00]/20 to-[#FF2A4D]/20 opacity-60"></span>
+                <span className="relative text-transparent bg-clip-text bg-gradient-to-r from-[#FF4D00] via-[#FF6A00] to-[#FF2A4D] font-black uppercase drop-shadow-sm">
+                  нашите клиенти
+                </span>
+              </span>
             </motion.h2>
           </div>
 
@@ -97,18 +110,23 @@ export const TestimonialsSection = () => {
             initial={{ opacity: 0, scale: 0.9 }}
             whileInView={{ opacity: 1, scale: 1 }}
             viewport={{ once: true }}
-            className="flex items-center gap-6 bg-white/50 backdrop-blur-md border border-gray-100 p-6 rounded-[2.5rem] shadow-xl shadow-gray-100/50"
+            className="flex items-center gap-6 bg-gray-50/50 backdrop-blur-xl border border-gray-100 p-6 rounded-[2rem] shadow-sm hover:shadow-xl transition-all duration-500 group"
           >
-            <div className="text-4xl font-black text-gray-900">4.9</div>
+            <div className="relative">
+              <div className="text-3xl font-black text-gray-900 leading-none">4.9</div>
+              <div className="absolute -top-3 -right-3 w-6 h-6 bg-[#10B981] rounded-full flex items-center justify-center text-white shadow-lg shadow-[#10B981]/20">
+                <Check className="w-3 h-3" />
+              </div>
+            </div>
             <div className="h-10 w-[1px] bg-gray-200" />
             <div>
-              <div className="flex gap-1 mb-1">
+              <div className="flex gap-1 mb-1.5">
                 {[1, 2, 3, 4, 5].map(star => (
-                  <Star key={star} className="w-4 h-4 text-[#FFD700] fill-[#FFD700]" />
+                  <Star key={star} className="w-4 h-4 text-[#FFD700] fill-[#FFD700] group-hover:scale-110 transition-transform" />
                 ))}
               </div>
-              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                Оценка в Google Maps
+              <div className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em]">
+                РЕАЛНИ ОЦЕНКИ В GOOGLE
               </div>
             </div>
           </motion.div>
@@ -129,63 +147,46 @@ export const TestimonialsSection = () => {
           {extendedReviews.map((review, index) => (
             <div
               key={`${review.id}-${index}`}
-              className="w-[380px] md:w-[450px] shrink-0 bg-white border border-gray-100 rounded-[2.5rem] p-8 md:p-10 shadow-[0_10px_40px_rgba(0,0,0,0.02)] transition-all duration-500 hover:shadow-[0_20px_60px_rgba(0,0,0,0.06)] hover:border-[#FF4D00]/10 hover:-translate-y-2 group/card"
+              className="w-[260px] md:w-[300px] shrink-0 bg-white/80 backdrop-blur-sm border border-gray-100/80 rounded-[1.5rem] p-5 transition-all duration-500 hover:shadow-xl hover:shadow-gray-200/40 hover:border-[#FF4D00]/20 group/card flex flex-col justify-between"
             >
-              <div className="flex justify-between items-start mb-8">
-                <div className="flex gap-1">
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex gap-0.5">
                   {[...Array(5)].map((_, i) => (
                     <Star
                       key={i}
-                      className="w-4 h-4 text-[#FFD700] fill-[#FFD700]"
+                      className="w-2.5 h-2.5 text-[#FFD700] fill-[#FFD700]"
                     />
                   ))}
                 </div>
-                <Quote className="w-10 h-10 text-gray-50 opacity-10 group-hover/card:text-[#FF4D00] group-hover/card:opacity-20 transition-all duration-500" />
+                <div className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest ${review.source === 'Google' ? 'bg-orange-50 text-[#FF4D00]' : 'bg-blue-50 text-[#1877F2]'}`}>
+                  {review.source}
+                </div>
               </div>
 
-              <p className="text-gray-700 text-base md:text-lg font-medium leading-relaxed whitespace-normal mb-10 italic">
+              <p className="text-gray-600 text-[13px] leading-relaxed mb-6 italic font-medium whitespace-normal mt-2">
                 "{review.text}"
               </p>
 
-              <div className="flex items-center justify-between border-t border-gray-50 pt-8">
-                <div className="flex items-center gap-4">
-                  <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${review.color} flex items-center justify-center text-white font-black text-xl shadow-lg shadow-gray-200/50`}>
+              <div className="flex items-center justify-between border-t border-gray-50/50 pt-5 mt-auto">
+                <div className="flex items-center gap-3">
+                  <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${review.color} flex items-center justify-center text-white font-black text-xs shadow-sm`}>
                     {review.name.charAt(0)}
                   </div>
                   <div>
-                    <h4 className="font-bold text-gray-900 text-sm tracking-tight">{review.name}</h4>
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{review.date}</span>
+                    <h4 className="font-bold text-gray-900 text-[11px] tracking-tight leading-none mb-1.5">{review.name}</h4>
+                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{review.date}</span>
                   </div>
-                </div>
-                
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-full border border-gray-100">
-                  <span className="text-[10px] font-black text-gray-400">VIA</span>
-                  <span className={`text-[10px] font-black uppercase ${review.source === 'Google' ? 'text-[#FF4D00]' : 'text-[#1877F2]'}`}>
-                    {review.source}
-                  </span>
                 </div>
               </div>
             </div>
           ))}
         </motion.div>
-        
+
         {/* Gradients on edges for smooth fading */}
-        <div className="absolute top-0 left-0 w-32 h-full bg-gradient-to-r from-white to-transparent z-10 pointer-events-none" />
-        <div className="absolute top-0 right-0 w-32 h-full bg-gradient-to-l from-white to-transparent z-10 pointer-events-none" />
+        <div className="absolute top-0 left-0 w-1/4 md:w-1/3 h-full bg-gradient-to-r from-white via-white/80 to-transparent z-10 pointer-events-none" />
+        <div className="absolute top-0 right-0 w-1/4 md:w-1/3 h-full bg-gradient-to-l from-white via-white/80 to-transparent z-10 pointer-events-none" />
       </div>
 
-      <div className="mt-20 text-center relative z-10">
-        <motion.a 
-          whileHover={{ x: 5 }}
-          href="https://google.com" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-3 text-xs font-bold text-gray-500 hover:text-[#FF4D00] transition-all tracking-[0.2em] uppercase bg-gray-50/50 px-8 py-4 rounded-full border border-gray-100 backdrop-blur-sm"
-        >
-          Вижте всички отзиви в Google Maps
-          <ArrowRight className="w-4 h-4" />
-        </motion.a>
-      </div>
     </section>
   );
 };
