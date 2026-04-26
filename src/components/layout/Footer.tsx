@@ -1,5 +1,6 @@
 import React from 'react';
 import { Facebook, Instagram, Phone, Mail, MapPin } from 'lucide-react';
+import { Logo } from '../ui/Logo';
 
 export const Footer = () => {
   return (
@@ -10,11 +11,7 @@ export const Footer = () => {
           {/* Brand */}
           <div className="space-y-6">
             <div className="flex items-center mb-2">
-              <img
-                src="/images/logo.png"
-                alt="СмолянКлима"
-                className="h-8 sm:h-9 w-auto object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)] hover:scale-105 transition-transform"
-              />
+              <Logo isDark={true} size="md" />
             </div>
             <p className="text-gray-400 text-sm leading-relaxed">
               Вашият доверен партньор за климатизация в Смолян и региона. Ние предлагаме качествени решения за вашия комфорт у дома и в офиса.
@@ -39,7 +36,7 @@ export const Footer = () => {
                 { name: 'Услуги', href: '#services' },
                 { name: 'Проекти', href: '#projects' },
                 { name: 'FAQ', href: '#faq' },
-                { name: 'Контакти', href: '#contact' }
+                { name: 'Контакти', href: '#contact-info' }
               ].map((item) => (
                 <li key={item.name}>
                   <a href={item.href} className="text-gray-400 hover:text-[#FF4D00] transition-colors text-sm font-medium">

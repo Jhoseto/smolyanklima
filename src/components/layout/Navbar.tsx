@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Menu, X, Phone } from 'lucide-react';
 import { Button } from '../ui/Button';
 
+import { Logo } from '../ui/Logo';
+
 export const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -21,7 +23,7 @@ export const Navbar = () => {
     { name: 'Услуги', href: '#services' },
     { name: 'Проекти', href: '#projects' },
     { name: 'FAQ', href: '#faq' },
-    { name: 'Контакти', href: '#contact' },
+    { name: 'Контакти', href: '#contact-info' },
   ];
 
   return (
@@ -34,11 +36,7 @@ export const Navbar = () => {
 
           {/* Logo */}
           <a href="#" className="flex items-center cursor-pointer">
-            <img
-              src="/images/logo.png"
-              alt="СмолянКлима"
-              className="h-10 md:h-12 w-auto object-contain drop-shadow-sm transition-transform hover:scale-105"
-            />
+            <Logo size="sm" />
           </a>
 
           {/* Desktop Nav */}

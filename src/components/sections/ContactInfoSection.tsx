@@ -119,9 +119,9 @@ export const ContactInfoSection = () => {
           >
             {/* The Map */}
             <div className="relative w-full h-full rounded-[2.5rem] overflow-hidden flex-grow group">
-              {/* Note: Iframe uses the exact embed code provided by the user */}
+              {/* Note: Iframe uses the exact embed code provided by the user, zoomed out slightly */}
               <iframe 
-                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d186.56460333537882!2d24.73404725883082!3d41.56851624537425!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x14ac50b6e42fae4f%3A0xdb4fcdc658cc6bda!2z0KHQvNC-0LvRj9C9INCa0LvQuNC80LAg0JXQntCe0JQ!5e0!3m2!1sen!2sbg!4v1777175712092!5m2!1sen!2sbg"
+                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d10000.564603335378!2d24.73404725883082!3d41.56851624537425!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x14ac50b6e42fae4f%3A0xdb4fcdc658cc6bda!2z0KHQvNC-0LvRj9C9INCa0LvQuNC80LAg0JXQntCe0JQ!5e0!3m2!1sen!2sbg!4v1777175712092!5m2!1sen!2sbg"
                 className="absolute inset-0 w-full h-full border-0 grayscale-[20%] contrast-125 transition-all duration-700 group-hover:grayscale-0 group-hover:scale-105"
                 allowFullScreen={false}
                 loading="lazy"
