@@ -14,19 +14,19 @@ export const ContactSection = () => {
   return (
     <section id="contact" className="py-24 bg-white relative overflow-hidden">
       {/* Decorative Parallax Background Elements */}
-      <motion.div 
+      <motion.div
         animate={{ y: [0, -30, 0], x: [0, 20, 0] }}
         transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-        className="absolute top-0 right-0 w-[600px] h-[600px] bg-orange-50 rounded-full blur-[120px] opacity-40 translate-x-1/2 -translate-y-1/2 pointer-events-none" 
+        className="absolute top-0 right-0 w-[600px] h-[600px] bg-orange-50 rounded-full blur-[120px] opacity-40 translate-x-1/2 -translate-y-1/2 pointer-events-none"
       />
-      <motion.div 
+      <motion.div
         animate={{ y: [0, 30, 0], x: [0, -20, 0] }}
         transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
-        className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-blue-50 rounded-full blur-[120px] opacity-40 -translate-x-1/2 translate-y-1/2 pointer-events-none" 
+        className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-blue-50 rounded-full blur-[120px] opacity-40 -translate-x-1/2 translate-y-1/2 pointer-events-none"
       />
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        
+
         {/* Headline */}
         <div className="text-center mb-16">
           <motion.span
@@ -47,7 +47,7 @@ export const ContactSection = () => {
           >
             <span className="relative inline-block mr-3">
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00B4D8] to-[#0077B6] drop-shadow-sm font-extralight block">
-                Заявете
+                Заявете вашата
               </span>
               <div className="absolute -bottom-1 left-0 right-0 h-1 bg-gradient-to-r from-[#00B4D8]/0 via-[#00B4D8] to-[#00B4D8]/0 opacity-30 rounded-full" />
             </span>
@@ -62,7 +62,7 @@ export const ContactSection = () => {
 
         {/* Split Layout Container */}
         <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-stretch">
-          
+
           {/* Left Side: Image & Trust Points */}
           <motion.div
             initial={{ opacity: 0, x: -30 }}
@@ -72,9 +72,9 @@ export const ContactSection = () => {
           >
             {/* Background Image */}
             <div className="absolute inset-0">
-              <img 
-                src="https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?q=80&w=2053&auto=format&fit=crop" 
-                alt="Луксозен модерен интериор" 
+              <img
+                src="https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?q=80&w=2053&auto=format&fit=crop"
+                alt="Луксозен модерен интериор"
                 className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-black/30" />
@@ -82,7 +82,7 @@ export const ContactSection = () => {
 
             {/* Content over image */}
             <div className="relative z-10">
-              <motion.h3 
+              <motion.h3
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
@@ -101,7 +101,7 @@ export const ContactSection = () => {
                   <span className="relative text-transparent bg-clip-text bg-gradient-to-r from-[#FF4D00] via-[#FF6A00] to-[#FF2A4D] font-black uppercase drop-shadow-sm">за вашия дом</span>
                 </span>
               </motion.h3>
-              <motion.p 
+              <motion.p
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
@@ -118,8 +118,8 @@ export const ContactSection = () => {
                   { icon: ShieldCheck, text: "Сертифицирани инженери" },
                   { icon: CheckCircle, text: "Безплатен оглед и консултация" }
                 ].map((point, idx) => (
-                  <motion.div 
-                    key={idx} 
+                  <motion.div
+                    key={idx}
                     initial={{ opacity: 0, x: -20 }}
                     whileInView={{ opacity: 1, x: 0 }}
                     viewport={{ once: true }}
@@ -145,10 +145,10 @@ export const ContactSection = () => {
           >
             {/* Subtle inner glow */}
             <div className="absolute top-0 right-0 w-64 h-64 bg-[#00B4D8]/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-            
+
             <AnimatePresence mode="wait">
               {!isSubmitted ? (
-                <motion.form 
+                <motion.form
                   key="form"
                   onSubmit={handleSubmit}
                   initial={{ opacity: 0, scale: 0.95 }}
@@ -158,7 +158,7 @@ export const ContactSection = () => {
                 >
                   <div className="grid md:grid-cols-2 gap-6">
                     {/* Floating Label Input */}
-                    <motion.div 
+                    <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.2 }}
@@ -171,15 +171,15 @@ export const ContactSection = () => {
                         placeholder="Име и Фамилия"
                         required
                       />
-                      <label 
-                        htmlFor="name" 
+                      <label
+                        htmlFor="name"
                         className="absolute left-6 top-2 text-[10px] font-black text-gray-400 uppercase tracking-widest transition-all duration-300 peer-placeholder-shown:top-5 peer-placeholder-shown:text-sm peer-placeholder-shown:font-medium peer-placeholder-shown:normal-case peer-focus:top-2 peer-focus:text-[10px] peer-focus:font-black peer-focus:uppercase peer-focus:text-[#FF4D00]"
                       >
                         Име и Фамилия
                       </label>
                     </motion.div>
 
-                    <motion.div 
+                    <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.3 }}
@@ -192,8 +192,8 @@ export const ContactSection = () => {
                         placeholder="Телефон"
                         required
                       />
-                      <label 
-                        htmlFor="phone" 
+                      <label
+                        htmlFor="phone"
                         className="absolute left-6 top-2 text-[10px] font-black text-gray-400 uppercase tracking-widest transition-all duration-300 peer-placeholder-shown:top-5 peer-placeholder-shown:text-sm peer-placeholder-shown:font-medium peer-placeholder-shown:normal-case peer-focus:top-2 peer-focus:text-[10px] peer-focus:font-black peer-focus:uppercase peer-focus:text-[#00B4D8]"
                       >
                         Телефон
@@ -201,7 +201,7 @@ export const ContactSection = () => {
                     </motion.div>
                   </div>
 
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.4 }}
@@ -220,7 +220,7 @@ export const ContactSection = () => {
                     </div>
                   </motion.div>
 
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.5 }}
@@ -232,8 +232,8 @@ export const ContactSection = () => {
                       className="peer w-full p-6 pt-8 rounded-2xl bg-white border border-gray-200 text-gray-900 font-outfit font-medium placeholder-transparent focus:outline-none focus:border-[#FF4D00] focus:ring-4 focus:ring-[#FF4D00]/10 shadow-sm transition-all duration-300 focus:shadow-[0_0_20px_rgba(255,77,0,0.1)] resize-none"
                       placeholder="Съобщение"
                     ></textarea>
-                    <label 
-                      htmlFor="message" 
+                    <label
+                      htmlFor="message"
                       className="absolute left-6 top-3 text-[10px] font-black text-gray-400 uppercase tracking-widest transition-all duration-300 peer-placeholder-shown:top-6 peer-placeholder-shown:text-sm peer-placeholder-shown:font-medium peer-placeholder-shown:normal-case peer-focus:top-3 peer-focus:text-[10px] peer-focus:font-black peer-focus:uppercase peer-focus:text-[#FF4D00]"
                     >
                       Допълнителна информация
@@ -252,34 +252,34 @@ export const ContactSection = () => {
                   </motion.button>
                 </motion.form>
               ) : (
-                <motion.div 
+                <motion.div
                   key="success"
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
                   className="flex flex-col items-center justify-center text-center h-full min-h-[400px] relative z-10"
                 >
-                  <motion.div 
+                  <motion.div
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
                     transition={{ type: "spring", damping: 12, delay: 0.1 }}
                     className="w-24 h-24 bg-gradient-to-br from-green-400 to-emerald-600 rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(52,211,153,0.4)] mb-8 relative"
                   >
                     <Check className="w-12 h-12 text-white" strokeWidth={3} />
-                    <motion.div 
-                      animate={{ rotate: 360 }} 
+                    <motion.div
+                      animate={{ rotate: 360 }}
                       transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
                       className="absolute -inset-4"
                     >
                       <Sparkles className="absolute top-0 right-0 w-6 h-6 text-emerald-400" />
                     </motion.div>
                   </motion.div>
-                  
+
                   <h3 className="text-3xl font-outfit font-black text-gray-900 mb-4">Успешно изпратено!</h3>
                   <p className="text-gray-500 max-w-sm mx-auto mb-8 leading-relaxed">
                     Благодарим ви за доверието. Наш консултант ще прегледа заявката ви и ще се свърже с вас съвсем скоро.
                   </p>
-                  
-                  <button 
+
+                  <button
                     onClick={() => setIsSubmitted(false)}
                     className="text-sm font-bold text-[#00B4D8] uppercase tracking-widest hover:text-[#0077B6] transition-colors"
                   >

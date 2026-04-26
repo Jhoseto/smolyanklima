@@ -7,7 +7,7 @@ export const Footer = () => {
     <footer className="bg-gray-900 text-white pt-20 pb-10 border-t border-gray-800">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-16">
-          
+
           {/* Brand */}
           <div className="space-y-6">
             <div className="flex items-center mb-2">
@@ -67,7 +67,7 @@ export const Footer = () => {
             <ul className="space-y-4">
               <li className="flex gap-3 text-gray-400">
                 <MapPin className="w-5 h-5 text-[#FF4D00] shrink-0" />
-                <span className="text-sm">гр. Смолян, п.к. 4700<br/>ул. Примерна 1</span>
+                <span className="text-sm">гр. Смолян, п.к. 4700<br />ул. Примерна 1</span>
               </li>
               <li className="flex gap-3 text-gray-400">
                 <Phone className="w-5 h-5 text-[#FF4D00] shrink-0" />
@@ -87,6 +87,7 @@ export const Footer = () => {
           <div className="flex gap-4 mt-4 md:mt-0 justify-center">
             <a href="#" className="hover:text-white transition-colors">Политика за поверителност</a>
             <a href="#" className="hover:text-white transition-colors">Общи условия</a>
+            <a href="#" className="hover:text-white transition-colors">Developed by K. Serezliev</a>
           </div>
         </div>
       </div>

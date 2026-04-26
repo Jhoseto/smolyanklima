@@ -58,9 +58,11 @@ export const Navbar = () => {
               <Phone className="w-4 h-4 text-[#FF4D00]" />
               0888 58 58 16
             </div>
-            <Button size="sm" className="hidden lg:flex">
-              Заяви оглед
-            </Button>
+            <a href="#contact">
+              <Button size="sm" className="hidden lg:flex">
+                Заяви оглед
+              </Button>
+            </a>
           </div>
 
           {/* Mobile Menu Button */}
@@ -97,7 +99,11 @@ export const Navbar = () => {
                   <Phone className="w-5 h-5 text-[#FF4D00]" />
                   0888 58 58 16
                 </div>
-                <Button className="w-full">Заяви оглед</Button>
+                <a href="#contact" className="block w-full">
+                  <Button className="w-full" onClick={() => setMobileMenuOpen(false)}>
+                    Заяви оглед
+                  </Button>
+                </a>
               </div>
             </div>
           </motion.div>

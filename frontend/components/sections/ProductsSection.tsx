@@ -9,8 +9,8 @@ const products = [
     model: "Perfera FTXM25R",
     type: "Стенен климатик",
     image: "/images/daikin-perfera.jpg",
-    price: "1 290",
-    priceWithMount: "1 590",
+    price: "659",
+    priceWithMount: "812",
     rating: 4.9,
     reviews: 47,
     energyClass: "A+++",
@@ -30,8 +30,8 @@ const products = [
     model: "MSZ-LN35VG",
     type: "Стенен климатик",
     image: "/images/mitsubishi-msz.jpg",
-    price: "1 490",
-    priceWithMount: "1 790",
+    price: "761",
+    priceWithMount: "914",
     rating: 4.8,
     reviews: 31,
     energyClass: "A+++",
@@ -51,8 +51,8 @@ const products = [
     model: "WindFree Comfort",
     type: "Стенен климатик",
     image: "/images/samsung-windfree.jpg",
-    price: "980",
-    priceWithMount: "1 280",
+    price: "500",
+    priceWithMount: "653",
     rating: 4.7,
     reviews: 58,
     energyClass: "A++",
@@ -72,8 +72,8 @@ const products = [
     model: "Fairy GWH12ACC",
     type: "Стенен климатик",
     image: "/images/gree-fairy.jpg",
-    price: "1 050",
-    priceWithMount: "1 350",
+    price: "536",
+    priceWithMount: "689",
     rating: 4.6,
     reviews: 82,
     energyClass: "A++",
@@ -93,8 +93,8 @@ const products = [
     model: "Sensira FTXF35D",
     type: "Стенен климатик",
     image: "/images/daikin-sensira.jpg",
-    price: "1 150",
-    priceWithMount: "1 450",
+    price: "587",
+    priceWithMount: "740",
     rating: 4.8,
     reviews: 124,
     energyClass: "A++",
@@ -114,8 +114,8 @@ const products = [
     model: "ASYG12KMTB",
     type: "Стенен климатик",
     image: "/images/fujitsu-asyg.jpg",
-    price: "1 390",
-    priceWithMount: "1 690",
+    price: "709",
+    priceWithMount: "862",
     rating: 4.7,
     reviews: 19,
     energyClass: "A++",
@@ -135,15 +135,28 @@ export const ProductsSection = () => {
   return (
     <section id="products" className="py-20 bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        
+
         <div className="text-center mb-16">
-          <motion.h2 
-            initial={{ opacity: 0, y: 10 }}
+          <motion.h2
+            initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-3xl md:text-[2.5rem] font-bold text-gray-900 mb-4"
+            transition={{ delay: 0.1 }}
+            className="font-outfit text-[2.25rem] md:text-[3.25rem] leading-[1.1] tracking-tighter"
           >
-            Топ <span className="text-[#FF4D00]">продукти</span>
+            <span className="relative inline-block mb-2">
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00B4D8] to-[#0077B6] drop-shadow-sm font-extralight block">
+                Топ
+              </span>
+              <div className="absolute -bottom-1 left-4 right-4 h-1 bg-gradient-to-r from-[#00B4D8]/0 via-[#00B4D8] to-[#00B4D8]/0 opacity-40 rounded-full" />
+            </span>
+            <br />
+            <span className="relative inline-block whitespace-nowrap">
+              <span className="absolute -inset-2 blur-xl bg-gradient-to-r from-[#FF4D00]/20 to-[#FF2A4D]/20 opacity-70"></span>
+              <span className="relative text-transparent bg-clip-text bg-gradient-to-r from-[#FF4D00] via-[#FF6A00] to-[#FF2A4D] font-black uppercase drop-shadow-md">
+                продукти
+              </span>
+            </span>
           </motion.h2>
         </div>
 
@@ -160,13 +173,13 @@ export const ProductsSection = () => {
             >
               {/* Image Area */}
               <div className={`relative h-56 overflow-hidden ${product.imgBg ?? 'bg-gray-50'}`}>
-                <img 
-                  src={product.image} 
-                  alt={product.model} 
+                <img
+                  src={product.image}
+                  alt={product.model}
                   className="w-full h-full object-contain p-4 transition-transform duration-700 group-hover:scale-105"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-80" />
-                
+
                 {/* Top Badges */}
                 <div className="absolute top-4 left-4 right-4 flex justify-between items-start">
                   {product.badge ? (
@@ -184,7 +197,7 @@ export const ProductsSection = () => {
 
               {/* Content Area */}
               <div className="p-6 flex flex-col flex-grow">
-                
+
                 <div className="mb-4">
                   <p className="text-xs font-bold text-[#00B4D8] uppercase tracking-wider mb-1">{product.brand}</p>
                   <h3 className="text-[1.35rem] font-bold text-gray-900 leading-tight mb-1">{product.model}</h3>
@@ -226,16 +239,14 @@ export const ProductsSection = () => {
                 <div className="flex items-end justify-between mt-auto mb-6">
                   <div>
                     <div className="flex items-baseline gap-1">
-                      <span className="text-3xl font-extrabold text-gray-900">{product.price}</span>
-                      <span className="text-sm font-bold text-gray-900">лв</span>
+                      <span className="text-3xl font-extrabold text-gray-900">€{product.price}</span>
                     </div>
-                    <p className="text-xs text-gray-500">с монтаж от {product.priceWithMount} лв</p>
+                    <p className="text-xs text-gray-500">с монтаж от €{product.priceWithMount}</p>
                   </div>
-                  
-                  <button className="flex items-center gap-2 bg-[#EBF5FF] text-[#00B4D8] hover:bg-[#00B4D8] hover:text-white transition-colors px-5 py-2.5 rounded-full font-bold text-sm">
-                    <ShoppingCart className="w-4 h-4" />
-                    Поръчай
-                  </button>
+
+                  <a href="#contact" className="flex items-center gap-2 bg-[#EBF5FF] text-[#00B4D8] hover:bg-[#00B4D8] hover:text-white transition-colors px-6 py-2.5 rounded-full font-bold text-sm shadow-sm hover:shadow-md">
+                    Направи запитване
+                  </a>
                 </div>
 
                 {/* Bottom Link */}

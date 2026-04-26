@@ -107,26 +107,25 @@ export const TestimonialsSection = () => {
           </div>
 
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            whileInView={{ opacity: 1, scale: 1 }}
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="flex items-center gap-6 bg-gray-50/50 backdrop-blur-xl border border-gray-100 p-6 rounded-[2rem] shadow-sm hover:shadow-xl transition-all duration-500 group"
+            className="inline-flex items-center gap-7 bg-white border border-gray-100/50 px-8 py-5 rounded-[2.5rem] shadow-[0_15px_40px_rgba(0,0,0,0.04)] hover:shadow-[0_20px_50px_rgba(0,0,0,0.08)] transition-all duration-500 group"
           >
             <div className="relative">
-              <div className="text-3xl font-black text-gray-900 leading-none">4.9</div>
-              <div className="absolute -top-3 -right-3 w-6 h-6 bg-[#10B981] rounded-full flex items-center justify-center text-white shadow-lg shadow-[#10B981]/20">
-                <Check className="w-3 h-3" />
-              </div>
+              <div className="text-4xl font-black text-[#1F2937] leading-none tracking-tighter">4.9</div>
             </div>
-            <div className="h-10 w-[1px] bg-gray-200" />
-            <div>
-              <div className="flex gap-1 mb-1.5">
+            
+            <div className="h-10 w-[1.5px] bg-gray-100" />
+            
+            <div className="flex flex-col items-start">
+              <div className="flex gap-0.5 mb-2">
                 {[1, 2, 3, 4, 5].map(star => (
-                  <Star key={star} className="w-4 h-4 text-[#FFD700] fill-[#FFD700] group-hover:scale-110 transition-transform" />
+                  <Star key={star} className="w-5 h-5 text-[#F9AB00] fill-[#F9AB00] transition-transform group-hover:scale-110" />
                 ))}
               </div>
-              <div className="text-[9px] font-bold text-gray-400 uppercase tracking-[0.2em]">
-                РЕАЛНИ ОЦЕНКИ В GOOGLE
+              <div className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] leading-none">
+                РЕАЛНИ ОЦЕНКИ В <span className="text-[#4285F4]">G</span><span className="text-[#EA4335]">O</span><span className="text-[#FBBC05]">O</span><span className="text-[#4285F4]">G</span><span className="text-[#34A853]">L</span><span className="text-[#EA4335]">E</span>
               </div>
             </div>
           </motion.div>
