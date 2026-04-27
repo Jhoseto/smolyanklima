@@ -21,6 +21,7 @@ import { FAQSection } from './components/sections/FAQSection';
 import { BrandsSection } from './components/sections/BrandsSection';
 import { Footer } from './components/layout/Footer';
 import { GradientMeshMorphing, BokehOrbs, TechGrid } from './components/effects';
+import { AIChatWidget } from './components/ai-assistant';
 
 // Lazy load страници за по-бързо начално зареждане
 const CatalogPage = lazy(() => import('./pages/CatalogPage'));
@@ -102,6 +103,16 @@ function App() {
         </Routes>
       </AnimatePresence>
       <Footer />
+      
+      {/* AI Assistant - Global on all pages */}
+      <AIChatWidget 
+        apiKey={import.meta.env.VITE_GEMINI_API_KEY || ''}
+        position="bottom-right"
+        primaryColor="#00B4D8"
+        accentColor="#FF4D00"
+        welcomeMessage="Здравейте! Аз съм Вашият личен асистент от Смолян Клима. Как мога да помогна?"
+        enableVoiceInput={true}
+      />
     </Suspense>
   );
 }

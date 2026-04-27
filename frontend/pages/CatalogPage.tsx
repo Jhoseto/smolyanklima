@@ -9,7 +9,6 @@ import { FilterSidebar }  from '../components/catalog/FilterSidebar';
 import { ActiveFilters }  from '../components/catalog/ActiveFilters';
 import { ProductCard }    from '../components/catalog/ProductCard';
 import { QuickViewModal } from '../components/catalog/QuickViewModal';
-import { FloatingHelp }   from '../components/catalog/FloatingHelp';
 import { ToastSystem, useToasts, useFavorites } from '../components/catalog/ToastSystem';
 import { RecentlyViewed, useRecentlyViewed } from '../components/catalog/RecentlyViewed';
 import { GuidedBuyingWizard } from '../components/catalog/GuidedBuyingWizard';
@@ -502,9 +501,6 @@ const CatalogPage = () => {
         onFavoriteToggle={handleFavoriteToggle}
         onFormSubmit={handleFormSubmit}
       />
-
-      {/* Floating Help Button */}
-      <FloatingHelp />
 
       {/* Social Proof Toasts */}
       <SocialProofToasts />
