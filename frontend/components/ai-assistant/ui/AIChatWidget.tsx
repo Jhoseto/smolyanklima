@@ -13,6 +13,7 @@ import { ChatMessage } from './ChatMessage';
 import { QuickReplyButtons } from './QuickReplyButtons';
 import { TypingIndicator as TypingIndicatorComponent } from './TypingIndicator';
 import { ProductCard } from './ProductCard';
+import { PrivacyConsent } from './PrivacyConsent';
 
 export interface AIChatWidgetProps {
   apiKey: string;
@@ -49,10 +50,13 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
   const [typingIndicator, setTypingIndicator] = useState<TypingIndicator | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
+  const [consentGiven, setConsentGiven] = useState(false);
+  const [showConsent, setShowConsent] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const widgetRef = useRef<HTMLDivElement>(null);
+  const consentStorageKeyRef = useRef('ai_chat_privacy_consent_v1');
 
   // Initialize AI Chat hook
   const {
@@ -88,6 +92,19 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // Load consent from localStorage (best-effort)
+  useEffect(() => {
+    try {
+      if (typeof window === 'undefined') return;
+      const raw = localStorage.getItem(consentStorageKeyRef.current);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { given?: boolean };
+      if (parsed?.given === true) setConsentGiven(true);
+    } catch {
+      // ignore
+    }
+  }, []);
+
   // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -116,18 +133,26 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
 
   // Handle quick reply click
   const handleQuickReply = useCallback((reply: QuickReply) => {
+    if (!consentGiven) {
+      setShowConsent(true);
+      return;
+    }
     setShowQuickReplies(false);
     sendMessage(reply.label);
-  }, [sendMessage]);
+  }, [consentGiven, sendMessage]);
 
   // Handle send message
   const handleSendMessage = useCallback(() => {
     if (!inputMessage.trim()) return;
+    if (!consentGiven) {
+      setShowConsent(true);
+      return;
+    }
     
     sendMessage(inputMessage);
     setInputMessage('');
     setShowQuickReplies(false);
-  }, [inputMessage, sendMessage]);
+  }, [consentGiven, inputMessage, sendMessage]);
 
   // Handle key press
   const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
@@ -148,12 +173,13 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
       return;
     }
 
-    const recognition = new (window as unknown as { webkitSpeechRecognition: new () => SpeechRecognition }).webkitSpeechRecognition();
+    const SpeechRecognitionCtor = (window as any).webkitSpeechRecognition as any;
+    const recognition = new SpeechRecognitionCtor();
     recognition.lang = 'bg-BG';
     recognition.continuous = false;
     recognition.interimResults = false;
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
+    recognition.onresult = (event: any) => {
       const transcript = event.results[0][0].transcript;
       setInputMessage(transcript);
     };
@@ -198,7 +224,11 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
 
   // Toggle chat
   const toggleChat = useCallback(() => {
-    setIsOpen((prev) => !prev);
+    setIsOpen((prev) => {
+      const next = !prev;
+      if (next && !consentGiven) setShowConsent(true);
+      return next;
+    });
   }, []);
 
   // Get first message (welcome or from conversation)
@@ -216,6 +246,32 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
         ...positionStyles,
       }}
     >
+      {/* Privacy / GDPR Consent */}
+      <AnimatePresence>
+        {showConsent && !consentGiven && (
+          <PrivacyConsent
+            primaryColor={primaryColor}
+            onConsent={(consent) => {
+              if (!consent) return;
+              setConsentGiven(true);
+              setShowConsent(false);
+              try {
+                localStorage.setItem(
+                  consentStorageKeyRef.current,
+                  JSON.stringify({ given: true, timestamp: Date.now(), version: '1.0' })
+                );
+              } catch {
+                // ignore
+              }
+            }}
+            onClose={() => {
+              setShowConsent(false);
+              setConsentGiven(false);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Chat Window */}
       <AnimatePresence>
         {isOpen && (
@@ -507,6 +563,7 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyDown={handleKeyPress}
                 placeholder="Напишете съобщение..."
+                disabled={!consentGiven}
                 style={{
                   flex: 1,
                   border: '1.5px solid #e2e8f0',

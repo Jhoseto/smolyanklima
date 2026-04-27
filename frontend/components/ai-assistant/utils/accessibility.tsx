@@ -3,7 +3,7 @@
  * WCAG 2.1 AA Compliance helpers
  */
 
-import { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 
 /**
  * Announces messages to screen readers
@@ -22,9 +22,9 @@ export function announceToScreenReader(message: string, priority: 'polite' | 'as
     overflow: hidden;
   `;
   announcement.textContent = message;
-  
+
   document.body.appendChild(announcement);
-  
+
   setTimeout(() => {
     document.body.removeChild(announcement);
   }, 1000);
@@ -40,10 +40,8 @@ export function useFocusTrap(isActive: boolean) {
   useEffect(() => {
     if (!isActive) return;
 
-    // Store previous focus
     previousFocusRef.current = document.activeElement as HTMLElement;
 
-    // Focus first focusable element
     const container = containerRef.current;
     if (!container) return;
 
@@ -56,7 +54,6 @@ export function useFocusTrap(isActive: boolean) {
 
     firstElement?.focus();
 
-    // Handle tab key
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Tab') return;
 
@@ -94,30 +91,33 @@ export function useKeyboardNavigation(handlers: {
   onArrowDown?: () => void;
   onTab?: () => void;
 }) {
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    switch (e.key) {
-      case 'Escape':
-        handlers.onEscape?.();
-        break;
-      case 'Enter':
-        if (!e.shiftKey) {
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      switch (e.key) {
+        case 'Escape':
+          handlers.onEscape?.();
+          break;
+        case 'Enter':
+          if (!e.shiftKey) {
+            e.preventDefault();
+            handlers.onEnter?.();
+          }
+          break;
+        case 'ArrowUp':
           e.preventDefault();
-          handlers.onEnter?.();
-        }
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        handlers.onArrowUp?.();
-        break;
-      case 'ArrowDown':
-        e.preventDefault();
-        handlers.onArrowDown?.();
-        break;
-      case 'Tab':
-        handlers.onTab?.();
-        break;
-    }
-  }, [handlers]);
+          handlers.onArrowUp?.();
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          handlers.onArrowDown?.();
+          break;
+        case 'Tab':
+          handlers.onTab?.();
+          break;
+      }
+    },
+    [handlers]
+  );
 
   return handleKeyDown;
 }
@@ -171,8 +171,6 @@ export function useReducedMotion(): boolean {
 
   return prefersReducedMotion;
 }
-
-import { useState } from 'react';
 
 /**
  * Color contrast checker
@@ -295,3 +293,4 @@ export function AccessibilityAnnouncer({ message }: { message: string }) {
     </div>
   );
 }
+

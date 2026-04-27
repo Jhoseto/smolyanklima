@@ -6,6 +6,43 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import type { Message, Conversation, UserContext, Product } from '../types';
 
+const STORAGE_KEYS = {
+  messages: 'ai_chat_messages_v2',
+  conversation: 'ai_chat_conversation_v2',
+  userContext: 'ai_chat_user_context_v2',
+  consent: 'ai_chat_privacy_consent_v1',
+} as const;
+
+const STORAGE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const MAX_STORED_MESSAGES = 50;
+
+function hasStorageConsent(): boolean {
+  try {
+    if (typeof window === 'undefined') return false;
+    const raw = localStorage.getItem(STORAGE_KEYS.consent);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw) as { given?: boolean; timestamp?: number };
+    if (parsed?.given !== true) return false;
+    if (typeof parsed.timestamp === 'number' && Date.now() - parsed.timestamp > STORAGE_TTL_MS) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function purgeIfExpired<T>(raw: string | null): T | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as { data?: T; savedAt?: number };
+    if (!parsed || typeof parsed !== 'object') return null;
+    const savedAt = typeof parsed.savedAt === 'number' ? parsed.savedAt : 0;
+    if (!savedAt || Date.now() - savedAt > STORAGE_TTL_MS) return null;
+    return (parsed.data ?? null) as T | null;
+  } catch {
+    return null;
+  }
+}
+
 interface AIChatContextType {
   // State
   messages: Message[];
@@ -50,26 +87,26 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({
     setMessages((prev) => [...prev, message]);
     
     // Persist to localStorage
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('ai_chat_messages');
-      const existing = stored ? JSON.parse(stored) : [];
-      localStorage.setItem('ai_chat_messages', JSON.stringify([...existing, message]));
+    if (typeof window !== 'undefined' && hasStorageConsent()) {
+      const existing = purgeIfExpired<Message[]>(localStorage.getItem(STORAGE_KEYS.messages)) || [];
+      const next = [...existing, message].slice(-MAX_STORED_MESSAGES);
+      localStorage.setItem(STORAGE_KEYS.messages, JSON.stringify({ data: next, savedAt: Date.now() }));
     }
   }, []);
 
   const updateConversation = useCallback((conv: Conversation) => {
     setConversation(conv);
     
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('ai_chat_conversation', JSON.stringify(conv));
+    if (typeof window !== 'undefined' && hasStorageConsent()) {
+      localStorage.setItem(STORAGE_KEYS.conversation, JSON.stringify({ data: conv, savedAt: Date.now() }));
     }
   }, []);
 
   const setUserContext = useCallback((context: UserContext) => {
     setUserContextState(context);
     
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('ai_chat_user_context', JSON.stringify(context));
+    if (typeof window !== 'undefined' && hasStorageConsent()) {
+      localStorage.setItem(STORAGE_KEYS.userContext, JSON.stringify({ data: context, savedAt: Date.now() }));
     }
   }, []);
 
@@ -88,8 +125,8 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({
     setError(null);
     
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('ai_chat_messages');
-      localStorage.removeItem('ai_chat_conversation');
+      localStorage.removeItem(STORAGE_KEYS.messages);
+      localStorage.removeItem(STORAGE_KEYS.conversation);
     }
   }, []);
 
@@ -100,13 +137,15 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({
   // Load persisted state on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const storedMessages = localStorage.getItem('ai_chat_messages');
-      const storedConversation = localStorage.getItem('ai_chat_conversation');
-      const storedUserContext = localStorage.getItem('ai_chat_user_context');
+      const storedMessages = localStorage.getItem(STORAGE_KEYS.messages);
+      const storedConversation = localStorage.getItem(STORAGE_KEYS.conversation);
+      const storedUserContext = localStorage.getItem(STORAGE_KEYS.userContext);
       
       if (storedMessages) {
         try {
-          setMessages(JSON.parse(storedMessages));
+          const msgs = purgeIfExpired<Message[]>(storedMessages);
+          if (msgs) setMessages(msgs);
+          else localStorage.removeItem(STORAGE_KEYS.messages);
         } catch (e) {
           console.error('Failed to parse stored messages', e);
         }
@@ -114,7 +153,9 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({
       
       if (storedConversation) {
         try {
-          setConversation(JSON.parse(storedConversation));
+          const conv = purgeIfExpired<Conversation>(storedConversation);
+          if (conv) setConversation(conv);
+          else localStorage.removeItem(STORAGE_KEYS.conversation);
         } catch (e) {
           console.error('Failed to parse stored conversation', e);
         }
@@ -122,7 +163,9 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({
       
       if (storedUserContext && !initialUserContext) {
         try {
-          setUserContextState(JSON.parse(storedUserContext));
+          const ctx = purgeIfExpired<UserContext>(storedUserContext);
+          if (ctx) setUserContextState(ctx);
+          else localStorage.removeItem(STORAGE_KEYS.userContext);
         } catch (e) {
           console.error('Failed to parse stored user context', e);
         }

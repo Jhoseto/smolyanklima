@@ -46,8 +46,6 @@ export {
 } from './skills';
 
 // Knowledge Base
-export { default as HVAC_EXPERTISE } from './knowledge-base/hvac-expertise';
-export { default as SALES_PLAYBOOK } from './knowledge-base/sales-playbook';
 export {
   PRODUCT_EMBEDDINGS,
   cosineSimilarity,

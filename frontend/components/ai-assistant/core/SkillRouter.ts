@@ -105,7 +105,7 @@ class SkillRouter {
     }
 
     try {
-      return await skill.handler(context);
+      return await skill.execute(context);
     } catch (error) {
       console.error(`Skill ${skill.name} failed:`, error);
       return this.handleSkillError(intent, context);

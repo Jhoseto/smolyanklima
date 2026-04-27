@@ -180,16 +180,18 @@ class HallucinationGuard {
     ];
 
     for (const pattern of suspiciousClaims) {
-      const match = response.match(pattern);
-      if (match) {
-        const context = this.getContextAround(response, match.index || 0, 50);
+      const matches = response.matchAll(pattern);
+      for (const match of matches) {
+        const claimed = match[0];
+        const idx = match.index ?? 0;
+        const context = this.getContextAround(response, idx, 60);
         const productContext = this.getProductFromContext(context);
 
-        if (productContext && !this.productHasFeature(productContext, match[0])) {
+        if (productContext && !this.productHasFeature(productContext, claimed)) {
           this.violations.push({
             type: 'feature_invented',
             field: 'feature',
-            claimed: match[0],
+            claimed,
             actual: 'Feature not verified for this product',
             severity: 'warning',
           });
@@ -239,10 +241,7 @@ class HallucinationGuard {
       switch (violation.type) {
         case 'price_mismatch':
           // Replace fabricated price with "ще проверя"
-          corrected = corrected.replace(
-            new RegExp(`\\${violation.claimed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'gi'),
-            '[цена ще бъде потвърдена]'
-          );
+          corrected = corrected.replace(this.escapeRegExp(violation.claimed), '[цена ще бъде потвърдена]');
           break;
 
         case 'product_not_found':
@@ -267,6 +266,13 @@ class HallucinationGuard {
     });
 
     return corrected;
+  }
+
+  private escapeRegExp(text: string): RegExp {
+    // Escape string to be used in a new RegExp() constructor.
+    // Using a helper avoids accidental double escaping and keeps behavior consistent.
+    const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(escaped, 'gi');
   }
 
   /**

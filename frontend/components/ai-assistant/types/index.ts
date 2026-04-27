@@ -28,6 +28,7 @@ export interface Conversation {
   id: string;
   messages: Message[];
   context: ConversationContext;
+  lastMessageAt?: number;
   createdAt: number;
   updatedAt: number;
   metadata: ConversationMetadata;
@@ -428,6 +429,7 @@ export interface APIError {
 
 export interface CrossTabMessage {
   type: 'CHAT_STATE_UPDATE' | 'CONVERSATION_SYNC' | 'USER_CONTEXT_UPDATE';
+  conversationId: string;
   payload: unknown;
   timestamp: number;
   tabId: string;

@@ -18,6 +18,39 @@ export interface UseCrossTabSyncReturn {
 }
 
 const BROADCAST_CHANNEL_NAME = 'smolyan-klima-ai-chat';
+const MAX_PAYLOAD_CHARS = 50_000;
+const MAX_MESSAGE_CHARS = 5_000;
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isValidIncomingMessage(message: unknown): message is CrossTabMessage {
+  if (!isPlainObject(message)) return false;
+  if (typeof message.type !== 'string') return false;
+  if (typeof message.conversationId !== 'string' || message.conversationId.length < 5) return false;
+  if (typeof message.timestamp !== 'number') return false;
+  if (typeof message.tabId !== 'string' || message.tabId.length < 5) return false;
+  // payload can be any, but we keep a simple size guard below
+  return true;
+}
+
+function safePayloadSize(payload: unknown): number {
+  try {
+    return JSON.stringify(payload).length;
+  } catch {
+    return MAX_PAYLOAD_CHARS + 1;
+  }
+}
+
+function isValidChatMessagePayload(payload: unknown): payload is Message {
+  if (!isPlainObject(payload)) return false;
+  if (typeof payload.id !== 'string') return false;
+  if (payload.role !== 'user' && payload.role !== 'assistant' && payload.role !== 'system') return false;
+  if (typeof payload.content !== 'string' || payload.content.length > MAX_MESSAGE_CHARS) return false;
+  if (typeof payload.timestamp !== 'number') return false;
+  return true;
+}
 
 export function useCrossTabSync(options: UseCrossTabSyncOptions): UseCrossTabSyncReturn {
   const { conversationId, onExternalMessage } = options;
@@ -42,10 +75,16 @@ export function useCrossTabSync(options: UseCrossTabSyncOptions): UseCrossTabSyn
 
       // Listen for messages
       channel.onmessage = (event: MessageEvent) => {
-        const message: CrossTabMessage = event.data;
+        const incoming = event.data;
+        if (!isValidIncomingMessage(incoming)) return;
+        const message: CrossTabMessage = incoming;
         
         // Ignore messages from self
         if (message.tabId === tabIdRef.current) return;
+        // Ignore messages for other conversations
+        if (message.conversationId !== conversationId) return;
+        // Payload size guard (prevents accidental huge objects)
+        if (safePayloadSize(message.payload) > MAX_PAYLOAD_CHARS) return;
 
         setLastSyncMessage(message);
 
@@ -58,9 +97,8 @@ export function useCrossTabSync(options: UseCrossTabSyncOptions): UseCrossTabSyn
 
           case 'CONVERSATION_SYNC':
             // New conversation message
-            if (message.payload && typeof message.payload === 'object') {
-              const msg = message.payload as Message;
-              onExternalMessage?.(msg);
+            if (isValidChatMessagePayload(message.payload)) {
+              onExternalMessage?.(message.payload);
             }
             break;
 
@@ -87,6 +125,7 @@ export function useCrossTabSync(options: UseCrossTabSyncOptions): UseCrossTabSyn
 
     const message: CrossTabMessage = {
       type: 'CHAT_STATE_UPDATE',
+      conversationId,
       payload: state,
       timestamp: Date.now(),
       tabId: tabIdRef.current,
@@ -105,6 +144,7 @@ export function useCrossTabSync(options: UseCrossTabSyncOptions): UseCrossTabSyn
 
     const syncMsg: CrossTabMessage = {
       type: 'CONVERSATION_SYNC',
+      conversationId,
       payload: message,
       timestamp: Date.now(),
       tabId: tabIdRef.current,

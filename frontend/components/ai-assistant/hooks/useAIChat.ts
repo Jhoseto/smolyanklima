@@ -100,6 +100,7 @@ function transformDbProducts(): Product[] {
 }
 
 const PRODUCTS: Product[] = transformDbProducts();
+const MAX_USER_MESSAGE_CHARS = 1000;
 
 export interface UseAIChatOptions {
   apiKey: string;
@@ -129,6 +130,16 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
   
   const geminiClient = useRef(getGeminiClient(apiKey));
   const hallucinationGuard = useRef(createHallucinationGuard(PRODUCTS));
+  const messagesRef = useRef<Message[]>([]);
+  const conversationRef = useRef<Conversation | null>(null);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    conversationRef.current = conversation;
+  }, [conversation]);
   
   // Initialize conversation on first load
   useEffect(() => {
@@ -155,6 +166,12 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
   // Send message and get AI response
   const sendMessage = useCallback(async (content: string) => {
     if (!conversation) return;
+    const trimmed = content.trim();
+    if (!trimmed) return;
+    if (trimmed.length > MAX_USER_MESSAGE_CHARS) {
+      setError(`Съобщението е твърде дълго (макс. ${MAX_USER_MESSAGE_CHARS} символа).`);
+      return;
+    }
 
     setIsLoading(true);
     setError(null);
@@ -166,37 +183,39 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
       const userMessage: Message = {
         id: uuidv4(),
         role: 'user',
-        content,
+        content: trimmed,
         timestamp: Date.now(),
       };
 
-      // Update messages immediately
-      const updatedMessages = [...messages, userMessage];
-      setMessages(updatedMessages);
-
       // Analyze intent
-      const intent = skillRouter.analyzeIntent(content);
+      const intent = skillRouter.analyzeIntent(trimmed);
       
       // Detect emotion
-      const emotionDetection = emotionalIntelligence.detectEmotion(content);
+      const emotionDetection = emotionalIntelligence.detectEmotion(trimmed);
       
-      // Update conversation context
+      // Update messages and conversation deterministically (avoid stale closures)
+      const baseMessages = messagesRef.current;
+      const updatedMessages = [...baseMessages, userMessage];
+      setMessages(updatedMessages);
+
+      const baseConversation = conversationRef.current || conversation;
       const updatedConversation: Conversation = {
-        ...conversation,
+        ...baseConversation,
         messages: updatedMessages,
         context: {
-          ...conversation.context,
-          userIntent: intent.type,
-          emotionalState: emotionDetection.confidence > 0.3 ? emotionDetection.emotion : conversation.context.emotionalState,
-          conversationStage: determineConversationStage(intent, conversation.context.conversationStage),
+          ...baseConversation.context,
+          userIntent: intent,
+          emotionalState:
+            emotionDetection.confidence > 0.3 ? emotionDetection.emotion : baseConversation.context.emotionalState,
+          conversationStage: determineConversationStage(intent, baseConversation.context.conversationStage),
         },
         updatedAt: Date.now(),
         metadata: {
-          ...conversation.metadata,
+          ...baseConversation.metadata,
           messageCount: updatedMessages.length,
         },
       };
-      
+
       setConversation(updatedConversation);
 
       // Build system prompt with context
@@ -283,7 +302,7 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
       });
 
       // Update emotional warmth
-      emotionalIntelligence.updateWarmth(conversation.id, aiMessage);
+      emotionalIntelligence.updateWarmth(updatedConversation.id, aiMessage);
 
     } catch (err) {
       console.error('AI Chat Error:', err);

@@ -229,7 +229,7 @@ class VectorSearchService {
     
     // Create bag-of-words vector
     const embedding = vocabulary.map(word => {
-      const count = (text.match(new RegExp(word, 'gi')) || []).length;
+      const count = (text.match(new RegExp(this.escapeRegExp(word), 'gi')) || []).length;
       return count > 0 ? 1 : 0;
     });
     
@@ -243,6 +243,10 @@ class VectorSearchService {
     this.cache[text] = normalized;
     
     return normalized;
+  }
+
+  private escapeRegExp(text: string): string {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   /**

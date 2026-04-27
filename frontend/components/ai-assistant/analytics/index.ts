@@ -9,6 +9,7 @@ class AIAnalytics {
   private events: AnalyticsEvent[] = [];
   private sessionId: string;
   private enabled: boolean;
+  private readonly maxEvents = 200;
 
   constructor(enabled = true) {
     this.sessionId = this.generateSessionId();
@@ -33,9 +34,12 @@ class AIAnalytics {
     };
 
     this.events.push(event);
+    if (this.events.length > this.maxEvents) {
+      this.events = this.events.slice(-this.maxEvents);
+    }
     
     // Send to analytics endpoint or console in development
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       console.log('[AI Analytics]', event);
     }
 

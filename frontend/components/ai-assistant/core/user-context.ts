@@ -62,7 +62,7 @@ export function updateUserContext(
   return {
     ...current,
     ...updates,
-    lastVisit: new Date().toISOString(),
+    lastVisit: Date.now(),
   };
 }
 

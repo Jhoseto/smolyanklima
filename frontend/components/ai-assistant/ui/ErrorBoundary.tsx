@@ -3,7 +3,7 @@
  * Handles errors gracefully without breaking UX
  */
 
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw, MessageCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -19,7 +19,7 @@ interface State {
   errorInfo: ErrorInfo | null;
 }
 
-export class AIErrorBoundary extends Component<Props, State> {
+export class AIErrorBoundary extends React.Component<Props, State> {
   public state: State = {
     hasError: false,
     error: null,
@@ -32,7 +32,7 @@ export class AIErrorBoundary extends Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('AI Assistant Error:', error, errorInfo);
-    this.setState({ error, errorInfo });
+    (this as any).setState({ error, errorInfo });
 
     // Send to analytics/monitoring
     this.reportError(error, errorInfo);
@@ -52,7 +52,7 @@ export class AIErrorBoundary extends Component<Props, State> {
   }
 
   private handleReset = () => {
-    this.setState({ hasError: false, error: null, errorInfo: null });
+    (this as any).setState({ hasError: false, error: null, errorInfo: null });
   };
 
   private handleContactSupport = () => {
@@ -66,10 +66,10 @@ export class AIErrorBoundary extends Component<Props, State> {
   public render() {
     if (this.state.hasError) {
       return (
-        this.props.fallback || (
+        (this as any).props.fallback || (
           <ErrorFallback
             error={this.state.error}
-            primaryColor={this.props.primaryColor}
+            primaryColor={(this as any).props.primaryColor}
             onReset={this.handleReset}
             onContactSupport={this.handleContactSupport}
           />
@@ -77,7 +77,7 @@ export class AIErrorBoundary extends Component<Props, State> {
       );
     }
 
-    return this.props.children;
+    return (this as any).props.children;
   }
 }
 
