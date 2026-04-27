@@ -10,6 +10,7 @@ import { promptBuilder } from '../core/PromptBuilder';
 import { skillRouter } from '../core/SkillRouter';
 import { emotionalIntelligence } from '../core/EmotionalIntelligence';
 import { createHallucinationGuard } from '../security/HallucinationGuard';
+import { products as dbProducts } from '../../../data/db';
 import type {
   Message,
   Conversation,
@@ -20,60 +21,85 @@ import type {
   UserIntent,
 } from '../types';
 
-// Mock product database - should be replaced with real data from data/db.ts
-const MOCK_PRODUCTS: Product[] = [
-  {
-    id: '1',
-    name: 'Daikin Perfera FTXM25R/RXM25R',
-    brand: 'Daikin',
-    model: 'FTXM25R',
-    price: 1299,
-    oldPrice: 1499,
-    image: '/products/daikin-perfera.jpg',
-    specs: {
-      power: '9000 BTU',
-      coolingCapacity: 2.5,
-      heatingCapacity: 3.2,
-      noiseLevel: 19,
-      energyEfficiency: 6.5,
-      coverage: 20,
-    },
-    features: ['Wi-Fi control', 'Quiet operation', 'Energy efficient'],
-    inStock: true,
-    stockCount: 5,
-    rating: 4.8,
-    reviewCount: 127,
-    energyClass: 'A+++',
-    warranty: { years: 3, compressor: 5, parts: 3, labor: 2 },
-    suitableFor: ['bedroom', 'living'],
-    popularityScore: 95,
-  },
-  {
-    id: '2',
-    name: 'Mitsubishi MSZ-LN25VG',
-    brand: 'Mitsubishi',
-    model: 'MSZ-LN25VG',
-    price: 1599,
-    image: '/products/mitsubishi-ln.jpg',
-    specs: {
-      power: '9000 BTU',
-      coolingCapacity: 2.5,
-      heatingCapacity: 3.4,
-      noiseLevel: 18,
-      energyEfficiency: 7.2,
-      coverage: 20,
-    },
-    features: ['Plasma filter', '3D auto airflow', 'Silent mode'],
-    inStock: true,
-    stockCount: 3,
-    rating: 4.9,
-    reviewCount: 89,
-    energyClass: 'A+++',
-    warranty: { years: 3, compressor: 5, parts: 3, labor: 2 },
-    suitableFor: ['bedroom', 'living', 'kids'],
-    popularityScore: 92,
-  },
-];
+// Transform data/db.ts products to AI assistant Product format
+function transformDbProducts(): Product[] {
+  return dbProducts.map((p) => {
+    // Parse cooling power to extract numeric value
+    const coolingMatch = p.coolingPower?.match(/([\d.]+)/);
+    const coolingCapacity = coolingMatch ? parseFloat(coolingMatch[1]) : 2.5;
+    
+    // Parse heating power
+    const heatingMatch = p.heatingPower?.match(/([\d.]+)/);
+    const heatingCapacity = heatingMatch ? parseFloat(heatingMatch[1]) : 3.2;
+    
+    // Parse noise level
+    const noiseMatch = p.noise?.match(/([\d]+)/);
+    const noiseLevel = noiseMatch ? parseInt(noiseMatch[1]) : 25;
+    
+    // Parse area for coverage
+    const areaMatch = p.area?.match(/([\d]+)/);
+    const coverage = areaMatch ? parseInt(areaMatch[1]) : 25;
+    
+    // Map energy class to numeric efficiency
+    const energyEfficiencyMap: Record<string, number> = {
+      'A+++': 8.5,
+      'A++': 7.5,
+      'A+': 6.5,
+      'A': 5.5,
+      'B': 4.5,
+    };
+    const energyEfficiency = energyEfficiencyMap[p.energyCool || 'A'] || 6.5;
+    
+    // Map category to suitableFor
+    const categoryToRoom: Record<string, ('bedroom' | 'living' | 'kids' | 'office' | 'kitchen' | 'other')[]> = {
+      'Апартамент': ['bedroom', 'living'],
+      'Къща': ['living', 'bedroom'],
+      'Офис': ['office'],
+      'Търговски': ['office'],
+      'Аксесоари': ['other'],
+      'Части': ['other'],
+    };
+    
+    // Parse warranty
+    const warrantyMatch = p.warranty?.match(/([\d]+)/);
+    const warrantyYears = warrantyMatch ? parseInt(warrantyMatch[1]) : 2;
+    
+    return {
+      id: p.id,
+      name: p.name,
+      brand: p.brand,
+      model: p.type || p.id,
+      price: p.price,
+      oldPrice: undefined,
+      image: `/images/${p.id}.jpg`,
+      specs: {
+        power: p.coolingPower || '2.5 kW',
+        coolingCapacity,
+        heatingCapacity,
+        noiseLevel,
+        energyEfficiency,
+        seer: energyEfficiency, // Use same value as placeholder
+        coverage,
+      },
+      features: p.features || [],
+      inStock: true,
+      stockCount: 5,
+      rating: 4.5,
+      reviewCount: 10,
+      energyClass: p.energyCool || 'A',
+      warranty: {
+        years: warrantyYears,
+        compressor: warrantyYears + 2,
+        parts: warrantyYears,
+        labor: warrantyYears - 1,
+      },
+      suitableFor: categoryToRoom[p.category] || ['other'],
+      popularityScore: 80,
+    };
+  });
+}
+
+const PRODUCTS: Product[] = transformDbProducts();
 
 export interface UseAIChatOptions {
   apiKey: string;
@@ -102,7 +128,7 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
   const [actions, setActions] = useState<AIAction[]>([]);
   
   const geminiClient = useRef(getGeminiClient(apiKey));
-  const hallucinationGuard = useRef(createHallucinationGuard(MOCK_PRODUCTS));
+  const hallucinationGuard = useRef(createHallucinationGuard(PRODUCTS));
   
   // Initialize conversation on first load
   useEffect(() => {
@@ -187,7 +213,7 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
           consent: { given: false, timestamp: 0, version: '1.0', dataTypes: [] },
           device: { type: 'desktop', viewport: { width: 1920, height: 1080 }, touch: false, language: 'bg' },
         },
-        relevantProducts: MOCK_PRODUCTS.slice(0, 3),
+        relevantProducts: PRODUCTS.slice(0, 3),
         userIntent: intent.type,
         emotion: emotionDetection.confidence > 0.3 ? emotionDetection.emotion : undefined,
       });
@@ -211,14 +237,20 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
       // Apply emotional intelligence
       finalContent = emotionalIntelligence.applyMirroring(updatedMessages, finalContent);
       
-      // Add empathy modifier if emotion detected
-      if (emotionDetection.confidence > 0.3) {
-        const empathyModifier = emotionalIntelligence.getEmpathyModifier(
-          emotionDetection.emotion,
-          emotionDetection.confidence
-        );
-        if (empathyModifier && !finalContent.toLowerCase().includes(empathyModifier.toLowerCase())) {
-          finalContent = `${empathyModifier}\n\n${finalContent}`;
+      // Add empathy modifier only when:
+      //  - emotion is strongly detected (>= 0.6), and
+      //  - the response doesn't already start with a greeting/empathy phrase.
+      // This prevents stacking "Здравейте... Разбирам..." over Gemini's own greeting.
+      if (emotionDetection.confidence >= 0.6) {
+        const startsWithGreeting = /^\s*(здравейте|здрасти|добро утро|добър ден|добър вечер|разбирам|чувам ви|радвам се)/i.test(finalContent);
+        if (!startsWithGreeting) {
+          const empathyModifier = emotionalIntelligence.getEmpathyModifier(
+            emotionDetection.emotion,
+            emotionDetection.confidence
+          );
+          if (empathyModifier && !finalContent.toLowerCase().includes(empathyModifier.toLowerCase())) {
+            finalContent = `${empathyModifier}\n\n${finalContent}`;
+          }
         }
       }
 
@@ -235,7 +267,7 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
       };
 
       // Extract suggested products from response
-      const extractedProducts = extractProductsFromResponse(finalContent, MOCK_PRODUCTS);
+      const extractedProducts = extractProductsFromResponse(finalContent, PRODUCTS);
       if (extractedProducts.length > 0) {
         setSuggestedProducts(extractedProducts);
       }

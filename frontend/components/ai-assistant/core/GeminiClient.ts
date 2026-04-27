@@ -5,8 +5,8 @@
 
 import type { GeminiResponse, APIError, Message, Conversation } from '../types';
 
-// Gemini 2.5 Flash - recommended for cost-effective, fast responses
-const GEMINI_MODEL = 'gemini-2.5-flash-preview-05-20';
+// Gemini 2.5 Flash - stable GA model, cost-effective and fast
+const GEMINI_MODEL = 'gemini-2.5-flash';
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
 interface GeminiConfig {

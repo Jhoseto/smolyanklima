@@ -151,12 +151,9 @@ class EmotionalIntelligence {
       modifiedResponse = modifiedResponse.replace(/ти/i, 'Вие');
     }
 
-    // Mirror length
-    if (usesShort && modifiedResponse.length > 150) {
-      // User prefers short, make response more concise
-      const sentences = modifiedResponse.split(/[.!?]+/).filter((s) => s.trim());
-      modifiedResponse = sentences.slice(0, 2).join('. ') + '.';
-    }
+    // Length mirroring intentionally disabled: it was truncating useful
+    // responses to 2 sentences when users typed short messages, making the
+    // assistant feel shallow. Let the model decide response length.
 
     return modifiedResponse;
   }

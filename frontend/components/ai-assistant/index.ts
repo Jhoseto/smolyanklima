@@ -18,9 +18,9 @@ export { AIErrorBoundary } from './ui/ErrorBoundary';
 // Hooks
 export { useCrossTabSync } from './hooks/useCrossTabSync';
 export { useAIIntegration, trackProductView, trackAddToCart, trackSearchQuery, trackPageContext } from './hooks/useAIIntegration';
-export { useProducts } from './hooks/useProducts';
 export { useUserContext } from './hooks/useUserContext';
 export { useConversation } from './hooks/useConversation';
+export { useAIChat } from './hooks/useAIChat';
 
 // Services
 export { VectorSearchService, getVectorSearchService, resetVectorSearchService } from './services/vectorSearch';
@@ -55,17 +55,6 @@ export {
   findSimilarProducts,
   precomputeProductEmbeddings,
 } from './knowledge-base/product-embeddings';
-export {
-  getAllProducts,
-  getProductById,
-  getProductsByBrand,
-  getProductsByRoomType,
-  getProductsByCoverage,
-  getProductsByBudget,
-  searchProducts,
-  getPopularProducts,
-  getProductsOnSale,
-} from './knowledge-base/product-database';
 
 // Context
 export { AIProvider, useAIContext } from './context';
@@ -79,7 +68,6 @@ export { PromptBuilder, promptBuilder } from './core/PromptBuilder';
 export { SkillRouter, skillRouter } from './core/SkillRouter';
 export { EmotionalIntelligence, emotionalIntelligence } from './core/EmotionalIntelligence';
 export { AIChatProvider, useAIChatContext } from './core/AIChatProvider';
-export { useAIChat } from './core/useAIChat';
 export * from './core/user-context';
 
 // Types
