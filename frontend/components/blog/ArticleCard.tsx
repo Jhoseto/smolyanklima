@@ -71,7 +71,7 @@ export const ArticleCard: React.FC<ArticleCardProps> = ({
           <div className="relative aspect-[16/9] rounded-2xl overflow-hidden mb-6">
             <ArticleImage
               src={article.featuredImage}
-              alt={article.title}
+              alt={`${article.title} - Featured Image`}
               className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
@@ -140,7 +140,7 @@ export const ArticleCard: React.FC<ArticleCardProps> = ({
           <div className="relative w-24 h-24 sm:w-32 sm:h-32 rounded-xl overflow-hidden flex-shrink-0">
             <ArticleImage
               src={article.featuredImage}
-              alt={article.title}
+              alt={`${article.title} - Thumbnail`}
               className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
             />
           </div>
@@ -176,7 +176,7 @@ export const ArticleCard: React.FC<ArticleCardProps> = ({
         <div className="relative aspect-[4/3] overflow-hidden">
           <img
             src={article.featuredImage}
-            alt={article.title}
+            alt={`${article.title} - Blog Post Image`}
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
           

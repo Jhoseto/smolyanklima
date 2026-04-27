@@ -20,6 +20,7 @@ import { ContactInfoSection } from './components/sections/ContactInfoSection';
 import { FAQSection } from './components/sections/FAQSection';
 import { BrandsSection } from './components/sections/BrandsSection';
 import { Footer } from './components/layout/Footer';
+import { GradientMeshMorphing, BokehOrbs, TechGrid } from './components/effects';
 
 // Lazy load страници за по-бързо начално зареждане
 const CatalogPage = lazy(() => import('./pages/CatalogPage'));
@@ -33,10 +34,32 @@ const BlogArticlePage = lazy(() => import('./pages/BlogArticlePage'));
 const HomePage = () => (
   <div className="min-h-screen bg-[#FAFAFA] font-sans selection:bg-[#FF4D00]/20 selection:text-[#FF4D00]">
     <main>
-      <HeroSection />
-      <FeaturesSection />
+      {/* Hero с Gradient Mesh */}
+      <section className="relative min-h-screen overflow-hidden">
+        <GradientMeshMorphing intensity="normal" />
+        <div className="relative z-10">
+          <HeroSection />
+        </div>
+      </section>
+      
+      {/* Features с Tech Grid */}
+      <section className="relative min-h-screen overflow-hidden">
+        <TechGrid gridSize={80} />
+        <div className="relative z-10">
+          <FeaturesSection />
+        </div>
+      </section>
+      
       <ProductsSection />
-      <ServicesSection />
+      
+      {/* Services с Bokeh Orbs */}
+      <section className="relative min-h-screen overflow-hidden bg-white/50">
+        <BokehOrbs orbCount={8} />
+        <div className="relative z-10">
+          <ServicesSection />
+        </div>
+      </section>
+      
       <StatsSection />
       <TestimonialsSection />
       <ProjectsSection />

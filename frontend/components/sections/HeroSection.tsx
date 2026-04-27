@@ -6,7 +6,7 @@ import { BrandsSection } from './BrandsSection';
 
 export const HeroSection = () => {
   return (
-    <section id="home" className="relative pt-32 pb-12 lg:pt-40 lg:pb-16 overflow-hidden bg-white">
+    <section id="home" className="relative pt-32 pb-12 lg:pt-40 lg:pb-16 overflow-hidden">
       {/* Background Soft Glow */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-red-50/80 rounded-full blur-[100px] pointer-events-none z-0" />
 
@@ -151,10 +151,11 @@ export const HeroSection = () => {
           </motion.div>
 
         </div>
+      </div>
 
-        <div className="mt-0 lg:mt-[-20px] relative z-20">
-          <BrandsSection />
-        </div>
+      {/* Brands Carousel - извън контейнера за пълна ширина и прозрачен фон */}
+      <div className="mt-0 lg:mt-[-20px] relative z-20 w-full bg-transparent">
+        <BrandsSection />
       </div>
     </section>
   );

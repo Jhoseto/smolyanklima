@@ -20,9 +20,9 @@ export const BrandsSection = () => {
 
   return (
     <div className="bg-transparent py-4 overflow-hidden relative group">
-      {/* Side Fades */}
-      <div className="absolute inset-y-0 left-0 w-32 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none" />
-      <div className="absolute inset-y-0 right-0 w-32 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none" />
+      {/* Fade edges - ляво и дясно */}
+      <div className="absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-[#FAFAFA] to-transparent z-10 pointer-events-none" />
+      <div className="absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-[#FAFAFA] to-transparent z-10 pointer-events-none" />
 
       <div className="relative flex">
         <motion.div

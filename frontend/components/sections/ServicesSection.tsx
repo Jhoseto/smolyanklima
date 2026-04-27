@@ -64,7 +64,7 @@ export const ServicesSection = () => {
   }, [isExpanded]);
 
   return (
-    <section id="services" ref={sectionRef} className="py-24 bg-white relative overflow-hidden">
+    <section id="services" ref={sectionRef} className="py-24 relative overflow-hidden">
       {/* Decorative background blur */}
       <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-red-50 rounded-full blur-[120px] opacity-60 translate-x-1/3 -translate-y-1/3 pointer-events-none" />
 

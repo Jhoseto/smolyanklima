@@ -25,7 +25,7 @@ export const CompareBar = ({ compareList, onRemove, onClear }: CompareBarProps) 
       >
         <div className="bg-white/90 backdrop-blur-xl border border-gray-200 shadow-2xl rounded-2xl p-4 flex flex-col md:flex-row items-center gap-6 pointer-events-auto w-full max-w-4xl">
           
-          <div className="flex-1 flex gap-4 overflow-x-auto w-full md:w-auto pb-2 md:pb-0">
+          <div className="flex-1 flex gap-4 w-full md:w-auto overflow-hidden">
             <AnimatePresence>
               {compareList.map(p => (
                 <motion.div
