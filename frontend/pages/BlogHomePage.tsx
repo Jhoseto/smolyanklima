@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
   BlogHeroSection, 
@@ -21,6 +21,11 @@ export default function BlogHomePage() {
   const navigate = useNavigate();
   const { slug } = useParams<{ slug?: string }>();
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Scroll to top on mount
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
   
   // Check if we're on a category page
   const isCategoryPage = window.location.pathname.includes('/kategoria/');

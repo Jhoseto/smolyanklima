@@ -15,15 +15,23 @@ export const BlogHeroSection: React.FC<BlogHeroSectionProps> = ({
 }) => {
   const stats = [
     { icon: BookOpen, label: 'Статии', value: '50+' },
-    { icon: Users, label: 'Експерти', value: '3' },
-    { icon: TrendingUp, label: 'Читатели', value: '1000+' }
+    { icon: Users, label: 'Автори', value: '3' },
+    { icon: TrendingUp, label: 'Прегледи', value: '200+' }
   ];
 
   return (
     <section className="relative pt-32 pb-20 overflow-hidden">
-      {/* Background Gradient */}
-      <div className="absolute inset-0 bg-gradient-to-br from-[#00B4D8]/5 via-transparent to-[#FF4D00]/5 pointer-events-none" />
-      
+      {/* Background Image */}
+      <div className="absolute inset-0">
+        <img
+          src="https://images.unsplash.com/photo-1498049860654-af1a5c566876?q=80&w=2340&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+          alt="Блог за климатици"
+          className="w-full h-full object-cover"
+        />
+        {/* Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-white/90 via-white/85 to-white/90" />
+      </div>
+
       {/* Decorative Blobs */}
       <div className="absolute top-20 left-0 w-[600px] h-[600px] bg-[#00B4D8]/10 rounded-full blur-[120px] -translate-x-1/2 pointer-events-none" />
       <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-[#FF4D00]/10 rounded-full blur-[100px] translate-x-1/3 pointer-events-none" />
@@ -59,8 +67,8 @@ export const BlogHeroSection: React.FC<BlogHeroSectionProps> = ({
             transition={{ duration: 0.6, delay: 0.1 }}
             className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-6 leading-tight"
           >
-            Експертни съвети за{' '}
-            <span className="text-[#FF4D00]">климатици</span>
+            Експертни съвети и теми{' '}
+            <span className="text-[#FF4D00]">от нашият свят</span>
           </motion.h1>
 
           <motion.p

@@ -36,8 +36,8 @@ export const ContactInfoSection = () => {
     {
       icon: Clock,
       title: "Работно време",
-      content: "09:00 - 18:00",
-      subtext: "Неделя - Почивен ден",
+      content: "Понеделник - Петък: 09:00-18:00",
+      subtext: "Събота: 09:00-14:00 | Неделя: Почивен ден",
       href: null,
       color: "from-gray-700 to-gray-900",
       shadow: "shadow-gray-900/20"
