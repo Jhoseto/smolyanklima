@@ -30,7 +30,7 @@ export function escapeHtml(text: string): string {
  * Format price with Bulgarian lev suffix
  */
 export function formatPrice(price: number): string {
-  return `${price.toLocaleString('bg-BG')} лв`;
+  return `${price.toLocaleString('bg-BG')} €`;
 }
 
 /**

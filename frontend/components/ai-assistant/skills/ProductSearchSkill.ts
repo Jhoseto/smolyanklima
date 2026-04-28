@@ -74,7 +74,7 @@ export class ProductSearchSkill {
       }
 
       // Get top products
-      const products = results.map(r => r.product).slice(0, 3);
+      const products = results.map(r => r.product);
 
       // Build response
       let response = this.buildResponse(products, query, userContext);
@@ -101,15 +101,15 @@ export class ProductSearchSkill {
   private buildResponse(products: Product[], query: string, userContext?: UserContext): string {
     if (products.length === 1) {
       const p = products[0];
-      return `Намерих точно това, което търсите! ${p.name} е идеален за ${p.suitableFor.join(', ')} с покритие до ${p.specs.coverage}м². Цената е ${p.price} лв. Искате ли повече информация за този модел?`;
+      return `Намерих точно това, което търсите! ${p.name} е идеален за ${p.suitableFor.join(', ')} с покритие до ${p.specs.coverage}м². Цената е ${p.price} €. Искате ли повече информация за този модел?`;
     }
 
     if (products.length === 2) {
-      return `Намерих 2 отлични опции за вас:\n\n1️⃣ ${products[0].name} - ${products[0].price} лв\n2️⃣ ${products[1].name} - ${products[1].price} лв\n\nИскате ли да Ви помогна да изберете между тях?`;
+      return `Намерих 2 отлични опции за вас:\n\n1️⃣ ${products[0].name} - ${products[0].price} €\n2️⃣ ${products[1].name} - ${products[1].price} €\n\nИскате ли да Ви помогна да изберете между тях?`;
     }
 
     return `Намерих ${products.length} модела, които отговарят на търсенето Ви:\n\n` +
-      products.map((p, i) => `${i + 1}. ${p.name} (${p.brand}) - ${p.price} лв - подходящ за ${p.suitableFor[0]}`).join('\n') +
+      products.map((p, i) => `${i + 1}. ${p.name} (${p.brand}) - ${p.price} € - подходящ за ${p.suitableFor[0]}`).join('\n') +
       `\n\nИскате ли подробности за някой от тях?`;
   }
 

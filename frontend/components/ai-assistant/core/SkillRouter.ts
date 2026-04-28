@@ -272,7 +272,7 @@ class SkillRouter {
       room_type: /(спалня|всекидневна|хол|детска|офис|кухня|таван|мазе)/i,
       square_meters: /(\d+)\s*(кв\.м|квадрата|м2|kvm)/i,
       brand: /(daikin|mitsubishi|lg|fujitsu|panasonic|toshiba)/i,
-      budget: /(\d+)\s*(лв|lv|лева)/i,
+      budget: /(\d+)\s*(€|eur|euro|евро)/i,
       price_range: /(\d+)\s*(до|-)\s*(\d+)/i,
     };
 
@@ -306,7 +306,7 @@ class SkillRouter {
     }
 
     // Price
-    const priceMatch = lowerMessage.match(/(\d{3,4})\s*(лв|lv|лева)/i);
+    const priceMatch = lowerMessage.match(/(\d{3,4})\s*(€|eur|euro|евро)/i);
     if (priceMatch) {
       entities.push({ type: 'price', value: priceMatch[1], confidence: 0.8 });
     }

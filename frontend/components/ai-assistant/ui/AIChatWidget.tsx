@@ -6,6 +6,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { X, Send, MessageCircle, ChevronDown, ChevronUp, Mic, Paperclip, Bot } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { useAIChat } from '../hooks/useAIChat';
 import { useCrossTabSync } from '../hooks/useCrossTabSync';
 import type { Message, QuickReply, TypingIndicator } from '../types';
@@ -57,6 +58,7 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const widgetRef = useRef<HTMLDivElement>(null);
   const consentStorageKeyRef = useRef('ai_chat_privacy_consent_v1');
+  const navigate = useNavigate();
 
   // Initialize AI Chat hook
   const {
@@ -221,6 +223,11 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
 
   const positionStyles = getPositionStyles();
   const dimensions = getWidgetDimensions();
+
+  // Handle product view details
+  const handleViewDetails = useCallback((product: any) => {
+    navigate(`/product/${product.id}`);
+  }, [navigate]);
 
   // Toggle chat
   const toggleChat = useCallback(() => {
@@ -456,6 +463,7 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
                         key={product.id}
                         product={product}
                         primaryColor={primaryColor}
+                        onViewDetails={handleViewDetails}
                       />
                     ))}
                   </div>

@@ -29,7 +29,7 @@ export interface DbProduct {
   warranty?: string;        // '3 г. гаранция'
   description?: string;
   features?: string[];      // ['Инвертор', 'WiFi управление', ...]
-  price: number;            // EUR
+  price: number;            // EUR (converted from BGN at 1.95 rate)
 }
 
 // ──────────────────────────────────────
@@ -75,7 +75,7 @@ export interface CatalogProduct {
   heatingPower?: string;
 
   // Pricing
-  price: number;           // EUR, base price
+  price: number;           // EUR, base price (converted from BGN at 1.95 rate)
   priceWithMount: number;  // EUR, price including installation
 
   // Social proof (hardcoded until backend)

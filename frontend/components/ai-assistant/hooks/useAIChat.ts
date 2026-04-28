@@ -72,6 +72,7 @@ function transformDbProducts(): Product[] {
       price: p.price,
       oldPrice: undefined,
       image: `/images/${p.id}.jpg`,
+      description: p.description || '',
       specs: {
         power: p.coolingPower || '2.5 kW',
         coolingCapacity,
@@ -232,7 +233,7 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
           consent: { given: false, timestamp: 0, version: '1.0', dataTypes: [] },
           device: { type: 'desktop', viewport: { width: 1920, height: 1080 }, touch: false, language: 'bg' },
         },
-        relevantProducts: PRODUCTS.slice(0, 3),
+        relevantProducts: PRODUCTS,
         userIntent: intent.type,
         emotion: emotionDetection.confidence > 0.3 ? emotionDetection.emotion : undefined,
       });
@@ -250,7 +251,10 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
       
       if (!validationResult.isValid && validationResult.correctedContent) {
         finalContent = validationResult.correctedContent;
-        console.warn('Response corrected by hallucination guard:', validationResult.violations);
+        // Only log in development
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('Response corrected by hallucination guard:', validationResult.violations);
+        }
       }
 
       // Apply emotional intelligence
@@ -259,8 +263,10 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
       // Add empathy modifier only when:
       //  - emotion is strongly detected (>= 0.6), and
       //  - the response doesn't already start with a greeting/empathy phrase.
+      //  - this is NOT the first message (to avoid adding greetings after the first)
       // This prevents stacking "Здравейте... Разбирам..." over Gemini's own greeting.
-      if (emotionDetection.confidence >= 0.6) {
+      const isFirstMessage = updatedMessages.length <= 2; // User + AI welcome
+      if (emotionDetection.confidence >= 0.6 && !isFirstMessage) {
         const startsWithGreeting = /^\s*(здравейте|здрасти|добро утро|добър ден|добър вечер|разбирам|чувам ви|радвам се)/i.test(finalContent);
         if (!startsWithGreeting) {
           const empathyModifier = emotionalIntelligence.getEmpathyModifier(
@@ -305,8 +311,18 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
       emotionalIntelligence.updateWarmth(updatedConversation.id, aiMessage);
 
     } catch (err) {
-      console.error('AI Chat Error:', err);
-      setError('Възникна грешка. Моля, опитайте отново или се свържете с нас на телефон.');
+      // Only log errors in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error('AI Chat Error:', err);
+        console.error('Error details:', JSON.stringify(err, null, 2));
+      }
+      
+      // Handle rate limit errors specifically
+      if (err && typeof err === 'object' && 'code' in err && err.code === 'RATE_LIMIT_EXCEEDED') {
+        setError('Надвишили сте дневния лимит за съобщения. Моля, опитайте отново утре или се свържете с нас на телефон: 0888 58 58 16');
+      } else {
+        setError('Възникна грешка. Моля, опитайте отново или се свържете с нас на телефон: 0888 58 58 16');
+      }
     } finally {
       setIsLoading(false);
     }

@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Check, ArrowRightLeft } from 'lucide-react';
+import { X, Check, ArrowRightLeft, DollarSign, Zap, Volume2, Square, Wifi, Tag, Shield, Star, Loader2 } from 'lucide-react';
 import type { CatalogProduct } from '../../data/types/product';
+import { getComparisonAIService } from '../ai-assistant/core/ComparisonAIService';
 
 interface CompareBarProps {
   compareList: CatalogProduct[];
@@ -11,6 +12,71 @@ interface CompareBarProps {
 
 export const CompareBar = ({ compareList, onRemove, onClear }: CompareBarProps) => {
   const [showTable, setShowTable] = useState(false);
+  const [aiRecommendation, setAiRecommendation] = useState<string | null>(null);
+  const [isLoadingAi, setIsLoadingAi] = useState(false);
+
+  // Generate AI recommendation when table opens
+  useEffect(() => {
+    if (showTable && compareList.length >= 2) {
+      generateAIRecommendation();
+    }
+  }, [showTable, compareList]);
+
+  const generateAIRecommendation = async () => {
+    setIsLoadingAi(true);
+    try {
+      const comparisonService = getComparisonAIService();
+      // Convert CatalogProduct to Product format
+      const products = compareList.map(p => ({
+        id: p.id,
+        name: `${p.brand} ${p.model}`,
+        brand: p.brand,
+        model: p.model,
+        image: p.image,
+        price: p.price,
+        oldPrice: undefined,
+        energyClass: p.energyClass,
+        specs: {
+          power: p.coolingPower,
+          coolingCapacity: 2.5,
+          heatingCapacity: 3.2,
+          coverage: parseInt(p.area) || 25,
+          noiseLevel: parseInt(p.noise) || 25,
+          energyEfficiency: 5.5,
+          seer: 0,
+        },
+        features: p.features,
+        inStock: true,
+        warranty: { years: 3, compressor: 5, parts: 3, labor: 2 },
+        rating: 0,
+        reviewCount: 0,
+        suitableFor: [],
+        popularityScore: 0,
+        type: p.type,
+      }));
+      
+      const recommendation = await comparisonService.generateComparison(products);
+      
+      // Build the recommendation text
+      let recommendationText = recommendation.summary;
+      if (recommendation.bestChoice) {
+        recommendationText += `\n\n${recommendation.bestChoice}`;
+      }
+      if (recommendation.keyDifferences.length > 0) {
+        recommendationText += `\n\nКлючови разлики:\n${recommendation.keyDifferences.join('\n')}`;
+      }
+      if (recommendation.recommendation) {
+        recommendationText += `\n\nПрепоръка: ${recommendation.recommendation}`;
+      }
+      
+      setAiRecommendation(recommendationText);
+    } catch (error) {
+      console.error('Error generating AI recommendation:', error);
+      setAiRecommendation('Не успяхме да генерираме AI препоръка. Моля, опитайте отново.');
+    } finally {
+      setIsLoadingAi(false);
+    }
+  };
 
   if (compareList.length === 0) return null;
 
@@ -112,54 +178,167 @@ export const CompareBar = ({ compareList, onRemove, onClear }: CompareBarProps) 
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr>
-                      <th className="p-4 border-b border-gray-200 w-1/4">Характеристика</th>
+                      <th className="p-4 border-b-2 border-gray-200 w-1/4 bg-gray-50/50 sticky left-0">Характеристика</th>
                       {compareList.map(p => (
-                        <th key={p.id} className="p-4 border-b border-gray-200 w-1/4 align-top">
-                          <img src={p.image} alt={p.model} className="w-24 h-24 object-contain mx-auto mix-blend-multiply mb-4" />
-                          <p className="text-xs font-bold text-[#00B4D8] uppercase">{p.brand}</p>
-                          <p className="text-sm font-black text-gray-900 mb-2">{p.model}</p>
-                          <p className="text-xl font-extrabold text-gray-900">€{p.price.toLocaleString()}</p>
+                        <th key={p.id} className="p-4 border-b-2 border-gray-200 w-1/4 align-top">
+                          <div className="relative">
+                            <img src={p.image} alt={p.model} className="w-28 h-28 object-contain mx-auto mix-blend-multiply mb-3 bg-white rounded-xl p-2 shadow-sm" />
+                            <div className="absolute top-0 right-0 bg-gradient-to-r from-[#00B4D8] to-[#0077B6] text-white text-[10px] font-black px-2 py-1 rounded-lg uppercase tracking-wider">
+                              {p.brand}
+                            </div>
+                          </div>
+                          <p className="text-sm font-black text-gray-900 mb-1 leading-tight">{p.model}</p>
+                          <p className="text-2xl font-extrabold bg-gradient-to-r from-[#FF4D00] to-[#FF2A4D] bg-clip-text text-transparent">€{p.price.toLocaleString()}</p>
                         </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="text-sm">
-                    <tr>
-                      <td className="p-4 border-b border-gray-100 font-bold text-gray-500">Цена с монтаж</td>
-                      {compareList.map(p => <td key={p.id} className="p-4 border-b border-gray-100 font-semibold">€{p.priceWithMount.toLocaleString()}</td>)}
+                    <tr className="hover:bg-gray-50/50 transition-colors">
+                      <td className="p-4 border-b border-gray-100 font-bold text-gray-600 bg-gray-50/30 flex items-center gap-2">
+                        <DollarSign className="w-4 h-4 text-[#FF4D00]" />
+                        Цена с монтаж
+                      </td>
+                      {compareList.map((p, idx) => {
+                        const prices = compareList.map(cp => cp.priceWithMount);
+                        const isCheapest = p.priceWithMount === Math.min(...prices);
+                        const isMostExpensive = p.priceWithMount === Math.max(...prices);
+                        return (
+                          <td key={p.id} className={`p-4 border-b border-gray-100 font-semibold ${isCheapest ? 'bg-green-50' : isMostExpensive ? 'bg-red-50' : ''}`}>
+                            <span className={isCheapest ? 'text-green-600' : isMostExpensive ? 'text-red-600' : 'text-gray-900'}>
+                              €{p.priceWithMount.toLocaleString()}
+                            </span>
+                            {isCheapest && <span className="ml-2 text-[10px] font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded-full">НАЙ-ДОБРА ЦЕНА</span>}
+                          </td>
+                        );
+                      })}
                     </tr>
-                    <tr>
-                      <td className="p-4 border-b border-gray-100 font-bold text-gray-500">Енергиен клас</td>
-                      {compareList.map(p => <td key={p.id} className="p-4 border-b border-gray-100"><span className="bg-green-500 text-white px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider">{p.energyClass}</span></td>)}
+                    <tr className="hover:bg-gray-50/50 transition-colors">
+                      <td className="p-4 border-b border-gray-100 font-bold text-gray-600 bg-gray-50/30 flex items-center gap-2">
+                        <Zap className="w-4 h-4 text-[#00B4D8]" />
+                        Енергиен клас
+                      </td>
+                      {compareList.map((p, idx) => {
+                        const energyOrder = ['A+++', 'A++', 'A+', 'A', 'B'];
+                        const energyScores = compareList.map(cp => energyOrder.indexOf(cp.energyClass));
+                        const bestEnergy = Math.min(...energyScores);
+                        const isBest = energyOrder.indexOf(p.energyClass) === bestEnergy;
+                        return (
+                          <td key={p.id} className={`p-4 border-b border-gray-100 ${isBest ? 'bg-green-50' : ''}`}>
+                            <span className={`px-3 py-1 rounded-full text-[11px] font-black tracking-wider ${isBest ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-700'}`}>
+                              {p.energyClass}
+                            </span>
+                            {isBest && <span className="ml-2 text-[10px] font-bold text-green-600">НАЙ-ЕФИКАСЕН</span>}
+                          </td>
+                        );
+                      })}
                     </tr>
-                    <tr>
-                      <td className="p-4 border-b border-gray-100 font-bold text-gray-500">WiFi Управление</td>
-                      {compareList.map(p => <td key={p.id} className="p-4 border-b border-gray-100">{p.features.includes('WiFi управление') ? <Check className="text-green-500 w-5 h-5" /> : <span className="text-gray-300">-</span>}</td>)}
+                    <tr className="hover:bg-gray-50/50 transition-colors">
+                      <td className="p-4 border-b border-gray-100 font-bold text-gray-600 bg-gray-50/30 flex items-center gap-2">
+                        <Volume2 className="w-4 h-4 text-[#0077B6]" />
+                        Шум (dB)
+                      </td>
+                      {compareList.map((p, idx) => {
+                        const noiseLevels = compareList.map(cp => parseInt(cp.noise) || 0);
+                        const isQuietest = parseInt(p.noise) === Math.min(...noiseLevels);
+                        return (
+                          <td key={p.id} className={`p-4 border-b border-gray-100 ${isQuietest ? 'bg-green-50' : ''}`}>
+                            <span className={isQuietest ? 'text-green-600 font-bold' : 'text-gray-900'}>{p.noise} dB</span>
+                            {isQuietest && <span className="ml-2 text-[10px] font-bold text-green-600">НАЙ-ТИХ</span>}
+                          </td>
+                        );
+                      })}
                     </tr>
-                    <tr>
-                      <td className="p-4 border-b border-gray-100 font-bold text-gray-500">Тип</td>
-                      {compareList.map(p => <td key={p.id} className="p-4 border-b border-gray-100 capitalize">{p.type}</td>)}
+                    <tr className="hover:bg-gray-50/50 transition-colors">
+                      <td className="p-4 border-b border-gray-100 font-bold text-gray-600 bg-gray-50/30 flex items-center gap-2">
+                        <Square className="w-4 h-4 text-gray-400" />
+                        Покритие (м²)
+                      </td>
+                      {compareList.map(p => <td key={p.id} className="p-4 border-b border-gray-100 font-semibold text-gray-900">{p.area}</td>)}
                     </tr>
-                    <tr>
-                      <td className="p-4 border-b border-gray-100 font-bold text-gray-500">Гаранция</td>
+                    <tr className="hover:bg-gray-50/50 transition-colors">
+                      <td className="p-4 border-b border-gray-100 font-bold text-gray-600 bg-gray-50/30 flex items-center gap-2">
+                        <Wifi className="w-4 h-4 text-[#00B4D8]" />
+                        WiFi Управление
+                      </td>
+                      {compareList.map(p => (
+                        <td key={p.id} className="p-4 border-b border-gray-100">
+                          {p.features.includes('WiFi управление') ? (
+                            <span className="flex items-center gap-2 text-green-600 font-bold">
+                              <Check className="w-4 h-4" /> Да
+                            </span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr className="hover:bg-gray-50/50 transition-colors">
+                      <td className="p-4 border-b border-gray-100 font-bold text-gray-600 bg-gray-50/30 flex items-center gap-2">
+                        <Tag className="w-4 h-4 text-gray-400" />
+                        Тип
+                      </td>
+                      {compareList.map(p => <td key={p.id} className="p-4 border-b border-gray-100 capitalize text-gray-900">{p.type}</td>)}
+                    </tr>
+                    <tr className="hover:bg-gray-50/50 transition-colors">
+                      <td className="p-4 border-b border-gray-100 font-bold text-gray-600 bg-gray-50/30 flex items-center gap-2">
+                        <Shield className="w-4 h-4 text-green-600" />
+                        Гаранция
+                      </td>
                       {compareList.map(p => <td key={p.id} className="p-4 border-b border-gray-100 font-semibold text-green-600">36 месеца</td>)}
                     </tr>
-                    <tr>
-                      <td className="p-4 font-bold text-gray-500">Функции</td>
+                    <tr className="hover:bg-gray-50/50 transition-colors">
+                      <td className="p-4 font-bold text-gray-600 bg-gray-50/30 flex items-center gap-2">
+                        <Star className="w-4 h-4 text-[#FF4D00]" />
+                        Функции
+                      </td>
                       {compareList.map(p => (
                         <td key={p.id} className="p-4">
-                          <ul className="space-y-1">
-                            {p.extras.map((ex, i) => (
-                              <li key={i} className="flex items-center gap-1 text-[11px] text-gray-600">
-                                <Check className="w-3 h-3 text-green-500" /> {ex}
+                          <ul className="space-y-1.5">
+                            {p.extras.slice(0, 5).map((ex, i) => (
+                              <li key={i} className="flex items-center gap-2 text-[11px] text-gray-700">
+                                <Check className="w-3 h-3 text-green-500 shrink-0" /> {ex}
                               </li>
                             ))}
+                            {p.extras.length > 5 && (
+                              <li className="text-[10px] text-gray-400 italic">+ още {p.extras.length - 5} функции</li>
+                            )}
                           </ul>
                         </td>
                       ))}
                     </tr>
                   </tbody>
                 </table>
+                
+                {/* AI Summary Section */}
+                <div className="mt-6 p-5 bg-gradient-to-r from-[#00B4D8]/5 to-[#0077B6]/5 rounded-2xl border border-[#00B4D8]/20">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-8 h-8 bg-gradient-to-r from-[#00B4D8] to-[#0077B6] rounded-lg flex items-center justify-center">
+                      {isLoadingAi ? (
+                        <Loader2 className="w-4 h-4 text-white animate-spin" />
+                      ) : (
+                        <Star className="w-4 h-4 text-white" />
+                      )}
+                    </div>
+                    <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">
+                      {isLoadingAi ? 'Генериране на Препоръка...' : 'Сравнителен анализ '}
+                    </h3>
+                  </div>
+                  {isLoadingAi ? (
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Обработване актуална информация от квалифицирани източници...</span>
+                    </div>
+                  ) : aiRecommendation ? (
+                    <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                      {aiRecommendation}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-gray-500 italic">
+                      Натиснете бутона за сравнение за да генерирате AI препоръка с информация от Google Search.
+                    </p>
+                  )}
+                </div>
               </div>
             </motion.div>
           </div>

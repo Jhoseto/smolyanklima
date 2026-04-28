@@ -200,6 +200,7 @@ export interface Product {
   price: number;
   oldPrice?: number;
   image: string;
+  description?: string;
   specs: ProductSpecs;
   features: string[];
   inStock: boolean;

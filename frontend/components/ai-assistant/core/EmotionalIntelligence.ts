@@ -189,10 +189,13 @@ class EmotionalIntelligence {
     }
 
     // First time ever - contextual based on page
-    const hour = new Date().getHours();
+    // Get Bulgarian time (Europe/Sofia)
+    const now = new Date();
+    const bulgarianTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Sofia' }));
+    const hour = bulgarianTime.getHours();
     let timeGreeting = 'Здравейте!';
-    if (hour < 12) timeGreeting = 'Добро утро! ☀️';
-    else if (hour < 18) timeGreeting = 'Здравейте! 👋';
+    if (hour >= 5 && hour < 9) timeGreeting = 'Добро утро! ☀️';
+    else if (hour >= 9 && hour < 19) timeGreeting = 'Добър ден! 👋';
     else timeGreeting = 'Добър вечер! 🌙';
 
     const pageOpeners: Record<string, string> = {
@@ -354,7 +357,7 @@ class EmotionalIntelligence {
   private loadStories(): string[] {
     return [
       'Миналия месец инсталирахме на младо семейство с бебе. Избраха най-тихия модел - сега бебето спи спокойно, а те спестяват 40% от сметките. 😊',
-      'Г-н Иванов от Райково ми праща снимка на сметката всяко лято. Първата година спести 280 лв, миналата - 320 лв. Вече е фен номер 1.',
+      'Г-н Иванов от Райково ми праща снимка на сметката всяко лято. Първата година спести 144 €, миналата - 164 €. Вече е фен номер 1.',
       'Нашият екип - Митко и Георги, работят заедно от 8 години. Знаят всяка къща в Смолян и винаги намират най-доброто решение.',
       'Семейство от Доспат търсеха "най-евтиното". Обясних им за разходите за ток и... избраха среден клас. Сега ми благодарят всеки път като мине техен познат.',
       'Баба Мария от село Триград каза: "Момче, не разбирам от коефициенти, но знам че тази зима съм топла и сметката е половинка". Това е най-добрият отзив, който съм получавал.',

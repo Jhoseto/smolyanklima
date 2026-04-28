@@ -58,9 +58,9 @@ const WhyUsBanner = ({ key }: { key?: React.Key }) => (
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {[
           { value: '25+', label: 'год. опит' },
-          { value: '1000+', label: 'монтажа' },
+          { value: '1500+', label: 'монтажа' },
           { value: '4.9★', label: 'оценка' },
-          { value: 'Daikin', label: 'сервизен' },
+          { value: 'ОТОРИЗИРАН', label: 'сервиз' },
           { value: '3г.', label: 'гаранция' },
           { value: '0%', label: 'лизинг' },
         ].map((stat, i) => (

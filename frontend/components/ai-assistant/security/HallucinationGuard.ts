@@ -52,7 +52,10 @@ class HallucinationGuard {
 
     // Log violations if enabled
     if (!isValid && this.config.logViolations) {
-      console.warn('[HallucinationGuard] Violations detected:', this.violations);
+      // Only log in development, not in production
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[HallucinationGuard] Violations detected:', this.violations);
+      }
     }
 
     return {
@@ -68,7 +71,7 @@ class HallucinationGuard {
    */
   private checkPrices(response: string): void {
     // Extract price mentions
-    const priceMatches = response.matchAll(/(\d{3,5})\s*(лв|lv|лева|лев)/gi);
+    const priceMatches = response.matchAll(/(\d{3,5})\s*(€|eur|euro|евро)/gi);
 
     for (const match of priceMatches) {
       const price = parseInt(match[1], 10);

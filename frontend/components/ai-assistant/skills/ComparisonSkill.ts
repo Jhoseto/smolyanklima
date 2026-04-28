@@ -61,8 +61,8 @@ export class ComparisonSkill {
       
       return `📊 **Сравнение: ${p1.name} vs ${p2.name}**\n\n` +
         `**Цена:**\n` +
-        `• ${p1.name}: ${p1.price} лв ${p1.oldPrice ? `(от ${p1.oldPrice} лв)` : ''}\n` +
-        `• ${p2.name}: ${p2.price} лв ${p2.oldPrice ? `(от ${p2.oldPrice} лв)` : ''}\n\n` +
+        `• ${p1.name}: ${p1.price} € ${p1.oldPrice ? `(от ${p1.oldPrice} €)` : ''}\n` +
+        `• ${p2.name}: ${p2.price} € ${p2.oldPrice ? `(от ${p2.oldPrice} €)` : ''}\n\n` +
         `**Покритие:**\n` +
         `• ${p1.name}: до ${p1.specs.coverage}м²\n` +
         `• ${p2.name}: до ${p2.specs.coverage}м²\n\n` +
@@ -81,7 +81,7 @@ export class ComparisonSkill {
     // For 3+ products, create summary
     return `📊 **Сравнение на ${products.length} модела**\n\n` +
       products.map((p, i) => 
-        `${i + 1}. **${p.name}** - ${p.price} лв\n` +
+        `${i + 1}. **${p.name}** - ${p.price} €\n` +
         `   • ${p.energyClass} клас, ${p.specs.coverage}м², ${p.specs.noiseLevel}dB\n` +
         `   • ${p.features.slice(0, 2).join(', ')}`
       ).join('\n\n') +

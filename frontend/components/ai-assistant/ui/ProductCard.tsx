@@ -151,7 +151,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               color: product.inStock ? '#1e293b' : '#94a3b8',
             }}
           >
-            {product.price} лв
+            {product.price} €
           </span>
           {hasDiscount && (
             <span
@@ -161,7 +161,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 textDecoration: 'line-through',
               }}
             >
-              {product.oldPrice} лв
+              {product.oldPrice} €
             </span>
           )}
         </div>

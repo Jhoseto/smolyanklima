@@ -68,15 +68,15 @@ export class QuoteGenerationSkill {
       quote += `   Модел: ${p.model}\n`;
       quote += `   Марка: ${p.brand}\n`;
       quote += `   Покритие: до ${p.specs.coverage}м²\n`;
-      quote += `   Цена: **${p.price} лв**${p.oldPrice ? ` (стара цена: ${p.oldPrice} лв)` : ''}\n\n`;
+      quote += `   Цена: **${p.price} €**${p.oldPrice ? ` (стара цена: ${p.oldPrice} €)` : ''}\n\n`;
     });
 
     // Installation
-    quote += `**🛠️ Монтаж:** ${installationCost} лв\n`;
+    quote += `**🛠️ Монтаж:** ${installationCost} €\n`;
     quote += `   (Включва: тръби, кабели, изолация, професионален монтаж)\n\n`;
 
     // Total
-    quote += `**💰 ОБЩО:** ${totalWithInstallation} лв\n\n`;
+    quote += `**💰 ОБЩО:** ${totalWithInstallation} €\n\n`;
 
     // Warranty
     quote += `**📜 Гаранция:**\n`;

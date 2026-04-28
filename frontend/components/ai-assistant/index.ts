@@ -59,6 +59,7 @@ export { AIProvider, useAIContext } from './context';
 
 // Utilities
 export { sanitizeInput, escapeHtml, formatPrice, generateId, debounce, throttle, isClient, now, formatDate, truncateText } from './utils';
+export { getComparisonAIService } from './core/ComparisonAIService';
 
 // Core
 export { GeminiClient, getGeminiClient, resetGeminiClient } from './core/GeminiClient';

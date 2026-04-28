@@ -19,10 +19,7 @@ interface GeminiConfig {
 }
 
 interface RateLimitState {
-  requestsToday: number;
-  tokensToday: number;
-  lastReset: number;
-  userMessageCount: Map<string, { hour: number; day: number; lastHourReset: number; lastDayReset: number }>;
+  userMessageCount: Map<string, { last30MinCount: number; lastReset: number; timestamps: number[] }>;
 }
 
 class GeminiClient {
@@ -32,11 +29,8 @@ class GeminiClient {
   private rateLimits: RateLimitState;
   private abortController: AbortController | null = null;
 
-  // Daily limits for cost protection
-  private readonly DAILY_REQUEST_LIMIT = 500;
-  private readonly DAILY_TOKEN_LIMIT = 100000;
-  private readonly MAX_USER_MESSAGES_PER_HOUR = 20;
-  private readonly MAX_USER_MESSAGES_PER_DAY = 50;
+  // 30-minute rolling limits (no daily limits)
+  private readonly MAX_USER_MESSAGES_PER_30MIN = 100;
 
   constructor(config: GeminiConfig) {
     this.apiKey = config.apiKey;
@@ -51,13 +45,8 @@ class GeminiClient {
 
     // Initialize rate limiting state
     this.rateLimits = {
-      requestsToday: 0,
-      tokensToday: 0,
-      lastReset: Date.now(),
       userMessageCount: new Map(),
     };
-
-    this.resetDailyCountersIfNeeded();
   }
 
   /**
@@ -195,29 +184,14 @@ class GeminiClient {
    * Check rate limits before making request
    */
   private checkRateLimits(userId?: string): { allowed: boolean; reason?: string } {
-    this.resetDailyCountersIfNeeded();
-
-    // Check global daily limits
-    if (this.rateLimits.requestsToday >= this.DAILY_REQUEST_LIMIT) {
-      return { allowed: false, reason: 'Daily request limit exceeded' };
-    }
-
-    if (this.rateLimits.tokensToday >= this.DAILY_TOKEN_LIMIT) {
-      return { allowed: false, reason: 'Daily token limit exceeded' };
-    }
-
-    // Check per-user limits
+    // Check per-user 30-minute rolling limits
     if (userId) {
       const userCounts = this.rateLimits.userMessageCount.get(userId);
       if (userCounts) {
         this.resetUserCountersIfNeeded(userId, userCounts);
 
-        if (userCounts.hour >= this.MAX_USER_MESSAGES_PER_HOUR) {
-          return { allowed: false, reason: 'Hourly message limit exceeded' };
-        }
-
-        if (userCounts.day >= this.MAX_USER_MESSAGES_PER_DAY) {
-          return { allowed: false, reason: 'Daily message limit exceeded' };
+        if (userCounts.last30MinCount >= this.MAX_USER_MESSAGES_PER_30MIN) {
+          return { allowed: false, reason: '30-minute message limit exceeded. Please wait a moment.' };
         }
       }
     }
@@ -229,57 +203,33 @@ class GeminiClient {
    * Update rate limits after successful request
    */
   private updateRateLimits(tokens: number, userId?: string): void {
-    this.rateLimits.requestsToday++;
-    this.rateLimits.tokensToday += tokens;
-
     if (userId) {
       let userCounts = this.rateLimits.userMessageCount.get(userId);
       if (!userCounts) {
-        userCounts = { hour: 0, day: 0, lastHourReset: Date.now(), lastDayReset: Date.now() };
+        userCounts = { last30MinCount: 0, lastReset: Date.now(), timestamps: [] };
       }
       this.resetUserCountersIfNeeded(userId, userCounts);
       
-      userCounts.hour++;
-      userCounts.day++;
+      userCounts.last30MinCount++;
+      userCounts.timestamps.push(Date.now());
       this.rateLimits.userMessageCount.set(userId, userCounts);
     }
   }
 
   /**
-   * Reset daily counters if it's a new day
-   */
-  private resetDailyCountersIfNeeded(): void {
-    const now = Date.now();
-    const oneDayMs = 24 * 60 * 60 * 1000;
-    
-    if (now - this.rateLimits.lastReset > oneDayMs) {
-      this.rateLimits.requestsToday = 0;
-      this.rateLimits.tokensToday = 0;
-      this.rateLimits.lastReset = now;
-    }
-  }
-
-  /**
-   * Reset user counters if needed
+   * Reset user counters if needed (30-minute rolling window)
    */
   private resetUserCountersIfNeeded(
     userId: string,
-    counts: { hour: number; day: number; lastHourReset: number; lastDayReset: number }
+    counts: { last30MinCount: number; lastReset: number; timestamps: number[] }
   ): void {
     const now = Date.now();
-    const oneHourMs = 60 * 60 * 1000;
-    const oneDayMs = 24 * oneHourMs;
+    const thirtyMinMs = 30 * 60 * 1000;
 
-    if (now - counts.lastHourReset > oneHourMs) {
-      counts.hour = 0;
-      counts.lastHourReset = now;
-    }
-
-    if (now - counts.lastDayReset > oneDayMs) {
-      counts.day = 0;
-      counts.lastDayReset = now;
-    }
-
+    // Remove timestamps older than 30 minutes
+    counts.timestamps = counts.timestamps.filter(timestamp => now - timestamp < thirtyMinMs);
+    counts.last30MinCount = counts.timestamps.length;
+    
     this.rateLimits.userMessageCount.set(userId, counts);
   }
 
@@ -360,17 +310,12 @@ class GeminiClient {
    * Get current rate limit status
    */
   getRateLimitStatus(): {
-    requestsRemaining: number;
-    tokensRemaining: number;
-    requestsUsed: number;
-    tokensUsed: number;
+    maxMessagesPer30Min: number;
+    userMessageCount: Map<string, { last30MinCount: number; lastReset: number; timestamps: number[] }>;
   } {
-    this.resetDailyCountersIfNeeded();
     return {
-      requestsRemaining: this.DAILY_REQUEST_LIMIT - this.rateLimits.requestsToday,
-      tokensRemaining: this.DAILY_TOKEN_LIMIT - this.rateLimits.tokensToday,
-      requestsUsed: this.rateLimits.requestsToday,
-      tokensUsed: this.rateLimits.tokensToday,
+      maxMessagesPer30Min: this.MAX_USER_MESSAGES_PER_30MIN,
+      userMessageCount: this.rateLimits.userMessageCount,
     };
   }
 
