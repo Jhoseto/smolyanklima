@@ -39,13 +39,12 @@ ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 
-# backend standalone
-COPY --from=backend_builder /app/public ./public
+# Next standalone (API + server)
 COPY --from=backend_builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=backend_builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# frontend dist → Next public (static)
-COPY --from=frontend_builder /repo/dist ./public
+# SPA само от Vite — без backend/public (next.svg, vercel.svg и т.н.), за да не остават „висящи“ файлове след merge на слоеве.
+COPY --from=frontend_builder --chown=nextjs:nodejs /repo/dist ./public
 
 USER nextjs
 EXPOSE 8080
