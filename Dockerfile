@@ -57,6 +57,7 @@ COPY --from=backend_builder --chown=nextjs:nodejs /app/.next/static ./.next/stat
 EXPOSE 8080
 
 # Start backend + nginx (one container)
-# Cloud Run sets PORT=8080 for the container. We keep nginx on 8080 (daemon) and run Next backend on 3001 as PID1.
-CMD ["sh", "-c", "nginx && PORT=3001 exec node /app/server.js"]
+# Cloud Run sets PORT=8080 for the container. Keep nginx on 8080 and force Next backend to 3001.
+# Use env/unset to avoid any runtime overrides.
+CMD ["sh", "-c", "set -eux; echo \"[boot] CloudRun PORT=${PORT:-}\"; unset PORT; export PORT=3001; echo \"[boot] Forced PORT=$PORT\"; nginx; exec env PORT=3001 HOSTNAME=0.0.0.0 node /app/server.js"]
 
