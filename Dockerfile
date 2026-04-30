@@ -58,5 +58,6 @@ EXPOSE 8080
 
 # Start backend + nginx (one container)
 # Cloud Run sets PORT=8080 for the container. We keep nginx on 8080 and force Next backend to 3001.
-CMD ["sh", "-c", "PORT=3001 node /app/server.js & nginx -g 'daemon off;'"]
+# Some runtimes still pass PORT=8080 into Node; ensure it's overridden before Next server loads.
+CMD ["sh", "-c", "node -e \"process.env.PORT='3001'; require('/app/server.js')\" & nginx -g 'daemon off;'"]
 
