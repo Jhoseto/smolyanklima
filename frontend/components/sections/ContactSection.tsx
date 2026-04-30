@@ -1,6 +1,14 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Send, Clock, ShieldCheck, CheckCircle, Check, Sparkles } from 'lucide-react';
+import { postPublicInquiry } from '../../data/postInquiry';
+
+const CONTACT_SERVICE_OPTIONS: { label: string; value: 'sale' | 'installation' | 'maintenance' | 'repair' }[] = [
+  { label: 'Продажба', value: 'sale' },
+  { label: 'Монтаж', value: 'installation' },
+  { label: 'Профилактика', value: 'maintenance' },
+  { label: 'Ремонт', value: 'repair' },
+];
 
 interface ContactSectionProps {
   subtitle?: string;
@@ -16,11 +24,40 @@ export const ContactSection = ({
   hideTitle = false
 }: ContactSectionProps) => {
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [message, setMessage] = useState('');
+  const [serviceType, setServiceType] = useState<(typeof CONTACT_SERVICE_OPTIONS)[number]['value']>('sale');
+  const [honeypot, setHoneypot] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitted(true);
-    // In a real app, reset after some time or keep the success state
+    setSubmitError(null);
+    if (honeypot.trim()) return;
+    setSubmitting(true);
+    try {
+      const r = await postPublicInquiry({
+        source: 'contact',
+        customerName: name.trim(),
+        customerPhone: phone.trim(),
+        message: message.trim() || undefined,
+        serviceType,
+        website: honeypot,
+      });
+      if (r.ok === false) {
+        setSubmitError(r.status === 429 ? 'Твърде много заявки. Опитайте по-късно.' : r.error);
+        return;
+      }
+      setIsSubmitted(true);
+      setName('');
+      setPhone('');
+      setMessage('');
+      setHoneypot('');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -170,6 +207,18 @@ export const ContactSection = ({
                   exit={{ opacity: 0, scale: 0.95, filter: "blur(10px)" }}
                   className="space-y-6 relative z-10"
                 >
+                  <div className="absolute -left-[9999px] h-px w-px overflow-hidden" aria-hidden>
+                    <label htmlFor="contact-website">Website</label>
+                    <input
+                      id="contact-website"
+                      name="website"
+                      tabIndex={-1}
+                      autoComplete="off"
+                      value={honeypot}
+                      onChange={(e) => setHoneypot(e.target.value)}
+                    />
+                  </div>
+
                   <div className="grid md:grid-cols-2 gap-6">
                     {/* Floating Label Input */}
                     <motion.div
@@ -181,8 +230,10 @@ export const ContactSection = ({
                       <input
                         type="text"
                         id="name"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
                         className="peer w-full h-16 px-6 pt-4 rounded-2xl bg-white border border-gray-200 text-gray-900 font-outfit font-medium placeholder-transparent focus:outline-none focus:border-[#FF4D00] focus:ring-4 focus:ring-[#FF4D00]/10 shadow-sm transition-all duration-300 focus:shadow-[0_0_20px_rgba(255,77,0,0.1)]"
-                        placeholder="Име и Фамилия"
+                        placeholder=" "
                         required
                       />
                       <label
@@ -202,8 +253,10 @@ export const ContactSection = ({
                       <input
                         type="tel"
                         id="phone"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
                         className="peer w-full h-16 px-6 pt-4 rounded-2xl bg-white border border-gray-200 text-gray-900 font-outfit font-medium placeholder-transparent focus:outline-none focus:border-[#00B4D8] focus:ring-4 focus:ring-[#00B4D8]/10 shadow-sm transition-all duration-300 focus:shadow-[0_0_20px_rgba(0,180,216,0.1)]"
-                        placeholder="Телефон"
+                        placeholder=" "
                         required
                       />
                       <label
@@ -223,11 +276,17 @@ export const ContactSection = ({
                   >
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2 block">Желана услуга</label>
                     <div className="flex flex-wrap gap-3">
-                      {['Продажба', 'Монтаж', 'Профилактика', 'Ремонт'].map((service, i) => (
-                        <label key={service} className="cursor-pointer">
-                          <input type="radio" name="service" className="peer sr-only" defaultChecked={i === 0} />
+                      {CONTACT_SERVICE_OPTIONS.map(({ label, value }) => (
+                        <label key={value} className="cursor-pointer">
+                          <input
+                            type="radio"
+                            name="service"
+                            className="peer sr-only"
+                            checked={serviceType === value}
+                            onChange={() => setServiceType(value)}
+                          />
                           <div className="px-6 py-3 rounded-xl bg-white border border-gray-200 text-[13px] font-bold text-gray-500 peer-checked:bg-gradient-to-r peer-checked:from-[#FF4D00] peer-checked:to-[#FF2A4D] peer-checked:text-white peer-checked:border-transparent hover:border-gray-300 transition-all duration-300 shadow-sm">
-                            {service}
+                            {label}
                           </div>
                         </label>
                       ))}
@@ -243,9 +302,11 @@ export const ContactSection = ({
                     <textarea
                       id="message"
                       rows={4}
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
                       className="peer w-full p-6 pt-8 rounded-2xl bg-white border border-gray-200 text-gray-900 font-outfit font-medium placeholder-transparent focus:outline-none focus:border-[#FF4D00] focus:ring-4 focus:ring-[#FF4D00]/10 shadow-sm transition-all duration-300 focus:shadow-[0_0_20px_rgba(255,77,0,0.1)] resize-none"
-                      placeholder="Съобщение"
-                    ></textarea>
+                      placeholder=" "
+                    />
                     <label
                       htmlFor="message"
                       className="absolute left-6 top-3 text-[10px] font-black text-gray-400 uppercase tracking-widest transition-all duration-300 peer-placeholder-shown:top-6 peer-placeholder-shown:text-sm peer-placeholder-shown:font-medium peer-placeholder-shown:normal-case peer-focus:top-3 peer-focus:text-[10px] peer-focus:font-black peer-focus:uppercase peer-focus:text-[#FF4D00]"
@@ -254,15 +315,22 @@ export const ContactSection = ({
                     </label>
                   </motion.div>
 
+                  {submitError && (
+                    <p className="text-sm text-red-600 font-medium text-center" role="alert">
+                      {submitError}
+                    </p>
+                  )}
                   <motion.button
+                    type="submit"
+                    disabled={submitting}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.6 }}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className="w-full h-14 bg-gradient-to-r from-[#FF4D00] via-[#FF6A00] to-[#FF2A4D] text-white rounded-full font-bold text-lg hover:shadow-[0_10px_30px_rgba(255,77,0,0.4)] transition-all flex items-center justify-center gap-2 mt-4"
+                    whileHover={{ scale: submitting ? 1 : 1.02 }}
+                    whileTap={{ scale: submitting ? 1 : 0.98 }}
+                    className="w-full h-14 bg-gradient-to-r from-[#FF4D00] via-[#FF6A00] to-[#FF2A4D] text-white rounded-full font-bold text-lg hover:shadow-[0_10px_30px_rgba(255,77,0,0.4)] transition-all flex items-center justify-center gap-2 mt-4 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    Изпрати заявката <Send className="w-5 h-5" />
+                    {submitting ? 'Изпращане…' : 'Изпрати заявката'} <Send className="w-5 h-5" />
                   </motion.button>
                 </motion.form>
               ) : (

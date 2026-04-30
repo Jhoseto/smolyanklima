@@ -58,6 +58,7 @@ export interface CatalogProduct {
 
   // Display & media
   image: string;        // Resolved path to image
+  images?: string[];    // Optional gallery (main first)
   imgBg: string;        // Background color for image area
   cardBorder: string;   // Border/shadow class for the card
 

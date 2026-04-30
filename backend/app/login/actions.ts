@@ -31,6 +31,24 @@ export async function loginAction(formData: FormData) {
     redirect(`/login?error=${encodeURIComponent(error.message)}`);
   }
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    redirect("/login?error=Невалидна сесия. Опитайте отново.");
+  }
+
+  const { data: adminRow, error: adminErr } = await supabase
+    .from("admin_users")
+    .select("id,is_active")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  // If admin_users is missing/inactive, block access early (prevents confusing RLS 403 later).
+  if (adminErr || !adminRow || !adminRow.is_active) {
+    redirect(`/login?reason=not_admin&next=${encodeURIComponent(parsed.data.next || "/admin")}`);
+  }
+
   redirect(parsed.data.next || "/admin");
 }
 

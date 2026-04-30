@@ -9,97 +9,17 @@ import { promptBuilder } from '../core/PromptBuilder';
 import { skillRouter } from '../core/SkillRouter';
 import { emotionalIntelligence } from '../core/EmotionalIntelligence';
 import { createHallucinationGuard } from '../security/HallucinationGuard';
-import { products as dbProducts } from '../../../data/db';
+import { getAllProducts } from '../../../data/productService';
+import { catalogProductsToAI } from '../data/catalogToAIProducts';
 import type {
   Message,
   Conversation,
-  ConversationContext,
   UserContext,
   Product,
   AIAction,
   UserIntent,
 } from '../types';
 
-// Transform data/db.ts products to AI assistant Product format
-function transformDbProducts(): Product[] {
-  return dbProducts.map((p) => {
-    // Parse cooling power to extract numeric value
-    const coolingMatch = p.coolingPower?.match(/([\d.]+)/);
-    const coolingCapacity = coolingMatch ? parseFloat(coolingMatch[1]) : 2.5;
-    
-    // Parse heating power
-    const heatingMatch = p.heatingPower?.match(/([\d.]+)/);
-    const heatingCapacity = heatingMatch ? parseFloat(heatingMatch[1]) : 3.2;
-    
-    // Parse noise level
-    const noiseMatch = p.noise?.match(/([\d]+)/);
-    const noiseLevel = noiseMatch ? parseInt(noiseMatch[1]) : 25;
-    
-    // Parse area for coverage
-    const areaMatch = p.area?.match(/([\d]+)/);
-    const coverage = areaMatch ? parseInt(areaMatch[1]) : 25;
-    
-    // Map energy class to numeric efficiency
-    const energyEfficiencyMap: Record<string, number> = {
-      'A+++': 8.5,
-      'A++': 7.5,
-      'A+': 6.5,
-      'A': 5.5,
-      'B': 4.5,
-    };
-    const energyEfficiency = energyEfficiencyMap[p.energyCool || 'A'] || 6.5;
-    
-    // Map category to suitableFor
-    const categoryToRoom: Record<string, ('bedroom' | 'living' | 'kids' | 'office' | 'kitchen' | 'other')[]> = {
-      'Апартамент': ['bedroom', 'living'],
-      'Къща': ['living', 'bedroom'],
-      'Офис': ['office'],
-      'Търговски': ['office'],
-      'Аксесоари': ['other'],
-      'Части': ['other'],
-    };
-    
-    // Parse warranty
-    const warrantyMatch = p.warranty?.match(/([\d]+)/);
-    const warrantyYears = warrantyMatch ? parseInt(warrantyMatch[1]) : 2;
-    
-    return {
-      id: p.id,
-      name: p.name,
-      brand: p.brand,
-      model: p.type || p.id,
-      price: p.price,
-      oldPrice: undefined,
-      image: `/images/${p.id}.jpg`,
-      description: p.description || '',
-      specs: {
-        power: p.coolingPower || '2.5 kW',
-        coolingCapacity,
-        heatingCapacity,
-        noiseLevel,
-        energyEfficiency,
-        seer: energyEfficiency, // Use same value as placeholder
-        coverage,
-      },
-      features: p.features || [],
-      inStock: true,
-      stockCount: 5,
-      rating: 4.5,
-      reviewCount: 10,
-      energyClass: p.energyCool || 'A',
-      warranty: {
-        years: warrantyYears,
-        compressor: warrantyYears + 2,
-        parts: warrantyYears,
-        labor: warrantyYears - 1,
-      },
-      suitableFor: categoryToRoom[p.category] || ['other'],
-      popularityScore: 80,
-    };
-  });
-}
-
-const PRODUCTS: Product[] = transformDbProducts();
 const MAX_USER_MESSAGE_CHARS = 1000;
 
 export interface UseAIChatOptions {
@@ -124,10 +44,28 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
   const [error, setError] = useState<string | null>(null);
   const [suggestedProducts, setSuggestedProducts] = useState<Product[]>([]);
   const [actions, setActions] = useState<AIAction[]>([]);
-  
-  const hallucinationGuard = useRef(createHallucinationGuard(PRODUCTS));
+
+  const aiProductsRef = useRef<Product[]>([]);
+  const hallucinationGuard = useRef(createHallucinationGuard([]));
   const messagesRef = useRef<Message[]>([]);
   const conversationRef = useRef<Conversation | null>(null);
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
+
+  useEffect(() => {
+    let cancelled = false;
+    getAllProducts()
+      .then((all) => {
+        if (cancelled) return;
+        const mapped = catalogProductsToAI(all);
+        aiProductsRef.current = mapped;
+        hallucinationGuard.current = createHallucinationGuard(mapped);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -215,9 +153,10 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
       setConversation(updatedConversation);
 
       // Build system prompt with context
+      const catalogProducts = aiProductsRef.current;
       const systemPrompt = promptBuilder.buildPrompt({
         conversation: updatedConversation,
-        userContext: options.userContext as UserContext || {
+        userContext: optionsRef.current.userContext as UserContext || {
           sessionId: uuidv4(),
           visitCount: 1,
           firstVisit: Date.now(),
@@ -228,7 +167,7 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
           consent: { given: false, timestamp: 0, version: '1.0', dataTypes: [] },
           device: { type: 'desktop', viewport: { width: 1920, height: 1080 }, touch: false, language: 'bg' },
         },
-        relevantProducts: PRODUCTS,
+        relevantProducts: catalogProducts,
         userIntent: intent.type,
         emotion: emotionDetection.confidence > 0.3 ? emotionDetection.emotion : undefined,
       });
@@ -284,7 +223,7 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
       };
 
       // Extract suggested products from response
-      const extractedProducts = extractProductsFromResponse(finalContent, PRODUCTS);
+      const extractedProducts = extractProductsFromResponse(finalContent, catalogProducts);
       if (extractedProducts.length > 0) {
         setSuggestedProducts(extractedProducts);
       }
@@ -318,7 +257,7 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [messages, conversation, options.userContext]);
+  }, [conversation]);
 
   // Reset conversation
   const resetConversation = useCallback(() => {

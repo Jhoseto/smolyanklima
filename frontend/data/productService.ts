@@ -10,11 +10,11 @@
 
 import type {
   CatalogProduct,
-  CatalogFilters,
   ProductSpec,
   ProductBadge,
   CategoryMeta,
   BrandMeta,
+  SortOption,
 } from './types/product';
 
 // ──────────────────────────────────────
@@ -132,11 +132,12 @@ function mapApiToCatalogProduct(raw: ApiProduct): CatalogProduct {
 
   const energyCool = specs0?.energy_class_cool ?? undefined;
   const energyHeat = specs0?.energy_class_heat ?? undefined;
-  const image =
-    (raw.product_images ?? [])
-      .slice()
-      .sort((a, b) => (b.is_main ? 1 : 0) - (a.is_main ? 1 : 0) || a.sort_order - b.sort_order)[0]
-      ?.url ?? `/images/${raw.slug}.jpg`;
+  const sortedImages = (raw.product_images ?? [])
+    .slice()
+    .sort((a, b) => (b.is_main ? 1 : 0) - (a.is_main ? 1 : 0) || a.sort_order - b.sort_order)
+    .map((im) => im.url)
+    .filter(Boolean);
+  const image = sortedImages[0] ?? `/images/${raw.slug}.jpg`;
 
   const { cardBorder, imgBg } = resolveBorderAndBg(brand);
   const { rating, reviews } = fakeRating(raw.slug);
@@ -156,6 +157,7 @@ function mapApiToCatalogProduct(raw: ApiProduct): CatalogProduct {
     category: '—',
 
     image,
+    images: sortedImages.length ? sortedImages : undefined,
     imgBg,
     cardBorder,
 
@@ -228,21 +230,70 @@ function isAccessoryLike(p: CatalogProduct) {
   return t.includes("аксес") || t.includes("резерв") || n.includes("филтър") || n.includes("filter");
 }
 
-/** Всички уникални марки */
-export function getAllBrands(): string[] {
-  // Вече се зареждат от backend; оставяме старото API като "placeholder" за legacy imports.
-  return [];
+export interface CatalogListParams {
+  q?: string;
+  cat?: string;
+  brands?: string[];
+  energyClasses?: string[];
+  features?: string[];
+  min?: number;
+  max?: number;
+  sort?: SortOption;
+  page?: number;
+  perPage?: number;
 }
 
-/** Ценови диапазон (min/max) */
-export function getPriceRange(): { min: number; max: number } {
-  return { min: 0, max: 0 };
+/** Една страница от каталога (филтри + сортиране на сървъра). */
+export async function fetchProductsCatalogPage(
+  params: CatalogListParams,
+): Promise<{ data: CatalogProduct[]; meta: { page: number; perPage: number; total: number } }> {
+  const sp = new URLSearchParams();
+  if (params.q?.trim()) sp.set("q", params.q.trim());
+  if (params.cat && params.cat !== "all") sp.set("cat", params.cat);
+  if (params.brands?.length) sp.set("b", params.brands.join(","));
+  if (params.energyClasses?.length) sp.set("e", params.energyClasses.join(","));
+  if (params.features?.length) sp.set("f", params.features.join(","));
+  if (typeof params.min === "number") sp.set("min", String(params.min));
+  if (typeof params.max === "number") sp.set("max", String(params.max));
+  if (params.sort && params.sort !== "recommended") sp.set("s", params.sort);
+  sp.set("page", String(params.page ?? 1));
+  sp.set("perPage", String(params.perPage ?? 24));
+
+  const res = await fetch(`/api/products?${sp.toString()}`);
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Грешка при зареждане на продукти");
+  const batch = (json.data ?? []) as ApiProduct[];
+  return {
+    data: batch.map(mapApiToCatalogProduct).filter((p) => !isAccessoryLike(p)),
+    meta: json.meta ?? { page: 1, perPage: 24, total: 0 },
+  };
 }
 
-/** Комплексно филтриране + сортиране */
-export function getFilteredProducts(filters: Partial<CatalogFilters>): CatalogProduct[] {
-  void filters;
-  return [];
+/** Min/max цена в активния каталог (за слайдера). */
+export async function fetchCatalogPriceBounds(): Promise<{ min: number; max: number }> {
+  const res = await fetch("/api/catalog/price-bounds");
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Грешка при ценови граници");
+  const min = Number(json.min) || 0;
+  const max = Number(json.max) || 0;
+  if (min === 0 && max === 0) return { min: 0, max: 50_000 };
+  return { min, max };
+}
+
+/** Брой продукти по категория (без други филтри), за чиповете. */
+export async function fetchCategoryProductCounts(): Promise<Record<string, number>> {
+  const counts: Record<string, number> = { all: 0 };
+  const [allRes, ...perCat] = await Promise.all([
+    fetchProductsCatalogPage({ page: 1, perPage: 1 }),
+    ...CATEGORIES.filter((c) => c.id !== "all").map((c) =>
+      fetchProductsCatalogPage({ cat: c.id, page: 1, perPage: 1 }),
+    ),
+  ]);
+  counts.all = allRes.meta.total;
+  CATEGORIES.filter((c) => c.id !== "all").forEach((c, i) => {
+    counts[c.id] = perCat[i]?.meta.total ?? 0;
+  });
+  return counts;
 }
 
 // ──────────────────────────────────────

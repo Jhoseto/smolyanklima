@@ -18,6 +18,12 @@
   body {
     @apply font-sans antialiased text-gray-900 bg-[#FAFAFA];
   }
+
+  /* Stable layout root for Motion useScroll / offset calculations */
+  #root {
+    position: relative;
+    min-height: 100dvh;
+  }
 }
 
 .glass-effect {

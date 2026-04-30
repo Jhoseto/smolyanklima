@@ -4,18 +4,37 @@ import { Mail, CheckCircle, Sparkles } from 'lucide-react';
 
 export const NewsletterSection: React.FC = () => {
   const [email, setEmail] = useState('');
+  const [honeypot, setHoneypot] = useState('');
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
-    
+    setFormError(null);
     setIsLoading(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setIsLoading(false);
-    setIsSubscribed(true);
+    try {
+      const res = await fetch('/api/newsletter/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), website: honeypot }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (res.status === 429) {
+          setFormError('Твърде много заявки. Опитайте по-късно.');
+        } else {
+          setFormError(json.error || 'Грешка при абониране.');
+        }
+        return;
+      }
+      setIsSubscribed(true);
+    } catch {
+      setFormError('Мрежова грешка. Опитайте отново.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -71,6 +90,16 @@ export const NewsletterSection: React.FC = () => {
                   className="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto"
                 >
                   <input
+                    type="text"
+                    name="website"
+                    tabIndex={-1}
+                    autoComplete="off"
+                    value={honeypot}
+                    onChange={(e) => setHoneypot(e.target.value)}
+                    className="absolute opacity-0 pointer-events-none h-0 w-0 overflow-hidden"
+                    aria-hidden="true"
+                  />
+                  <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -93,6 +122,7 @@ export const NewsletterSection: React.FC = () => {
                     )}
                   </button>
                 </motion.form>
+                {formError ? <p className="text-center text-sm text-red-600 mt-3">{formError}</p> : null}
 
                 <motion.p
                   initial={{ opacity: 0 }}
@@ -101,7 +131,7 @@ export const NewsletterSection: React.FC = () => {
                   transition={{ delay: 0.3 }}
                   className="text-sm text-gray-500 mt-6"
                 >
-                  Присъединявайки се, се съгласявате с нашата политика за поверителност.
+                  Присъединявайки се, се съгласявате с нашата политика за поверителност. Ще получите имейл за потвърждение, ако е настроен сървърът.
                 </motion.p>
               </>
             ) : (

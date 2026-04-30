@@ -12,7 +12,6 @@ const CreateSchema = z.object({
   tags: z.array(z.string().min(1).max(60)).optional().default([]),
   authorSlug: z.string().min(1).max(120),
   featuredImage: z.string().min(1).max(2048),
-  images: z.array(z.string().min(1).max(2048)).optional().default([]),
   seo: z
     .object({
       title: z.string().min(1).max(240),
@@ -56,7 +55,7 @@ export async function POST(req: NextRequest) {
   const schema = {
     headline: parsed.data.title,
     description: seo.description,
-    image: [parsed.data.featuredImage, ...(parsed.data.images ?? [])].filter(Boolean),
+    image: [parsed.data.featuredImage].filter(Boolean),
     datePublished: nowIso,
     dateModified: nowIso,
     author: { name: parsed.data.authorSlug, url: "" },
@@ -74,7 +73,7 @@ export async function POST(req: NextRequest) {
       tags: parsed.data.tags,
       author_slug: parsed.data.authorSlug,
       featured_image: parsed.data.featuredImage,
-      images: parsed.data.images,
+      images: [],
       seo,
       schema,
       is_published: parsed.data.isPublished,

@@ -1,6 +1,13 @@
 import React from 'react';
-import { Facebook, Instagram, Phone, Mail, MapPin } from 'lucide-react';
+import { Facebook, Instagram, Lock, Mail, MapPin, Phone } from 'lucide-react';
 import { Logo } from '../ui/Logo';
+
+function adminLoginHref(): string {
+  const fromEnv = import.meta.env.VITE_ADMIN_ORIGIN?.trim().replace(/\/$/, '');
+  if (fromEnv) return `${fromEnv}/login`;
+  if (import.meta.env.DEV) return 'http://localhost:3001/login';
+  return '/login';
+}
 
 export const Footer = () => {
   return (
@@ -24,6 +31,13 @@ export const Footer = () => {
                 <Instagram className="w-5 h-5" />
               </a>
             </div>
+            <a
+              href={adminLoginHref()}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-700 px-4 py-2.5 text-sm font-medium text-gray-300 transition-colors hover:border-[#FF4D00] hover:text-[#FF4D00]"
+            >
+              <Lock className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+              Административен портал
+            </a>
           </div>
 
           {/* Links */}

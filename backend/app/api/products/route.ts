@@ -1,14 +1,15 @@
 import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
+import { withCloudinaryWebOptimization } from "@/lib/services/cloudinaryService";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 const QuerySchema = z.object({
   q: z.string().optional(),
   cat: z.string().optional(),
-  b: z.string().optional(), // comma-separated brand names
-  e: z.string().optional(), // comma-separated energy classes
-  f: z.string().optional(), // comma-separated feature names
+  b: z.string().optional(),
+  e: z.string().optional(),
+  f: z.string().optional(),
   min: z.coerce.number().optional(),
   max: z.coerce.number().optional(),
   s: z
@@ -26,6 +27,11 @@ function splitCsv(value?: string) {
     .filter(Boolean);
 }
 
+function intersectIds(a: string[], b: string[]): string[] {
+  const setB = new Set(b);
+  return a.filter((id) => setB.has(id));
+}
+
 export async function OPTIONS(req: NextRequest) {
   return corsPreflight(req);
 }
@@ -38,14 +44,115 @@ export async function GET(req: NextRequest) {
   }
 
   const { q, cat, b, e, f, min, max, s, page = 1, perPage = 24 } = parsed.data;
-  const brands = splitCsv(b);
+  const brandNames = splitCsv(b);
   const energyClasses = splitCsv(e);
-  const features = splitCsv(f);
+  const featureTerms = splitCsv(f);
 
-  // Use service role for public reads (server-side only) to avoid RLS embed issues.
   const supabase = createSupabaseServiceRoleClient();
 
-  // Base query: denormalized read via joins using select syntax.
+  /** `null` = no id restriction; non-null array = restrict to these ids; `empty` = impossible match */
+  let idRestriction: string[] | null | "empty" = null;
+
+  function mergeProductIds(ids: string[]): void {
+    if (ids.length === 0) {
+      idRestriction = "empty";
+      return;
+    }
+    if (idRestriction === "empty") return;
+    const prev = idRestriction;
+    idRestriction = prev === null ? ids : intersectIds(prev, ids);
+    if (idRestriction.length === 0) idRestriction = "empty";
+  }
+
+  // Search (FTS + ILIKE via RPC; fallback if migration not applied yet)
+  if (q && q.trim()) {
+    const term = q.trim();
+    const { data: searchRows, error: rpcErr } = await supabase.rpc("search_product_ids", {
+      search_query: term,
+      result_limit: 5000,
+    });
+    let ids: string[] = [];
+    if (rpcErr) {
+      const { data: fb, error: fbErr } = await supabase
+        .from("products")
+        .select("id")
+        .eq("is_active", true)
+        .or(`name.ilike.%${term}%,description.ilike.%${term}%`);
+      if (fbErr) return withCors(req, NextResponse.json({ error: fbErr.message }, { status: 500 }));
+      ids = (fb ?? []).map((r: { id: string }) => r.id);
+    } else {
+      ids = (searchRows ?? []).map((r: { id: string }) => r.id).filter(Boolean);
+    }
+    mergeProductIds(ids);
+  }
+
+  // Category slug → product_type ids
+  if (cat && cat !== "all") {
+    const { data: catRow } = await supabase.from("categories").select("id").eq("slug", cat).maybeSingle();
+    if (!catRow?.id) {
+      mergeProductIds([]);
+    } else {
+      const { data: ctRows } = await supabase
+        .from("category_types")
+        .select("product_type")
+        .eq("category_id", catRow.id);
+      const typeNames = (ctRows ?? []).map((r) => r.product_type).filter(Boolean);
+      if (typeNames.length === 0) {
+        mergeProductIds([]);
+      } else {
+        const { data: types } = await supabase.from("product_types").select("id").in("name", typeNames);
+        const typeIds = (types ?? []).map((t: { id: string }) => t.id);
+        const { data: prows } = await supabase.from("products").select("id").eq("is_active", true).in("type_id", typeIds);
+        mergeProductIds((prows ?? []).map((p: { id: string }) => p.id));
+      }
+    }
+  }
+
+  // Brand names → brand_id → product ids
+  if (brandNames.length > 0) {
+    const { data: brows } = await supabase.from("brands").select("id").in("name", brandNames);
+    const brandIds = (brows ?? []).map((r: { id: string }) => r.id);
+    if (brandIds.length === 0) {
+      mergeProductIds([]);
+    } else {
+      const { data: prows } = await supabase.from("products").select("id").eq("is_active", true).in("brand_id", brandIds);
+      mergeProductIds((prows ?? []).map((p: { id: string }) => p.id));
+    }
+  }
+
+  // Energy classes via product_specs
+  if (energyClasses.length > 0) {
+    const { data: srows } = await supabase
+      .from("product_specs")
+      .select("product_id")
+      .in("energy_class_cool", energyClasses);
+    const ids = [...new Set((srows ?? []).map((r: { product_id: string }) => r.product_id).filter(Boolean))];
+    mergeProductIds(ids);
+  }
+
+  // Features: AND — product must match every term (ilike on feature name)
+  for (const term of featureTerms) {
+    const { data: feats } = await supabase.from("features").select("id").ilike("name", `%${term}%`);
+    const featIds = (feats ?? []).map((r: { id: string }) => r.id);
+    if (featIds.length === 0) {
+      mergeProductIds([]);
+      break;
+    }
+    const { data: links } = await supabase.from("product_features").select("product_id").in("feature_id", featIds);
+    const ids = [...new Set((links ?? []).map((r: { product_id: string }) => r.product_id))];
+    mergeProductIds(ids);
+  }
+
+  if (idRestriction === "empty") {
+    return withCors(
+      req,
+      NextResponse.json({
+        data: [],
+        meta: { page, perPage, total: 0 },
+      }),
+    );
+  }
+
   let query = supabase
     .from("products")
     .select(
@@ -59,51 +166,10 @@ export async function GET(req: NextRequest) {
     )
     .eq("is_active", true);
 
-  // Category (UI facet) → map to product_types via category_types table (names)
-  if (cat && cat !== "all") {
-    const { data: catRow } = await supabase.from("categories").select("id").eq("slug", cat).maybeSingle();
-    if (catRow?.id) {
-      const { data: ctRows } = await supabase
-        .from("category_types")
-        .select("product_type")
-        .eq("category_id", catRow.id);
-      const typeNames = (ctRows ?? []).map((r) => r.product_type).filter(Boolean);
-      if (typeNames.length > 0) {
-        query = query.in("product_types.name", typeNames);
-      }
-    }
-  }
-
-  // Brands (names)
-  if (brands.length > 0) {
-    query = query.in("brands.name", brands);
-  }
-
-  // Energy classes
-  if (energyClasses.length > 0) {
-    query = query.in("product_specs.energy_class_cool", energyClasses);
-  }
-
-  // Features (names) — filter via nested relationship
-  if (features.length > 0) {
-    // Supabase doesn't support deep IN easily; approximate via ilike OR.
-    // Backend adapter can be improved later by using RPC.
-    for (const feat of features) {
-      query = query.ilike("product_features.features.name", `%${feat}%`);
-    }
-  }
-
-  // Price range
+  if (idRestriction !== null && idRestriction !== "empty") query = query.in("id", idRestriction);
   if (typeof min === "number") query = query.gte("price", min);
   if (typeof max === "number") query = query.lte("price", max);
 
-  // Search
-  if (q && q.trim()) {
-    const term = q.trim();
-    query = query.or(`name.ilike.%${term}%,description.ilike.%${term}%`);
-  }
-
-  // Sorting
   switch (s) {
     case "price-asc":
       query = query.order("price", { ascending: true });
@@ -114,23 +180,51 @@ export async function GET(req: NextRequest) {
     case "rating-desc":
       query = query.order("rating", { ascending: false });
       break;
+    case "energy-class":
+      query = query.order("id", { ascending: true });
+      break;
+    case "noise-asc":
+      query = query.order("id", { ascending: true });
+      break;
     default:
       query = query.order("is_featured", { ascending: false }).order("price", { ascending: true });
-      break;
   }
 
   const from = (page - 1) * perPage;
   const to = from + perPage - 1;
-  const { data, error, count } = await query.range(from, to);
+  let { data, error, count } = await query.range(from, to);
 
   if (error) {
     return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   }
 
-  const rows = (data ?? []) as Array<any>;
-  const brandIds = Array.from(new Set(rows.map((r) => r.brand_id).filter(Boolean)));
-  const typeIds = Array.from(new Set(rows.map((r) => r.type_id).filter(Boolean)));
-  const productIds = rows.map((r) => r.id);
+  let rows = (data ?? []) as Array<Record<string, unknown>>;
+
+  // Client-visible sort for specs-backed fields (same-page only; total count still correct)
+  if ((s === "noise-asc" || s === "energy-class") && rows.length > 1) {
+    const pids = rows.map((r) => r.id as string);
+    const { data: specRows } = await supabase
+      .from("product_specs")
+      .select("product_id,noise_db,energy_class_cool")
+      .in("product_id", pids);
+    const specByPid = new Map((specRows ?? []).map((r: any) => [r.product_id as string, r]));
+    rows = [...rows].sort((a, b) => {
+      const sa = specByPid.get(a.id as string);
+      const sb = specByPid.get(b.id as string);
+      if (s === "noise-asc") {
+        const na = Number(sa?.noise_db ?? 999);
+        const nb = Number(sb?.noise_db ?? 999);
+        return na - nb;
+      }
+      const ea = String(sa?.energy_class_cool ?? "");
+      const eb = String(sb?.energy_class_cool ?? "");
+      return eb.localeCompare(ea);
+    });
+  }
+
+  const brandIds = Array.from(new Set(rows.map((r) => r.brand_id).filter(Boolean))) as string[];
+  const typeIds = Array.from(new Set(rows.map((r) => r.type_id).filter(Boolean))) as string[];
+  const productIds = rows.map((r) => r.id as string);
 
   const [brandsRes, typesRes, specsRes, imagesRes, pfRes] = await Promise.all([
     brandIds.length > 0 ? supabase.from("brands").select("id,slug,name").in("id", brandIds) : Promise.resolve({ data: [], error: null } as any),
@@ -164,7 +258,11 @@ export async function GET(req: NextRequest) {
   for (const irow of imagesRes.data ?? []) {
     const pid = (irow as any).product_id as string;
     const arr = imagesByProduct.get(pid) ?? [];
-    arr.push({ url: (irow as any).url, sort_order: (irow as any).sort_order, is_main: (irow as any).is_main });
+    arr.push({
+      url: withCloudinaryWebOptimization((irow as any).url),
+      sort_order: (irow as any).sort_order,
+      is_main: (irow as any).is_main,
+    });
     imagesByProduct.set(pid, arr);
   }
 
@@ -185,11 +283,11 @@ export async function GET(req: NextRequest) {
 
   const stitched = rows.map((r) => ({
     ...r,
-    brands: brandById.get(r.brand_id) ?? null,
-    product_types: typeById.get(r.type_id) ?? null,
-    product_specs: specsByProduct.get(r.id) ?? [],
-    product_images: imagesByProduct.get(r.id) ?? [],
-    product_features: featsByProduct.get(r.id) ?? [],
+    brands: brandById.get(r.brand_id as string) ?? null,
+    product_types: typeById.get(r.type_id as string) ?? null,
+    product_specs: specsByProduct.get(r.id as string) ?? [],
+    product_images: imagesByProduct.get(r.id as string) ?? [],
+    product_features: featsByProduct.get(r.id as string) ?? [],
   }));
 
   return withCors(
@@ -200,4 +298,3 @@ export async function GET(req: NextRequest) {
     }),
   );
 }
-

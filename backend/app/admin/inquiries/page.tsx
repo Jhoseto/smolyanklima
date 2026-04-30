@@ -42,6 +42,7 @@ type Inquiry = {
   status: string;
   priority: string;
   assigned_to?: string | null;
+  admin_notes?: string | null;
   created_at: string;
 };
 
@@ -51,6 +52,7 @@ function AdminInquiriesClient() {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<string>("");
   const [q, setQ] = useState("");
+  const [notesForId, setNotesForId] = useState<string | null>(null);
 
   const queryString = useMemo(() => {
     const sp = new URLSearchParams();
@@ -80,19 +82,34 @@ function AdminInquiriesClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queryString]);
 
-  async function quickUpdate(id: string, patch: { status?: string; priority?: string }) {
+  async function quickUpdate(id: string, patch: { status?: string; priority?: string; adminNotes?: string | null }) {
     setError(null);
+    const body: Record<string, unknown> = {};
+    if (patch.status !== undefined) body.status = patch.status;
+    if (patch.priority !== undefined) body.priority = patch.priority;
+    if (patch.adminNotes !== undefined) body.adminNotes = patch.adminNotes;
     const res = await fetch(`/api/admin/inquiries/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
+      body: JSON.stringify(body),
     });
     const json = await res.json();
     if (!res.ok) {
       setError(json.error || "Грешка");
       return;
     }
-    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...(patch as any) } : it)));
+    setItems((prev) =>
+      prev.map((it) =>
+        it.id === id
+          ? {
+              ...it,
+              ...(patch.status !== undefined ? { status: patch.status } : {}),
+              ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
+              ...(patch.adminNotes !== undefined ? { admin_notes: patch.adminNotes } : {}),
+            }
+          : it,
+      ),
+    );
   }
 
   return (
@@ -134,7 +151,7 @@ function AdminInquiriesClient() {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead style={{ background: "#f9fafb" }}>
               <tr>
-                {["Клиент", "Контакт", "Статус", "Приоритет", "Източник", "Създадено", ""].map((h) => (
+                {["Клиент", "Контакт", "Статус", "Приоритет", "Източник", "Създадено", "Действия"].map((h) => (
                   <th key={h} style={{ textAlign: "left", padding: "10px 12px", fontSize: 12, color: "#374151" }}>
                     {h}
                   </th>
@@ -161,14 +178,17 @@ function AdminInquiriesClient() {
                     <td style={{ padding: "10px 12px", color: "#6b7280" }}>{i.source}</td>
                     <td style={{ padding: "10px 12px", color: "#6b7280" }}>{new Date(i.created_at).toLocaleString()}</td>
                     <td style={{ padding: "10px 12px" }}>
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <button onClick={() => quickUpdate(i.id, { status: "in_progress" })} style={{ padding: "6px 10px", borderRadius: 10, border: "1px solid #e5e7eb", fontWeight: 800 }}>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                        <button type="button" onClick={() => setNotesForId(i.id)} style={{ padding: "6px 10px", borderRadius: 10, border: "1px solid #0ea5e9", color: "#0369a1", fontWeight: 800 }}>
+                          Бележки{i.admin_notes ? " ●" : ""}
+                        </button>
+                        <button type="button" onClick={() => quickUpdate(i.id, { status: "in_progress" })} style={{ padding: "6px 10px", borderRadius: 10, border: "1px solid #e5e7eb", fontWeight: 800 }}>
                           В работа
                         </button>
-                        <button onClick={() => quickUpdate(i.id, { status: "done" })} style={{ padding: "6px 10px", borderRadius: 10, border: "1px solid #e5e7eb", fontWeight: 800 }}>
+                        <button type="button" onClick={() => quickUpdate(i.id, { status: "done" })} style={{ padding: "6px 10px", borderRadius: 10, border: "1px solid #e5e7eb", fontWeight: 800 }}>
                           Приключи
                         </button>
-                        <button onClick={() => quickUpdate(i.id, { status: "spam" })} style={{ padding: "6px 10px", borderRadius: 10, border: "1px solid #fecaca", color: "#b91c1c", fontWeight: 800 }}>
+                        <button type="button" onClick={() => quickUpdate(i.id, { status: "spam" })} style={{ padding: "6px 10px", borderRadius: 10, border: "1px solid #fecaca", color: "#b91c1c", fontWeight: 800 }}>
                           Спам
                         </button>
                       </div>
@@ -187,6 +207,84 @@ function AdminInquiriesClient() {
           </table>
         </div>
       )}
+
+      {notesForId ? (
+        <InquiryNotesModal
+          inquiryId={notesForId}
+          initialNotes={items.find((x) => x.id === notesForId)?.admin_notes ?? ""}
+          onClose={() => setNotesForId(null)}
+          onSave={async (adminNotes) => {
+            await quickUpdate(notesForId, { adminNotes });
+            setNotesForId(null);
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function InquiryNotesModal({
+  inquiryId,
+  initialNotes,
+  onClose,
+  onSave,
+}: {
+  inquiryId: string;
+  initialNotes: string;
+  onClose: () => void;
+  onSave: (notes: string | null) => Promise<void>;
+}) {
+  const [text, setText] = useState(initialNotes);
+  const [saving, setSaving] = useState(false);
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.35)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 50,
+        padding: 16,
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: "white", borderRadius: 16, maxWidth: 560, width: "100%", padding: 20 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ fontWeight: 900, marginBottom: 8 }}>Вътрешни бележки (CRM)</div>
+        <p style={{ fontSize: 12, color: "#6b7280", marginBottom: 10 }}>ID: {inquiryId}</p>
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={8}
+          placeholder="Бележки само за екипа…"
+          style={{ width: "100%", padding: 12, borderRadius: 12, border: "1px solid #e5e7eb", marginBottom: 12 }}
+        />
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <button type="button" onClick={onClose} style={{ padding: "10px 14px", borderRadius: 12, border: "1px solid #e5e7eb", fontWeight: 800 }}>
+            Отказ
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={async () => {
+              setSaving(true);
+              try {
+                await onSave(text.trim() || null);
+              } finally {
+                setSaving(false);
+              }
+            }}
+            style={{ padding: "10px 14px", borderRadius: 12, background: "#0ea5e9", color: "white", fontWeight: 800, border: "none", cursor: saving ? "wait" : "pointer" }}
+          >
+            {saving ? "Запис…" : "Запази"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

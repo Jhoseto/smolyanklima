@@ -20,7 +20,9 @@ export async function GET(req: NextRequest) {
   const supabase = await adminDb();
   let query = supabase
     .from("inquiries")
-    .select("id,source,customer_name,customer_phone,customer_email,message,service_type,status,priority,assigned_to,created_at,updated_at");
+    .select(
+      "id,source,customer_name,customer_phone,customer_email,message,service_type,status,priority,assigned_to,admin_notes,created_at,updated_at",
+    );
 
   if (parsed.data.status) query = query.eq("status", parsed.data.status);
 

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowUp, SlidersHorizontal, PackageX, ShieldCheck, Wrench, Clock, BadgeCheck } from 'lucide-react';
 
@@ -18,9 +18,11 @@ import { useSearchParams } from 'react-router-dom';
 import { useScroll, useSpring } from 'motion/react';
 
 import {
-  getAllProducts,
-  CATEGORIES,
+  fetchProductsCatalogPage,
+  fetchCatalogPriceBounds,
+  fetchCategoryProductCounts,
 } from '../data/productService';
+import { postPublicInquiry } from '../data/postInquiry';
 import type { CatalogProduct, SortOption } from '../data/types/product';
 
 // ─────────────────────────────────────────
@@ -49,7 +51,7 @@ const TrustBar = () => (
 // ─────────────────────────────────────────
 // WHY US BANNER (inserted between products)
 // ─────────────────────────────────────────
-const WhyUsBanner = ({ key }: { key?: React.Key }) => (
+const WhyUsBanner = () => (
   <div className="col-span-full my-2">
     <div className="bg-gradient-to-r from-[#F4F9FA] to-white rounded-2xl p-6 border border-[#00B4D8]/10 shadow-sm">
       <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 text-center">Защо Смолян Клима?</p>
@@ -57,7 +59,7 @@ const WhyUsBanner = ({ key }: { key?: React.Key }) => (
         {[
           { value: '25+', label: 'год. опит' },
           { value: '1500+', label: 'монтажа' },
-          { value: '4.9★', label: 'оценка' },
+          { value: '4.8/ 5 ★', label: 'оценка' },
           { value: 'ОТОРИЗИРАН', label: 'сервиз' },
           { value: '3г.', label: 'гаранция' },
           { value: '0%', label: 'лизинг' },
@@ -75,7 +77,7 @@ const WhyUsBanner = ({ key }: { key?: React.Key }) => (
 // ─────────────────────────────────────────
 // EMPTY STATE
 // ─────────────────────────────────────────
-const EmptyState = ({ onReset, key }: { onReset: () => void; key?: React.Key }) => (
+const EmptyState = ({ onReset }: { onReset: () => void }) => (
   <motion.div
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
@@ -126,25 +128,30 @@ const SkeletonCard = () => (
 // ─────────────────────────────────────────
 // MAIN CATALOG PAGE
 // ─────────────────────────────────────────
+const PER_PAGE = 24;
+
 const CatalogPage = () => {
-  const [allProducts, setAllProducts] = useState<CatalogProduct[]>([]);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [priceMin, setPriceMin] = useState(0);
   const [priceMax, setPriceMax] = useState(0);
+  const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({ all: 0 });
 
-  // ── State ────────────────────────────────
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [loading, setLoading] = useState(true);
-  
   const [search, setSearch] = useState(searchParams.get('q') || '');
   const [category, setCategory] = useState(searchParams.get('cat') || 'all');
   const [brands, setBrands] = useState<string[]>(searchParams.get('b')?.split(',').filter(Boolean) || []);
   const [energyClasses, setEnergyClasses] = useState<string[]>(searchParams.get('e')?.split(',').filter(Boolean) || []);
   const [features, setFeatures] = useState<string[]>(searchParams.get('f')?.split(',').filter(Boolean) || []);
-  const [priceRange, setPriceRange] = useState<[number, number]>([
-    Number(searchParams.get('min')) || priceMin,
-    Number(searchParams.get('max')) || priceMax
-  ]);
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 0]);
   const [sortBy, setSortBy] = useState<SortOption>((searchParams.get('s') as SortOption) || 'recommended');
+  const [page, setPage] = useState(() => {
+    const raw = Number(searchParams.get('page'));
+    return raw >= 1 && Number.isFinite(raw) ? Math.floor(raw) : 1;
+  });
+
+  const [products, setProducts] = useState<CatalogProduct[]>([]);
+  const [total, setTotal] = useState(0);
+  const [listLoading, setListLoading] = useState(true);
+  const prevListFiltersSigRef = useRef<string | null>(null);
   
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -156,26 +163,116 @@ const CatalogPage = () => {
   const { isFavorite, toggle: toggleFavorite } = useFavorites();
   const { viewedIds, addViewed } = useRecentlyViewed();
 
-  // ── Load products from backend (DB) ──────
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 150);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // ── Ценови граници + броя по категории (веднъж при mount) ──
+  useEffect(() => {
+    let cancelled = false;
     (async () => {
-      const all = await getAllProducts();
-      setAllProducts(all);
-      const prices = all.map(p => p.price);
-      const min = prices.length ? Math.min(...prices) : 0;
-      const max = prices.length ? Math.max(...prices) : 0;
-      setPriceMin(min);
-      setPriceMax(max);
-      setPriceRange((prev) => {
-        // ако още сме със стартовите 0/0 – синхронизираме
-        if (prev[0] === 0 && prev[1] === 0) return [min, max];
-        return prev;
-      });
-    })().catch(() => {
-      // ignore, UI already has error/empty states
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      try {
+        const [bounds, counts] = await Promise.all([
+          fetchCatalogPriceBounds(),
+          fetchCategoryProductCounts(),
+        ]);
+        if (cancelled) return;
+        const minP = bounds.min;
+        const maxP = bounds.max;
+        setPriceMin(minP);
+        setPriceMax(maxP);
+        setCategoryCounts(counts);
+        const uMin = searchParams.get('min');
+        const uMax = searchParams.get('max');
+        setPriceRange((prev) => {
+          if (uMin != null && uMax != null) {
+            const a = Number(uMin);
+            const b = Number(uMax);
+            if (!Number.isNaN(a) && !Number.isNaN(b) && b >= a) {
+              return [Math.max(minP, a), Math.min(maxP, b)];
+            }
+          }
+          if (prev[0] === 0 && prev[1] === 0) return [minP, maxP];
+          return [Math.max(minP, prev[0]), Math.min(maxP, prev[1])];
+        });
+      } catch {
+        if (!cancelled) setCategoryCounts({ all: 0 });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- еднократно при mount + URL min/max
   }, []);
+
+  // ── Списък от API при филтри / страница (при смяна на филтри → страница 1 преди заявката) ──
+  useEffect(() => {
+    const listFiltersSig = JSON.stringify({
+      debouncedSearch,
+      category,
+      brands,
+      energyClasses,
+      features,
+      priceRange,
+      sortBy,
+    });
+    const prevSig = prevListFiltersSigRef.current;
+    if (prevSig !== null && prevSig !== listFiltersSig && page !== 1) {
+      setPage(1);
+      return;
+    }
+    prevListFiltersSigRef.current = listFiltersSig;
+
+    let cancelled = false;
+    setListLoading(true);
+    (async () => {
+      try {
+        const minQ =
+          priceMax > priceMin && priceRange[0] > priceMin ? priceRange[0] : undefined;
+        const maxQ =
+          priceMax > priceMin && priceRange[1] < priceMax ? priceRange[1] : undefined;
+        const { data, meta } = await fetchProductsCatalogPage({
+          q: debouncedSearch,
+          cat: category,
+          brands,
+          energyClasses,
+          features,
+          min: minQ,
+          max: maxQ,
+          sort: sortBy,
+          page,
+          perPage: PER_PAGE,
+        });
+        if (!cancelled) {
+          setProducts(data);
+          setTotal(meta.total);
+        }
+      } catch {
+        if (!cancelled) {
+          setProducts([]);
+          setTotal(0);
+        }
+      } finally {
+        if (!cancelled) setListLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    debouncedSearch,
+    category,
+    brands,
+    energyClasses,
+    features,
+    priceRange,
+    sortBy,
+    page,
+    priceMin,
+    priceMax,
+  ]);
 
   // ── Sync to URL ──────────────────────────
   useEffect(() => {
@@ -185,21 +282,18 @@ const CatalogPage = () => {
     if (brands.length) params.set('b', brands.join(','));
     if (energyClasses.length) params.set('e', energyClasses.join(','));
     if (features.length) params.set('f', features.join(','));
-    if (priceRange[0] !== priceMin) params.set('min', priceRange[0].toString());
-    if (priceRange[1] !== priceMax) params.set('max', priceRange[1].toString());
+    if (priceMax > priceMin) {
+      if (priceRange[0] > priceMin) params.set('min', priceRange[0].toString());
+      if (priceRange[1] < priceMax) params.set('max', priceRange[1].toString());
+    }
     if (sortBy !== 'recommended') params.set('s', sortBy);
+    if (page > 1) params.set('page', String(page));
     setSearchParams(params, { replace: true });
-  }, [search, category, brands, energyClasses, features, priceRange, sortBy, priceMin, priceMax, setSearchParams]);
+  }, [search, category, brands, energyClasses, features, priceRange, sortBy, priceMin, priceMax, page, setSearchParams]);
 
   // ── Scroll Progress ──────────────────────
   const { scrollYProgress } = useScroll();
   const scaleX = useSpring(scrollYProgress, { stiffness: 100, damping: 30, restDelta: 0.001 });
-
-  // ── Simulate loading ─────────────────────
-  useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 600);
-    return () => clearTimeout(t);
-  }, []);
 
   // ── Back to top ──────────────────────────
   useEffect(() => {
@@ -208,121 +302,16 @@ const CatalogPage = () => {
     return () => window.removeEventListener('scroll', handler);
   }, []);
 
-  // ── Debounced search ─────────────────────
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 150);
-    return () => clearTimeout(t);
-  }, [search]);
-
-  // ── Filtered products ────────────────────
-  const filtered = useMemo(() => {
-    // Category filter resolves to type list
-    const catMeta = CATEGORIES.find(c => c.id === category);
-    const types = catMeta && catMeta.types.length > 0 ? catMeta.types : [];
-
-    return filterProductsLocal(allProducts, {
-      search: debouncedSearch,
-      brands,
-      types,
-      energyClasses,
-      features,
-      priceMin: priceRange[0],
-      priceMax: priceRange[1],
-      sortBy,
-    });
-  }, [allProducts, debouncedSearch, category, brands, energyClasses, features, priceRange, sortBy]);
-
-function filterProductsLocal(products: CatalogProduct[], filters: Partial<import('../data/types/product').CatalogFilters>): CatalogProduct[] {
-  let result = [...products];
-
-  // Search
-  if (filters.search && filters.search.trim()) {
-    const q = filters.search.toLowerCase().trim();
-    result = result.filter(p =>
-      p.name.toLowerCase().includes(q) ||
-      p.brand.toLowerCase().includes(q) ||
-      (p.type ?? '').toLowerCase().includes(q) ||
-      (p.description ?? '').toLowerCase().includes(q)
-    );
-  }
-
-  // Brands
-  if (filters.brands && filters.brands.length > 0) {
-    result = result.filter(p =>
-      filters.brands!.some(b => p.brand.toLowerCase().includes(b.toLowerCase()))
-    );
-  }
-
-  // Types
-  if (filters.types && filters.types.length > 0) {
-    result = result.filter(p => filters.types!.includes(p.type));
-  }
-
-  // Energy classes
-  if (filters.energyClasses && filters.energyClasses.length > 0) {
-    result = result.filter(p => filters.energyClasses!.includes(p.energyClass));
-  }
-
-  // Features
-  if (filters.features && filters.features.length > 0) {
-    result = result.filter(p =>
-      filters.features!.every(f =>
-        p.features.some(pf => pf.toLowerCase().includes(f.toLowerCase()))
-      )
-    );
-  }
-
-  // Price range
-  if (filters.priceMin !== undefined) {
-    result = result.filter(p => p.price >= filters.priceMin!);
-  }
-  if (filters.priceMax !== undefined) {
-    result = result.filter(p => p.price <= filters.priceMax!);
-  }
-
-  // Sort
-  switch (filters.sortBy) {
-    case 'price-asc':
-      result.sort((a, b) => a.price - b.price);
-      break;
-    case 'price-desc':
-      result.sort((a, b) => b.price - a.price);
-      break;
-    case 'energy-class':
-      result.sort((a, b) => a.energyClass.localeCompare(b.energyClass));
-      break;
-    case 'noise-asc':
-      result.sort((a, b) => {
-        const noiseA = parseInt(a.noise ?? '99');
-        const noiseB = parseInt(b.noise ?? '99');
-        return noiseA - noiseB;
-      });
-      break;
-    case 'rating-desc':
-      result.sort((a, b) => b.rating - a.rating);
-      break;
-    default:
-      break;
-  }
-
-  return result;
-}
-
-  // ── Category counts ──────────────────────
-  const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: allProducts.length };
-    CATEGORIES.forEach(cat => {
-      if (cat.types.length > 0) {
-        counts[cat.id] = allProducts.filter(p => cat.types.includes(p.type)).length;
-      }
-    });
-    return counts;
-  }, [allProducts]);
+  const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
+  const showSkeleton = listLoading && products.length === 0;
 
   // ── Active filter count ──────────────────
-  const activeFilterCount = brands.length + energyClasses.length + features.length +
-    (priceRange[0] !== priceMin || priceRange[1] !== priceMax ? 1 : 0);
+  const activeFilterCount =
+    brands.length +
+    energyClasses.length +
+    features.length +
+    (search.trim() ? 1 : 0) +
+    (priceMax > priceMin && (priceRange[0] > priceMin || priceRange[1] < priceMax) ? 1 : 0);
 
   // ── Handlers ────────────────────────────
   const resetAllFilters = useCallback(() => {
@@ -333,6 +322,7 @@ function filterProductsLocal(products: CatalogProduct[], filters: Partial<import
     setFeatures([]);
     setPriceRange([priceMin, priceMax]);
     setSortBy('recommended');
+    setPage(1);
   }, [priceMin, priceMax]);
 
   const handleFavoriteToggle = useCallback((id: string) => {
@@ -351,11 +341,36 @@ function filterProductsLocal(products: CatalogProduct[], filters: Partial<import
     });
   }, [addToast]);
 
-  const handleFormSubmit = useCallback((productName: string, name: string, phone: string) => {
-    console.log('Inquiry:', { productName, name, phone });
-    addToast('Ще ви се обадим скоро!', '✅');
-    setQuickViewProduct(null);
-  }, [addToast]);
+  const handleFormSubmit = useCallback(
+    async (
+      productName: string,
+      name: string,
+      phone: string,
+      meta?: { website?: string; productSlug?: string },
+    ) => {
+      if (meta?.website?.trim()) {
+        addToast('Ще ви се обадим скоро!', '✅');
+        setQuickViewProduct(null);
+        return;
+      }
+      const r = await postPublicInquiry({
+        source: 'quick_view',
+        customerName: name,
+        customerPhone: phone,
+        message: `Запитване от бърз преглед за: ${productName}`,
+        serviceType: 'sale',
+        productSlug: meta?.productSlug,
+        website: meta?.website ?? '',
+      });
+      if (r.ok === false) {
+        addToast(r.status === 429 ? 'Твърде много заявки. Опитайте по-късно.' : r.error, '⚠️');
+        return;
+      }
+      addToast('Ще ви се обадим скоро!', '✅');
+      setQuickViewProduct(null);
+    },
+    [addToast],
+  );
 
   const brandToggle = (b: string) => setBrands(prev => prev.includes(b) ? prev.filter(x => x !== b) : [...prev, b]);
   const energyToggle = (e: string) => setEnergyClasses(prev => prev.includes(e) ? prev.filter(x => x !== e) : [...prev, e]);
@@ -376,7 +391,7 @@ function filterProductsLocal(products: CatalogProduct[], filters: Partial<import
 
   // ── Render ───────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-50 font-sans selection:bg-[#FF4D00]/20 selection:text-[#FF4D00]">
+    <div className="relative min-h-screen bg-gray-50 font-sans selection:bg-[#FF4D00]/20 selection:text-[#FF4D00]">
       {/* Scroll Progress Bar */}
       <motion.div
         className="fixed top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#00B4D8] to-[#FF4D00] transform-origin-0 z-[1000]"
@@ -421,8 +436,8 @@ function filterProductsLocal(products: CatalogProduct[], filters: Partial<import
             onSortChange={setSortBy}
             viewMode={viewMode}
             onViewModeChange={setViewMode}
-            totalCount={allProducts.length}
-            filteredCount={filtered.length}
+            totalCount={categoryCounts.all ?? 0}
+            filteredCount={total}
             onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
             sidebarOpen={sidebarOpen}
           />
@@ -515,7 +530,7 @@ function filterProductsLocal(products: CatalogProduct[], filters: Partial<import
 
           {/* ── PRODUCT GRID ─────────────────────── */}
           <div className="flex-1 min-w-0">
-            {loading ? (
+            {showSkeleton ? (
               <div className={`grid gap-4 lg:gap-5 ${
                 viewMode === 'grid'
                   ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
@@ -533,15 +548,21 @@ function filterProductsLocal(products: CatalogProduct[], filters: Partial<import
                 }`}
               >
                 <AnimatePresence mode="popLayout">
-                  {filtered.length === 0 ? (
-                    <EmptyState key="empty" onReset={resetAllFilters} />
+                  {!listLoading && products.length === 0 ? (
+                    <div key="empty" className="col-span-full">
+                      <EmptyState onReset={resetAllFilters} />
+                    </div>
                   ) : (
-                    filtered.map((product, index) => {
+                    products.map((product, index) => {
                       const nodes: React.ReactNode[] = [];
 
                       // Insert "Why Us" banner after 8th product
                       if (index === 8) {
-                        nodes.push(<WhyUsBanner key="why-us" />);
+                        nodes.push(
+                          <div key="why-us" className="col-span-full">
+                            <WhyUsBanner />
+                          </div>,
+                        );
                       }
 
                       nodes.push(
@@ -571,10 +592,39 @@ function filterProductsLocal(products: CatalogProduct[], filters: Partial<import
             )}
 
             {/* Result count at bottom */}
-            {!loading && filtered.length > 0 && (
-              <p className="text-center text-sm text-gray-400 mt-10">
-                Показани <strong className="text-gray-600">{filtered.length}</strong> от <strong className="text-gray-600">{allProducts.length}</strong> продукта
-              </p>
+            {!showSkeleton && products.length > 0 && total > 0 && (
+              <div className="mt-10 space-y-4">
+                <p className="text-center text-sm text-gray-400">
+                  Показани{' '}
+                  <strong className="text-gray-600">
+                    {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, total)}
+                  </strong>{' '}
+                  от <strong className="text-gray-600">{total}</strong> продукта
+                </p>
+                {totalPages > 1 && (
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      disabled={page <= 1 || listLoading}
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      className="px-4 py-2 rounded-xl text-sm font-semibold border border-gray-200 bg-white text-gray-700 disabled:opacity-40 hover:border-[#00B4D8] hover:text-[#00B4D8] transition-colors"
+                    >
+                      Предишна
+                    </button>
+                    <span className="text-sm text-gray-500 px-2">
+                      Страница {page} от {totalPages}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={page >= totalPages || listLoading}
+                      onClick={() => setPage((p) => p + 1)}
+                      className="px-4 py-2 rounded-xl text-sm font-semibold border border-gray-200 bg-white text-gray-700 disabled:opacity-40 hover:border-[#00B4D8] hover:text-[#00B4D8] transition-colors"
+                    >
+                      Следваща
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

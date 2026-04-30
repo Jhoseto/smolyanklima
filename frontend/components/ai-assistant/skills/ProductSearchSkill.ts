@@ -6,7 +6,8 @@
 import type { IntentType, Product, UserContext, SkillResult, SkillContext } from '../types';
 import { getVectorSearchService } from '../services/vectorSearch';
 import { aiAnalytics } from '../analytics';
-import { products as dbProducts } from '../../../data/db';
+import { getAllProducts } from '../../../data/productService';
+import { catalogProductsToAI } from '../data/catalogToAIProducts';
 
 export class ProductSearchSkill {
   public name = 'ProductSearchSkill';
@@ -21,39 +22,11 @@ export class ProductSearchSkill {
     const { query, userContext, products: contextProducts } = context;
 
     try {
-      // Get vector search service with products
-      const vectorSearch = getVectorSearchService(contextProducts || dbProducts.map(p => ({
-        id: p.id,
-        name: p.name,
-        brand: p.brand,
-        model: p.type || p.id,
-        price: p.price,
-        oldPrice: undefined,
-        image: `/images/${p.id}.jpg`,
-        specs: {
-          power: p.coolingPower || '2.5 kW',
-          coolingCapacity: parseFloat(p.coolingPower?.match(/[\d.]+/)?.[0] || '2.5'),
-          heatingCapacity: parseFloat(p.heatingPower?.match(/[\d.]+/)?.[0] || '3.2'),
-          noiseLevel: parseInt(p.noise?.match(/\d+/)?.[0] || '25'),
-          energyEfficiency: 6.5,
-          seer: 6.5,
-          coverage: parseInt(p.area?.match(/\d+/)?.[0] || '25'),
-        },
-        features: p.features || [],
-        inStock: true,
-        stockCount: 5,
-        rating: 4.5,
-        reviewCount: 10,
-        energyClass: p.energyCool || 'A',
-        warranty: {
-          years: 2,
-          compressor: 4,
-          parts: 2,
-          labor: 1,
-        },
-        suitableFor: ['bedroom', 'living'],
-        popularityScore: 80,
-      })));
+      let products: Product[] = contextProducts ?? [];
+      if (!products.length) {
+        products = catalogProductsToAI(await getAllProducts());
+      }
+      const vectorSearch = getVectorSearchService(products);
 
       // Search for products
       const results = vectorSearch.search(query);
@@ -73,16 +46,14 @@ export class ProductSearchSkill {
         };
       }
 
-      // Get top products
-      const products = results.map(r => r.product);
+      const topProducts = results.map((r) => r.product);
 
-      // Build response
-      let response = this.buildResponse(products, query, userContext);
+      let response = this.buildResponse(topProducts, query, userContext);
 
       return {
         success: true,
         response,
-        products,
+        products: topProducts,
         confidence: results[0].score,
       };
     } catch (error) {

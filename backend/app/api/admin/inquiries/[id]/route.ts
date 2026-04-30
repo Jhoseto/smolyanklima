@@ -7,6 +7,7 @@ const UpdateSchema = z.object({
   status: z.string().optional(),
   priority: z.string().optional(),
   assignedTo: z.string().uuid().nullable().optional(),
+  adminNotes: z.string().max(8000).nullable().optional(),
 });
 
 export async function OPTIONS(req: NextRequest) {
@@ -18,7 +19,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   const supabase = await adminDb();
   const { data, error } = await supabase
     .from("inquiries")
-    .select("id,source,customer_name,customer_phone,customer_email,message,product_id,service_type,status,priority,assigned_to,created_at,updated_at")
+    .select(
+      "id,source,customer_name,customer_phone,customer_email,message,product_id,service_type,status,priority,assigned_to,admin_notes,created_at,updated_at",
+    )
     .eq("id", id)
     .maybeSingle();
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
@@ -36,9 +39,15 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   if (parsed.data.status !== undefined) patch.status = parsed.data.status;
   if (parsed.data.priority !== undefined) patch.priority = parsed.data.priority;
   if (parsed.data.assignedTo !== undefined) patch.assigned_to = parsed.data.assignedTo;
+  if (parsed.data.adminNotes !== undefined) patch.admin_notes = parsed.data.adminNotes;
 
   const supabase = await adminDb();
-  const { data, error } = await supabase.from("inquiries").update(patch).eq("id", id).select("id,status,priority,assigned_to").maybeSingle();
+  const { data, error } = await supabase
+    .from("inquiries")
+    .update(patch)
+    .eq("id", id)
+    .select("id,status,priority,assigned_to,admin_notes")
+    .maybeSingle();
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   if (!data) return withCors(req, NextResponse.json({ error: "Не е намерено" }, { status: 404 }));
   return withCors(req, NextResponse.json({ data }));

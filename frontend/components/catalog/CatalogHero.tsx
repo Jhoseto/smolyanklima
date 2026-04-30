@@ -31,7 +31,7 @@ const stats = [
 ];
 
 export const CatalogHero = () => {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLElement | null>(null);
   const { scrollYProgress } = useScroll({
     target: containerRef,
     offset: ["start start", "end start"]
@@ -43,7 +43,10 @@ export const CatalogHero = () => {
   const statsY = useTransform(scrollYProgress, [0, 1], ["0%", "30%"]);
 
   return (
-    <section ref={containerRef} className="relative pt-24 pb-8 lg:pt-28 lg:pb-12 overflow-hidden bg-white flex items-center min-h-[300px] lg:min-h-[350px]">
+    <section
+      ref={containerRef}
+      className="relative pt-24 pb-8 lg:pt-28 lg:pb-12 overflow-hidden bg-white flex items-center min-h-[300px] lg:min-h-[350px]"
+    >
       
       {/* ── Background Image & Overlays ─────────────── */}
       <div 

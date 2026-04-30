@@ -113,7 +113,7 @@ export const HeroSection = () => {
                     <div className="text-white/80 text-[11px] font-medium uppercase tracking-wider">Години опит</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-white text-2xl font-black mb-1">4.9★</div>
+                    <div className="text-white text-2xl font-black mb-1">4.8/5 ★</div>
                     <div className="text-white/80 text-[11px] font-medium uppercase tracking-wider">Средна оценка</div>
                   </div>
                 </div>

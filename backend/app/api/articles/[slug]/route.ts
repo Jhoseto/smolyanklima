@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
+import { optimizeArticlePayloadForWeb } from "@/lib/services/cloudinaryService";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function OPTIONS(req: NextRequest) {
@@ -20,6 +21,6 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   if (!data) return withCors(req, NextResponse.json({ error: "Not found" }, { status: 404 }));
 
-  return withCors(req, NextResponse.json({ data }));
+  return withCors(req, NextResponse.json({ data: optimizeArticlePayloadForWeb(data as Record<string, unknown>) }));
 }
 

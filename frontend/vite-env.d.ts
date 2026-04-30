@@ -1,8 +1,8 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  // Keep custom env typings empty intentionally:
-  // AI is server-side and does not use VITE_* variables.
+  /** Base URL на Next админ (без накрайна /). Пример: https://api.smolyanklima.bg */
+  readonly VITE_ADMIN_ORIGIN?: string;
 }
 
 interface ImportMeta {

@@ -12,7 +12,6 @@ const UpdateSchema = z.object({
   tags: z.array(z.string().min(1).max(60)).optional(),
   authorSlug: z.string().min(1).max(120).optional(),
   featuredImage: z.string().min(1).max(2048).optional(),
-  images: z.array(z.string().min(1).max(2048)).optional(),
   seo: z
     .object({
       title: z.string().min(1).max(240),
@@ -49,6 +48,14 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   if (!parsed.success) return withCors(req, NextResponse.json({ error: "Невалидни данни" }, { status: 400 }));
 
   const supabase = await adminDb();
+  const { data: current, error: curErr } = await supabase
+    .from("articles")
+    .select("featured_image,schema")
+    .eq("id", id)
+    .maybeSingle();
+  if (curErr) return withCors(req, NextResponse.json({ error: curErr.message }, { status: 500 }));
+  if (!current) return withCors(req, NextResponse.json({ error: "Не е намерено" }, { status: 404 }));
+
   const patch: Record<string, unknown> = {};
 
   if (parsed.data.slug !== undefined) patch.slug = parsed.data.slug;
@@ -59,7 +66,6 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   if (parsed.data.tags !== undefined) patch.tags = parsed.data.tags;
   if (parsed.data.authorSlug !== undefined) patch.author_slug = parsed.data.authorSlug;
   if (parsed.data.featuredImage !== undefined) patch.featured_image = parsed.data.featuredImage;
-  if (parsed.data.images !== undefined) patch.images = parsed.data.images;
   if (parsed.data.seo !== undefined) patch.seo = parsed.data.seo;
   if (parsed.data.isFeatured !== undefined) patch.is_featured = parsed.data.isFeatured;
 
@@ -69,6 +75,17 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   }
 
   patch.modified_at = new Date().toISOString();
+  patch.images = [];
+
+  const nextFeatured =
+    parsed.data.featuredImage !== undefined
+      ? parsed.data.featuredImage
+      : String((current as { featured_image?: string | null }).featured_image ?? "");
+  const prevSchema = ((current as { schema?: Record<string, unknown> | null }).schema ?? {}) as Record<string, unknown>;
+  patch.schema = {
+    ...prevSchema,
+    image: nextFeatured ? [nextFeatured] : [],
+  };
 
   const { data, error } = await supabase.from("articles").update(patch).eq("id", id).select("id,slug").maybeSingle();
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));

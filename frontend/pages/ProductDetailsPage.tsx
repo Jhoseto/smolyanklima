@@ -5,6 +5,7 @@ import { ArrowLeft, Star, Phone, ShieldCheck, Clock, Check, Zap, Volume2, Wind }
 import { getAllProducts, getProductById } from '../data/productService';
 import type { CatalogProduct } from '../data/types/product';
 import { ProductCard } from '../components/catalog/ProductCard';
+import { PremiumImageGallery } from '../components/media/PremiumImageGallery';
 
 export default function ProductDetailsPage() {
   const { id } = useParams<{ id: string }>();
@@ -80,21 +81,17 @@ export default function ProductDetailsPage() {
             animate={{ opacity: 1, x: 0 }}
             className="w-full lg:w-1/2"
           >
-            <div className="relative aspect-square bg-gray-50 rounded-[2.5rem] p-8 flex items-center justify-center border border-gray-100 shadow-sm">
-              {product.badge && (
-                <span className={`absolute top-6 left-6 px-4 py-1.5 rounded-full text-xs font-bold shadow-sm ${product.badge.bg} ${product.badge.textCol}`}>
-                  {product.badge.text}
-                </span>
-              )}
-              <img 
-                src={product.image} 
-                alt={product.name} 
-                className="w-full h-full object-contain mix-blend-multiply hover:scale-105 transition-transform duration-500"
-              />
-              <span className="absolute top-6 right-6 bg-green-500 text-white text-sm font-black px-4 py-1.5 rounded-full shadow-md">
-                {product.energyClass}
-              </span>
-            </div>
+            <PremiumImageGallery
+              images={(product.images?.length ? product.images : [product.image]).filter(Boolean)}
+              alt={product.name}
+              badgeText={product.badge?.text}
+              badgeClassName={
+                product.badge
+                  ? `absolute top-6 left-6 px-4 py-1.5 rounded-full text-xs font-black shadow-sm ${product.badge.bg} ${product.badge.textCol}`
+                  : undefined
+              }
+              energyClass={product.energyClass}
+            />
           </motion.div>
 
           {/* Right: Info */}

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
+import { optimizeImageRowUrls } from "@/lib/services/cloudinaryService";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 const QuerySchema = z.object({
@@ -49,6 +50,10 @@ export async function GET(req: NextRequest) {
   const { data, error, count } = await query.range(from, to);
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
 
-  return withCors(req, NextResponse.json({ data: data ?? [], meta: { page, perPage, total: count ?? 0 } }));
+  const rows = (data ?? []).map((row) => {
+    const r = row as Record<string, unknown> & { accessory_images?: { url: string }[] };
+    return { ...r, accessory_images: optimizeImageRowUrls(r.accessory_images) };
+  });
+  return withCors(req, NextResponse.json({ data: rows, meta: { page, perPage, total: count ?? 0 } }));
 }
 

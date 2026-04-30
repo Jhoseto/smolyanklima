@@ -1,17 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
-import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
-import { getEnv } from "@/lib/env";
+import {
+  buildUploadFolderPath,
+  formatCloudinaryUploadError,
+  isCloudinaryConfigured,
+  sanitizeMediaFolderSlug,
+  uploadImageBuffer,
+  type CloudinaryUploadKind,
+} from "@/lib/services/cloudinaryService";
 
 export const dynamic = "force-dynamic";
+
+const KINDS: CloudinaryUploadKind[] = ["product", "accessory", "blog"];
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflight(req);
 }
 
 export async function POST(req: NextRequest) {
-  const env = getEnv();
-  const supabase = createSupabaseServiceRoleClient();
+  if (!isCloudinaryConfigured()) {
+    return withCors(
+      req,
+      NextResponse.json(
+        {
+          error:
+            "Cloudinary не е конфигуриран. Добави CLOUDINARY_URL в .env.local (виж .env.example).",
+        },
+        { status: 503 },
+      ),
+    );
+  }
 
   const form = await req.formData().catch(() => null);
   const file = form?.get("file");
@@ -19,31 +37,37 @@ export async function POST(req: NextRequest) {
     return withCors(req, NextResponse.json({ error: "Липсва файл" }, { status: 400 }));
   }
 
-  const bucket = env.BLOG_IMAGES_BUCKET ?? "blog-images";
-  const ext = guessExtension(file.type) ?? "bin";
-  const safeName = (file.name || "image").replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 80);
-  const key = `articles/${new Date().toISOString().slice(0, 10)}/${Date.now()}-${safeName}.${ext}`.replace(/\.([a-z0-9]+)\.([a-z0-9]+)$/i, ".$2");
-
-  const { error: uploadError } = await supabase.storage.from(bucket).upload(key, file, {
-    contentType: file.type || "application/octet-stream",
-    upsert: false,
-  });
-
-  if (uploadError) {
-    return withCors(req, NextResponse.json({ error: uploadError.message }, { status: 500 }));
+  const kindRaw = String(form?.get("kind") ?? "").trim();
+  const slugRaw = String(form?.get("slug") ?? "").trim();
+  if (!KINDS.includes(kindRaw as (typeof KINDS)[number])) {
+    return withCors(
+      req,
+      NextResponse.json({ error: "Невалиден kind (product | accessory | blog)" }, { status: 400 }),
+    );
+  }
+  const kind = kindRaw as CloudinaryUploadKind;
+  if (slugRaw.length < 2) {
+    return withCors(req, NextResponse.json({ error: "Липсва или е твърде кратък slug за папката в Cloudinary" }, { status: 400 }));
   }
 
-  const { data } = supabase.storage.from(bucket).getPublicUrl(key);
-  return withCors(req, NextResponse.json({ data: { url: data.publicUrl, path: key } }, { status: 201 }));
-}
+  const safe = sanitizeMediaFolderSlug(slugRaw);
+  const folderBase = buildUploadFolderPath(kind, safe);
 
-function guessExtension(mime: string) {
-  if (!mime) return null;
-  if (mime === "image/jpeg") return "jpg";
-  if (mime === "image/png") return "png";
-  if (mime === "image/webp") return "webp";
-  if (mime === "image/gif") return "gif";
-  if (mime === "image/svg+xml") return "svg";
-  return null;
-}
+  const buf = Buffer.from(await file.arrayBuffer());
+  const mime = file.type || "application/octet-stream";
+  if (!mime.startsWith("image/")) {
+    return withCors(req, NextResponse.json({ error: "Файлът трябва да е изображение" }, { status: 400 }));
+  }
 
+  try {
+    const { url, publicId } = await uploadImageBuffer({
+      buffer: buf,
+      mimeType: mime,
+      folderPath: folderBase,
+    });
+    return withCors(req, NextResponse.json({ data: { url, publicId, folder: folderBase } }, { status: 201 }));
+  } catch (e: unknown) {
+    const msg = formatCloudinaryUploadError(e);
+    return withCors(req, NextResponse.json({ error: msg }, { status: 500 }));
+  }
+}

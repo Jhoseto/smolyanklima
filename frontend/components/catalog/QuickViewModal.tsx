@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Star, Check, Wifi, ShieldCheck, Zap, Volume2, Wind, ChevronDown } from 'lucide-react';
 import type { CatalogProduct } from '../../data/types/product';
+import { PremiumImageGallery } from '../media/PremiumImageGallery';
 
 // Мини-Accordion за price breakdown
 const Accordion = ({ title, children, defaultOpen = false }: { title: string, children: React.ReactNode, defaultOpen?: boolean }) => {
@@ -28,7 +29,12 @@ interface QuickViewModalProps {
   onClose: () => void;
   isFavorite: boolean;
   onFavoriteToggle: (id: string) => void;
-  onFormSubmit: (productName: string, name: string, phone: string) => void;
+  onFormSubmit: (
+    productName: string,
+    name: string,
+    phone: string,
+    meta?: { website?: string; productSlug?: string },
+  ) => void;
 }
 
 export const QuickViewModal = ({
@@ -40,15 +46,20 @@ export const QuickViewModal = ({
 }: QuickViewModalProps) => {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [website, setWebsite] = useState('');
   const [submitted, setSubmitted] = useState(false);
-  const [imgError, setImgError] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!product || !name.trim() || !phone.trim()) return;
-    onFormSubmit(product.name, name, phone);
+    onFormSubmit(product.name, name.trim(), phone.trim(), { website, productSlug: product.id });
     setSubmitted(true);
-    setTimeout(() => { setSubmitted(false); setName(''); setPhone(''); }, 3000);
+    setTimeout(() => {
+      setSubmitted(false);
+      setName('');
+      setPhone('');
+      setWebsite('');
+    }, 3000);
   };
 
   return (
@@ -86,20 +97,18 @@ export const QuickViewModal = ({
 
               {/* LEFT – Image */}
               <div className="lg:w-[420px] shrink-0 bg-gray-50 flex items-center justify-center p-8 relative border-r border-gray-100">
-                {product.badge && (
-                  <span className={`absolute top-6 left-6 px-3 py-1 rounded-full text-xs font-bold shadow-sm ${product.badge.bg} ${product.badge.textCol}`}>
-                    {product.badge.text}
-                  </span>
-                )}
-                <img
-                  src={imgError ? '/images/hero-ac.jpg' : product.image}
+                <PremiumImageGallery
+                  className="w-full"
+                  images={(product.images?.length ? product.images : [product.image]).filter(Boolean)}
                   alt={product.name}
-                  onError={() => setImgError(true)}
-                  className="w-full max-h-[300px] object-contain hover:scale-105 transition-transform duration-500 mix-blend-multiply drop-shadow-xl"
+                  badgeText={product.badge?.text}
+                  badgeClassName={
+                    product.badge
+                      ? `absolute top-6 left-6 px-3 py-1 rounded-full text-xs font-black shadow-sm ${product.badge.bg} ${product.badge.textCol}`
+                      : undefined
+                  }
+                  energyClass={product.energyClass}
                 />
-                <span className="absolute bottom-6 right-6 bg-green-500 text-white text-xs font-black px-3 py-1.5 rounded-full shadow-md">
-                  {product.energyClass}
-                </span>
               </div>
 
               {/* RIGHT – Details + Form */}
@@ -235,7 +244,17 @@ export const QuickViewModal = ({
                       </div>
                     </motion.div>
                   ) : (
-                    <form onSubmit={handleSubmit} className="space-y-3">
+                    <form onSubmit={handleSubmit} className="relative space-y-3">
+                      <div className="absolute -left-[9999px] h-px w-px overflow-hidden" aria-hidden>
+                        <label htmlFor="qv-website">Website</label>
+                        <input
+                          id="qv-website"
+                          tabIndex={-1}
+                          autoComplete="off"
+                          value={website}
+                          onChange={(e) => setWebsite(e.target.value)}
+                        />
+                      </div>
                       <div className="grid grid-cols-2 gap-3">
                         <input
                           type="text"

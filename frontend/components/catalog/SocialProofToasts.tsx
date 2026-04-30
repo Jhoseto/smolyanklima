@@ -13,7 +13,6 @@ const ALL_MESSAGES = [
   { text: "Нова доставка: Mitsubishi MSZ-LN наличен", icon: Package, type: 'stock' },
   { text: "Популярно: Daikin Perfera се разпродава бързо", icon: TrendingUp, type: 'trending' },
   { text: "Топ оценка: 4.9★ от 127 клиента", icon: Star, type: 'rating' },
-  { text: "Безплатен монтаж в Смолян и областта", icon: MapPin, type: 'service' },
   { text: "Петър от Девин поръча климатик с монтаж", icon: ShoppingCart, type: 'purchase' },
   { text: "Гаранция 3 години на всички модели", icon: CheckCircle2, type: 'service' },
   { text: "1500+ успешни монтажа в региона", icon: TrendingUp, type: 'social' },

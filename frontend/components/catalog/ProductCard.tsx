@@ -93,6 +93,13 @@ export const ProductCard = ({
             </span>
           )}
         </div>
+
+        {/* Energy class badge */}
+        {product.energyClass && (
+          <span className="absolute top-3 right-3 bg-green-500 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow-md">
+            {product.energyClass}
+          </span>
+        )}
       </div>
 
       {/* ── CONTENT AREA ─────────────────────────── */}

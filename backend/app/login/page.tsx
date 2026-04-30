@@ -1,5 +1,10 @@
 import { loginAction } from "./actions";
 
+export const metadata = {
+  title: "Вход — администрация | Смолян Клима",
+  description: "Административен портал с класифициран достъп.",
+};
+
 export default async function LoginPage({
   searchParams,
 }: {
@@ -9,74 +14,88 @@ export default async function LoginPage({
   const next = sp.next ?? "/admin";
   const error = sp.error;
   const reason = sp.reason;
+  const publicSite = process.env.FRONTEND_ORIGIN ?? "http://localhost:3000";
 
   return (
-    <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
-      <div style={{ width: "100%", maxWidth: 420, border: "1px solid #e5e7eb", borderRadius: 16, padding: 20 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}>Вход за администратори</h1>
-        <p style={{ color: "#6b7280", fontSize: 13, marginBottom: 16 }}>
-          Влез с админ акаунта си (Supabase Auth).
-        </p>
+    <div className="login-shell">
+      <div className="login-card">
+        <div className="login-brand">
+          <div className="login-logo">
+            <span className="login-logo-smolyan">СМОЛЯН</span>
+            <span className="login-logo-klima">КЛИМА</span>
+          </div>
+          <p className="login-tagline">Административен портал</p>
+        </div>
+
+        <div className="login-classified">
+          <svg className="login-classified-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <div>
+            <strong>Класифициран достъп</strong>
+            <p>
+              Този раздел е само за оторизирани служители на Смолян Клима. Неоторизиран достъп и опити за влизане чрез чужди
+              акаунти са забранени и могат да бъдат отчетени и преследвани съгласно вътрешните правила и приложимото право.
+            </p>
+          </div>
+        </div>
+
+        <h1 className="login-title">Вход в системата</h1>
+        <p className="login-sub">Въведете корпоративните си идентификационни данни.</p>
 
         {reason === "not_admin" && (
-          <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", padding: 12, borderRadius: 12, marginBottom: 12 }}>
-            <strong style={{ display: "block", marginBottom: 4 }}>Нямаш админ достъп</strong>
-            <span style={{ fontSize: 13, color: "#9a3412" }}>
-              Акаунтът не е добавен/активиран в <code>admin_users</code>.
+          <div className="login-alert login-alert--warn" role="alert">
+            <strong style={{ display: "block", marginBottom: 6 }}>Нямате администраторски права</strong>
+            <span>
+              Акаунтът не е активиран в списъка на администраторите. Свържете се с отговорното лице или проверете записа в{" "}
+              <code style={{ opacity: 0.95 }}>admin_users</code>.
             </span>
           </div>
         )}
 
         {error && (
-          <div style={{ background: "#fef2f2", border: "1px solid #fecaca", padding: 12, borderRadius: 12, marginBottom: 12 }}>
-            <strong style={{ display: "block", marginBottom: 4 }}>Грешка</strong>
-            <span style={{ fontSize: 13, color: "#991b1b" }}>{error}</span>
+          <div className="login-alert login-alert--err" role="alert">
+            <strong style={{ display: "block", marginBottom: 6 }}>Неуспешен вход</strong>
+            <span>{error}</span>
           </div>
         )}
 
-        <form action={loginAction} style={{ display: "grid", gap: 10 }}>
+        <form action={loginAction} className="login-form">
           <input type="hidden" name="next" value={next} />
 
-          <label style={{ display: "grid", gap: 6 }}>
-            <span style={{ fontSize: 12, color: "#374151", fontWeight: 700 }}>Имейл</span>
+          <label className="login-label">
+            <span>Имейл</span>
             <input
               name="email"
               type="email"
               required
-              placeholder="admin@smolyanklima.bg"
-              style={{ padding: "10px 12px", border: "1px solid #e5e7eb", borderRadius: 12 }}
+              autoComplete="username"
+              placeholder="office@smolyanklima.bg"
+              className="login-input"
             />
           </label>
 
-          <label style={{ display: "grid", gap: 6 }}>
-            <span style={{ fontSize: 12, color: "#374151", fontWeight: 700 }}>Парола</span>
+          <label className="login-label">
+            <span>Парола</span>
             <input
               name="password"
               type="password"
               required
+              autoComplete="current-password"
               placeholder="••••••••"
-              style={{ padding: "10px 12px", border: "1px solid #e5e7eb", borderRadius: 12 }}
+              className="login-input"
             />
           </label>
 
-          <button
-            type="submit"
-            style={{
-              marginTop: 6,
-              padding: "10px 12px",
-              borderRadius: 12,
-              border: "1px solid #0ea5e9",
-              background: "#0ea5e9",
-              color: "white",
-              fontWeight: 800,
-              cursor: "pointer",
-            }}
-          >
+          <button type="submit" className="login-submit">
             Вход
           </button>
         </form>
+
+        <a href={publicSite} className="login-back">
+          ← Обратно към публичния сайт
+        </a>
       </div>
     </div>
   );
 }
-

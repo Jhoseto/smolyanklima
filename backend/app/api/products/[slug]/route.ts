@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
+import { optimizeImageRowUrls } from "@/lib/services/cloudinaryService";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 export async function OPTIONS(req: NextRequest) {
@@ -67,7 +68,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
     brands: bRes.data ?? null,
     product_types: tRes.data ?? null,
     product_specs: sRes.data ?? [],
-    product_images: iRes.data ?? [],
+    product_images: optimizeImageRowUrls(iRes.data ?? []),
     product_features: (pfRes.data ?? [])
       .map((r: any) => featById.get(r.feature_id))
       .filter(Boolean)

@@ -1,3 +1,10 @@
+/**
+ * Импорт на продукти от frontend/data/db.ts → Supabase.
+ * Идемпотентен: безопасно за повторно пускане (upsert по slug / sync на features).
+ *
+ * Usage: cd backend && npm run import:products
+ * Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (.env.local)
+ */
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -63,17 +70,33 @@ function uniqueBy<T>(items: T[], keyFn: (item: T) => string) {
 }
 
 async function main() {
+  if (process.argv.includes("--help") || process.argv.includes("-h")) {
+    console.log(`import_products.ts — Upsert каталог от frontend/data/db.ts
+Usage: npm run import:products [--dry-run]
+
+--dry-run   Зарежда db.ts и извежда брой записи, без запис в Supabase`);
+    return;
+  }
+
+  const dryRun = process.argv.includes("--dry-run");
+
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
   dotenv.config({ path: path.resolve(__dirname, "../.env.local") });
 
-  const supabaseUrl = requiredEnv("SUPABASE_URL");
-  const serviceRole = requiredEnv("SUPABASE_SERVICE_ROLE_KEY");
-  const supabase = createClient(supabaseUrl, serviceRole);
-
   const frontendDbPath = path.resolve(__dirname, "../../frontend/data/db.ts");
   const mod = (await import(pathToFileURL(frontendDbPath).toString())) as { products: FrontendProduct[] };
   const products = mod.products ?? [];
+
+  if (dryRun) {
+    const acc = products.filter((p) => (p.type ?? "").includes("Аксесоар") || (p.type ?? "").includes("Резерв")).length;
+    console.log(`[dry-run] Продукти в източника: ${products.length} (${acc} аксесоари/части, ${products.length - acc} каталог)`);
+    return;
+  }
+
+  const supabaseUrl = requiredEnv("SUPABASE_URL");
+  const serviceRole = requiredEnv("SUPABASE_SERVICE_ROLE_KEY");
+  const supabase = createClient(supabaseUrl, serviceRole);
 
   // Upsert brands
   const brandNames = Array.from(new Set(products.map((p) => p.brand).filter(Boolean)));
@@ -205,10 +228,15 @@ async function main() {
       if (featFetchErr) throw featFetchErr;
 
       const links = (featRows ?? []).map((f: any) => ({ product_id: productId, feature_id: f.id }));
+      const { error: delPfErr } = await supabase.from("product_features").delete().eq("product_id", productId);
+      if (delPfErr) throw delPfErr;
       if (links.length) {
-        const { error: linkErr } = await supabase.from("product_features").upsert(links, { onConflict: "product_id,feature_id" });
+        const { error: linkErr } = await supabase.from("product_features").insert(links);
         if (linkErr) throw linkErr;
       }
+    } else {
+      const { error: delPfErr } = await supabase.from("product_features").delete().eq("product_id", productId);
+      if (delPfErr) throw delPfErr;
     }
 
     // Images: best-effort conventional path (frontend uses /images/${id}.jpg)

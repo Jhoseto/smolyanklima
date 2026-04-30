@@ -28,7 +28,6 @@ export default function EditArticlePage() {
     authorSlug: "",
     featuredImage: "",
     tags: "",
-    images: "",
     isPublished: false,
     isFeatured: false,
     seoTitle: "",
@@ -62,7 +61,6 @@ export default function EditArticlePage() {
         authorSlug: json.data.author_slug,
         featuredImage: json.data.featured_image,
         tags: Array.isArray(json.data.tags) ? json.data.tags.join(", ") : "",
-        images: Array.isArray(json.data.images) ? json.data.images.join("\n") : "",
         isPublished: Boolean(json.data.is_published),
         isFeatured: Boolean(json.data.is_featured),
         seoTitle: json.data.seo?.title ?? "",
@@ -103,10 +101,17 @@ export default function EditArticlePage() {
   }, [form.title, form.excerpt, form.content, form.tags, form.featuredImage, slugTouched, seoTouched]);
 
   async function uploadFeaturedImage(file: File) {
+    const folderSlug = form.slug.trim();
+    if (folderSlug.length < 2) {
+      setError("Попълнете slug (мин. 2 знака), за да се качи снимката в отделна папка в Cloudinary (smolyanklima/blog/{slug}/).");
+      return;
+    }
     setUploading(true);
     try {
       const fd = new FormData();
       fd.append("file", file);
+      fd.append("kind", "blog");
+      fd.append("slug", folderSlug);
       const res = await fetch("/api/admin/uploads/image", { method: "POST", body: fd });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Грешка при качване");
@@ -136,10 +141,6 @@ export default function EditArticlePage() {
         tags: form.tags
           .split(",")
           .map((t) => t.trim())
-          .filter(Boolean),
-        images: form.images
-          .split("\n")
-          .map((s) => s.trim())
           .filter(Boolean),
         isPublished: form.isPublished,
         isFeatured: form.isFeatured,
@@ -233,7 +234,8 @@ export default function EditArticlePage() {
           <input value={form.featuredImage} onChange={(e) => setForm({ ...form, featuredImage: e.target.value })} style={{ width: "100%", padding: 10, border: "1px solid #e5e7eb", borderRadius: 12 }} />
         </label>
         <label>
-          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Качи снимка от компютъра</div>
+          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Качи снимка от компютъра (Cloudinary)</div>
+          <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 6 }}>Папка: smolyanklima/blog/{"{slug}"}/ (отделна папка за статията).</div>
           <input
             type="file"
             accept="image/*"
@@ -249,10 +251,6 @@ export default function EditArticlePage() {
         <label>
           <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Тагове (разделени със запетая)</div>
           <input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} style={{ width: "100%", padding: 10, border: "1px solid #e5e7eb", borderRadius: 12 }} />
-        </label>
-        <label>
-          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Допълнителни снимки (по 1 URL на ред)</div>
-          <textarea value={form.images} onChange={(e) => setForm({ ...form, images: e.target.value })} rows={3} style={{ width: "100%", padding: 10, border: "1px solid #e5e7eb", borderRadius: 12 }} />
         </label>
 
         <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 10, marginTop: 4 }}>

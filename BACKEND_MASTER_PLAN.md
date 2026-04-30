@@ -1063,7 +1063,7 @@ Frontend вече има структури `ai_chat_messages_v2`, `ai_chat_conv
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY` (само backend)
-- `CLOUDINARY_URL` (ако качваме през backend)
+- `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` (качване на изображения през `POST /api/admin/uploads/image`; в базата се пазят само `secure_url` линкове)
 - `FRONTEND_ORIGIN` (CORS allowlist)
 ---
 
@@ -1112,3 +1112,47 @@ Frontend вече има структури `ai_chat_messages_v2`, `ai_chat_conv
 - CI/CD.
 - CORS allowlist, security headers, audit logs.
 - Smoke tests + мониторинг.
+
+---
+
+## Прогрес и лакуни (одит спрямо кода, 2026-04)
+
+**Къде сме по фазите:** Фази **0–2** са в голямата си част покрити; **Фаза 3** е частично (UI + login); **Фаза 4** е в ход — има CRUD екрани и API, но не „пълна“ функционалност от чеклиста; **Фаза 5** — скриптове има; **Фаза 6** — каталог/блог към API са пренасочени; **Фаза 7** — почти незапочната. Съобщението в [`backend/app/admin/page.tsx`](backend/app/admin/page.tsx) („Фаза 3… Следва Фаза 4“) е **остаряло** спрямо реалното състояние — препоръчва се да се обнови на нещо от сорта: „Фаза 4 в прогрес / Фаза 5–7 частично“.
+
+### Фаза 0 — Field audit
+- **Статус:** покрито в този документ (§0.1) и в имплементацията на схемата/API.
+
+### Фаза 1 — Supabase foundation
+- **Налично:** миграции `0001`–`0013` (ядро, RLS, индекси, FTS+trgm в `0003`, seed, accessories, grants, inquiries notes, RPC търсене, admin write за specs/images и `product_features`).
+- **Лакуни:** опционалните неща от плана (отделни публични таблици за favorites/sessions, `ai_events`) не са задължителни за MVP — липсват по избор.
+
+### Фаза 2 — Public API
+- **Налично:** `GET/POST` нужните ядра — `products`, `products/[slug]`, `articles`, `articles/[slug]`, `inquiries`, `newsletter/subscribe` + `confirm`, `health`, допълнително `accessories`, **`POST /api/ai/chat`**, **`GET /api/brands`**, **`GET /api/categories`** (с `product_types` по категория).
+- **Подобрения (одит → код):** rate limit за `POST /api/inquiries` и `POST /api/newsletter/subscribe`; honeypot поле `website` в inquiries + newsletter; търсене в продукти чрез RPC `search_product_ids` (миграция `0011`) с **fallback** към `ilike`, ако RPC още не е приложен; филтрите по марка/категория/енергия/features са пренаписани с **реални id-та**, не счупени embed филтри в PostgREST.
+- **Оставащи лакуни (по желание):** rate limit за `GET` каталог/статии; пълно FTS без fallback; reCAPTCHA; фронтендът може да премине от статични `CATEGORIES` към `GET /api/categories` (API вече съществува).
+
+### Фаза 3 — Admin Auth + skeleton
+- **Налично:** [`login/page.tsx`](backend/app/login/page.tsx) + server actions [`login/actions.ts`](backend/app/login/actions.ts); [`admin/layout.tsx`](backend/app/admin/layout.tsx) с навигация; dashboard страница (placeholder KPI „—“).
+- **Next.js 16 / защита на админ:** в тази версия се използва **`proxy.ts`** (виж build: „ƒ Proxy (Middleware)“), а **не** `middleware.ts` — двата файла едновременно чупят build. Защитата на `/admin/*` и `/api/admin/*` е в [`backend/proxy.ts`](backend/proxy.ts) + `export const config.matcher`.
+
+### Фаза 4 — Admin CRUD (пълен обхват от §6)
+- **Продукти:** list + new + edit + DELETE; meta за марки/типове; **качване на снимки** в **Cloudinary** по папка `smolyanklima/klimatici/{slug}/` или `smolyanklima/aksesoari/{slug}/` ([`api/admin/uploads/image`](backend/app/api/admin/uploads/image/route.ts)); в Supabase само URL-и в `product_images`, **до 4** на продукт/аксесоар.
+- **Статии:** new/edit с markdown, SEO, publish, featured; **една** основна снимка (`featured_image`, JSON-LD `schema.image` с един URL); допълнителна галерия в колона `images` не се ползва (`[]`). Качване: `smolyanklima/blog/{slug}/`.
+- **Inquiries:** list + филтри + PATCH; **CRM бележки:** колона `admin_notes` (миграция `0010`), API `adminNotes`, UI модал „Бележки“ в админ списъка.
+- **Settings:** UI + API за key/value — **има** (generic редове, не wizard за „работно време“ и т.н. от §6).
+- **Dashboard:** реални броячи от Supabase + бутон за изпращане на **`email_outbox`** през [`POST /api/admin/email-outbox/drain`](backend/app/api/admin/email-outbox/drain/route.ts) (Resend).
+
+### Фаза 5 — Import scripts
+- **Налично:** [`scripts/import_products.ts`](backend/scripts/import_products.ts), [`scripts/import_blog.ts`](backend/scripts/import_blog.ts) + npm scripts в `package.json`.
+- **Лакуна:** идемпотентност/документация за оператор (един източник на истина кога и как се пускат) може да се подобри; няма автоматичен тест на импорта в CI.
+
+### Фаза 6 — Frontend switch
+- **Налично:** [`productService.ts`](frontend/data/productService.ts) и [`blogService.ts`](frontend/data/blogService.ts) четат от `/api/*` (чрез Vite proxy).
+- **AI:** [`useAIChat`](frontend/components/ai-assistant/hooks/useAIChat.ts) и [`ProductSearchSkill`](frontend/components/ai-assistant/skills/ProductSearchSkill.ts) зареждат продукти от **`getAllProducts()`** (API), чрез [`catalogToAIProducts.ts`](frontend/components/ai-assistant/data/catalogToAIProducts.ts). Каталогът използва `fetchProductsCatalogPage` и свързаните публични endpoints.
+
+### Фаза 7 — Deploy + hardening
+- **Добавено:** [`backend/Dockerfile`](backend/Dockerfile) (standalone), [`backend/.env.example`](backend/.env.example), [`.github/workflows/ci.yml`](.github/workflows/ci.yml). `next.config.mjs`: `output: "standalone"`.
+- **Частично:** CORS allowlist; security headers/мониторинг/smoke — по избор.
+
+### Резюме
+След одит → имплементация: публични **brands/categories**, **продуктови филтри + търсене**, **rate limit + honeypot** (контакт + quick view → `POST /api/inquiries`), **CRM бележки + имейл notify (Resend)**, **dashboard + drain на опашката**, **Docker/CI**, **AI от API**, **Cloudinary за медия + линкове в Postgres**. Следващи стъпки по желание: security headers, smoke тестове, още server-side филтри за каталога.

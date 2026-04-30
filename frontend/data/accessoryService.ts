@@ -79,7 +79,6 @@ function mapApiToCatalogAccessory(raw: ApiAccessory): CatalogProduct {
     features: [],
     energyCool: undefined,
     energyHeat: undefined,
-    oldPrice: raw.old_price ?? undefined,
   };
 }
 
