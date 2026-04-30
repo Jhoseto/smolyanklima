@@ -57,7 +57,6 @@ COPY --from=backend_builder --chown=nextjs:nodejs /app/.next/static ./.next/stat
 EXPOSE 8080
 
 # Start backend + nginx (one container)
-# Cloud Run sets PORT=8080 for the container. We keep nginx on 8080 and force Next backend to 3001.
-# Some runtimes still pass PORT=8080 into Node; ensure it's overridden before Next server loads.
-CMD ["sh", "-c", "node -e \"process.env.PORT='3001'; require('/app/server.js')\" & nginx -g 'daemon off;'"]
+# Cloud Run sets PORT=8080 for the container. We keep nginx on 8080 (daemon) and run Next backend on 3001 as PID1.
+CMD ["sh", "-c", "nginx && PORT=3001 exec node /app/server.js"]
 
