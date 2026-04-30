@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Star, Check, Wifi, ShieldCheck, Zap, Volume2, Wind, ChevronDown } from 'lucide-react';
 import type { CatalogProduct } from '../../data/types/product';
 import { PremiumImageGallery } from '../media/PremiumImageGallery';
+import { rateProduct } from '../../data/productService';
 
 // Мини-Accordion за price breakdown
 const Accordion = ({ title, children, defaultOpen = false }: { title: string, children: React.ReactNode, defaultOpen?: boolean }) => {
@@ -27,6 +28,7 @@ const Accordion = ({ title, children, defaultOpen = false }: { title: string, ch
 interface QuickViewModalProps {
   product: CatalogProduct | null;
   onClose: () => void;
+  onRated?: (productId: string, rating: number, reviewsCount: number) => void;
   isFavorite: boolean;
   onFavoriteToggle: (id: string) => void;
   onFormSubmit: (
@@ -40,6 +42,7 @@ interface QuickViewModalProps {
 export const QuickViewModal = ({
   product,
   onClose,
+  onRated,
   isFavorite,
   onFavoriteToggle,
   onFormSubmit,
@@ -48,6 +51,58 @@ export const QuickViewModal = ({
   const [phone, setPhone] = useState('');
   const [website, setWebsite] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [ratingBusy, setRatingBusy] = useState(false);
+  const [alreadyRated, setAlreadyRated] = useState(false);
+  const [ratingNotice, setRatingNotice] = useState<string | null>(null);
+  const [currentRating, setCurrentRating] = useState(0);
+  const [currentReviews, setCurrentReviews] = useState(0);
+  const [hoverStars, setHoverStars] = useState<number | null>(null);
+  const [votedStars, setVotedStars] = useState<number | null>(null);
+
+  useEffect(() => {
+    setAlreadyRated(false);
+    setRatingBusy(false);
+    setRatingNotice(null);
+    setCurrentRating(product?.rating ?? 0);
+    setCurrentReviews(product?.reviews ?? 0);
+    setHoverStars(null);
+    setVotedStars(null);
+  }, [product]);
+
+  const handleRate = async (stars: number) => {
+    if (!product || ratingBusy || alreadyRated) return;
+    setRatingBusy(true);
+    setRatingNotice(null);
+    const r = await rateProduct(product.id, stars);
+    if (r.ok) {
+      setCurrentRating(r.rating);
+      setCurrentReviews(r.reviewsCount);
+      onRated?.(product.id, r.rating, r.reviewsCount);
+      setVotedStars(stars);
+      setAlreadyRated(true);
+      setRatingNotice('Благодарим за оценката!');
+      setRatingBusy(false);
+      return;
+    }
+    if (!('code' in r)) {
+      setRatingNotice('Грешка при изпращане на оценката.');
+      setRatingBusy(false);
+      return;
+    }
+    const code = r.code;
+    if (code === 'ALREADY_RATED') {
+      setAlreadyRated(true);
+      setRatingNotice('Вече сте оценили този продукт.');
+    } else if (code === 'RATE_LIMIT_EXCEEDED') {
+      setRatingNotice('Твърде много опити. Опитайте по-късно.');
+    } else if (code === 'RATINGS_NOT_READY') {
+      setRatingNotice('Оценяването още не е активирано.');
+    } else {
+      setRatingNotice('Грешка при изпращане на оценката.');
+    }
+    setRatingBusy(false);
+  };
+  const starsToRender = hoverStars ?? votedStars ?? Math.round(currentRating);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,12 +178,24 @@ export const QuickViewModal = ({
                 <div className="flex items-center gap-2 mb-4">
                   <div className="flex text-yellow-400">
                     {[...Array(5)].map((_, i) => (
-                      <Star key={i} className={`w-4 h-4 ${i < Math.floor(product.rating) ? 'fill-current' : 'fill-gray-200 text-gray-200'}`} />
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => void handleRate(i + 1)}
+                        onMouseEnter={() => setHoverStars(i + 1)}
+                        onMouseLeave={() => setHoverStars(null)}
+                        disabled={ratingBusy || alreadyRated}
+                        className="disabled:cursor-not-allowed"
+                        title={alreadyRated ? 'Вече сте гласували' : `Оцени с ${i + 1} звезди`}
+                      >
+                        <Star className={`w-4 h-4 transition-colors ${i < starsToRender ? 'fill-current' : 'fill-gray-200 text-gray-200'}`} />
+                      </button>
                     ))}
                   </div>
-                  <span className="text-sm font-semibold text-gray-700">{product.rating}</span>
-                  <span className="text-sm text-gray-500">({product.reviews} отзива)</span>
+                  <span className="text-sm font-semibold text-gray-700">{currentRating.toFixed(1)}</span>
+                  <span className="text-sm text-gray-500">({currentReviews} отзива)</span>
                 </div>
+                {ratingNotice && <p className="text-xs font-semibold text-gray-500 mb-4">{ratingNotice}</p>}
 
                 {/* Description */}
                 {product.description && (

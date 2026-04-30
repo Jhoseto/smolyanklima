@@ -2,6 +2,7 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminDb } from "@/lib/admin/db";
+import { logAdminActivity } from "@/lib/admin/audit";
 
 const UpdateSchema = z.object({
   status: z.string().optional(),
@@ -26,6 +27,17 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     .maybeSingle();
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   if (!data) return withCors(req, NextResponse.json({ error: "Не е намерено" }, { status: 404 }));
+  await logAdminActivity({
+    action: "inquiry.update",
+    entityType: "inquiry",
+    entityId: id,
+    details: {
+      changedFields: Object.keys(patch),
+      status: data.status,
+      priority: data.priority,
+      assigned_to: data.assigned_to,
+    },
+  });
   return withCors(req, NextResponse.json({ data }));
 }
 

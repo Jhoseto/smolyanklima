@@ -3,7 +3,7 @@ import { Search, SlidersHorizontal, LayoutGrid, LayoutList, X, ChevronDown } fro
 import type { SortOption } from '../../data/types/product';
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
-  { value: 'recommended', label: 'Препоръчани' },
+  { value: 'recommended', label: 'По оценка (бр. отзиви)' },
   { value: 'price-asc',   label: 'Цена: ниска → висока' },
   { value: 'price-desc',  label: 'Цена: висока → ниска' },
   { value: 'energy-class', label: 'Енергиен клас' },

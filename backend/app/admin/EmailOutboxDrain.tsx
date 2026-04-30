@@ -25,7 +25,7 @@ export function EmailOutboxDrain({ pendingCount }: { pendingCount: number }) {
 
   return (
     <div style={{ border: "1px solid #e5e7eb", borderRadius: 16, padding: 14, maxWidth: 520 }}>
-      <div style={{ fontWeight: 800, marginBottom: 8 }}>Имейл опашка</div>
+      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Имейл опашка</div>
       <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 10 }}>
         Има {pendingCount} чакащи съобщения. Натиснете за изпращане чрез Resend (ако е конфигуриран <code>RESEND_API_KEY</code>).
       </p>
@@ -33,7 +33,7 @@ export function EmailOutboxDrain({ pendingCount }: { pendingCount: number }) {
         type="button"
         disabled={busy}
         onClick={drain}
-        style={{ padding: "10px 14px", borderRadius: 12, fontWeight: 800, border: "1px solid #e5e7eb", cursor: busy ? "wait" : "pointer" }}
+        style={{ padding: "8px 12px", borderRadius: 10, fontWeight: 600, fontSize: 12, border: "1px solid #e5e7eb", cursor: busy ? "wait" : "pointer" }}
       >
         {busy ? "Изпращане…" : "Изпрати pending имейли"}
       </button>

@@ -12,6 +12,7 @@ const QuerySchema = z.object({
   f: z.string().optional(),
   min: z.coerce.number().optional(),
   max: z.coerce.number().optional(),
+  cond: z.enum(["new", "used"]).optional(),
   s: z
     .enum(["recommended", "price-asc", "price-desc", "energy-class", "noise-asc", "rating-desc"])
     .optional(),
@@ -32,6 +33,14 @@ function intersectIds(a: string[], b: string[]): string[] {
   return a.filter((id) => setB.has(id));
 }
 
+const CATEGORY_TYPE_FALLBACK: Record<string, string[]> = {
+  wall: ["Стенен климатик", "Дизайнерски климатик"],
+  multi: ["Мулти-сплит система"],
+  cassette: ["Касетъчен климатик"],
+  floor: ["Подов климатик"],
+  office: ["Офис климатик"],
+};
+
 export async function OPTIONS(req: NextRequest) {
   return corsPreflight(req);
 }
@@ -43,7 +52,7 @@ export async function GET(req: NextRequest) {
     return withCors(req, NextResponse.json({ error: "Invalid query" }, { status: 400 }));
   }
 
-  const { q, cat, b, e, f, min, max, s, page = 1, perPage = 24 } = parsed.data;
+  const { q, cat, b, e, f, min, max, cond, s, page = 1, perPage = 24 } = parsed.data;
   const brandNames = splitCsv(b);
   const energyClasses = splitCsv(e);
   const featureTerms = splitCsv(f);
@@ -96,7 +105,9 @@ export async function GET(req: NextRequest) {
         .from("category_types")
         .select("product_type")
         .eq("category_id", catRow.id);
-      const typeNames = (ctRows ?? []).map((r) => r.product_type).filter(Boolean);
+      const relationTypeNames = (ctRows ?? []).map((r) => r.product_type).filter(Boolean);
+      const fallbackTypeNames = CATEGORY_TYPE_FALLBACK[cat] ?? [];
+      const typeNames = Array.from(new Set([...relationTypeNames, ...fallbackTypeNames]));
       if (typeNames.length === 0) {
         mergeProductIds([]);
       } else {
@@ -153,46 +164,64 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  let query = supabase
-    .from("products")
-    .select(
-      `
+  const from = (page - 1) * perPage;
+  const to = from + perPage - 1;
+  const buildQuery = (includeCondition: boolean) => {
+    const selectCols = includeCondition
+      ? `
+      id, slug, name, description, price, price_with_mount, old_price, product_condition,
+      is_active, is_featured, stock_status, stock_quantity, rating, reviews_count,
+      meta_title, meta_description,
+      brand_id, type_id
+    `
+      : `
       id, slug, name, description, price, price_with_mount, old_price,
       is_active, is_featured, stock_status, stock_quantity, rating, reviews_count,
       meta_title, meta_description,
       brand_id, type_id
-    `,
-      { count: "exact" },
-    )
-    .eq("is_active", true);
+    `;
+    let query = supabase
+      .from("products")
+      .select(selectCols, { count: "exact" })
+      .eq("is_active", true);
+    if (idRestriction !== null && idRestriction !== "empty") query = query.in("id", idRestriction);
+    if (typeof min === "number") query = query.gte("price", min);
+    if (typeof max === "number") query = query.lte("price", max);
+    if (includeCondition && cond) query = query.eq("product_condition", cond);
 
-  if (idRestriction !== null && idRestriction !== "empty") query = query.in("id", idRestriction);
-  if (typeof min === "number") query = query.gte("price", min);
-  if (typeof max === "number") query = query.lte("price", max);
+    switch (s) {
+      case "price-asc":
+        query = query.order("price", { ascending: true });
+        break;
+      case "price-desc":
+        query = query.order("price", { ascending: false });
+        break;
+      case "rating-desc":
+        query = query.order("rating", { ascending: false });
+        break;
+      case "energy-class":
+        query = query.order("id", { ascending: true });
+        break;
+      case "noise-asc":
+        query = query.order("id", { ascending: true });
+        break;
+      default:
+        query = query
+          .order("reviews_count", { ascending: false })
+          .order("rating", { ascending: false })
+          .order("is_featured", { ascending: false });
+    }
+    return query;
+  };
 
-  switch (s) {
-    case "price-asc":
-      query = query.order("price", { ascending: true });
-      break;
-    case "price-desc":
-      query = query.order("price", { ascending: false });
-      break;
-    case "rating-desc":
-      query = query.order("rating", { ascending: false });
-      break;
-    case "energy-class":
-      query = query.order("id", { ascending: true });
-      break;
-    case "noise-asc":
-      query = query.order("id", { ascending: true });
-      break;
-    default:
-      query = query.order("is_featured", { ascending: false }).order("price", { ascending: true });
+  let { data, error, count } = await buildQuery(true).range(from, to);
+  const isMissingConditionColumn =
+    !!error &&
+    (String((error as any).code ?? "") === "42703" ||
+      String((error as any).message ?? "").includes("product_condition"));
+  if (isMissingConditionColumn) {
+    ({ data, error, count } = await buildQuery(false).range(from, to));
   }
-
-  const from = (page - 1) * perPage;
-  const to = from + perPage - 1;
-  let { data, error, count } = await query.range(from, to);
 
   if (error) {
     return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));

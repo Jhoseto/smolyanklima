@@ -2,6 +2,7 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminDb } from "@/lib/admin/db";
+import { logAdminActivity } from "@/lib/admin/audit";
 
 const CreateSchema = z.object({
   slug: z.string().min(2).max(160),
@@ -86,6 +87,17 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
+  await logAdminActivity({
+    action: "article.create",
+    entityType: "article",
+    entityId: data.id as string,
+    details: {
+      slug: parsed.data.slug,
+      title: parsed.data.title,
+      isPublished: parsed.data.isPublished,
+      isFeatured: parsed.data.isFeatured,
+    },
+  });
   return withCors(req, NextResponse.json({ data }, { status: 201 }));
 }
 

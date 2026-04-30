@@ -50,6 +50,7 @@ function mapApiToCatalogAccessory(raw: ApiAccessory): CatalogProduct {
     model: raw.name,
     type: kindLabel,
     category: '—',
+    condition: 'new',
 
     image,
     imgBg: 'bg-gray-50',

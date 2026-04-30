@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
+import { logAdminActivity } from "@/lib/admin/audit";
 import {
   buildUploadFolderPath,
   formatCloudinaryUploadError,
@@ -64,6 +65,17 @@ export async function POST(req: NextRequest) {
       buffer: buf,
       mimeType: mime,
       folderPath: folderBase,
+    });
+    await logAdminActivity({
+      action: "media.upload",
+      entityType: "media",
+      details: {
+        kind,
+        slug: safe,
+        folder: folderBase,
+        publicId,
+        url,
+      },
     });
     return withCors(req, NextResponse.json({ data: { url, publicId, folder: folderBase } }, { status: 201 }));
   } catch (e: unknown) {

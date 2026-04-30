@@ -14,7 +14,7 @@ import { RecentlyViewed, useRecentlyViewed } from '../components/catalog/Recentl
 import { GuidedBuyingWizard } from '../components/catalog/GuidedBuyingWizard';
 import { SocialProofToasts } from '../components/catalog/SocialProofToasts';
 import { CompareBar }     from '../components/catalog/CompareBar';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useScroll, useSpring } from 'motion/react';
 
 import {
@@ -22,6 +22,7 @@ import {
   fetchCatalogPriceBounds,
   fetchCategoryProductCounts,
 } from '../data/productService';
+import { getAllAccessories } from '../data/accessoryService';
 import { postPublicInquiry } from '../data/postInquiry';
 import type { CatalogProduct, SortOption } from '../data/types/product';
 
@@ -128,10 +129,29 @@ const SkeletonCard = () => (
 // ─────────────────────────────────────────
 // MAIN CATALOG PAGE
 // ─────────────────────────────────────────
+type CatalogTab = 'climate' | 'accessories';
+type ClimateCondition = 'new' | 'used';
 const PER_PAGE = 24;
+const ACCESSORY_CATEGORIES = [
+  { id: 'all', label: 'Всички' },
+  { id: 'accessory', label: 'Аксесоари' },
+  { id: 'spare_part', label: 'Резервни части' },
+] as const;
+
+function accessoryCategoryOf(p: CatalogProduct): 'accessory' | 'spare_part' {
+  return p.type?.toLowerCase().includes('резерв') ? 'spare_part' : 'accessory';
+}
 
 const CatalogPage = () => {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const tabFromUrl = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState<CatalogTab>(tabFromUrl === 'accessories' ? 'accessories' : 'climate');
+  const [selectedConditions, setSelectedConditions] = useState<ClimateCondition[]>(
+    searchParams.get('cond') === 'new' || searchParams.get('cond') === 'used'
+      ? [searchParams.get('cond') as ClimateCondition]
+      : [],
+  );
   const [priceMin, setPriceMin] = useState(0);
   const [priceMax, setPriceMax] = useState(0);
   const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({ all: 0 });
@@ -151,6 +171,8 @@ const CatalogPage = () => {
   const [products, setProducts] = useState<CatalogProduct[]>([]);
   const [total, setTotal] = useState(0);
   const [listLoading, setListLoading] = useState(true);
+  const [allAccessories, setAllAccessories] = useState<CatalogProduct[]>([]);
+  const [accessoriesLoaded, setAccessoriesLoaded] = useState(false);
   const prevListFiltersSigRef = useRef<string | null>(null);
   
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -169,14 +191,51 @@ const CatalogPage = () => {
     return () => clearTimeout(t);
   }, [search]);
 
-  // ── Ценови граници + броя по категории (веднъж при mount) ──
+  const accessoryCounts = {
+    all: allAccessories.length,
+    accessory: allAccessories.filter((p) => accessoryCategoryOf(p) === 'accessory').length,
+    spare_part: allAccessories.filter((p) => accessoryCategoryOf(p) === 'spare_part').length,
+  };
+  const accessoryPriceMin = allAccessories.length ? Math.min(...allAccessories.map((p) => p.price)) : 0;
+  const accessoryPriceMax = allAccessories.length ? Math.max(...allAccessories.map((p) => p.price)) : 0;
+  const effectivePriceMin = activeTab === 'climate' ? priceMin : accessoryPriceMin;
+  const effectivePriceMax = activeTab === 'climate' ? priceMax : accessoryPriceMax;
+  const effectiveCategoryCounts = activeTab === 'climate' ? categoryCounts : accessoryCounts;
+  const accessoryBrandOptions = [...new Set(allAccessories.map((a) => a.brand).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'bg'));
+  const showEnergyAndFeatureFilters = activeTab === 'climate';
+  const showConditionFilters = activeTab === 'climate';
+  const effectiveCondition: ClimateCondition | undefined =
+    selectedConditions.length === 1 ? selectedConditions[0] : undefined;
+
   useEffect(() => {
+    const fromUrl = searchParams.get('tab');
+    const normalized: CatalogTab = fromUrl === 'accessories' ? 'accessories' : 'climate';
+    const cond = searchParams.get('cond');
+    setActiveTab((prev) => (prev === normalized ? prev : normalized));
+    setSelectedConditions((prev) => {
+      const next: ClimateCondition[] = cond === 'new' || cond === 'used' ? [cond] : [];
+      if (prev.length === next.length && prev.every((v, i) => v === next[i])) return prev;
+      return next;
+    });
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (activeTab === 'accessories') {
+      if (!ACCESSORY_CATEGORIES.some((c) => c.id === category)) setCategory('all');
+      if (selectedConditions.length > 0) setSelectedConditions([]);
+      return;
+    }
+  }, [activeTab, category, selectedConditions]);
+
+  // ── Ценови граници + броя по категории (за нови/втора употреба) ──
+  useEffect(() => {
+    if (activeTab !== 'climate') return;
     let cancelled = false;
     (async () => {
       try {
         const [bounds, counts] = await Promise.all([
-          fetchCatalogPriceBounds(),
-          fetchCategoryProductCounts(),
+          fetchCatalogPriceBounds(effectiveCondition),
+          fetchCategoryProductCounts(effectiveCondition),
         ]);
         if (cancelled) return;
         const minP = bounds.min;
@@ -184,19 +243,7 @@ const CatalogPage = () => {
         setPriceMin(minP);
         setPriceMax(maxP);
         setCategoryCounts(counts);
-        const uMin = searchParams.get('min');
-        const uMax = searchParams.get('max');
-        setPriceRange((prev) => {
-          if (uMin != null && uMax != null) {
-            const a = Number(uMin);
-            const b = Number(uMax);
-            if (!Number.isNaN(a) && !Number.isNaN(b) && b >= a) {
-              return [Math.max(minP, a), Math.min(maxP, b)];
-            }
-          }
-          if (prev[0] === 0 && prev[1] === 0) return [minP, maxP];
-          return [Math.max(minP, prev[0]), Math.min(maxP, prev[1])];
-        });
+        setPriceRange([minP, maxP]);
       } catch {
         if (!cancelled) setCategoryCounts({ all: 0 });
       }
@@ -204,12 +251,58 @@ const CatalogPage = () => {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- еднократно при mount + URL min/max
-  }, []);
+  }, [activeTab, effectiveCondition]);
+
+  // ── Аксесоари: зареждаме веднъж при първо влизане в таба ──
+  useEffect(() => {
+    if (activeTab !== 'accessories' || accessoriesLoaded) return;
+    let cancelled = false;
+    setListLoading(true);
+    (async () => {
+      try {
+        const all = await getAllAccessories();
+        if (!cancelled) {
+          setAllAccessories(all);
+          setAccessoriesLoaded(true);
+        }
+      } catch {
+        if (!cancelled) {
+          setAllAccessories([]);
+          setAccessoriesLoaded(true);
+        }
+      } finally {
+        if (!cancelled) setListLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, accessoriesLoaded]);
+
+  useEffect(() => {
+    if (activeTab === 'climate') {
+      if (priceMax > priceMin) {
+        setPriceRange((prev) => {
+          if (prev[0] === 0 && prev[1] === 0) return [priceMin, priceMax];
+          return [Math.max(priceMin, prev[0]), Math.min(priceMax, prev[1])];
+        });
+      }
+      return;
+    }
+
+    if (accessoryPriceMax > accessoryPriceMin) {
+      setPriceRange((prev) => {
+        if (prev[0] === 0 && prev[1] === 0) return [accessoryPriceMin, accessoryPriceMax];
+        return [Math.max(accessoryPriceMin, prev[0]), Math.min(accessoryPriceMax, prev[1])];
+      });
+    }
+  }, [activeTab, priceMin, priceMax, accessoryPriceMin, accessoryPriceMax]);
 
   // ── Списък от API при филтри / страница (при смяна на филтри → страница 1 преди заявката) ──
   useEffect(() => {
     const listFiltersSig = JSON.stringify({
+      activeTab,
+      selectedConditions,
       debouncedSearch,
       category,
       brands,
@@ -229,25 +322,61 @@ const CatalogPage = () => {
     setListLoading(true);
     (async () => {
       try {
-        const minQ =
-          priceMax > priceMin && priceRange[0] > priceMin ? priceRange[0] : undefined;
-        const maxQ =
-          priceMax > priceMin && priceRange[1] < priceMax ? priceRange[1] : undefined;
-        const { data, meta } = await fetchProductsCatalogPage({
-          q: debouncedSearch,
-          cat: category,
-          brands,
-          energyClasses,
-          features,
-          min: minQ,
-          max: maxQ,
-          sort: sortBy,
-          page,
-          perPage: PER_PAGE,
+        if (activeTab === 'climate') {
+          const minQ =
+            priceMax > priceMin && priceRange[0] > priceMin ? priceRange[0] : undefined;
+          const maxQ =
+            priceMax > priceMin && priceRange[1] < priceMax ? priceRange[1] : undefined;
+          const { data, meta } = await fetchProductsCatalogPage({
+            q: debouncedSearch,
+            cat: category,
+            cond: effectiveCondition,
+            brands,
+            energyClasses,
+            features,
+            min: minQ,
+            max: maxQ,
+            sort: sortBy,
+            page,
+            perPage: PER_PAGE,
+          });
+          if (!cancelled) {
+            setProducts(data);
+            setTotal(meta.total);
+          }
+          return;
+        }
+
+        const normalizedSearch = debouncedSearch.trim().toLowerCase();
+        let filtered = allAccessories.filter((p) => {
+          if (normalizedSearch) {
+            const hay = `${p.name} ${p.brand} ${p.type} ${p.description ?? ''}`.toLowerCase();
+            if (!hay.includes(normalizedSearch)) return false;
+          }
+          if (category !== 'all' && accessoryCategoryOf(p) !== category) return false;
+          if (brands.length > 0 && !brands.includes(p.brand)) return false;
+          if (effectivePriceMax > effectivePriceMin) {
+            if (p.price < priceRange[0] || p.price > priceRange[1]) return false;
+          }
+          return true;
         });
+
+        filtered = filtered.sort((a, b) => {
+          if (sortBy === 'price-asc') return a.price - b.price;
+          if (sortBy === 'price-desc') return b.price - a.price;
+          if (sortBy === 'rating-desc') return b.rating - a.rating;
+          if (sortBy === 'recommended') {
+            return (b.reviews - a.reviews) || (b.rating - a.rating);
+          }
+          return a.name.localeCompare(b.name, 'bg');
+        });
+
+        const totalItems = filtered.length;
+        const start = (page - 1) * PER_PAGE;
+        const pageData = filtered.slice(start, start + PER_PAGE);
         if (!cancelled) {
-          setProducts(data);
-          setTotal(meta.total);
+          setProducts(pageData);
+          setTotal(totalItems);
         }
       } catch {
         if (!cancelled) {
@@ -263,6 +392,10 @@ const CatalogPage = () => {
     };
   }, [
     debouncedSearch,
+    activeTab,
+    selectedConditions,
+    effectiveCondition,
+    allAccessories,
     category,
     brands,
     energyClasses,
@@ -277,19 +410,21 @@ const CatalogPage = () => {
   // ── Sync to URL ──────────────────────────
   useEffect(() => {
     const params = new URLSearchParams();
+    if (activeTab === 'accessories') params.set('tab', 'accessories');
+    if (activeTab === 'climate' && effectiveCondition) params.set('cond', effectiveCondition);
     if (search) params.set('q', search);
     if (category !== 'all') params.set('cat', category);
     if (brands.length) params.set('b', brands.join(','));
-    if (energyClasses.length) params.set('e', energyClasses.join(','));
-    if (features.length) params.set('f', features.join(','));
-    if (priceMax > priceMin) {
-      if (priceRange[0] > priceMin) params.set('min', priceRange[0].toString());
-      if (priceRange[1] < priceMax) params.set('max', priceRange[1].toString());
+    if (activeTab === 'climate' && energyClasses.length) params.set('e', energyClasses.join(','));
+    if (activeTab === 'climate' && features.length) params.set('f', features.join(','));
+    if (effectivePriceMax > effectivePriceMin) {
+      if (priceRange[0] > effectivePriceMin) params.set('min', priceRange[0].toString());
+      if (priceRange[1] < effectivePriceMax) params.set('max', priceRange[1].toString());
     }
     if (sortBy !== 'recommended') params.set('s', sortBy);
     if (page > 1) params.set('page', String(page));
     setSearchParams(params, { replace: true });
-  }, [search, category, brands, energyClasses, features, priceRange, sortBy, priceMin, priceMax, page, setSearchParams]);
+  }, [activeTab, effectiveCondition, search, category, brands, energyClasses, features, priceRange, sortBy, effectivePriceMin, effectivePriceMax, page, setSearchParams]);
 
   // ── Scroll Progress ──────────────────────
   const { scrollYProgress } = useScroll();
@@ -307,23 +442,48 @@ const CatalogPage = () => {
 
   // ── Active filter count ──────────────────
   const activeFilterCount =
+    (showConditionFilters && effectiveCondition ? 1 : 0) +
     brands.length +
-    energyClasses.length +
-    features.length +
+    (showEnergyAndFeatureFilters ? energyClasses.length : 0) +
+    (showEnergyAndFeatureFilters ? features.length : 0) +
     (search.trim() ? 1 : 0) +
-    (priceMax > priceMin && (priceRange[0] > priceMin || priceRange[1] < priceMax) ? 1 : 0);
+    (effectivePriceMax > effectivePriceMin && (priceRange[0] > effectivePriceMin || priceRange[1] < effectivePriceMax) ? 1 : 0);
 
   // ── Handlers ────────────────────────────
   const resetAllFilters = useCallback(() => {
     setSearch('');
     setCategory('all');
+    setSelectedConditions([]);
     setBrands([]);
     setEnergyClasses([]);
     setFeatures([]);
-    setPriceRange([priceMin, priceMax]);
+    setPriceRange([effectivePriceMin, effectivePriceMax]);
     setSortBy('recommended');
     setPage(1);
-  }, [priceMin, priceMax]);
+  }, [effectivePriceMin, effectivePriceMax]);
+
+  const handleTabChange = useCallback((tab: CatalogTab) => {
+    const nextMin = tab === 'climate' ? priceMin : accessoryPriceMin;
+    const nextMax = tab === 'climate' ? priceMax : accessoryPriceMax;
+    setActiveTab(tab);
+    setCategory('all');
+    setSelectedConditions([]);
+    setBrands([]);
+    setEnergyClasses([]);
+    setFeatures([]);
+    setSearch('');
+    setPriceRange([nextMin, nextMax]);
+    setSortBy('recommended');
+    setCompareList([]);
+    setQuickViewProduct(null);
+    setPage(1);
+  }, [priceMin, priceMax, accessoryPriceMin, accessoryPriceMax]);
+
+  const handleConditionToggle = useCallback((condition: ClimateCondition) => {
+    setSelectedConditions((prev) =>
+      prev.includes(condition) ? prev.filter((c) => c !== condition) : [...prev, condition],
+    );
+  }, []);
 
   const handleFavoriteToggle = useCallback((id: string) => {
     toggleFavorite(id);
@@ -335,11 +495,14 @@ const CatalogPage = () => {
   }, [toggleFavorite, isFavorite, addToast]);
 
   const handleShare = useCallback((product: CatalogProduct) => {
-    const url = `${window.location.origin}/catalog?product=${product.id}`;
+    const url =
+      activeTab === 'accessories'
+        ? `${window.location.origin}/aksesoar/${product.id}`
+        : `${window.location.origin}/catalog?product=${product.id}`;
     navigator.clipboard.writeText(url).then(() => {
       addToast('Линкът е копиран!', '🔗');
     });
-  }, [addToast]);
+  }, [activeTab, addToast]);
 
   const handleFormSubmit = useCallback(
     async (
@@ -406,26 +569,29 @@ const CatalogPage = () => {
 
       {/* Main Content */}
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {activeTab === 'climate' && (
+          <>
+            {/* Guided Buying Wizard */}
+            <GuidedBuyingWizard
+              onQuickView={(p: CatalogProduct) => {
+                setQuickViewProduct(p);
+                addViewed(p.id);
+              }}
+              isFavorite={isFavorite}
+              onFavoriteToggle={handleFavoriteToggle}
+              onShare={handleShare}
+            />
 
-        {/* Guided Buying Wizard */}
-        <GuidedBuyingWizard
-          onQuickView={(p: CatalogProduct) => {
-            setQuickViewProduct(p);
-            addViewed(p.id);
-          }}
-          isFavorite={isFavorite}
-          onFavoriteToggle={handleFavoriteToggle}
-          onShare={handleShare}
-        />
-
-        {/* Recently Viewed */}
-        <RecentlyViewed 
-          viewedIds={viewedIds}
-          onQuickView={(p) => {
-            setQuickViewProduct(p);
-            addViewed(p.id);
-          }}
-        />
+            {/* Recently Viewed */}
+            <RecentlyViewed
+              viewedIds={viewedIds}
+              onQuickView={(p) => {
+                setQuickViewProduct(p);
+                addViewed(p.id);
+              }}
+            />
+          </>
+        )}
 
         {/* Sticky Search + Sort */}
         <div className="mb-6 sticky top-[72px] z-40 -mx-4 sm:mx-0">
@@ -436,20 +602,68 @@ const CatalogPage = () => {
             onSortChange={setSortBy}
             viewMode={viewMode}
             onViewModeChange={setViewMode}
-            totalCount={categoryCounts.all ?? 0}
+            totalCount={effectiveCategoryCounts.all ?? 0}
             filteredCount={total}
             onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
             sidebarOpen={sidebarOpen}
           />
         </div>
 
+        <div className="mb-5 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => handleTabChange('climate')}
+            className={`px-5 py-2.5 rounded-full text-sm font-bold border transition-all ${
+              activeTab === 'climate'
+                ? 'bg-gradient-to-r from-[#00B4D8] to-[#0077B6] text-white border-transparent shadow-md'
+                : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
+            }`}
+          >
+            Климатици
+          </button>
+          <button
+            type="button"
+            onClick={() => handleTabChange('accessories')}
+            className={`px-5 py-2.5 rounded-full text-sm font-bold border transition-all ${
+              activeTab === 'accessories'
+                ? 'bg-gradient-to-r from-[#FF4D00] to-[#FF2A4D] text-white border-transparent shadow-md'
+                : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
+            }`}
+          >
+            Аксесоари
+          </button>
+        </div>
+
         {/* Category Chips */}
         <div className="mb-5">
-          <CategoryChips
-            selected={category}
-            onChange={setCategory}
-            counts={categoryCounts}
-          />
+          {activeTab === 'climate' ? (
+            <CategoryChips
+              selected={category}
+              onChange={setCategory}
+              counts={effectiveCategoryCounts}
+            />
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {ACCESSORY_CATEGORIES.map((cat) => {
+                const isActive = category === cat.id;
+                const count = effectiveCategoryCounts[cat.id] ?? 0;
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setCategory(cat.id)}
+                    className={`px-4 py-2 rounded-full text-sm font-semibold border transition-all ${
+                      isActive
+                        ? 'bg-gradient-to-r from-[#FF4D00] to-[#FF2A4D] text-white border-transparent shadow-md'
+                        : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    {cat.label} {count > 0 ? `(${count})` : ''}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Active Filters */}
@@ -473,16 +687,22 @@ const CatalogPage = () => {
             {/* Desktop sidebar */}
             <aside className="hidden lg:block w-[240px] shrink-0">
               <FilterSidebar
+                showConditionFilters={showConditionFilters}
+                selectedConditions={selectedConditions}
+                onConditionToggle={handleConditionToggle}
+                brandsOptions={activeTab === 'climate' ? undefined : accessoryBrandOptions}
                 selectedBrands={brands}
                 onBrandToggle={brandToggle}
                 selectedEnergy={energyClasses}
                 onEnergyToggle={energyToggle}
                 selectedFeatures={features}
                 onFeatureToggle={featureToggle}
+                showEnergyFilters={showEnergyAndFeatureFilters}
+                showFeatureFilters={showEnergyAndFeatureFilters}
                 priceRange={priceRange}
                 onPriceChange={setPriceRange}
-                priceMin={priceMin}
-                priceMax={priceMax}
+                priceMin={effectivePriceMin}
+                priceMax={effectivePriceMax}
                 onReset={resetAllFilters}
                 activeFilterCount={activeFilterCount}
               />
@@ -509,16 +729,22 @@ const CatalogPage = () => {
                     className="fixed left-0 top-0 bottom-0 w-72 bg-white z-50 shadow-2xl overflow-y-auto p-5 lg:hidden"
                   >
                     <FilterSidebar
+                      showConditionFilters={showConditionFilters}
+                      selectedConditions={selectedConditions}
+                      onConditionToggle={handleConditionToggle}
+                      brandsOptions={activeTab === 'climate' ? undefined : accessoryBrandOptions}
                       selectedBrands={brands}
                       onBrandToggle={brandToggle}
                       selectedEnergy={energyClasses}
                       onEnergyToggle={energyToggle}
                       selectedFeatures={features}
                       onFeatureToggle={featureToggle}
+                      showEnergyFilters={showEnergyAndFeatureFilters}
+                      showFeatureFilters={showEnergyAndFeatureFilters}
                       priceRange={priceRange}
                       onPriceChange={setPriceRange}
-                      priceMin={priceMin}
-                      priceMax={priceMax}
+                      priceMin={effectivePriceMin}
+                      priceMax={effectivePriceMax}
                       onReset={resetAllFilters}
                       activeFilterCount={activeFilterCount}
                     />
@@ -571,8 +797,12 @@ const CatalogPage = () => {
                           product={product}
                           index={index}
                           onQuickView={(p) => {
-                            setQuickViewProduct(p);
-                            addViewed(p.id);
+                            if (activeTab === 'accessories') {
+                              navigate(`/aksesoar/${p.id}`);
+                            } else {
+                              setQuickViewProduct(p);
+                              addViewed(p.id);
+                            }
                           }}
                           isFavorite={isFavorite(product.id)}
                           onFavoriteToggle={handleFavoriteToggle}
@@ -633,20 +863,32 @@ const CatalogPage = () => {
       {/* ── OVERLAYS & FLOATING ────────────────── */}
 
       {/* Compare Bar */}
-      <CompareBar 
-        compareList={compareList} 
-        onRemove={(id) => setCompareList(prev => prev.filter(p => p.id !== id))}
-        onClear={() => setCompareList([])}
-      />
+      {activeTab === 'climate' && (
+        <CompareBar
+          compareList={compareList}
+          onRemove={(id) => setCompareList(prev => prev.filter(p => p.id !== id))}
+          onClear={() => setCompareList([])}
+        />
+      )}
 
       {/* Quick View Modal */}
-      <QuickViewModal
-        product={quickViewProduct}
-        onClose={() => setQuickViewProduct(null)}
-        isFavorite={quickViewProduct ? isFavorite(quickViewProduct.id) : false}
-        onFavoriteToggle={handleFavoriteToggle}
-        onFormSubmit={handleFormSubmit}
-      />
+      {activeTab === 'climate' && (
+        <QuickViewModal
+          product={quickViewProduct}
+          onClose={() => setQuickViewProduct(null)}
+        onRated={(productId, rating, reviewsCount) => {
+          const patchRating = (p: CatalogProduct) =>
+            p.id === productId ? { ...p, rating, reviews: reviewsCount } : p;
+          setProducts((prev) => prev.map(patchRating));
+          setAllAccessories((prev) => prev.map(patchRating));
+          setCompareList((prev) => prev.map(patchRating));
+          setQuickViewProduct((prev) => (prev && prev.id === productId ? { ...prev, rating, reviews: reviewsCount } : prev));
+        }}
+          isFavorite={quickViewProduct ? isFavorite(quickViewProduct.id) : false}
+          onFavoriteToggle={handleFavoriteToggle}
+          onFormSubmit={handleFormSubmit}
+        />
+      )}
 
       {/* Social Proof Toasts */}
       <SocialProofToasts />

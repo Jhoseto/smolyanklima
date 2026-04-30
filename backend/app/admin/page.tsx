@@ -1,5 +1,6 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { EmailOutboxDrain } from "./EmailOutboxDrain";
+import { WorkItemsPlanner } from "./WorkItemsPlanner";
 
 export const dynamic = "force-dynamic";
 
@@ -20,9 +21,9 @@ export default async function AdminDashboardPage() {
 
   return (
     <div>
-      <h1 style={{ fontSize: 22, fontWeight: 900, marginBottom: 8 }}>Табло</h1>
-      <p style={{ color: "#6b7280", fontSize: 13, marginBottom: 16 }}>
-        Фаза 4: CRUD и публични API са активни. Следващи стъпки: deploy (Docker/Cloud Run), email worker при нужда.
+      <h1 style={{ fontSize: 17, fontWeight: 700, marginBottom: 6, color: "#0f172a" }}>Табло</h1>
+      <p style={{ color: "#64748b", fontSize: 12, marginBottom: 12 }}>
+        Обзор на каталога, статиите, запитванията и имейл опашката.
       </p>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12 }}>
@@ -32,9 +33,9 @@ export default async function AdminDashboardPage() {
           { label: "Нови запитвания", value: String(nInquiries) },
           { label: "Имейли в опашка (pending)", value: String(nOutbox) },
         ].map((card) => (
-          <div key={card.label} style={{ border: "1px solid #e5e7eb", borderRadius: 16, padding: 14 }}>
-            <div style={{ fontSize: 12, color: "#6b7280", fontWeight: 700 }}>{card.label}</div>
-            <div style={{ fontSize: 22, fontWeight: 900, marginTop: 6 }}>{card.value}</div>
+          <div key={card.label} style={{ border: "1px solid #e2e8f0", borderRadius: 16, padding: 14, background: "white" }}>
+            <div style={{ fontSize: 11, color: "#64748b", fontWeight: 600 }}>{card.label}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4, color: "#0f172a" }}>{card.value}</div>
           </div>
         ))}
       </div>
@@ -42,6 +43,7 @@ export default async function AdminDashboardPage() {
       <div style={{ marginTop: 20 }}>
         <EmailOutboxDrain pendingCount={nOutbox} />
       </div>
+      <WorkItemsPlanner />
     </div>
   );
 }

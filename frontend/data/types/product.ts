@@ -55,6 +55,7 @@ export interface CatalogProduct {
   model: string;        // Same as name, for display
   type: string;
   category: string;
+  condition: "new" | "used";
 
   // Display & media
   image: string;        // Resolved path to image

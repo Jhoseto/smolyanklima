@@ -58,7 +58,6 @@ export const ProductCard = ({
     null
   ];
   const urgency = urgencyTypes[hash % urgencyTypes.length];
-  const buyersCount = 15 + (hash % 85); // 15 to 100
   const isList = viewMode === 'list';
 
   return (
@@ -188,9 +187,6 @@ export const ProductCard = ({
                 <span className="text-[11px] font-semibold text-gray-700 ml-0.5">{product.rating}</span>
                 <span className="text-[11px] text-gray-500">({product.reviews} отзива)</span>
               </div>
-              <p className="text-[10px] font-medium text-gray-500 flex items-center gap-1">
-                <span className="text-gray-400">👥</span> {buyersCount} клиента избраха този модел
-              </p>
             </div>
           )}
 

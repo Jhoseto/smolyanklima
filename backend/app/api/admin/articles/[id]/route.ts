@@ -2,6 +2,7 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminDb } from "@/lib/admin/db";
+import { logAdminActivity } from "@/lib/admin/audit";
 
 const UpdateSchema = z.object({
   slug: z.string().min(2).max(160).optional(),
@@ -90,6 +91,15 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   const { data, error } = await supabase.from("articles").update(patch).eq("id", id).select("id,slug").maybeSingle();
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   if (!data) return withCors(req, NextResponse.json({ error: "Не е намерено" }, { status: 404 }));
+  await logAdminActivity({
+    action: "article.update",
+    entityType: "article",
+    entityId: id,
+    details: {
+      changedFields: Object.keys(patch),
+      slug: data.slug,
+    },
+  });
   return withCors(req, NextResponse.json({ data }));
 }
 
@@ -98,6 +108,11 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
   const supabase = await adminDb();
   const { error } = await supabase.from("articles").delete().eq("id", id);
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
+  await logAdminActivity({
+    action: "article.delete",
+    entityType: "article",
+    entityId: id,
+  });
   return withCors(req, NextResponse.json({ ok: true }));
 }
 

@@ -82,32 +82,55 @@ export const ContactInfoSection = () => {
 
           {/* Left Side: Contact Cards */}
           <div className="lg:col-span-5 grid sm:grid-cols-2 lg:grid-cols-1 gap-4 h-full">
-            {contactCards.map((card, idx) => (
-              <motion.a
-                key={idx}
-                as={card.href ? "a" : "div"}
-                href={card.href || undefined}
-                target={card.href?.includes('http') ? "_blank" : undefined}
-                rel={card.href?.includes('http') ? "noopener noreferrer" : undefined}
-                initial={{ opacity: 0, x: -20 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: idx * 0.1, type: 'spring' }}
-                className={`group relative bg-white rounded-[2rem] p-6 sm:p-8 border border-gray-100 hover:border-transparent transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:${card.shadow} flex items-center gap-6 overflow-hidden ${card.href ? 'cursor-pointer' : 'cursor-default'}`}
-              >
-                {/* Hover Background Gradient */}
-                <div className={`absolute inset-0 bg-gradient-to-r ${card.color} opacity-0 group-hover:opacity-5 transition-opacity duration-300`} />
+            {contactCards.map((card, idx) => {
+              const cardClassName = `group relative bg-white rounded-[2rem] p-6 sm:p-8 border border-gray-100 hover:border-transparent transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:${card.shadow} flex items-center gap-6 overflow-hidden ${card.href ? 'cursor-pointer' : 'cursor-default'}`;
+              const cardBody = (
+                <>
+                  {/* Hover Background Gradient */}
+                  <div className={`absolute inset-0 bg-gradient-to-r ${card.color} opacity-0 group-hover:opacity-5 transition-opacity duration-300`} />
 
-                <div className={`w-14 h-14 rounded-2xl bg-gray-50 flex items-center justify-center shrink-0 group-hover:bg-gradient-to-br ${card.color} transition-all duration-300 shadow-sm group-hover:shadow-lg`}>
-                  <card.icon className="w-6 h-6 text-gray-600 group-hover:text-white transition-colors duration-300" />
-                </div>
-                <div>
-                  <p className="text-[11px] font-black tracking-widest uppercase text-gray-400 mb-1">{card.title}</p>
-                  <p className="font-outfit font-bold text-gray-900 text-lg group-hover:text-[#FF4D00] transition-colors">{card.content}</p>
-                  <p className="text-sm text-gray-500 mt-1">{card.subtext}</p>
-                </div>
-              </motion.a>
-            ))}
+                  <div className={`w-14 h-14 rounded-2xl bg-gray-50 flex items-center justify-center shrink-0 group-hover:bg-gradient-to-br ${card.color} transition-all duration-300 shadow-sm group-hover:shadow-lg`}>
+                    <card.icon className="w-6 h-6 text-gray-600 group-hover:text-white transition-colors duration-300" />
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-black tracking-widest uppercase text-gray-400 mb-1">{card.title}</p>
+                    <p className="font-outfit font-bold text-gray-900 text-lg group-hover:text-[#FF4D00] transition-colors">{card.content}</p>
+                    <p className="text-sm text-gray-500 mt-1">{card.subtext}</p>
+                  </div>
+                </>
+              );
+
+              if (card.href) {
+                return (
+                  <motion.a
+                    key={idx}
+                    href={card.href}
+                    target={card.href.includes('http') ? "_blank" : undefined}
+                    rel={card.href.includes('http') ? "noopener noreferrer" : undefined}
+                    initial={{ opacity: 0, x: -20 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: idx * 0.1, type: 'spring' }}
+                    className={cardClassName}
+                  >
+                    {cardBody}
+                  </motion.a>
+                );
+              }
+
+              return (
+                <motion.div
+                  key={idx}
+                  initial={{ opacity: 0, x: -20 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: idx * 0.1, type: 'spring' }}
+                  className={cardClassName}
+                >
+                  {cardBody}
+                </motion.div>
+              );
+            })}
           </div>
 
           {/* Right Side: Interactive Map */}

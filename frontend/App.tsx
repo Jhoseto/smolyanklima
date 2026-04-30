@@ -4,7 +4,7 @@
  */
 
 import React, { lazy, Suspense } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { AnimatePresence } from 'motion/react';
 import { PageTransition } from './components/layout/PageTransition';
 import { Navbar } from './components/layout/Navbar';
@@ -30,7 +30,6 @@ const ContactPage = lazy(() => import('./pages/ContactPage'));
 const ServicesPage = lazy(() => import('./pages/ServicesPage'));
 const BlogHomePage = lazy(() => import('./pages/BlogHomePage'));
 const BlogArticlePage = lazy(() => import('./pages/BlogArticlePage'));
-const AccessoriesPage = lazy(() => import('./pages/AccessoriesPage'));
 const AccessoryDetailsPage = lazy(() => import('./pages/AccessoryDetailsPage'));
 
 // ── Главна страница ──────────────────────────────────
@@ -101,7 +100,7 @@ function App() {
           <Route path="/blog/tag/:slug" element={<PageTransition><BlogHomePage /></PageTransition>} />
           <Route path="/blog/tursi" element={<PageTransition><BlogHomePage /></PageTransition>} />
           <Route path="/blog/:slug" element={<PageTransition><BlogArticlePage /></PageTransition>} />
-          <Route path="/aksesoari" element={<PageTransition><AccessoriesPage /></PageTransition>} />
+          <Route path="/aksesoari" element={<Navigate to="/catalog?tab=accessories" replace />} />
           <Route path="/aksesoar/:id" element={<PageTransition><AccessoryDetailsPage /></PageTransition>} />
           <Route path="*" element={<PageTransition><HomePage /></PageTransition>} />
         </Routes>

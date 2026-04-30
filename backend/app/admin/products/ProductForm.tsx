@@ -23,6 +23,7 @@ export type AdminProductForm = {
   name: string;
   brandId: string;
   typeId: string;
+  productCondition: "new" | "used";
   description: string;
   price: number;
   priceWithMount: string;
@@ -57,6 +58,7 @@ export function emptyProductForm(): AdminProductForm {
     name: "",
     brandId: "",
     typeId: "",
+    productCondition: "new",
     description: "",
     price: 0,
     priceWithMount: "",
@@ -201,6 +203,7 @@ export function buildPostBody(form: AdminProductForm) {
     name: form.name.trim(),
     brandId: form.brandId,
     typeId: form.typeId,
+    productCondition: form.productCondition,
     description: form.description.trim() || undefined,
     price: Number(form.price),
     priceWithMount: pwm ?? undefined,
@@ -227,6 +230,7 @@ export function buildPutBody(form: AdminProductForm) {
     name: form.name.trim(),
     brandId: form.brandId,
     typeId: form.typeId,
+    productCondition: form.productCondition,
     description: form.description.trim() || null,
     price: Number(form.price),
     priceWithMount: pwm,
@@ -251,6 +255,7 @@ export function mapLoadedProductToForm(p: {
   name: string;
   brand_id: string;
   type_id: string;
+  product_condition?: "new" | "used";
   description?: string | null;
   price: number;
   price_with_mount?: number | null;
@@ -269,6 +274,7 @@ export function mapLoadedProductToForm(p: {
     name: p.name,
     brandId: p.brand_id,
     typeId: p.type_id,
+    productCondition: p.product_condition === "used" ? "used" : "new",
     description: p.description ?? "",
     price: Number(p.price),
     priceWithMount: p.price_with_mount != null ? String(p.price_with_mount) : "",
@@ -474,6 +480,17 @@ export function ProductFormFields({ brands, types, form, setForm, cloudinaryKind
           </select>
         </label>
       </div>
+      <label>
+        <FieldTitle label="Състояние" info="Основна подкатегория за климатици: Нови или Втора употреба." />
+        <select
+          value={form.productCondition}
+          onChange={(e) => setForm({ ...form, productCondition: e.target.value as AdminProductForm["productCondition"] })}
+          style={inp}
+        >
+          <option value="new">Нови</option>
+          <option value="used">Втора употреба</option>
+        </select>
+      </label>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
         <label>
           <FieldTitle label="Цена (EUR)" info="Цена на уреда (без монтаж), в евро." />

@@ -115,8 +115,8 @@ function AdminInquiriesClient() {
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 900 }}>Запитвания</h1>
-        <button onClick={load} style={{ padding: "10px 12px", borderRadius: 12, border: "1px solid #e5e7eb", fontWeight: 800 }}>
+        <h1 style={{ fontSize: 17, fontWeight: 700, color: "#0f172a", margin: 0 }}>Запитвания</h1>
+        <button onClick={load} style={{ padding: "8px 11px", borderRadius: 10, border: "1px solid #e5e7eb", fontWeight: 600, fontSize: 12 }}>
           Обнови
         </button>
       </div>
@@ -147,9 +147,9 @@ function AdminInquiriesClient() {
       {loading ? (
         <div>Зареждане...</div>
       ) : (
-        <div style={{ border: "1px solid #e5e7eb", borderRadius: 16, overflow: "hidden" }}>
+        <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, overflow: "hidden", background: "white" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead style={{ background: "#f9fafb" }}>
+            <thead style={{ background: "#f8fafc" }}>
               <tr>
                 {["Клиент", "Контакт", "Статус", "Приоритет", "Източник", "Създадено", "Действия"].map((h) => (
                   <th key={h} style={{ textAlign: "left", padding: "10px 12px", fontSize: 12, color: "#374151" }}>

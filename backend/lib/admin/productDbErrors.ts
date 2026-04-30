@@ -4,6 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export function mapProductDbError(raw: string): { status: number; error: string } | null {
   if (raw.includes("chk_products_old_price"))
     return { status: 400, error: "Старата цена трябва да е ≥ текущата цена или оставете полето за стара цена празно." };
+  if (raw.includes("chk_products_condition"))
+    return { status: 400, error: "Състоянието трябва да е 'new' или 'used'." };
   if (raw.includes("chk_specs_nonneg"))
     return { status: 400, error: "Едно от техническите полета е извън допустимия обхват." };
   if (raw.includes("products_slug_key") || (raw.includes("duplicate key") && raw.includes("(slug")))

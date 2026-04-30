@@ -32,7 +32,7 @@ export const BokehOrbs: React.FC<BokehOrbsProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const orbsRef = useRef<Orb[]>([]);
   const mouseRef = useRef({ x: -1000, y: -1000 });
-  const animationRef = useRef<number>();
+  const animationRef = useRef<number | null>(null);
 
   const initOrbs = useCallback((width: number, height: number) => {
     orbsRef.current = [];
@@ -163,7 +163,7 @@ export const BokehOrbs: React.FC<BokehOrbsProps> = ({
       window.removeEventListener('resize', resizeCanvas);
       canvas.removeEventListener('mousemove', handleMouseMove);
       canvas.removeEventListener('mouseleave', handleMouseLeave);
-      if (animationRef.current) {
+      if (animationRef.current !== null) {
         cancelAnimationFrame(animationRef.current);
       }
     };

@@ -30,7 +30,7 @@ export const TechGrid: React.FC<TechGridProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pointsRef = useRef<GridPoint[]>([]);
   const mouseRef = useRef({ x: -1000, y: -1000 });
-  const animationRef = useRef<number>();
+  const animationRef = useRef<number | null>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
   const initGrid = useCallback((width: number, height: number) => {
@@ -191,7 +191,7 @@ export const TechGrid: React.FC<TechGridProps> = ({
       window.removeEventListener('resize', resizeCanvas);
       canvas.removeEventListener('mousemove', handleMouseMove);
       canvas.removeEventListener('mouseleave', handleMouseLeave);
-      if (animationRef.current) {
+      if (animationRef.current !== null) {
         cancelAnimationFrame(animationRef.current);
       }
     };

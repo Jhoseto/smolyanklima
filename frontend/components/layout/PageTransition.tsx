@@ -15,7 +15,7 @@ const pageVariants = {
     y: 0,
     transition: {
       duration: 0.4,
-      ease: [0.22, 1, 0.36, 1], // Custom cubic-bezier for premium feel
+        ease: [0.22, 1, 0.36, 1] as const, // Custom cubic-bezier for premium feel
     },
   },
   exit: {
@@ -23,7 +23,7 @@ const pageVariants = {
     y: -10,
     transition: {
       duration: 0.3,
-      ease: [0.22, 1, 0.36, 1],
+        ease: [0.22, 1, 0.36, 1] as const,
     },
   },
 };

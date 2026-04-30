@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/admin/db";
+import { logAdminActivity } from "@/lib/admin/audit";
 import { getEnv } from "@/lib/env";
 import { sendResendEmail } from "@/lib/email/resend";
 
@@ -64,6 +65,17 @@ export async function POST(_req: NextRequest) {
         .eq("id", r.id);
     }
   }
+
+  await logAdminActivity({
+    action: "email_outbox.drain",
+    entityType: "email_outbox",
+    details: {
+      processed: (rows ?? []).length,
+      sent,
+      failed,
+      skipped,
+    },
+  });
 
   return NextResponse.json({ sent, failed, skipped, processed: (rows ?? []).length });
 }

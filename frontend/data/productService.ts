@@ -105,6 +105,9 @@ type ApiProduct = {
   name: string;
   description?: string | null;
   price: number;
+  product_condition?: "new" | "used" | null;
+  rating?: number | null;
+  reviews_count?: number | null;
   brands?: { name: string } | null;
   product_types?: { name: string } | null;
   product_specs?: Array<{
@@ -141,7 +144,9 @@ function mapApiToCatalogProduct(raw: ApiProduct): CatalogProduct {
   const image = sortedImages[0] ?? `/images/hero-new.jpg`;
 
   const { cardBorder, imgBg } = resolveBorderAndBg(brand);
-  const { rating, reviews } = fakeRating(raw.slug);
+  const fallback = fakeRating(raw.slug);
+  const rating = raw.rating != null ? Number(raw.rating) : fallback.rating;
+  const reviews = raw.reviews_count != null ? Number(raw.reviews_count) : fallback.reviews;
 
   const coolingPower = specs0?.cooling_power_kw ? `${specs0.cooling_power_kw} kW` : undefined;
   const heatingPower = specs0?.heating_power_kw ? `${specs0.heating_power_kw} kW` : undefined;
@@ -156,6 +161,7 @@ function mapApiToCatalogProduct(raw: ApiProduct): CatalogProduct {
     model: raw.name,
     type,
     category: '—',
+    condition: raw.product_condition === "used" ? "used" : "new",
 
     image,
     images: sortedImages.length ? sortedImages : undefined,
@@ -225,6 +231,34 @@ export async function getProductById(id: string): Promise<CatalogProduct | undef
   return mapApiToCatalogProduct(json.data as ApiProduct);
 }
 
+export async function rateProduct(
+  productSlug: string,
+  stars: number,
+): Promise<
+  | { ok: true; rating: number; reviewsCount: number }
+  | { ok: false; code: 'ALREADY_RATED' | 'RATINGS_NOT_READY' | 'RATE_LIMIT_EXCEEDED' | 'UNKNOWN'; message: string }
+> {
+  const res = await fetch(`/api/products/${encodeURIComponent(productSlug)}/rating`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ stars, website: '' }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (res.ok) {
+    return {
+      ok: true,
+      rating: Number((json as any)?.data?.rating ?? 0),
+      reviewsCount: Number((json as any)?.data?.reviewsCount ?? 0),
+    };
+  }
+  const code = String((json as any)?.error ?? 'UNKNOWN');
+  if (code === 'ALREADY_RATED' || code === 'RATINGS_NOT_READY' || code === 'RATE_LIMIT_EXCEEDED') {
+    return { ok: false, code, message: code };
+  }
+  return { ok: false, code: 'UNKNOWN', message: code || 'UNKNOWN' };
+}
+
 function isAccessoryLike(p: CatalogProduct) {
   const t = (p.type ?? "").toLowerCase();
   const n = (p.name ?? "").toLowerCase();
@@ -234,6 +268,7 @@ function isAccessoryLike(p: CatalogProduct) {
 export interface CatalogListParams {
   q?: string;
   cat?: string;
+  cond?: "new" | "used";
   brands?: string[];
   energyClasses?: string[];
   features?: string[];
@@ -251,6 +286,7 @@ export async function fetchProductsCatalogPage(
   const sp = new URLSearchParams();
   if (params.q?.trim()) sp.set("q", params.q.trim());
   if (params.cat && params.cat !== "all") sp.set("cat", params.cat);
+  if (params.cond) sp.set("cond", params.cond);
   if (params.brands?.length) sp.set("b", params.brands.join(","));
   if (params.energyClasses?.length) sp.set("e", params.energyClasses.join(","));
   if (params.features?.length) sp.set("f", params.features.join(","));
@@ -271,8 +307,9 @@ export async function fetchProductsCatalogPage(
 }
 
 /** Min/max цена в активния каталог (за слайдера). */
-export async function fetchCatalogPriceBounds(): Promise<{ min: number; max: number }> {
-  const res = await fetch("/api/catalog/price-bounds");
+export async function fetchCatalogPriceBounds(cond?: "new" | "used"): Promise<{ min: number; max: number }> {
+  const qp = cond ? `?cond=${cond}` : "";
+  const res = await fetch(`/api/catalog/price-bounds${qp}`);
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Грешка при ценови граници");
   const min = Number(json.min) || 0;
@@ -282,12 +319,12 @@ export async function fetchCatalogPriceBounds(): Promise<{ min: number; max: num
 }
 
 /** Брой продукти по категория (без други филтри), за чиповете. */
-export async function fetchCategoryProductCounts(): Promise<Record<string, number>> {
+export async function fetchCategoryProductCounts(cond?: "new" | "used"): Promise<Record<string, number>> {
   const counts: Record<string, number> = { all: 0 };
   const [allRes, ...perCat] = await Promise.all([
-    fetchProductsCatalogPage({ page: 1, perPage: 1 }),
+    fetchProductsCatalogPage({ cond, page: 1, perPage: 1 }),
     ...CATEGORIES.filter((c) => c.id !== "all").map((c) =>
-      fetchProductsCatalogPage({ cat: c.id, page: 1, perPage: 1 }),
+      fetchProductsCatalogPage({ cond, cat: c.id, page: 1, perPage: 1 }),
     ),
   ]);
   counts.all = allRes.meta.total;

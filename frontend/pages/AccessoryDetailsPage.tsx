@@ -45,7 +45,7 @@ export default function AccessoryDetailsPage() {
       <div className="min-h-screen bg-[#FAFAFA] flex flex-col pt-20">
         <div className="flex-1 flex flex-col items-center justify-center">
           <h1 className="text-3xl font-black text-gray-900 mb-4">Аксесоарът не е намерен</h1>
-          <button onClick={() => navigate('/aksesoari')} className="text-[#00B4D8] hover:underline font-bold">
+          <button onClick={() => navigate('/catalog?tab=accessories')} className="text-[#00B4D8] hover:underline font-bold">
             ← Обратно към аксесоарите
           </button>
         </div>
@@ -57,7 +57,7 @@ export default function AccessoryDetailsPage() {
     <div className="min-h-screen bg-white font-sans pt-20">
       <main className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
         <button
-          onClick={() => navigate('/aksesoari')}
+          onClick={() => navigate('/catalog?tab=accessories')}
           className="flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-900 transition-colors mb-8"
         >
           <ArrowLeft className="w-4 h-4" /> Обратно към аксесоарите

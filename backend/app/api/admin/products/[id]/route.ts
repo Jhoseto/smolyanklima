@@ -2,6 +2,7 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminDb } from "@/lib/admin/db";
+import { logAdminActivity } from "@/lib/admin/audit";
 import { formatSupabaseError, mapProductDbError, mergedOldPriceInvalid } from "@/lib/admin/productDbErrors";
 import { replaceProductImages, upsertProductSpecs, type ImageInput, type SpecsInput } from "@/lib/admin/syncProductChildren";
 
@@ -32,6 +33,7 @@ const UpdateSchema = z
     name: z.string().min(2).max(200).optional(),
     brandId: z.string().uuid().optional(),
     typeId: z.string().uuid().optional(),
+    productCondition: z.enum(["new", "used"]).optional(),
     description: z.string().max(5000).optional().nullable(),
     price: z.number().nonnegative().optional(),
     priceWithMount: z.number().nonnegative().optional().nullable(),
@@ -40,6 +42,7 @@ const UpdateSchema = z
     isFeatured: z.boolean().optional(),
     stockStatus: z.enum(["in_stock", "out_of_stock", "on_order"]).optional(),
     stockQuantity: z.number().int().nonnegative().optional(),
+    soldQuantity: z.number().int().nonnegative().optional(),
     specs: SpecsSchema.optional(),
     images: z.array(ImageSchema).max(MAX_IMAGES).optional(),
   })
@@ -63,7 +66,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   const { data: row, error } = await supabase
     .from("products")
     .select(
-      "id,slug,name,brand_id,type_id,description,price,price_with_mount,old_price,is_active,is_featured,stock_status,stock_quantity",
+      "id,slug,name,brand_id,type_id,product_condition,description,price,price_with_mount,old_price,is_active,is_featured,stock_status,stock_quantity,sold_quantity",
     )
     .eq("id", id)
     .maybeSingle();
@@ -105,6 +108,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   if (parsed.data.name !== undefined) patch.name = parsed.data.name;
   if (parsed.data.brandId !== undefined) patch.brand_id = parsed.data.brandId;
   if (parsed.data.typeId !== undefined) patch.type_id = parsed.data.typeId;
+  if (parsed.data.productCondition !== undefined) patch.product_condition = parsed.data.productCondition;
   if (parsed.data.description !== undefined) patch.description = parsed.data.description;
   if (parsed.data.price !== undefined) patch.price = parsed.data.price;
   if (parsed.data.priceWithMount !== undefined) patch.price_with_mount = parsed.data.priceWithMount;
@@ -113,6 +117,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   if (parsed.data.isFeatured !== undefined) patch.is_featured = parsed.data.isFeatured;
   if (parsed.data.stockStatus !== undefined) patch.stock_status = parsed.data.stockStatus;
   if (parsed.data.stockQuantity !== undefined) patch.stock_quantity = parsed.data.stockQuantity;
+  if (parsed.data.soldQuantity !== undefined) patch.sold_quantity = parsed.data.soldQuantity;
 
   if (Object.keys(patch).length > 0) {
     if (patch.price !== undefined || patch.old_price !== undefined) {
@@ -173,13 +178,50 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   }
 
   const { data: out } = await supabase.from("products").select("id,slug").eq("id", id).maybeSingle();
+  await logAdminActivity({
+    action: "product.update",
+    entityType: "product",
+    entityId: id,
+    details: {
+      changedFields: Object.keys(patch),
+      hasSpecsUpdate: Boolean(parsed.data.specs),
+      hasImagesUpdate: Boolean(parsed.data.images),
+      slug: out?.slug ?? null,
+    },
+  });
   return withCors(req, NextResponse.json({ data: out }));
 }
 
 export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   const supabase = await adminDb();
+  const { data: current } = await supabase.from("products").select("id,name,price").eq("id", id).maybeSingle();
+
+  if (current) {
+    try {
+      await supabase.from("work_items").insert({
+        type: "stock_out",
+        event_code: "item_removed",
+        status: "done",
+        priority: "medium",
+        title: `Премахнат артикул: ${current.name}`,
+        product_id: current.id,
+        due_date: new Date().toISOString().slice(0, 10),
+        quantity: 1,
+        unit_price: Number(current.price ?? 0),
+        total_amount: Number(current.price ?? 0),
+      });
+    } catch {
+      // Non-blocking if work_items schema is not migrated yet.
+    }
+  }
+
   const { error } = await supabase.from("products").delete().eq("id", id);
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
+  await logAdminActivity({
+    action: "product.delete",
+    entityType: "product",
+    entityId: id,
+  });
   return withCors(req, NextResponse.json({ ok: true }));
 }

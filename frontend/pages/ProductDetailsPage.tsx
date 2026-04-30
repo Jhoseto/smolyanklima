@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { ArrowLeft, Star, Phone, ShieldCheck, Clock, Check, Zap, Volume2, Wind } from 'lucide-react';
-import { getAllProducts, getProductById } from '../data/productService';
+import { getAllProducts, getProductById, rateProduct } from '../data/productService';
 import type { CatalogProduct } from '../data/types/product';
 import { ProductCard } from '../components/catalog/ProductCard';
 import { PremiumImageGallery } from '../components/media/PremiumImageGallery';
@@ -13,6 +13,11 @@ export default function ProductDetailsPage() {
   const [product, setProduct] = useState<CatalogProduct | null>(null);
   const [loading, setLoading] = useState(true);
   const [related, setRelated] = useState<CatalogProduct[]>([]);
+  const [ratingBusy, setRatingBusy] = useState(false);
+  const [ratingNotice, setRatingNotice] = useState<string | null>(null);
+  const [alreadyRated, setAlreadyRated] = useState(false);
+  const [hoverStars, setHoverStars] = useState<number | null>(null);
+  const [votedStars, setVotedStars] = useState<number | null>(null);
 
   useEffect(() => {
     // Scroll to top on mount
@@ -38,6 +43,38 @@ export default function ProductDetailsPage() {
     fetchProduct();
   }, [id]);
 
+  async function handleRate(stars: number) {
+    if (!product || ratingBusy || alreadyRated) return;
+    setRatingBusy(true);
+    setRatingNotice(null);
+    const r = await rateProduct(product.id, stars);
+    if (r.ok) {
+      setProduct((prev) => (prev ? { ...prev, rating: r.rating, reviews: r.reviewsCount } : prev));
+      setVotedStars(stars);
+      setAlreadyRated(true);
+      setRatingNotice('Благодарим за оценката!');
+      setRatingBusy(false);
+      return;
+    }
+    if (!('code' in r)) {
+      setRatingNotice('Грешка при изпращане на оценката.');
+      setRatingBusy(false);
+      return;
+    }
+    const code = r.code;
+    if (code === 'ALREADY_RATED') {
+      setAlreadyRated(true);
+      setRatingNotice('Вече сте оценили този продукт.');
+    } else if (code === 'RATE_LIMIT_EXCEEDED') {
+      setRatingNotice('Твърде много опити. Опитайте по-късно.');
+    } else if (code === 'RATINGS_NOT_READY') {
+      setRatingNotice('Оценяването още не е активирано.');
+    } else {
+      setRatingNotice('Грешка при изпращане на оценката.');
+    }
+    setRatingBusy(false);
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#FAFAFA] flex flex-col">
@@ -60,6 +97,8 @@ export default function ProductDetailsPage() {
       </div>
     );
   }
+
+  const starsToRender = hoverStars ?? votedStars ?? Math.round(product.rating);
 
   return (
     <div className="min-h-screen bg-white font-sans pt-20">
@@ -109,12 +148,24 @@ export default function ProductDetailsPage() {
             <div className="flex items-center gap-2 mb-6">
               <div className="flex text-yellow-400">
                 {[...Array(5)].map((_, i) => (
-                  <Star key={i} className={`w-4 h-4 ${i < Math.floor(product.rating) ? 'fill-current' : 'fill-gray-200 text-gray-200'}`} />
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => void handleRate(i + 1)}
+                    onMouseEnter={() => setHoverStars(i + 1)}
+                    onMouseLeave={() => setHoverStars(null)}
+                    disabled={ratingBusy || alreadyRated}
+                    className="disabled:cursor-not-allowed"
+                    title={alreadyRated ? 'Вече сте гласували' : `Оцени с ${i + 1} звезди`}
+                  >
+                    <Star className={`w-4 h-4 transition-colors ${i < starsToRender ? 'fill-current' : 'fill-gray-200 text-gray-200'}`} />
+                  </button>
                 ))}
               </div>
               <span className="text-sm font-bold text-gray-700">{product.rating}</span>
               <span className="text-sm text-gray-400">({product.reviews} отзива)</span>
             </div>
+            {ratingNotice && <p className="text-xs font-semibold text-gray-500 mb-6">{ratingNotice}</p>}
 
             {product.description && (
               <p className="text-gray-600 leading-relaxed mb-6">{product.description}</p>

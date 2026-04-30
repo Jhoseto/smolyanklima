@@ -51,12 +51,18 @@ const Accordion = ({ title, children, defaultOpen = true }: AccordionProps) => {
 };
 
 interface FilterSidebarProps {
+  showConditionFilters?: boolean;
+  selectedConditions?: Array<'new' | 'used'>;
+  onConditionToggle?: (condition: 'new' | 'used') => void;
+  brandsOptions?: string[];
   selectedBrands: string[];
   onBrandToggle: (brand: string) => void;
   selectedEnergy: string[];
   onEnergyToggle: (cls: string) => void;
   selectedFeatures: string[];
   onFeatureToggle: (feat: string) => void;
+  showEnergyFilters?: boolean;
+  showFeatureFilters?: boolean;
   priceRange: [number, number];
   onPriceChange: (range: [number, number]) => void;
   priceMin: number;
@@ -66,12 +72,18 @@ interface FilterSidebarProps {
 }
 
 export const FilterSidebar = ({
+  showConditionFilters = false,
+  selectedConditions = [],
+  onConditionToggle,
+  brandsOptions,
   selectedBrands,
   onBrandToggle,
   selectedEnergy,
   onEnergyToggle,
   selectedFeatures,
   onFeatureToggle,
+  showEnergyFilters = true,
+  showFeatureFilters = true,
   priceRange,
   onPriceChange,
   priceMin,
@@ -79,6 +91,7 @@ export const FilterSidebar = ({
   onReset,
   activeFilterCount,
 }: FilterSidebarProps) => {
+  const availableBrands = brandsOptions ?? BRANDS.map((b) => b.name);
   return (
     <aside className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sticky top-[120px] max-h-[calc(100vh-140px)] overflow-y-auto">
 
@@ -96,17 +109,52 @@ export const FilterSidebar = ({
         )}
       </div>
 
+      {/* Condition */}
+      {showConditionFilters && (
+        <Accordion title="Състояние">
+          <div className="space-y-2">
+            {[
+              { id: 'new' as const, label: 'Нови' },
+              { id: 'used' as const, label: 'Втора употреба' },
+            ].map((item) => (
+              <label key={item.id} className="flex items-center gap-3 cursor-pointer group">
+                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+                  selectedConditions.includes(item.id)
+                    ? 'border-[#00B4D8] bg-[#00B4D8]'
+                    : 'border-gray-300 group-hover:border-[#00B4D8]/50'
+                }`}>
+                  {selectedConditions.includes(item.id) && (
+                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </div>
+                <input
+                  type="checkbox"
+                  className="sr-only"
+                  checked={selectedConditions.includes(item.id)}
+                  onChange={() => onConditionToggle?.(item.id)}
+                />
+                <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900 transition-colors">
+                  {item.label}
+                </span>
+              </label>
+            ))}
+          </div>
+        </Accordion>
+      )}
+
       {/* Brands */}
       <Accordion title="Марка">
         <div className="space-y-2">
-          {BRANDS.map((brand) => (
-            <label key={brand.id} className="flex items-center gap-3 cursor-pointer group">
+          {availableBrands.map((brandName) => (
+            <label key={brandName} className="flex items-center gap-3 cursor-pointer group">
               <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
-                selectedBrands.includes(brand.name)
+                selectedBrands.includes(brandName)
                   ? 'border-[#00B4D8] bg-[#00B4D8]'
                   : 'border-gray-300 group-hover:border-[#00B4D8]/50'
               }`}>
-                {selectedBrands.includes(brand.name) && (
+                {selectedBrands.includes(brandName) && (
                   <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                   </svg>
@@ -115,11 +163,11 @@ export const FilterSidebar = ({
               <input
                 type="checkbox"
                 className="sr-only"
-                checked={selectedBrands.includes(brand.name)}
-                onChange={() => onBrandToggle(brand.name)}
+                checked={selectedBrands.includes(brandName)}
+                onChange={() => onBrandToggle(brandName)}
               />
               <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900 transition-colors">
-                {brand.name}
+                {brandName}
               </span>
             </label>
           ))}
@@ -187,51 +235,55 @@ export const FilterSidebar = ({
       </Accordion>
 
       {/* Energy Class */}
-      <Accordion title="Енергиен клас">
-        <div className="flex flex-wrap gap-2">
-          {ENERGY_CLASSES.map((cls) => (
-            <button
-              key={cls}
-              onClick={() => onEnergyToggle(cls)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-bold border-2 transition-all ${
-                selectedEnergy.includes(cls)
-                  ? 'bg-green-500 border-green-500 text-white'
-                  : 'bg-white border-gray-200 text-gray-700 hover:border-green-400 hover:text-green-600'
-              }`}
-            >
-              {cls}
-            </button>
-          ))}
-        </div>
-      </Accordion>
+      {showEnergyFilters && (
+        <Accordion title="Енергиен клас">
+          <div className="flex flex-wrap gap-2">
+            {ENERGY_CLASSES.map((cls) => (
+              <button
+                key={cls}
+                onClick={() => onEnergyToggle(cls)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-bold border-2 transition-all ${
+                  selectedEnergy.includes(cls)
+                    ? 'bg-green-500 border-green-500 text-white'
+                    : 'bg-white border-gray-200 text-gray-700 hover:border-green-400 hover:text-green-600'
+                }`}
+              >
+                {cls}
+              </button>
+            ))}
+          </div>
+        </Accordion>
+      )}
 
       {/* Features */}
-      <Accordion title="Функции" defaultOpen={false}>
-        <div className="space-y-2">
-          {FEATURES_LIST.map((feat) => (
-            <label key={feat} className="flex items-center gap-3 cursor-pointer group">
-              <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
-                selectedFeatures.includes(feat)
-                  ? 'border-[#FF4D00] bg-[#FF4D00]'
-                  : 'border-gray-300 group-hover:border-[#FF4D00]/50'
-              }`}>
-                {selectedFeatures.includes(feat) && (
-                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                )}
-              </div>
-              <input
-                type="checkbox"
-                className="sr-only"
-                checked={selectedFeatures.includes(feat)}
-                onChange={() => onFeatureToggle(feat)}
-              />
-              <span className="text-sm text-gray-700 group-hover:text-gray-900 transition-colors">{feat}</span>
-            </label>
-          ))}
-        </div>
-      </Accordion>
+      {showFeatureFilters && (
+        <Accordion title="Функции" defaultOpen={false}>
+          <div className="space-y-2">
+            {FEATURES_LIST.map((feat) => (
+              <label key={feat} className="flex items-center gap-3 cursor-pointer group">
+                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+                  selectedFeatures.includes(feat)
+                    ? 'border-[#FF4D00] bg-[#FF4D00]'
+                    : 'border-gray-300 group-hover:border-[#FF4D00]/50'
+                }`}>
+                  {selectedFeatures.includes(feat) && (
+                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </div>
+                <input
+                  type="checkbox"
+                  className="sr-only"
+                  checked={selectedFeatures.includes(feat)}
+                  onChange={() => onFeatureToggle(feat)}
+                />
+                <span className="text-sm text-gray-700 group-hover:text-gray-900 transition-colors">{feat}</span>
+              </label>
+            ))}
+          </div>
+        </Accordion>
+      )}
 
       {/* ── CALCULATORS ────────────────────── */}
       <div className="mt-6 border-t border-gray-100 pt-6">

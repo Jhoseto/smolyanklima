@@ -146,7 +146,7 @@ export default function NewArticlePage() {
 
   return (
     <div style={{ maxWidth: 860 }}>
-      <h1 style={{ fontSize: 20, fontWeight: 900, marginBottom: 10 }}>Нова статия</h1>
+      <h1 style={{ fontSize: 17, fontWeight: 700, marginBottom: 10 }}>Нова статия</h1>
       {error && (
         <div style={{ background: "#fef2f2", border: "1px solid #fecaca", padding: 12, borderRadius: 12, marginBottom: 12 }}>
           {error}
@@ -285,7 +285,7 @@ export default function NewArticlePage() {
           Избрана
         </label>
 
-        <button onClick={submit} style={{ padding: "10px 12px", borderRadius: 12, background: "#0ea5e9", color: "white", fontWeight: 900, border: "1px solid #0ea5e9" }}>
+        <button onClick={submit} style={{ padding: "8px 12px", borderRadius: 10, background: "#0ea5e9", color: "white", fontWeight: 700, border: "1px solid #0ea5e9", fontSize: 12 }}>
           Създай
         </button>
       </div>

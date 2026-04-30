@@ -2,6 +2,7 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminDb } from "@/lib/admin/db";
+import { logAdminActivity } from "@/lib/admin/audit";
 
 const UpsertSchema = z.object({
   key: z.string().min(1).max(120),
@@ -41,6 +42,16 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
+  await logAdminActivity({
+    action: "settings.upsert",
+    entityType: "settings",
+    entityId: null,
+    details: {
+      key: parsed.data.key,
+      hasValue: parsed.data.value != null,
+      hasDescription: parsed.data.description != null,
+    },
+  });
   return withCors(req, NextResponse.json({ data }, { status: 201 }));
 }
 

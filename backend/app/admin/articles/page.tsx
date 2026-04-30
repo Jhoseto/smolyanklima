@@ -13,8 +13,8 @@ export default async function AdminArticlesPage() {
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 900 }}>Статии</h1>
-        <Link href="/admin/articles/new" style={{ padding: "10px 12px", borderRadius: 12, background: "#0ea5e9", color: "white", fontWeight: 800 }}>
+        <h1 style={{ fontSize: 17, fontWeight: 700, color: "#0f172a", margin: 0 }}>Статии</h1>
+        <Link href="/admin/articles/new" style={{ padding: "8px 12px", borderRadius: 10, background: "#0ea5e9", color: "white", fontWeight: 700, fontSize: 12 }}>
           + Нова статия
         </Link>
       </div>
@@ -25,9 +25,9 @@ export default async function AdminArticlesPage() {
         </div>
       )}
 
-      <div style={{ border: "1px solid #e5e7eb", borderRadius: 16, overflow: "hidden" }}>
+      <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, overflow: "hidden", background: "white" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead style={{ background: "#f9fafb" }}>
+          <thead style={{ background: "#f8fafc" }}>
             <tr>
               {["Заглавие", "Категория", "Автор", "Публикувана", "Избрана", ""].map((h) => (
                 <th key={h} style={{ textAlign: "left", padding: "10px 12px", fontSize: 12, color: "#374151" }}>

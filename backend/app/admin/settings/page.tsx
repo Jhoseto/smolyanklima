@@ -50,8 +50,8 @@ export default function AdminSettingsPage() {
   return (
     <div style={{ maxWidth: 980 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 900 }}>Настройки</h1>
-        <button onClick={load} style={{ padding: "10px 12px", borderRadius: 12, border: "1px solid #e5e7eb", fontWeight: 800 }}>
+        <h1 style={{ fontSize: 17, fontWeight: 700, color: "#0f172a", margin: 0 }}>Настройки</h1>
+        <button onClick={load} style={{ padding: "8px 11px", borderRadius: 10, border: "1px solid #e5e7eb", fontWeight: 600, fontSize: 12 }}>
           Обнови
         </button>
       </div>
@@ -62,8 +62,8 @@ export default function AdminSettingsPage() {
         </div>
       )}
 
-      <div style={{ border: "1px solid #e5e7eb", borderRadius: 16, padding: 14, marginBottom: 12 }}>
-        <div style={{ fontWeight: 900, marginBottom: 10 }}>Добави / обнови настройка</div>
+      <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, padding: 14, marginBottom: 12, background: "white" }}>
+        <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10 }}>Добави / обнови настройка</div>
         <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 10, alignItems: "start" }}>
           <label>
             <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 4 }}>Ключ</div>
@@ -100,9 +100,9 @@ export default function AdminSettingsPage() {
       {loading ? (
         <div>Зареждане...</div>
       ) : (
-        <div style={{ border: "1px solid #e5e7eb", borderRadius: 16, overflow: "hidden" }}>
+        <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, overflow: "hidden", background: "white" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead style={{ background: "#f9fafb" }}>
+            <thead style={{ background: "#f8fafc" }}>
               <tr>
                 {["Ключ", "Стойност", "Описание", "Обновено", ""].map((h) => (
                   <th key={h} style={{ textAlign: "left", padding: "10px 12px", fontSize: 12, color: "#374151" }}>

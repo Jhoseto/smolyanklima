@@ -174,7 +174,7 @@ export default function EditArticlePage() {
 
   return (
     <div style={{ maxWidth: 860 }}>
-      <h1 style={{ fontSize: 20, fontWeight: 900, marginBottom: 10 }}>Редакция на статия</h1>
+      <h1 style={{ fontSize: 17, fontWeight: 700, marginBottom: 10 }}>Редакция на статия</h1>
       {error && (
         <div style={{ background: "#fef2f2", border: "1px solid #fecaca", padding: 12, borderRadius: 12, marginBottom: 12 }}>
           {error}
@@ -314,10 +314,10 @@ export default function EditArticlePage() {
         </label>
 
         <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={save} style={{ padding: "10px 12px", borderRadius: 12, background: "#0ea5e9", color: "white", fontWeight: 900, border: "1px solid #0ea5e9" }}>
+          <button onClick={save} style={{ padding: "8px 12px", borderRadius: 10, background: "#0ea5e9", color: "white", fontWeight: 700, border: "1px solid #0ea5e9", fontSize: 12 }}>
             Запази
           </button>
-          <button onClick={remove} style={{ padding: "10px 12px", borderRadius: 12, background: "#fff", color: "#b91c1c", fontWeight: 900, border: "1px solid #fecaca" }}>
+          <button onClick={remove} style={{ padding: "8px 12px", borderRadius: 10, background: "#fff", color: "#b91c1c", fontWeight: 700, border: "1px solid #fecaca", fontSize: 12 }}>
             Изтрий
           </button>
         </div>
