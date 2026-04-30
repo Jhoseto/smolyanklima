@@ -39,7 +39,7 @@ function mapApiToCatalogAccessory(raw: ApiAccessory): CatalogProduct {
     (raw.accessory_images ?? [])
       .slice()
       .sort((a, b) => (b.is_main ? 1 : 0) - (a.is_main ? 1 : 0) || a.sort_order - b.sort_order)[0]
-      ?.url ?? `/images/${raw.slug}.jpg`;
+      ?.url ?? `/images/hero-new.jpg`;
   const { rating, reviews } = fakeRating(raw.slug);
 
   const kindLabel = resolveKindLabel(raw.kind);

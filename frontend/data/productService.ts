@@ -137,7 +137,8 @@ function mapApiToCatalogProduct(raw: ApiProduct): CatalogProduct {
     .sort((a, b) => (b.is_main ? 1 : 0) - (a.is_main ? 1 : 0) || a.sort_order - b.sort_order)
     .map((im) => im.url)
     .filter(Boolean);
-  const image = sortedImages[0] ?? `/images/${raw.slug}.jpg`;
+  // If backend doesn't have images yet, use a known existing local asset (avoid 404 spam).
+  const image = sortedImages[0] ?? `/images/hero-new.jpg`;
 
   const { cardBorder, imgBg } = resolveBorderAndBg(brand);
   const { rating, reviews } = fakeRating(raw.slug);
