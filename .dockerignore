@@ -1,9 +1,27 @@
+# Dependencies & build outputs (ще се генерират в образа)
 **/node_modules
 **/.next
 **/dist
-**/build
-**/coverage
-.git
-.env*
-*.log
 
+# Git / IDE / локални среди
+.git
+.gitignore
+**/.cursor
+**/.vscode
+**/.idea
+**/agent-transcripts
+
+# Env (никога в образа)
+.env
+.env.*
+!.env.example
+
+# Логове и тестове
+**/*.log
+**/coverage
+**/cypress
+**/__tests__
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx

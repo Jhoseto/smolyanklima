@@ -1,15 +1,10 @@
-# Unified Cloud Run deploy: един контейнер = Vite SPA (static) + Next.js API/админ.
-# Локална разработка: frontend (Vite) :3000 с proxy на /api към Next.js :3001 — вижте vite.config.ts.
-#
-# Изисква GitHub Secrets (WIF + GCP). Име на услуга: CLOUD_RUN_SERVICE (напр. smolyanklima).
-# PROD_FRONTEND_ORIGIN = публичният HTTPS URL на същата Cloud Run услуга (без trailing slash).
+# Production deploy по подразбиране: Cloud Build trigger от GitHub (вижте DEPLOY_CLOUD_RUN.md).
+# Този workflow е само за ръчно пускане, ако ползвате GitHub Actions + WIF (без Cloud Build).
 
 name: Deploy (Cloud Run)
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main, master]
 
 concurrency:
   group: cloud-run-${{ github.ref }}
@@ -25,10 +20,21 @@ jobs:
     env:
       REGION: ${{ secrets.GCP_REGION }}
       PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-      AR_REPO: ${{ secrets.GCP_ARTIFACT_REPO }}
 
     steps:
       - uses: actions/checkout@v4
+
+      # Ясна грешка вместо съобщението на google-github-actions/auth за липсващ WIF
+      - name: Require Workload Identity secrets
+        env:
+          WIF: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          SA: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "${WIF}" ] || [ -z "${SA}" ]; then
+            echo "::error::Липсват GitHub Secrets: GCP_WORKLOAD_IDENTITY_PROVIDER и/или GCP_SERVICE_ACCOUNT."
+            echo "Настройте WIF в GitHub (repo → Settings → Secrets → Actions) ИЛИ не ползвайте този workflow — production deploy е през Cloud Build trigger (вижте DEPLOY_CLOUD_RUN.md)."
+            exit 1
+          fi
 
       - name: Auth to Google Cloud (WIF)
         uses: google-github-actions/auth@v2
@@ -42,11 +48,11 @@ jobs:
           project_id: ${{ env.PROJECT_ID }}
 
       - name: Configure Docker auth
-        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+        run: gcloud auth configure-docker gcr.io --quiet
 
       - name: Build & push unified image
         env:
-          IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/smolyanklima:${{ github.sha }}
+          IMAGE: gcr.io/${{ env.PROJECT_ID }}/smolyanklima:${{ github.sha }}
         run: |
           docker build -t "$IMAGE" .
           docker push "$IMAGE"
@@ -54,7 +60,7 @@ jobs:
       - name: Deploy to Cloud Run (unified)
         env:
           SERVICE: ${{ secrets.CLOUD_RUN_SERVICE }}
-          IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/smolyanklima:${{ github.sha }}
+          IMAGE: gcr.io/${{ env.PROJECT_ID }}/smolyanklima:${{ github.sha }}
           ORIGIN: ${{ secrets.PROD_FRONTEND_ORIGIN }}
           NOTIFY_TO: ${{ secrets.PROD_NOTIFY_EMAIL_TO }}
           NOTIFY_FROM: ${{ secrets.PROD_NOTIFY_EMAIL_FROM }}
@@ -74,5 +80,4 @@ jobs:
             --set-secrets "SUPABASE_ANON_KEY=${{ secrets.SECRET_SUPABASE_ANON_KEY }}:latest" \
             --set-secrets "SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SECRET_SUPABASE_SERVICE_ROLE_KEY }}:latest" \
             --set-secrets "GEMINI_API_KEY=${{ secrets.SECRET_GEMINI_API_KEY }}:latest" \
-            --set-secrets "CLOUDINARY_URL=${{ secrets.SECRET_CLOUDINARY_URL }}:latest" \
-            --set-secrets "RESEND_API_KEY=${{ secrets.SECRET_RESEND_API_KEY }}:latest"
+            --set-secrets "CLOUDINARY_URL=${{ secrets.SECRET_CLOUDINARY_URL }}:latest"

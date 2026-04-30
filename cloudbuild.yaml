@@ -1,59 +1,72 @@
-# Trigger → User-defined substitutions: задайте _PUBLIC_URL = https://ВАШАТА-услуга.run.app (без / накрая).
+##############################################################
+# cloudbuild.yaml — SmolyanKlima | GitHub → Cloud Run
+#
+# Модел като STAIPOAI (GCR, COMMIT_SHA, push --all-tags, images, options):
+#   https://github.com/Jhoseto/STAIPOAI/blob/master/cloudbuild.yaml
+#
+# Разлика: един Cloud Run service (root Dockerfile: Next + Vite SPA).
+# Runtime тайни през Secret Manager (--set-secrets), не в substitution текста.
+#
+# Trigger (Cloud Build → Triggers → Substitution variables):
+#   _PUBLIC_URL = https://ТВОЯ-СЕРВИС....run.app  (без / накрая)
+#   при нужда: _REGION, _SERVICE
+#
+# Secret Manager (задължителни за deploy): SUPABASE_*, GEMINI_API_KEY, CLOUDINARY_URL
+# Опционално за email: създай secret RESEND_API_KEY и добави ръчно в Cloud Run или разшири този файл с --set-secrets.
+##############################################################
+
 substitutions:
-  _REGION: europe-west1
-  _AR_REPO: apps
+  # ЗАДЪЛЖИТЕЛНО: същият регион като Cloud Run услугата (от конзолата или тригера).
+  _REGION: europe-west3
   _SERVICE: smolyanklima
-  _PUBLIC_URL: "https://YOUR-SERVICE-XXXX.europe-west1.run.app"
+  _PUBLIC_URL: "https://REPLACE-WITH-YOUR-SERVICE-URL.europe-west3.run.app"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  env:
+    - "DOCKER_BUILDKIT=1"
+  machineType: E2_HIGHCPU_8
+
+timeout: 2400s
 
 steps:
   - name: gcr.io/cloud-builders/docker
+    id: build-image
     args:
-      [
-        "build",
-        "-t",
-        "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/smolyanklima:${SHORT_SHA}",
-        ".",
-      ]
+      - build
+      - -t
+      - gcr.io/$PROJECT_ID/$_SERVICE:$COMMIT_SHA
+      - -t
+      - gcr.io/$PROJECT_ID/$_SERVICE:latest
+      - .
 
   - name: gcr.io/cloud-builders/docker
+    id: push-image
+    waitFor:
+      - build-image
     args:
-      [
-        "push",
-        "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/smolyanklima:${SHORT_SHA}",
-      ]
+      - push
+      - --all-tags
+      - gcr.io/$PROJECT_ID/$_SERVICE
 
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy-run
+    waitFor:
+      - push-image
     entrypoint: gcloud
     args:
-      [
-        "run",
-        "deploy",
-        "${_SERVICE}",
-        "--image",
-        "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/smolyanklima:${SHORT_SHA}",
-        "--region",
-        "${_REGION}",
-        "--platform",
-        "managed",
-        "--allow-unauthenticated",
-        "--port",
-        "8080",
-        "--set-env-vars",
-        "NODE_ENV=production,FRONTEND_ORIGIN=${_PUBLIC_URL},APP_URL=${_PUBLIC_URL}",
-        "--set-secrets",
-        "SUPABASE_URL=SUPABASE_URL:latest",
-        "--set-secrets",
-        "SUPABASE_ANON_KEY=SUPABASE_ANON_KEY:latest",
-        "--set-secrets",
-        "SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest",
-        "--set-secrets",
-        "GEMINI_API_KEY=GEMINI_API_KEY:latest",
-        "--set-secrets",
-        "CLOUDINARY_URL=CLOUDINARY_URL:latest",
-        "--set-secrets",
-        "RESEND_API_KEY=RESEND_API_KEY:latest",
-      ]
+      - run
+      - deploy
+      - $_SERVICE
+      - --image=gcr.io/$PROJECT_ID/$_SERVICE:$COMMIT_SHA
+      - --region=$_REGION
+      - --platform=managed
+      - --allow-unauthenticated
+      - --port=8080
+      - --quiet
+      - --set-env-vars=NODE_ENV=production,FRONTEND_ORIGIN=$_PUBLIC_URL,APP_URL=$_PUBLIC_URL
+      - --set-secrets=SUPABASE_URL=SUPABASE_URL:latest,SUPABASE_ANON_KEY=SUPABASE_ANON_KEY:latest,SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest,GEMINI_API_KEY=GEMINI_API_KEY:latest,CLOUDINARY_URL=CLOUDINARY_URL:latest
 
 images:
-  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/smolyanklima:${SHORT_SHA}"
-
+  - gcr.io/$PROJECT_ID/$_SERVICE:$COMMIT_SHA
+  - gcr.io/$PROJECT_ID/$_SERVICE:latest
