@@ -1,6 +1,13 @@
+# Unified Cloud Run deploy: един контейнер = Vite SPA (static) + Next.js API/админ.
+# Локална разработка: frontend (Vite) :3000 с proxy на /api към Next.js :3001 — вижте vite.config.ts.
+#
+# Изисква GitHub Secrets (WIF + GCP). Име на услуга: CLOUD_RUN_SERVICE (напр. smolyanklima).
+# PROD_FRONTEND_ORIGIN = публичният HTTPS URL на същата Cloud Run услуга (без trailing slash).
+
 name: Deploy (Cloud Run)
 
 on:
+  workflow_dispatch:
   push:
     branches: [main, master]
 
@@ -37,59 +44,35 @@ jobs:
       - name: Configure Docker auth
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 
-      # ─────────────────────────────────────────────
-      # Backend
-      # ─────────────────────────────────────────────
-      - name: Build & push backend image
+      - name: Build & push unified image
         env:
-          IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/smolyanklima-backend:${{ github.sha }}
+          IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/smolyanklima:${{ github.sha }}
         run: |
-          docker build -f backend/Dockerfile -t "$IMAGE" backend
+          docker build -t "$IMAGE" .
           docker push "$IMAGE"
 
-      - name: Deploy backend to Cloud Run
+      - name: Deploy to Cloud Run (unified)
         env:
-          SERVICE: ${{ secrets.CLOUD_RUN_BACKEND_SERVICE }}
-          IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/smolyanklima-backend:${{ github.sha }}
+          SERVICE: ${{ secrets.CLOUD_RUN_SERVICE }}
+          IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/smolyanklima:${{ github.sha }}
+          ORIGIN: ${{ secrets.PROD_FRONTEND_ORIGIN }}
+          NOTIFY_TO: ${{ secrets.PROD_NOTIFY_EMAIL_TO }}
+          NOTIFY_FROM: ${{ secrets.PROD_NOTIFY_EMAIL_FROM }}
         run: |
-          gcloud run deploy "$SERVICE" \
-            --image "$IMAGE" \
-            --region "${{ env.REGION }}" \
-            --platform managed \
-            --allow-unauthenticated \
-            --port 3001 \
-            --set-env-vars "NODE_ENV=production" \
-            --set-env-vars "FRONTEND_ORIGIN=${{ secrets.PROD_FRONTEND_ORIGIN }}" \
-            --set-env-vars "APP_URL=${{ secrets.PROD_BACKEND_ORIGIN }}" \
-            --set-secrets "SUPABASE_URL=${{ secrets.SECRET_SUPABASE_URL }}:latest" \
-            --set-secrets "SUPABASE_ANON_KEY=${{ secrets.SECRET_SUPABASE_ANON_KEY }}:latest" \
-            --set-secrets "SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SECRET_SUPABASE_SERVICE_ROLE_KEY }}:latest" \
-            --set-secrets "GEMINI_API_KEY=${{ secrets.SECRET_GEMINI_API_KEY }}:latest" \
-            --set-secrets "CLOUDINARY_URL=${{ secrets.SECRET_CLOUDINARY_URL }}:latest" \
-            --set-secrets "RESEND_API_KEY=${{ secrets.SECRET_RESEND_API_KEY }}:latest" \
-            --set-env-vars "NOTIFY_EMAIL_TO=${{ secrets.PROD_NOTIFY_EMAIL_TO }}" \
-            --set-env-vars "NOTIFY_EMAIL_FROM=${{ secrets.PROD_NOTIFY_EMAIL_FROM }}"
-
-      # ─────────────────────────────────────────────
-      # Frontend
-      # ─────────────────────────────────────────────
-      - name: Build & push frontend image
-        env:
-          IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/smolyanklima-frontend:${{ github.sha }}
-        run: |
-          docker build -f frontend/Dockerfile -t "$IMAGE" .
-          docker push "$IMAGE"
-
-      - name: Deploy frontend to Cloud Run
-        env:
-          SERVICE: ${{ secrets.CLOUD_RUN_FRONTEND_SERVICE }}
-          IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/smolyanklima-frontend:${{ github.sha }}
-        run: |
+          set -euo pipefail
+          ENV_VARS="NODE_ENV=production,FRONTEND_ORIGIN=${ORIGIN},APP_URL=${ORIGIN}"
+          if [ -n "${NOTIFY_TO:-}" ]; then ENV_VARS="${ENV_VARS},NOTIFY_EMAIL_TO=${NOTIFY_TO}"; fi
+          if [ -n "${NOTIFY_FROM:-}" ]; then ENV_VARS="${ENV_VARS},NOTIFY_EMAIL_FROM=${NOTIFY_FROM}"; fi
           gcloud run deploy "$SERVICE" \
             --image "$IMAGE" \
             --region "${{ env.REGION }}" \
             --platform managed \
             --allow-unauthenticated \
             --port 8080 \
-            --set-env-vars "NODE_ENV=production"
-
+            --set-env-vars "$ENV_VARS" \
+            --set-secrets "SUPABASE_URL=${{ secrets.SECRET_SUPABASE_URL }}:latest" \
+            --set-secrets "SUPABASE_ANON_KEY=${{ secrets.SECRET_SUPABASE_ANON_KEY }}:latest" \
+            --set-secrets "SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SECRET_SUPABASE_SERVICE_ROLE_KEY }}:latest" \
+            --set-secrets "GEMINI_API_KEY=${{ secrets.SECRET_GEMINI_API_KEY }}:latest" \
+            --set-secrets "CLOUDINARY_URL=${{ secrets.SECRET_CLOUDINARY_URL }}:latest" \
+            --set-secrets "RESEND_API_KEY=${{ secrets.SECRET_RESEND_API_KEY }}:latest"

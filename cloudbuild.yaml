@@ -1,7 +1,9 @@
+# Trigger → User-defined substitutions: задайте _PUBLIC_URL = https://ВАШАТА-услуга.run.app (без / накрая).
 substitutions:
   _REGION: europe-west1
   _AR_REPO: apps
   _SERVICE: smolyanklima
+  _PUBLIC_URL: "https://YOUR-SERVICE-XXXX.europe-west1.run.app"
 
 steps:
   - name: gcr.io/cloud-builders/docker
@@ -37,7 +39,7 @@ steps:
         "--port",
         "8080",
         "--set-env-vars",
-        "NODE_ENV=production",
+        "NODE_ENV=production,FRONTEND_ORIGIN=${_PUBLIC_URL},APP_URL=${_PUBLIC_URL}",
         "--set-secrets",
         "SUPABASE_URL=SUPABASE_URL:latest",
         "--set-secrets",

@@ -1,58 +1,43 @@
-## Cloud Run deploy (автоматично през Cloud Build)
+## Production: Google Cloud Run (препоръчан модел)
 
-### Вариант (препоръчан за “1 услуга”)
-Този проект може да deploy-ва **една Cloud Run услуга** (един контейнер):
-- `nginx` сервира Vite SPA (порт `8080`)
-- `nginx` проксира `/api`, `/admin`, `/login`, `/_next` към Next.js backend (вътрешно на `3001`)
+Един **Cloud Run service**, един **Docker image** от **repo root `Dockerfile`**:
 
-Файлове:
-- `Dockerfile` (repo root) — unified image
-- `deploy/nginx-unified.conf`
-- `cloudbuild.yaml` (по избор, ако искаш 1 trigger с build config вместо “Dockerfile” режим)
+- Next.js (standalone) слуша `$PORT` (Cloud Run подава **8080**).
+- Vite build се копира в `public/`; `backend/next.config.mjs` пренасочва „клиентски“ пътища към `/index.html` (SPA), а `/api/*`, `/admin/*`, `/login` остават за Next.js.
+- Локално: Vite (`npm run dev` в root) проксира `/api` към Next на **3001** (`vite.config.ts`); това **не се използва** в контейнера.
 
-### 1) One-time setup в Google Cloud
+### Защо автоматичният deploy „не работи“
 
-#### 1.1 Artifact Registry repo
-Създай Docker repo (пример: `apps`):
+Има **два независими** механизма; объркват се лесно:
 
-```bash
-gcloud artifacts repositories create apps \
-  --repository-format=docker \
-  --location=europe-west1
-```
+1. **Cloud Build trigger** (GitHub → Cloud Build) — ако в конзолата виждаш *„Failed to list branches“* / *„Couldn’t read commit“*, връзката **Google Cloud Build ↔ GitHub app** е счупена. Трябва reconnect на repository (Cloud Build → Repositories) или настройка на GitHub App permissions. Без това trigger **никога** няма да стартира build.
+2. **GitHub Actions** — `.github/workflows/deploy-cloud-run.yml` деплойва директно през WIF **без** Cloud Build GitHub connector. Ако липсват secrets или WIF е грешен, workflow пада; провери **Actions** таб в GitHub.
 
-#### 1.2 Cloud Build permissions (задължително)
-Cloud Build service account трябва да има роли:
-- Artifact Registry Writer
-- Cloud Run Admin
-- Secret Manager Secret Accessor
-- Service Account User
-- Cloud Build Builds Editor
+**Не ползвай едновременно** два различни модела за един и същ сайт (един път unified image, друг път отделен frontend nginx + отделен backend), освен ако наистина знаеш какво правиш.
 
-### 2) Cloud Run service
-Създай една услуга (пример): `smolyanklima`
+### Грешка: отделен frontend (nginx) + отделен backend
 
-### 3) Secret Manager secrets (production)
+`frontend/nginx.conf` **няма** `proxy_pass` към `/api`. SPA-то вика `fetch("/api/...")` — на чист nginx това **не стига** до Next.js. Затова в production ползвай **само root `Dockerfile`**, или добави изричен reverse proxy (извън scope на текущия препоръчан setup).
 
-Създай secrets (имената по-долу трябва да съвпадат със secrets в GitHub):
-- `SUPABASE_URL`
-- `SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `GEMINI_API_KEY`
-- `CLOUDINARY_URL` (ако ползваш upload)
-- `RESEND_API_KEY` (ако ползваш email)
+### Cloud Build (`cloudbuild.yaml`)
 
-### 4) Runtime env vars (Cloud Run)
-Задължително:
-- `FRONTEND_ORIGIN` (домейнът на сайта; за CORS)
-- `APP_URL` (публичният URL на услугата; за email линкове)
+- Задай **`_PUBLIC_URL`** = точният HTTPS URL на услугата (без `/` накрая), напр. в trigger → **Substitutions**. Иначе CORS/`getEnv()` ще са с грешен `FRONTEND_ORIGIN` / `APP_URL`.
+- Secret Manager: имената трябва да съвпадат с `--set-secrets` в `cloudbuild.yaml`.
 
-Optional:
-- `NOTIFY_EMAIL_TO`
-- `NOTIFY_EMAIL_FROM`
+### GitHub Actions (unified)
 
-### 5) Local dev остава непроменен
-- `./restart.bat` стартира:
-  - frontend: `http://localhost:3000`
-  - backend: `http://localhost:3001`
+Задължителни secrets (минимум):
 
+- `GCP_PROJECT_ID`, `GCP_REGION`, `GCP_ARTIFACT_REPO`
+- `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_SERVICE_ACCOUNT`
+- `CLOUD_RUN_SERVICE` — име на Cloud Run service (напр. `smolyanklima`)
+- `PROD_FRONTEND_ORIGIN` — **същият** URL като публичния на услугата (HTTPS, без trailing slash)
+- `SECRET_SUPABASE_URL`, `SECRET_SUPABASE_ANON_KEY`, `SECRET_SUPABASE_SERVICE_ROLE_KEY` (+ останалите secret refs както в workflow)
+- По желание: `PROD_NOTIFY_EMAIL_TO`, `PROD_NOTIFY_EMAIL_FROM`
+
+След push към `main` / `master` (или **Run workflow** ръчно): build на root `Dockerfile`, push към Artifact Registry, `gcloud run deploy` с `--port 8080`.
+
+### Проверка след deploy
+
+- `GET /api/health` → JSON `ok: true`
+- Началната страница е SPA, не Next.js starter (няма `backend/app/page.tsx` за `/`)
