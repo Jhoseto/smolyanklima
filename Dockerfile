@@ -36,7 +36,6 @@ RUN npm run build
 FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-ENV PORT=3001
 ENV HOSTNAME=0.0.0.0
 
 RUN apk add --no-cache nginx && \
@@ -58,5 +57,6 @@ COPY --from=backend_builder --chown=nextjs:nodejs /app/.next/static ./.next/stat
 EXPOSE 8080
 
 # Start backend + nginx (one container)
-CMD ["sh", "-c", "node /app/server.js & nginx -g 'daemon off;'"]
+# Cloud Run sets PORT=8080 for the container. We keep nginx on 8080 and force Next backend to 3001.
+CMD ["sh", "-c", "PORT=3001 node /app/server.js & nginx -g 'daemon off;'"]
 
