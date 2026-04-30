@@ -1,10 +1,14 @@
-## Cloud Run deploy (автоматично през GitHub)
+## Cloud Run deploy (автоматично през Cloud Build)
 
-Този проект deploy-ва **две Cloud Run услуги**:
-- **backend**: Next.js (Admin + Public API) на порт `3001`
-- **frontend**: Vite SPA, сервирана статично от `nginx` на порт `8080`
+### Вариант (препоръчан за “1 услуга”)
+Този проект може да deploy-ва **една Cloud Run услуга** (един контейнер):
+- `nginx` сервира Vite SPA (порт `8080`)
+- `nginx` проксира `/api`, `/admin`, `/login`, `/_next` към Next.js backend (вътрешно на `3001`)
 
-Deploy workflow: `.github/workflows/deploy-cloud-run.yml` (trigger: push към `main/master`).
+Файлове:
+- `Dockerfile` (repo root) — unified image
+- `deploy/nginx-unified.conf`
+- `cloudbuild.yaml` (по избор, ако искаш 1 trigger с build config вместо “Dockerfile” режим)
 
 ### 1) One-time setup в Google Cloud
 
@@ -17,28 +21,16 @@ gcloud artifacts repositories create apps \
   --location=europe-west1
 ```
 
-#### 1.2 Workload Identity Federation (GitHub → GCP)
-Препоръчан подход: Workload Identity Federation + service account.
+#### 1.2 Cloud Build permissions (задължително)
+Cloud Build service account трябва да има роли:
+- Artifact Registry Writer
+- Cloud Run Admin
+- Secret Manager Secret Accessor
+- Service Account User
+- Cloud Build Builds Editor
 
-Създай service account (пример):
-
-```bash
-gcloud iam service-accounts create gha-deployer
-```
-
-Дай роли (минимално):
-- `roles/run.admin`
-- `roles/artifactregistry.writer`
-- `roles/iam.serviceAccountUser`
-- `roles/secretmanager.secretAccessor`
-
-След това създай WIF pool/provider за GitHub и ограничи по repo/branch.
-
-### 2) Cloud Run services
-
-Създай/избери имена (пример):
-- backend: `smolyanklima-backend`
-- frontend: `smolyanklima-frontend`
+### 2) Cloud Run service
+Създай една услуга (пример): `smolyanklima`
 
 ### 3) Secret Manager secrets (production)
 
@@ -50,34 +42,14 @@ gcloud iam service-accounts create gha-deployer
 - `CLOUDINARY_URL` (ако ползваш upload)
 - `RESEND_API_KEY` (ако ползваш email)
 
-### 4) GitHub repo secrets (нужни за workflow-а)
+### 4) Runtime env vars (Cloud Run)
+Задължително:
+- `FRONTEND_ORIGIN` (домейнът на сайта; за CORS)
+- `APP_URL` (публичният URL на услугата; за email линкове)
 
-**GCP:**
-- `GCP_PROJECT_ID`
-- `GCP_REGION` (пример: `europe-west1`)
-- `GCP_ARTIFACT_REPO` (пример: `apps`)
-- `GCP_WORKLOAD_IDENTITY_PROVIDER` (full resource name)
-- `GCP_SERVICE_ACCOUNT` (email на service account)
-
-**Cloud Run service names:**
-- `CLOUD_RUN_BACKEND_SERVICE`
-- `CLOUD_RUN_FRONTEND_SERVICE`
-
-**Production origins:**
-- `PROD_FRONTEND_ORIGIN` (пример: `https://www.smolyanklima.bg`)
-- `PROD_BACKEND_ORIGIN` (пример: `https://api.smolyanklima.bg` или Cloud Run URL)
-
-**Secret references** (по избор можеш да ги държиш като константи; тук са secrets за гъвкавост):
-- `SECRET_SUPABASE_URL` (например `SUPABASE_URL`)
-- `SECRET_SUPABASE_ANON_KEY`
-- `SECRET_SUPABASE_SERVICE_ROLE_KEY`
-- `SECRET_GEMINI_API_KEY`
-- `SECRET_CLOUDINARY_URL` (ако няма — остави празно и махни реда от workflow)
-- `SECRET_RESEND_API_KEY` (ако няма — остави празно и махни реда от workflow)
-
-**Email (optional):**
-- `PROD_NOTIFY_EMAIL_TO`
-- `PROD_NOTIFY_EMAIL_FROM`
+Optional:
+- `NOTIFY_EMAIL_TO`
+- `NOTIFY_EMAIL_FROM`
 
 ### 5) Local dev остава непроменен
 - `./restart.bat` стартира:
