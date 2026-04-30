@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import React, { useMemo, useEffect, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { 
   BlogHeroSection, 
   ArticleCard, 
@@ -9,18 +9,17 @@ import {
   SEOMetaTags,
   SchemaMarkup
 } from '../components/blog';
-import { 
-  getLatestArticles, 
-  getFeaturedArticles, 
-  searchArticles,
-  getArticlesByCategory,
-  getCategoryBySlug
-} from '../data/blog';
+import { getCategoryBySlug } from '../data/blog';
+import { fetchArticles } from '../data/blogService';
+import type { Article } from '../data/blog/types';
 
 export default function BlogHomePage() {
   const navigate = useNavigate();
   const { slug } = useParams<{ slug?: string }>();
+  const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
+  const [articles, setArticles] = useState<Article[]>([]);
+  const [loading, setLoading] = useState(true);
 
   // Scroll to top on mount
   useEffect(() => {
@@ -29,29 +28,50 @@ export default function BlogHomePage() {
   
   // Check if we're on a category page
   const isCategoryPage = window.location.pathname.includes('/kategoria/');
+  const isTagPage = window.location.pathname.includes('/tag/');
+  const isSearchPage = window.location.pathname.includes('/tursi');
   const categorySlug = isCategoryPage ? slug : undefined;
   const category = categorySlug ? getCategoryBySlug(categorySlug) : null;
   
-  // Filter articles by category if on category page
-  const filteredArticles = useMemo(() => {
-    if (categorySlug) {
-      return getArticlesByCategory(categorySlug);
-    }
-    return getLatestArticles(9);
-  }, [categorySlug]);
-  
-  const featuredArticles = !categorySlug ? getFeaturedArticles(1) : [];
-  const featuredArticle = featuredArticles[0];
+  const tagSlug = isTagPage ? slug : undefined;
+  const q = isSearchPage ? (searchParams.get('q') || '').trim() : '';
+
+  useEffect(() => {
+    const run = async () => {
+      try {
+        setLoading(true);
+        const res = await fetchArticles({
+          page: 1,
+          perPage: 50,
+          q: q || undefined,
+          category: categorySlug || undefined,
+        });
+        let data = res.data;
+        if (tagSlug) {
+          data = data.filter(a =>
+            (a.tags ?? []).some(t => t.toLowerCase().replace(/\s+/g, '-') === tagSlug.toLowerCase())
+          );
+        }
+        setArticles(data);
+      } finally {
+        setLoading(false);
+      }
+    };
+    void run();
+  }, [categorySlug, tagSlug, q]);
+
+  const featuredArticle = useMemo(() => {
+    if (categorySlug || tagSlug || q) return undefined;
+    return articles.find(a => a.featured) ?? articles[0];
+  }, [articles, categorySlug, tagSlug, q]);
+
   const regularArticles = featuredArticle 
-    ? filteredArticles.filter(a => a.id !== featuredArticle.id).slice(0, 6)
-    : filteredArticles.slice(0, 9);
+    ? articles.filter(a => a.id !== featuredArticle.id).slice(0, 6)
+    : articles.slice(0, 9);
 
   const handleSearchSubmit = () => {
     if (searchQuery.trim()) {
-      const results = searchArticles(searchQuery);
-      if (results.length > 0) {
-        navigate(`/blog/tursi?q=${encodeURIComponent(searchQuery)}`);
-      }
+      navigate(`/blog/tursi?q=${encodeURIComponent(searchQuery)}`);
     }
   };
 
@@ -111,7 +131,13 @@ export default function BlogHomePage() {
             <section>
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold text-gray-900">
-                  {categorySlug ? `Статии в "${category?.name}"` : 'Последни публикации'}
+                  {categorySlug
+                    ? `Статии в "${category?.name}"`
+                    : tagSlug
+                      ? 'Статии по таг'
+                      : q
+                        ? 'Резултати от търсене'
+                        : 'Последни публикации'}
                 </h2>
                 <a 
                   href="/blog" 
@@ -122,14 +148,23 @@ export default function BlogHomePage() {
               </div>
               
               <div className="grid sm:grid-cols-2 gap-6">
-                {regularArticles.map((article, index) => (
+                {loading ? (
+                  <>
+                    <div className="h-56 bg-white rounded-2xl border border-gray-100 animate-pulse" />
+                    <div className="h-56 bg-white rounded-2xl border border-gray-100 animate-pulse" />
+                    <div className="h-56 bg-white rounded-2xl border border-gray-100 animate-pulse" />
+                    <div className="h-56 bg-white rounded-2xl border border-gray-100 animate-pulse" />
+                  </>
+                ) : (
+                  regularArticles.map((article, index) => (
                   <ArticleCard 
                     key={article.id} 
                     article={article} 
                     variant="standard"
                     index={index}
                   />
-                ))}
+                  ))
+                )}
               </div>
             </section>
           </div>

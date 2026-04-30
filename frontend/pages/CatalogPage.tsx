@@ -19,8 +19,6 @@ import { useScroll, useSpring } from 'motion/react';
 
 import {
   getAllProducts,
-  getFilteredProducts,
-  getPriceRange,
   CATEGORIES,
 } from '../data/productService';
 import type { CatalogProduct, SortOption } from '../data/types/product';
@@ -129,8 +127,9 @@ const SkeletonCard = () => (
 // MAIN CATALOG PAGE
 // ─────────────────────────────────────────
 const CatalogPage = () => {
-  const allProducts = useMemo(() => getAllProducts(), []);
-  const { min: priceMin, max: priceMax } = useMemo(() => getPriceRange(), []);
+  const [allProducts, setAllProducts] = useState<CatalogProduct[]>([]);
+  const [priceMin, setPriceMin] = useState(0);
+  const [priceMax, setPriceMax] = useState(0);
 
   // ── State ────────────────────────────────
   const [searchParams, setSearchParams] = useSearchParams();
@@ -156,6 +155,27 @@ const CatalogPage = () => {
   const { toasts, addToast, dismissToast } = useToasts();
   const { isFavorite, toggle: toggleFavorite } = useFavorites();
   const { viewedIds, addViewed } = useRecentlyViewed();
+
+  // ── Load products from backend (DB) ──────
+  useEffect(() => {
+    (async () => {
+      const all = await getAllProducts();
+      setAllProducts(all);
+      const prices = all.map(p => p.price);
+      const min = prices.length ? Math.min(...prices) : 0;
+      const max = prices.length ? Math.max(...prices) : 0;
+      setPriceMin(min);
+      setPriceMax(max);
+      setPriceRange((prev) => {
+        // ако още сме със стартовите 0/0 – синхронизираме
+        if (prev[0] === 0 && prev[1] === 0) return [min, max];
+        return prev;
+      });
+    })().catch(() => {
+      // ignore, UI already has error/empty states
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Sync to URL ──────────────────────────
   useEffect(() => {
@@ -201,7 +221,7 @@ const CatalogPage = () => {
     const catMeta = CATEGORIES.find(c => c.id === category);
     const types = catMeta && catMeta.types.length > 0 ? catMeta.types : [];
 
-    return getFilteredProducts({
+    return filterProductsLocal(allProducts, {
       search: debouncedSearch,
       brands,
       types,
@@ -211,7 +231,83 @@ const CatalogPage = () => {
       priceMax: priceRange[1],
       sortBy,
     });
-  }, [debouncedSearch, category, brands, energyClasses, features, priceRange, sortBy]);
+  }, [allProducts, debouncedSearch, category, brands, energyClasses, features, priceRange, sortBy]);
+
+function filterProductsLocal(products: CatalogProduct[], filters: Partial<import('../data/types/product').CatalogFilters>): CatalogProduct[] {
+  let result = [...products];
+
+  // Search
+  if (filters.search && filters.search.trim()) {
+    const q = filters.search.toLowerCase().trim();
+    result = result.filter(p =>
+      p.name.toLowerCase().includes(q) ||
+      p.brand.toLowerCase().includes(q) ||
+      (p.type ?? '').toLowerCase().includes(q) ||
+      (p.description ?? '').toLowerCase().includes(q)
+    );
+  }
+
+  // Brands
+  if (filters.brands && filters.brands.length > 0) {
+    result = result.filter(p =>
+      filters.brands!.some(b => p.brand.toLowerCase().includes(b.toLowerCase()))
+    );
+  }
+
+  // Types
+  if (filters.types && filters.types.length > 0) {
+    result = result.filter(p => filters.types!.includes(p.type));
+  }
+
+  // Energy classes
+  if (filters.energyClasses && filters.energyClasses.length > 0) {
+    result = result.filter(p => filters.energyClasses!.includes(p.energyClass));
+  }
+
+  // Features
+  if (filters.features && filters.features.length > 0) {
+    result = result.filter(p =>
+      filters.features!.every(f =>
+        p.features.some(pf => pf.toLowerCase().includes(f.toLowerCase()))
+      )
+    );
+  }
+
+  // Price range
+  if (filters.priceMin !== undefined) {
+    result = result.filter(p => p.price >= filters.priceMin!);
+  }
+  if (filters.priceMax !== undefined) {
+    result = result.filter(p => p.price <= filters.priceMax!);
+  }
+
+  // Sort
+  switch (filters.sortBy) {
+    case 'price-asc':
+      result.sort((a, b) => a.price - b.price);
+      break;
+    case 'price-desc':
+      result.sort((a, b) => b.price - a.price);
+      break;
+    case 'energy-class':
+      result.sort((a, b) => a.energyClass.localeCompare(b.energyClass));
+      break;
+    case 'noise-asc':
+      result.sort((a, b) => {
+        const noiseA = parseInt(a.noise ?? '99');
+        const noiseB = parseInt(b.noise ?? '99');
+        return noiseA - noiseB;
+      });
+      break;
+    case 'rating-desc':
+      result.sort((a, b) => b.rating - a.rating);
+      break;
+    default:
+      break;
+  }
+
+  return result;
+}
 
   // ── Category counts ──────────────────────
   const categoryCounts = useMemo(() => {

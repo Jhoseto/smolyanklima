@@ -33,7 +33,14 @@ export function useRecentlyViewed() {
 export const RecentlyViewed = ({ viewedIds, onQuickView }: { viewedIds: string[], onQuickView: (p: CatalogProduct) => void }) => {
   if (viewedIds.length === 0) return null;
 
-  const products = viewedIds.map(id => getProductById(id)).filter(Boolean) as CatalogProduct[];
+  const [products, setProducts] = useState<CatalogProduct[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      const loaded = await Promise.all(viewedIds.map(id => getProductById(id)));
+      setProducts(loaded.filter(Boolean) as CatalogProduct[]);
+    })().catch(() => setProducts([]));
+  }, [viewedIds]);
 
   if (products.length === 0) return null;
 

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { ArrowLeft, Star, Phone, ShieldCheck, Clock, Check, Zap, Volume2, Wind } from 'lucide-react';
-import { getAllProducts } from '../data/productService';
+import { getAllProducts, getProductById } from '../data/productService';
 import type { CatalogProduct } from '../data/types/product';
 import { ProductCard } from '../components/catalog/ProductCard';
 
@@ -19,16 +19,15 @@ export default function ProductDetailsPage() {
 
     const fetchProduct = async () => {
       setLoading(true);
-      // Симулираме мрежово забавяне
-      await new Promise(r => setTimeout(r, 500)); 
-      const allProducts = getAllProducts();
-      const found = allProducts.find(p => p.id === id);
+      // Реално зареждане от backend (база)
+      const found = id ? await getProductById(id) : undefined;
       
       if (found) {
         setProduct(found);
-        // Взимаме 3 подобни продукта от същата категория (различни от текущия)
+        // Взимаме 3 подобни продукта от същия тип (различни от текущия)
+        const allProducts = await getAllProducts();
         const relatedProds = allProducts
-          .filter(p => p.category === found.category && p.id !== found.id)
+          .filter(p => p.type === found.type && p.id !== found.id)
           .slice(0, 3);
         setRelated(relatedProds);
       }
@@ -232,9 +231,14 @@ export default function ProductDetailsPage() {
         <div className="mb-16">
           <h2 className="text-2xl font-black text-gray-900 mb-6">Включено в комплекта</h2>
           <div className="flex flex-wrap gap-3">
-            {['Вътрешен блок (рамка)', 'Външен блок', 'Дистанционно', `${product.warranty || '3 г. гаранция'}`].map((item, i) => (
-              <div key={i} className="flex items-center gap-2 bg-green-50 border border-green-100 text-green-800 rounded-full px-4 py-2 text-sm font-semibold">
-                <Check className="w-4 h-4 text-green-500" strokeWidth={3} /> {item}
+            {(isAccessoryLike(product) ? buildIncludedForAccessory(product) : buildIncludedForAc(product)).map((item, i) => (
+              <div
+                key={i}
+                className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold border ${
+                  item.included ? "bg-green-50 border-green-100 text-green-800" : "bg-gray-50 border-gray-200 text-gray-500"
+                }`}
+              >
+                <Check className={`w-4 h-4 ${item.included ? "text-green-500" : "text-gray-300"}`} strokeWidth={3} /> {item.label}
               </div>
             ))}
           </div>
@@ -264,4 +268,36 @@ export default function ProductDetailsPage() {
 
     </div>
   );
+}
+
+function isAccessoryLike(p: CatalogProduct) {
+  const t = (p.type ?? "").toLowerCase();
+  const n = (p.name ?? "").toLowerCase();
+  return (
+    t.includes("аксес") ||
+    t.includes("резерв") ||
+    n.includes("филтър") ||
+    n.includes("filter") ||
+    n.includes("помпа") ||
+    n.includes("drain")
+  );
+}
+
+function buildIncludedForAc(p: CatalogProduct): Array<{ label: string; included: boolean }> {
+  return [
+    { label: "Вътрешен блок (рамка)", included: true },
+    { label: "Външен блок", included: true },
+    { label: "Дистанционно", included: true },
+    { label: `Гаранция: ${p.warranty || "3 г. гаранция"}`, included: true },
+  ];
+}
+
+function buildIncludedForAccessory(p: CatalogProduct): Array<{ label: string; included: boolean }> {
+  // За аксесоари не показваме подвеждащо "външен/вътрешен блок".
+  const hasWarranty = Boolean(p.warranty);
+  return [
+    { label: "Самият аксесоар", included: true },
+    { label: "Инструкция/описание", included: true },
+    { label: hasWarranty ? `Гаранция: ${p.warranty}` : "Гаранция", included: hasWarranty },
+  ];
 }

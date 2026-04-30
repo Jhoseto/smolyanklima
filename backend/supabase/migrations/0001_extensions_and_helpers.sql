@@ -1,0 +1,17 @@
+-- 0001_extensions_and_helpers.sql
+-- Extensions + helper functions used by later migrations.
+
+create extension if not exists pgcrypto;
+create extension if not exists citext;
+create extension if not exists pg_trgm;
+
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+

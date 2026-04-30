@@ -24,6 +24,7 @@
     "noEmit": true
   },
   "exclude": [
-    "frontend/components/ai-assistant/__tests__/**"
+    "frontend/components/ai-assistant/__tests__/**",
+    "backend/**"
   ]
 }

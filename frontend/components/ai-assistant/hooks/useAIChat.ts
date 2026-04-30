@@ -5,7 +5,6 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { getGeminiClient } from '../core/GeminiClient';
 import { promptBuilder } from '../core/PromptBuilder';
 import { skillRouter } from '../core/SkillRouter';
 import { emotionalIntelligence } from '../core/EmotionalIntelligence';
@@ -104,7 +103,6 @@ const PRODUCTS: Product[] = transformDbProducts();
 const MAX_USER_MESSAGE_CHARS = 1000;
 
 export interface UseAIChatOptions {
-  apiKey: string;
   userContext?: Partial<UserContext>;
 }
 
@@ -120,8 +118,6 @@ export interface UseAIChatReturn {
 }
 
 export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
-  const { apiKey } = options;
-  
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -129,7 +125,6 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
   const [suggestedProducts, setSuggestedProducts] = useState<Product[]>([]);
   const [actions, setActions] = useState<AIAction[]>([]);
   
-  const geminiClient = useRef(getGeminiClient(apiKey));
   const hallucinationGuard = useRef(createHallucinationGuard(PRODUCTS));
   const messagesRef = useRef<Message[]>([]);
   const conversationRef = useRef<Conversation | null>(null);
@@ -239,10 +234,7 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
       });
 
       // Call Gemini API
-      const response = await geminiClient.current.sendMessage(
-        updatedMessages,
-        systemPrompt
-      );
+      const response = await callBackendAIChat(updatedMessages, systemPrompt);
 
       // Validate response with hallucination guard
       const validationResult = hallucinationGuard.current.validateResponse(response.content);
@@ -409,3 +401,25 @@ function extractProductsFromResponse(response: string, products: Product[]): Pro
 }
 
 export default useAIChat;
+
+async function callBackendAIChat(messages: Message[], systemPrompt?: string): Promise<{ content: string }> {
+  const res = await fetch('/api/ai/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      systemPrompt,
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const err: any = new Error('AI request failed');
+    err.code = res.status === 429 ? 'RATE_LIMIT_EXCEEDED' : `HTTP_${res.status}`;
+    err.details = body;
+    throw err;
+  }
+
+  const data = (await res.json()) as { content?: string };
+  return { content: data.content ?? '' };
+}

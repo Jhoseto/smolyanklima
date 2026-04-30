@@ -30,6 +30,8 @@ const ContactPage = lazy(() => import('./pages/ContactPage'));
 const ServicesPage = lazy(() => import('./pages/ServicesPage'));
 const BlogHomePage = lazy(() => import('./pages/BlogHomePage'));
 const BlogArticlePage = lazy(() => import('./pages/BlogArticlePage'));
+const AccessoriesPage = lazy(() => import('./pages/AccessoriesPage'));
+const AccessoryDetailsPage = lazy(() => import('./pages/AccessoryDetailsPage'));
 
 // ── Главна страница ──────────────────────────────────
 const HomePage = () => (
@@ -99,6 +101,8 @@ function App() {
           <Route path="/blog/tag/:slug" element={<PageTransition><BlogHomePage /></PageTransition>} />
           <Route path="/blog/tursi" element={<PageTransition><BlogHomePage /></PageTransition>} />
           <Route path="/blog/:slug" element={<PageTransition><BlogArticlePage /></PageTransition>} />
+          <Route path="/aksesoari" element={<PageTransition><AccessoriesPage /></PageTransition>} />
+          <Route path="/aksesoar/:id" element={<PageTransition><AccessoryDetailsPage /></PageTransition>} />
           <Route path="*" element={<PageTransition><HomePage /></PageTransition>} />
         </Routes>
       </AnimatePresence>
@@ -106,7 +110,6 @@ function App() {
       
       {/* AI Assistant - Global on all pages */}
       <AIChatWidget 
-        apiKey={import.meta.env.VITE_GEMINI_API_KEY || ''}
         position="bottom-right"
         primaryColor="#00B4D8"
         accentColor="#FF4D00"

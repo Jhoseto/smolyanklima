@@ -17,7 +17,6 @@ import { ProductCard } from './ProductCard';
 import { PrivacyConsent } from './PrivacyConsent';
 
 export interface AIChatWidgetProps {
-  apiKey: string;
   position?: 'bottom-right' | 'bottom-left' | 'bottom-center';
   primaryColor?: string;
   accentColor?: string;
@@ -38,7 +37,6 @@ const QUICK_REPLIES: QuickReply[] = [
 ];
 
 export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
-  apiKey,
   position = 'bottom-right',
   primaryColor = DEFAULT_COLORS.primary,
   accentColor = DEFAULT_COLORS.accent,
@@ -70,7 +68,7 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
     conversation,
     suggestedProducts,
     actions,
-  } = useAIChat({ apiKey });
+  } = useAIChat({});
 
   // Cross-tab synchronization
   const { syncState, lastSyncMessage } = useCrossTabSync({

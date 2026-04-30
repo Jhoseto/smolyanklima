@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Home, Layers, Building2, Wind, ArrowRight, CheckCircle2, RotateCcw } from 'lucide-react';
-import { getFilteredProducts } from '../../data/productService';
+import { getAllProducts } from '../../data/productService';
 import type { CatalogProduct } from '../../data/types/product';
 import { ProductCard } from './ProductCard';
 
@@ -57,7 +57,7 @@ export const GuidedBuyingWizard = ({ onQuickView, isFavorite, onFavoriteToggle, 
     }
   };
 
-  const generateRecommendations = (ans: Record<number, string>) => {
+  const generateRecommendations = async (ans: Record<number, string>) => {
     // Map area to BTU roughly
     let minPower = 0;
     let maxPower = 99999;
@@ -69,7 +69,7 @@ export const GuidedBuyingWizard = ({ onQuickView, isFavorite, onFavoriteToggle, 
     // We can't filter power perfectly yet because our dummy data doesn't have exact BTU in power prop,
     // but we can sort and slice.
     
-    let all = getFilteredProducts({});
+    let all = await getAllProducts();
     
     // Sort logic based on priority
     if (ans[2] === 'budget') {

@@ -3,22 +3,38 @@ import { useParams, Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Clock, Calendar, ChevronLeft, Share2, ImageIcon } from 'lucide-react';
 import { Breadcrumb, SchemaMarkup, SEOMetaTags, ArticleContent, RelatedArticles, SocialShare } from '../components/blog';
-import { getArticleBySlug, getAuthorBySlug, getCategoryBySlug, formatDate, articles } from '../data/blog';
+import { getAuthorBySlug, getCategoryBySlug, formatDate } from '../data/blog';
+import { fetchArticleBySlug, fetchArticles } from '../data/blogService';
+import type { Article } from '../data/blog/types';
 
 export default function BlogArticlePage() {
   const { slug } = useParams<{ slug: string }>();
+  const [article, setArticle] = React.useState<Article | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [allArticles, setAllArticles] = React.useState<Article[]>([]);
   
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [slug]);
 
-  const article = slug ? getArticleBySlug(slug) : undefined;
+  useEffect(() => {
+    const run = async () => {
+      setLoading(true);
+      const a = slug ? await fetchArticleBySlug(slug) : undefined;
+      setArticle(a ?? null);
+      const list = await fetchArticles({ page: 1, perPage: 50 });
+      setAllArticles(list.data);
+      setLoading(false);
+    };
+    void run();
+  }, [slug]);
+
   const author = article ? getAuthorBySlug(article.author) : undefined;
   const category = article ? getCategoryBySlug(article.category) : undefined;
   // Parse FAQs from article content for structured data
   const parseFAQs = () => {
     const faqs = [];
-    const lines = article.content.split('\n');
+    const lines = (article?.content ?? '').split('\n');
     let currentQuestion = null;
     
     for (const line of lines) {
@@ -34,6 +50,14 @@ export default function BlogArticlePage() {
   };
   
   const faqs = parseFAQs();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center">
+        <div className="w-12 h-12 rounded-full border-4 border-[#00B4D8]/20 border-t-[#00B4D8] animate-spin" />
+      </div>
+    );
+  }
 
   if (!article) {
     return (
@@ -243,7 +267,7 @@ export default function BlogArticlePage() {
             {/* Related Articles - Smart Component */}
             <RelatedArticles 
               currentArticle={article}
-              articles={articles}
+              articles={allArticles}
               maxCount={3}
             />
           </aside>

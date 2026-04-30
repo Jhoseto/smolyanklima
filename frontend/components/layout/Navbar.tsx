@@ -24,6 +24,7 @@ export const Navbar = () => {
   const navLinks = [
     { name: 'Начало', href: '/', isRouter: true },
     { name: 'Каталог', href: '/catalog', isRouter: true },
+    { name: 'Аксесоари', href: '/aksesoari', isRouter: true },
     { name: 'Блог', href: '/blog', isRouter: true },
     { name: 'Услуги', href: isHome ? '#services' : '/services', isRouter: !isHome },
     { name: 'Проекти', href: isHome ? '#projects' : '/#projects', isRouter: false },

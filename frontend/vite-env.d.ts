@@ -1,10 +1,8 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  readonly VITE_GEMINI_API_KEY: string
-  readonly VITE_ENABLE_AI_ASSISTANT: string
-  readonly VITE_AI_MAX_DAILY_REQUESTS: string
-  readonly VITE_AI_MAX_TOKENS: string
+  // Keep custom env typings empty intentionally:
+  // AI is server-side and does not use VITE_* variables.
 }
 
 interface ImportMeta {

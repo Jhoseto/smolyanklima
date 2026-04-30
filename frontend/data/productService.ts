@@ -8,9 +8,7 @@
  * Нищо друго в UI не се пипа.
  */
 
-import { products as rawProducts } from './db';
 import type {
-  DbProduct,
   CatalogProduct,
   CatalogFilters,
   ProductSpec,
@@ -24,26 +22,7 @@ import type {
 // При backend → снимките идват от API/CDN
 // ──────────────────────────────────────
 
-const IMAGE_POOL = [
-  '/images/daikin-perfera.jpg',
-  '/images/daikin-sensira.jpg',
-  '/images/fujitsu-asyg.jpg',
-  '/images/gree-fairy.jpg',
-  '/images/mitsubishi-msz.jpg',
-  '/images/samsung-windfree.jpg',
-];
-
-/** Детерминирано (стабилно при всяко зареждане) разпределение по ID hash */
-function resolveImage(id: string): string {
-  const hash = id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return IMAGE_POOL[hash % IMAGE_POOL.length];
-}
-
-// ──────────────────────────────────────
-// CARD BORDER & BG MAP
-// ──────────────────────────────────────
-
-function resolveBorderAndBg(brand: string, energyCool?: string): { cardBorder: string; imgBg: string } {
+function resolveBorderAndBg(brand: string): { cardBorder: string; imgBg: string } {
   const brandLower = brand.toLowerCase();
   if (brandLower.includes('daikin'))    return { cardBorder: 'border-blue-200 shadow-blue-50', imgBg: 'bg-gray-50' };
   if (brandLower.includes('mitsubishi')) return { cardBorder: 'border-red-100 shadow-red-50', imgBg: 'bg-white' };
@@ -59,9 +38,9 @@ function resolveBorderAndBg(brand: string, energyCool?: string): { cardBorder: s
 // BADGE LOGIC
 // ──────────────────────────────────────
 
-function resolveBadge(product: DbProduct): ProductBadge | undefined {
+function resolveBadge(product: { slug: string; price: number; energyCool?: string; features: string[] }): ProductBadge | undefined {
   const features = product.features ?? [];
-  if (product.id.includes('perfera') || product.id.includes('ln25')) {
+  if (product.slug.includes('perfera') || product.slug.includes('ln25')) {
     return { text: 'Bestseller', bg: 'bg-yellow-100', textCol: 'text-yellow-700' };
   }
   if (product.energyCool === 'A+++') {
@@ -80,7 +59,7 @@ function resolveBadge(product: DbProduct): ProductBadge | undefined {
 // SPECS (icon + text pairs for quick-view)
 // ──────────────────────────────────────
 
-function resolveSpecs(product: DbProduct): ProductSpec[] {
+function resolveSpecs(product: { coolingPower?: string; noise?: string; wifi?: boolean }): ProductSpec[] {
   const specs: ProductSpec[] = [];
   if (product.coolingPower) {
     specs.push({ icon: '⚡', text: product.coolingPower });
@@ -98,8 +77,8 @@ function resolveSpecs(product: DbProduct): ProductSpec[] {
 // RATING (детерминирано от id докато няма реални данни)
 // ──────────────────────────────────────
 
-function fakeRating(id: string): { rating: number; reviews: number } {
-  const hash = id.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+function fakeRating(seed: string): { rating: number; reviews: number } {
+  const hash = seed.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
   const rating = +(4.5 + (hash % 5) * 0.1).toFixed(1);
   const reviews = 15 + (hash % 100);
   return { rating, reviews };
@@ -109,7 +88,7 @@ function fakeRating(id: string): { rating: number; reviews: number } {
 // PRICE WITH MOUNT
 // ──────────────────────────────────────
 
-function resolveInstallPrice(product: DbProduct): number {
+function resolveInstallPrice(product: { type?: string; price: number }): number {
   const type = product.type ?? '';
   if (type.includes('Мулти')) return product.price + 250;
   if (type.includes('Касетъ')) return product.price + 350;
@@ -121,58 +100,91 @@ function resolveInstallPrice(product: DbProduct): number {
 // MAIN MAPPING FUNCTION
 // ──────────────────────────────────────
 
-function mapToCatalogProduct(raw: DbProduct): CatalogProduct {
-  const { cardBorder, imgBg } = resolveBorderAndBg(raw.brand, raw.energyCool);
-  const { rating, reviews } = fakeRating(raw.id);
+type ApiProduct = {
+  slug: string;
+  name: string;
+  description?: string | null;
+  price: number;
+  brands?: { name: string } | null;
+  product_types?: { name: string } | null;
+  product_specs?: Array<{
+    coverage_m2?: number | null;
+    noise_db?: number | null;
+    cooling_power_kw?: number | null;
+    heating_power_kw?: number | null;
+    refrigerant?: string | null;
+    wifi?: boolean | null;
+    energy_class_cool?: string | null;
+    energy_class_heat?: string | null;
+    warranty_months?: number | null;
+  }> | null;
+  product_images?: Array<{ url: string; is_main: boolean; sort_order: number }> | null;
+  product_features?: Array<{ features?: { name?: string } | null }> | null;
+};
+
+function mapApiToCatalogProduct(raw: ApiProduct): CatalogProduct {
+  const brand = raw.brands?.name ?? '—';
+  const type = raw.product_types?.name ?? '';
+  const specs0 = raw.product_specs?.[0];
+  const features = (raw.product_features ?? [])
+    .map((pf) => pf.features?.name)
+    .filter(Boolean) as string[];
+
+  const energyCool = specs0?.energy_class_cool ?? undefined;
+  const energyHeat = specs0?.energy_class_heat ?? undefined;
+  const image =
+    (raw.product_images ?? [])
+      .slice()
+      .sort((a, b) => (b.is_main ? 1 : 0) - (a.is_main ? 1 : 0) || a.sort_order - b.sort_order)[0]
+      ?.url ?? `/images/${raw.slug}.jpg`;
+
+  const { cardBorder, imgBg } = resolveBorderAndBg(brand);
+  const { rating, reviews } = fakeRating(raw.slug);
+
+  const coolingPower = specs0?.cooling_power_kw ? `${specs0.cooling_power_kw} kW` : undefined;
+  const heatingPower = specs0?.heating_power_kw ? `${specs0.heating_power_kw} kW` : undefined;
+  const noise = specs0?.noise_db ? `${specs0.noise_db} dB` : undefined;
+  const area = specs0?.coverage_m2 ? `до ${Math.round(specs0.coverage_m2)} м²` : undefined;
+  const warranty = specs0?.warranty_months ? `${Math.round(specs0.warranty_months / 12)} г. гаранция` : undefined;
 
   return {
-    id: raw.id,
+    id: raw.slug,
     name: raw.name,
-    brand: raw.brand,
+    brand,
     model: raw.name,
-    type: raw.type,
-    category: raw.category,
+    type,
+    category: '—',
 
-    image: resolveImage(raw.id),
+    image,
     imgBg,
     cardBorder,
 
-    energyClass: raw.energyCool ?? 'A+',
-    specs: resolveSpecs(raw),
-    extras: (raw.features ?? []).slice(0, 4),
-    area: raw.area,
-    noise: raw.noise,
-    wifi: raw.wifi,
-    warranty: raw.warranty,
-    description: raw.description,
-    refrigerant: raw.refrigerant,
-    coolingPower: raw.coolingPower,
-    heatingPower: raw.heatingPower,
+    energyClass: energyCool ?? 'A+',
+    specs: resolveSpecs({ coolingPower, noise, wifi: specs0?.wifi ?? undefined }),
+    extras: features.slice(0, 4),
+    area,
+    noise,
+    wifi: specs0?.wifi ?? undefined,
+    warranty,
+    description: raw.description ?? undefined,
+    refrigerant: specs0?.refrigerant ?? undefined,
+    coolingPower,
+    heatingPower,
 
-    price: raw.price,
-    priceWithMount: resolveInstallPrice(raw),
+    price: Number(raw.price),
+    priceWithMount: resolveInstallPrice({ type, price: Number(raw.price) }),
 
     rating,
     reviews,
 
-    badge: resolveBadge(raw),
-    inStock: true, // временно, при backend → реална наличност
+    badge: resolveBadge({ slug: raw.slug, price: Number(raw.price), energyCool, features }),
+    inStock: true,
 
-    features: raw.features ?? [],
-    energyCool: raw.energyCool,
-    energyHeat: raw.energyHeat,
+    features,
+    energyCool,
+    energyHeat,
   };
 }
-
-// ──────────────────────────────────────
-// CACHED MAPPED PRODUCTS
-// ──────────────────────────────────────
-
-const catalogProducts: CatalogProduct[] = (rawProducts as DbProduct[])
-  // Пропускаме аксесоари и части за сега (без energyCool)
-  // При backend → отделни endpoint-и
-  .filter(p => p.type && !p.type.includes('Аксесоар') && !p.type.includes('Резерв'))
-  .map(mapToCatalogProduct);
 
 // ──────────────────────────────────────
 // PUBLIC SERVICE FUNCTIONS
@@ -180,114 +192,57 @@ const catalogProducts: CatalogProduct[] = (rawProducts as DbProduct[])
 // ──────────────────────────────────────
 
 /** Всички продукти */
-export function getAllProducts(): CatalogProduct[] {
-  // При backend → return await fetch('/api/products').then(r => r.json())
-  return catalogProducts;
+export async function getAllProducts(): Promise<CatalogProduct[]> {
+  const all: CatalogProduct[] = [];
+  let page = 1;
+  const perPage = 100;
+  for (;;) {
+    const res = await fetch(`/api/products?page=${page}&perPage=${perPage}`);
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Грешка при зареждане на продукти');
+    const batch = (json.data ?? []) as ApiProduct[];
+    all.push(
+      ...batch
+        .map(mapApiToCatalogProduct)
+        // Каталогът показва основните продукти (климатици). Аксесоари/части се отделят по-късно.
+        .filter((p) => !isAccessoryLike(p)),
+    );
+    if (batch.length < perPage) break;
+    page += 1;
+  }
+  return all;
 }
 
 /** Един продукт по ID */
-export function getProductById(id: string): CatalogProduct | undefined {
-  // При backend → return await fetch(`/api/products/${id}`).then(r => r.json())
-  return catalogProducts.find(p => p.id === id);
+export async function getProductById(id: string): Promise<CatalogProduct | undefined> {
+  const res = await fetch(`/api/products/${encodeURIComponent(id)}`);
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Грешка при зареждане на продукт');
+  if (!json.data) return undefined;
+  return mapApiToCatalogProduct(json.data as ApiProduct);
 }
 
-/** Продукти по тип (категория) */
-export function getProductsByType(type: string): CatalogProduct[] {
-  if (type === 'all') return catalogProducts;
-  return catalogProducts.filter(p => p.type === type);
-}
-
-/** Продукти по марка */
-export function getProductsByBrand(brand: string): CatalogProduct[] {
-  return catalogProducts.filter(p => p.brand.toLowerCase() === brand.toLowerCase());
+function isAccessoryLike(p: CatalogProduct) {
+  const t = (p.type ?? "").toLowerCase();
+  const n = (p.name ?? "").toLowerCase();
+  return t.includes("аксес") || t.includes("резерв") || n.includes("филтър") || n.includes("filter");
 }
 
 /** Всички уникални марки */
 export function getAllBrands(): string[] {
-  return [...new Set(catalogProducts.map(p => p.brand))].sort();
+  // Вече се зареждат от backend; оставяме старото API като "placeholder" за legacy imports.
+  return [];
 }
 
 /** Ценови диапазон (min/max) */
 export function getPriceRange(): { min: number; max: number } {
-  const prices = catalogProducts.map(p => p.price);
-  return { min: Math.min(...prices), max: Math.max(...prices) };
+  return { min: 0, max: 0 };
 }
 
 /** Комплексно филтриране + сортиране */
 export function getFilteredProducts(filters: Partial<CatalogFilters>): CatalogProduct[] {
-  let result = [...catalogProducts];
-
-  // Search
-  if (filters.search && filters.search.trim()) {
-    const q = filters.search.toLowerCase().trim();
-    result = result.filter(p =>
-      p.name.toLowerCase().includes(q) ||
-      p.brand.toLowerCase().includes(q) ||
-      p.type.toLowerCase().includes(q) ||
-      (p.description ?? '').toLowerCase().includes(q)
-    );
-  }
-
-  // Brands
-  if (filters.brands && filters.brands.length > 0) {
-    result = result.filter(p =>
-      filters.brands!.some(b => p.brand.toLowerCase().includes(b.toLowerCase()))
-    );
-  }
-
-  // Types
-  if (filters.types && filters.types.length > 0) {
-    result = result.filter(p => filters.types!.includes(p.type));
-  }
-
-  // Energy classes
-  if (filters.energyClasses && filters.energyClasses.length > 0) {
-    result = result.filter(p => filters.energyClasses!.includes(p.energyClass));
-  }
-
-  // Features (WiFi, etc.)
-  if (filters.features && filters.features.length > 0) {
-    result = result.filter(p =>
-      filters.features!.every(f =>
-        p.features.some(pf => pf.toLowerCase().includes(f.toLowerCase()))
-      )
-    );
-  }
-
-  // Price range
-  if (filters.priceMin !== undefined) {
-    result = result.filter(p => p.price >= filters.priceMin!);
-  }
-  if (filters.priceMax !== undefined) {
-    result = result.filter(p => p.price <= filters.priceMax!);
-  }
-
-  // Sort
-  switch (filters.sortBy) {
-    case 'price-asc':
-      result.sort((a, b) => a.price - b.price);
-      break;
-    case 'price-desc':
-      result.sort((a, b) => b.price - a.price);
-      break;
-    case 'energy-class':
-      result.sort((a, b) => a.energyClass.localeCompare(b.energyClass));
-      break;
-    case 'noise-asc':
-      result.sort((a, b) => {
-        const noiseA = parseInt(a.noise ?? '99');
-        const noiseB = parseInt(b.noise ?? '99');
-        return noiseA - noiseB;
-      });
-      break;
-    case 'rating-desc':
-      result.sort((a, b) => b.rating - a.rating);
-      break;
-    default: // 'recommended' – no change
-      break;
-  }
-
-  return result;
+  void filters;
+  return [];
 }
 
 // ──────────────────────────────────────

@@ -3,7 +3,6 @@
  * Uses Gemini's built-in Google Search to generate accurate product comparisons
  */
 
-import { GeminiClient } from './GeminiClient';
 import type { Product } from '../types';
 
 interface ComparisonRecommendation {
@@ -21,20 +20,11 @@ class ComparisonAIService {
     // Build prompt with instruction to use Google Search
     const prompt = this.buildComparisonPrompt(products);
 
-    // Generate AI response using Gemini with Google Search enabled
-    // Increase maxOutputTokens to allow for longer responses (8192 tokens)
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
-    const geminiClient = new GeminiClient({ 
-      apiKey, 
-      maxOutputTokens: 8192 
-    });
-    const response = await geminiClient.sendMessage(
-      [{ role: 'user' as const, content: prompt, id: '', timestamp: Date.now() }],
-      this.getSystemPrompt()
-    );
+    // Generate AI response via backend proxy (keeps GEMINI_API_KEY server-side)
+    const response = await this.callBackendAI(prompt);
 
     // Parse AI response
-    return this.parseAIResponse(response.content, products);
+    return this.parseAIResponse(response, products);
   }
 
   /**
@@ -137,6 +127,25 @@ class ComparisonAIService {
       keyDifferences: keyDifferences,
       recommendation: recommendation || '',
     };
+  }
+
+  private async callBackendAI(prompt: string): Promise<string> {
+    const res = await fetch('/api/ai/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [{ role: 'user', content: prompt }],
+        systemPrompt: this.getSystemPrompt(),
+        maxOutputTokens: 8192,
+      }),
+    });
+
+    if (!res.ok) {
+      throw new Error('AI comparison request failed');
+    }
+
+    const data = (await res.json()) as { content?: string };
+    return data.content ?? '';
   }
 }
 
