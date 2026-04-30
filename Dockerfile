@@ -1,6 +1,7 @@
 # Unified production image (ONE Cloud Run service)
-# - nginx serves Vite SPA
-# - nginx proxies /api, /admin, /login, /_next to Next.js backend (running on 3001 inside container)
+# - Next.js backend is the only server process (listens on Cloud Run $PORT=8080)
+# - Vite SPA is served as static files from Next.js `public/`
+# - SPA routes are rewritten to `/index.html` in `backend/next.config.mjs`
 #
 # Build context: repo root
 #
@@ -37,27 +38,19 @@ FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
-
-RUN apk add --no-cache nginx && \
-    addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs && \
-    mkdir -p /run/nginx /var/lib/nginx /var/log/nginx && \
-    chown -R nextjs:nodejs /run/nginx /var/lib/nginx /var/log/nginx
-
-# nginx config
-COPY deploy/nginx-unified.conf /etc/nginx/http.d/default.conf
-
-# frontend dist → nginx root
-COPY --from=frontend_builder /repo/dist /usr/share/nginx/html
+RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 
 # backend standalone
 COPY --from=backend_builder /app/public ./public
 COPY --from=backend_builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=backend_builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# frontend dist → Next public (static)
+COPY --from=frontend_builder /repo/dist ./public
+
+USER nextjs
 EXPOSE 8080
 
-# Start backend + nginx (one container)
-# Cloud Run sets PORT=8080 for the container. Keep nginx on 8080 and force Next backend to 3001.
-# Use env/unset to avoid any runtime overrides.
-CMD ["sh", "-c", "set -eux; echo \"[boot] CloudRun PORT=${PORT:-}\"; unset PORT; export PORT=3001; echo \"[boot] Forced PORT=$PORT\"; nginx; exec env PORT=3001 HOSTNAME=0.0.0.0 node /app/server.js"]
+# Cloud Run sets PORT=8080; Next standalone honors PORT.
+CMD ["node", "server.js"]
 

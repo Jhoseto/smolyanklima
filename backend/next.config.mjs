@@ -10,6 +10,16 @@ const nextConfig = {
   turbopack: {
     root: __dirname,
   },
+  async rewrites() {
+    // Serve the Vite SPA (built into /public) from the same origin in production.
+    // Keep backend routes working normally.
+    return [
+      {
+        source: "/:path((?!api/|admin/|login$|_next/|assets/|images/|favicon\\.ico).*)",
+        destination: "/index.html",
+      },
+    ];
+  },
   async headers() {
     return [
       {
