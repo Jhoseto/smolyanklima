@@ -6,8 +6,7 @@
 # Build context: repo root
 #
 # Cloud Run:
-# - Container listens on 8080 (nginx)
-# - Backend listens internally on 3001
+# - Container must listen on $PORT (default 8080)
 
 FROM node:22-alpine AS frontend_builder
 WORKDIR /repo
@@ -52,5 +51,5 @@ USER nextjs
 EXPOSE 8080
 
 # Cloud Run sets PORT=8080; Next standalone honors PORT.
-CMD ["node", "server.js"]
+CMD ["sh", "-c", "set -eux; echo \"[boot] PORT=${PORT:-}\"; echo \"[boot] HOSTNAME=${HOSTNAME:-}\"; exec node server.js"]
 

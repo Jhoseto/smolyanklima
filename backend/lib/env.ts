@@ -6,7 +6,7 @@ function emptyToUndefined(v: string | undefined): string | undefined {
   return t === "" ? undefined : t;
 }
 
-const EnvSchema = z.object({
+const EnvSchemaBase = z.object({
   SUPABASE_URL: z.string().url(),
   SUPABASE_ANON_KEY: z.string().min(20),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(20),
@@ -17,7 +17,7 @@ const EnvSchema = z.object({
     .transform((v) => v !== "false"),
   AI_MAX_DAILY_REQUESTS: z.coerce.number().int().min(1).optional(),
   AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(1).max(8192).optional(),
-  GEMINI_API_KEY: z.string().min(10),
+  GEMINI_API_KEY: z.string().min(10).optional(),
   GEMINI_MODEL: z.string().min(1).optional(),
   GEMINI_TEMPERATURE: z.coerce.number().min(0).max(1).optional(),
   /** Качване на снимки (админ). Препоръка: CLOUDINARY_URL от Cloudinary Console. */
@@ -30,6 +30,16 @@ const EnvSchema = z.object({
   RESEND_API_KEY: z.string().min(10).optional(),
   /** Public backend URL for links in emails (e.g. newsletter confirm). */
   APP_URL: z.string().url().optional(),
+});
+
+const EnvSchema = EnvSchemaBase.superRefine((env, ctx) => {
+  if (env.AI_ENABLED !== false && !env.GEMINI_API_KEY) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["GEMINI_API_KEY"],
+      message: "GEMINI_API_KEY is required when AI is enabled.",
+    });
+  }
 });
 
 let cachedEnv: z.infer<typeof EnvSchema> | null = null;
