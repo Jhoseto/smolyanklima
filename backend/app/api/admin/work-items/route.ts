@@ -36,6 +36,7 @@ const BodySchema = z.object({
   scheduledStart: z.string().optional().nullable(),
   scheduledEnd: z.string().optional().nullable(),
   productId: z.string().uuid().optional().nullable(),
+  contactId: z.string().uuid().optional().nullable(),
   inquiryId: z.string().uuid().optional().nullable(),
   customerName: z.string().max(160).optional().nullable(),
   customerPhone: z.string().max(80).optional().nullable(),
@@ -71,7 +72,7 @@ export async function GET(req: NextRequest) {
   const supabase = await adminDb();
   let query = supabase
     .from("work_items")
-    .select("id,type,event_code,status,priority,title,notes,due_date,scheduled_start,scheduled_end,product_id,inquiry_id,customer_name,customer_phone,customer_address,quantity,unit_price,total_amount,assigned_to,completed_at,created_at,products:product_id(id,slug,name)", {
+    .select("id,type,event_code,status,priority,title,notes,due_date,scheduled_start,scheduled_end,product_id,contact_id,inquiry_id,customer_name,customer_phone,customer_address,quantity,unit_price,total_amount,assigned_to,completed_at,created_at,products:product_id(id,slug,name),contacts:contact_id(id,full_name,phone,email,address)", {
       count: "exact",
     })
     .order("due_date", { ascending: true, nullsFirst: false })
@@ -116,6 +117,7 @@ export async function POST(req: NextRequest) {
     scheduled_start: parsed.data.scheduledStart || null,
     scheduled_end: parsed.data.scheduledEnd || null,
     product_id: parsed.data.productId ?? null,
+    contact_id: parsed.data.contactId ?? null,
     inquiry_id: parsed.data.inquiryId ?? null,
     customer_name: parsed.data.customerName ?? null,
     customer_phone: parsed.data.customerPhone ?? null,

@@ -26,6 +26,7 @@ const UpdateSchema = z.object({
   scheduledStart: z.string().optional().nullable(),
   scheduledEnd: z.string().optional().nullable(),
   productId: z.string().uuid().optional().nullable(),
+  contactId: z.string().uuid().optional().nullable(),
   inquiryId: z.string().uuid().optional().nullable(),
   customerName: z.string().max(160).optional().nullable(),
   customerPhone: z.string().max(80).optional().nullable(),
@@ -57,6 +58,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   if (parsed.data.scheduledStart !== undefined) patch.scheduled_start = parsed.data.scheduledStart || null;
   if (parsed.data.scheduledEnd !== undefined) patch.scheduled_end = parsed.data.scheduledEnd || null;
   if (parsed.data.productId !== undefined) patch.product_id = parsed.data.productId ?? null;
+  if (parsed.data.contactId !== undefined) patch.contact_id = parsed.data.contactId ?? null;
   if (parsed.data.inquiryId !== undefined) patch.inquiry_id = parsed.data.inquiryId ?? null;
   if (parsed.data.customerName !== undefined) patch.customer_name = parsed.data.customerName ?? null;
   if (parsed.data.customerPhone !== undefined) patch.customer_phone = parsed.data.customerPhone ?? null;

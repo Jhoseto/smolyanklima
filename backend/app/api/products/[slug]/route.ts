@@ -12,17 +12,19 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
   // Use service role for public reads (server-side only) to avoid RLS embed issues.
   const supabase = createSupabaseServiceRoleClient();
 
-  const loadProduct = async (includeCondition: boolean) =>
-    supabase
-      .from("products")
-      .select(
-        includeCondition
-          ? "id,slug,name,description,price,price_with_mount,old_price,product_condition,is_active,is_featured,stock_status,stock_quantity,rating,reviews_count,meta_title,meta_description,brand_id,type_id"
-          : "id,slug,name,description,price,price_with_mount,old_price,is_active,is_featured,stock_status,stock_quantity,rating,reviews_count,meta_title,meta_description,brand_id,type_id",
-      )
+  const SELECT_WITH_CONDITION =
+    "id,slug,name,description,price,price_with_mount,old_price,product_condition,is_active,is_featured,stock_status,stock_quantity,rating,reviews_count,meta_title,meta_description,brand_id,type_id";
+  const SELECT_BASE =
+    "id,slug,name,description,price,price_with_mount,old_price,is_active,is_featured,stock_status,stock_quantity,rating,reviews_count,meta_title,meta_description,brand_id,type_id";
+
+  const loadProduct = async (includeCondition: boolean) => {
+    const selectCols: string = includeCondition ? SELECT_WITH_CONDITION : SELECT_BASE;
+    return (supabase.from("products") as any)
+      .select(selectCols)
       .eq("slug", slug)
       .eq("is_active", true)
       .maybeSingle();
+  };
 
   let { data: p, error: pErr } = await loadProduct(true);
   const isMissingConditionColumn =

@@ -20,6 +20,7 @@ type ProductRow = {
 };
 
 type OptionRow = { id: string; name: string };
+type ContactChoice = { id: string; full_name: string; phone: string; email?: string | null; address?: string | null };
 type SortField = "created_at" | "name" | "price" | "stock_quantity" | "sold_quantity" | "is_active" | "is_featured";
 type SortDir = "asc" | "desc";
 
@@ -52,11 +53,16 @@ export default function AdminProductsPage() {
   const [saleFor, setSaleFor] = useState<ProductRow | null>(null);
   const [saleBusy, setSaleBusy] = useState(false);
   const [saleForm, setSaleForm] = useState({
+    contactId: "",
     customerName: "",
     customerPhone: "",
     customerAddress: "",
+    customerEmail: "",
     notes: "",
   });
+  const [contactQuery, setContactQuery] = useState("");
+  const [contactLoading, setContactLoading] = useState(false);
+  const [contactResults, setContactResults] = useState<ContactChoice[]>([]);
 
   const qs = useMemo(() => {
     const sp = new URLSearchParams();
@@ -179,7 +185,52 @@ export default function AdminProductsPage() {
     await load();
   }
 
-  async function markAsSold(p: ProductRow, customer: { name: string; phone: string; address: string; notes: string }) {
+  useEffect(() => {
+    if (!saleFor) return;
+    const q = contactQuery.trim();
+    if (q.length < 2) {
+      setContactResults([]);
+      return;
+    }
+    const t = setTimeout(async () => {
+      setContactLoading(true);
+      try {
+        const res = await fetch(`/api/admin/contacts?q=${encodeURIComponent(q)}&perPage=20`, { credentials: "include" });
+        const json = await res.json().catch(() => ({}));
+        if (res.ok) setContactResults((json as any).data ?? []);
+      } finally {
+        setContactLoading(false);
+      }
+    }, 180);
+    return () => clearTimeout(t);
+  }, [contactQuery, saleFor]);
+
+  async function createContactInline() {
+    if (!saleForm.customerName.trim() || !saleForm.customerPhone.trim()) return;
+    const res = await fetch("/api/admin/contacts", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fullName: saleForm.customerName.trim(),
+        phone: saleForm.customerPhone.trim(),
+        email: saleForm.customerEmail.trim() || null,
+        address: saleForm.customerAddress.trim() || null,
+        notes: saleForm.notes.trim() || null,
+      }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((json as any).error || "Грешка при създаване на контакт");
+    const c = (json as any).data as ContactChoice;
+    setSaleForm((s) => ({ ...s, contactId: c.id }));
+    setContactQuery(c.full_name);
+    setContactResults([c]);
+  }
+
+  async function markAsSold(
+    p: ProductRow,
+    customer: { id?: string; name: string; phone: string; address: string; email?: string; notes: string },
+  ) {
     if (p.stock_quantity <= 0) return;
     const nextQty = Math.max(0, p.stock_quantity - 1);
     const nextSold = Math.max(0, Number(p.sold_quantity ?? 0) + 1);
@@ -228,6 +279,7 @@ export default function AdminProductsPage() {
         priority: "medium",
         status: "done",
         productId: p.id,
+        contactId: customer.id || null,
         customerName: customer.name || null,
         customerPhone: customer.phone || null,
         customerAddress: customer.address || null,
@@ -363,7 +415,9 @@ export default function AdminProductsPage() {
                       type="button"
                       onClick={() => {
                         setSaleFor(p);
-                        setSaleForm({ customerName: "", customerPhone: "", customerAddress: "", notes: "" });
+                        setSaleForm({ contactId: "", customerName: "", customerPhone: "", customerAddress: "", customerEmail: "", notes: "" });
+                        setContactQuery("");
+                        setContactResults([]);
                       }}
                       disabled={p.stock_quantity <= 0}
                       style={{
@@ -420,11 +474,53 @@ export default function AdminProductsPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a", marginBottom: 4 }}>Продажба - {saleFor.name}</div>
-            <div style={{ fontSize: 12, color: "#64748b", marginBottom: 10 }}>Въведи данни за клиента. Това влиза в История и Календар.</div>
+            <div style={{ fontSize: 12, color: "#64748b", marginBottom: 10 }}>Избери съществуващ контакт (live search) или създай нов. Данните влизат в История и Календар.</div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10, position: "relative" }}>
+              <div style={{ gridColumn: "1 / -1", position: "relative" }}>
+                <input
+                  value={contactQuery}
+                  onChange={(e) => {
+                    setContactQuery(e.target.value);
+                    setSaleForm((s) => ({ ...s, contactId: "" }));
+                  }}
+                  placeholder="Търси контакт (име/телефон) ..."
+                  style={inputField}
+                />
+                {(contactLoading || contactResults.length > 0) && (
+                  <div style={{ position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", border: "1px solid #cbd5e1", borderRadius: 10, background: "white", zIndex: 5, maxHeight: 180, overflow: "auto" }}>
+                    {contactLoading ? (
+                      <div style={{ padding: "8px 10px", fontSize: 12, color: "#64748b" }}>Търсене...</div>
+                    ) : (
+                      contactResults.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => {
+                            setSaleForm((s) => ({
+                              ...s,
+                              contactId: c.id,
+                              customerName: c.full_name || "",
+                              customerPhone: c.phone || "",
+                              customerAddress: c.address || "",
+                              customerEmail: c.email || "",
+                            }));
+                            setContactQuery(`${c.full_name} (${c.phone})`);
+                            setContactResults([]);
+                          }}
+                          style={{ display: "block", width: "100%", textAlign: "left", border: "none", background: "white", padding: "8px 10px", cursor: "pointer", fontSize: 12 }}
+                        >
+                          <div style={{ fontWeight: 700, color: "#0f172a" }}>{c.full_name}</div>
+                          <div style={{ color: "#64748b" }}>{c.phone}{c.email ? ` / ${c.email}` : ""}</div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
               <input value={saleForm.customerName} onChange={(e) => setSaleForm((s) => ({ ...s, customerName: e.target.value }))} placeholder="Контактно лице*" style={inputField} />
               <input value={saleForm.customerPhone} onChange={(e) => setSaleForm((s) => ({ ...s, customerPhone: e.target.value }))} placeholder="Телефон*" style={inputField} />
+              <input value={saleForm.customerEmail} onChange={(e) => setSaleForm((s) => ({ ...s, customerEmail: e.target.value }))} placeholder="Имейл" style={inputField} />
               <input value={saleForm.customerAddress} onChange={(e) => setSaleForm((s) => ({ ...s, customerAddress: e.target.value }))} placeholder="Адрес" style={{ ...inputField, gridColumn: "1 / -1" }} />
               <textarea value={saleForm.notes} onChange={(e) => setSaleForm((s) => ({ ...s, notes: e.target.value }))} placeholder="Бележки (по желание)" rows={3} style={{ ...inputField, gridColumn: "1 / -1", resize: "vertical" }} />
             </div>
@@ -432,6 +528,23 @@ export default function AdminProductsPage() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontSize: 12, color: "#64748b" }}>Сума: €{Number(saleFor.price).toLocaleString()}</span>
               <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  disabled={saleBusy || !saleForm.customerName.trim() || !saleForm.customerPhone.trim()}
+                  onClick={async () => {
+                    setSaleBusy(true);
+                    try {
+                      await createContactInline();
+                    } catch (e: any) {
+                      setError(String(e?.message ?? e));
+                    } finally {
+                      setSaleBusy(false);
+                    }
+                  }}
+                  style={bulkBtn(!saleBusy && !!saleForm.customerName.trim() && !!saleForm.customerPhone.trim())}
+                >
+                  + Нов контакт
+                </button>
                 <button type="button" disabled={saleBusy} onClick={() => setSaleFor(null)} style={bulkBtn(!saleBusy)}>Отказ</button>
                 <button
                   type="button"
@@ -440,9 +553,11 @@ export default function AdminProductsPage() {
                     setSaleBusy(true);
                     try {
                       await markAsSold(saleFor, {
+                        id: saleForm.contactId || undefined,
                         name: saleForm.customerName.trim(),
                         phone: saleForm.customerPhone.trim(),
                         address: saleForm.customerAddress.trim(),
+                        email: saleForm.customerEmail.trim(),
                         notes: saleForm.notes.trim(),
                       });
                       setSaleFor(null);

@@ -180,8 +180,8 @@ export async function GET(req: NextRequest) {
       meta_title, meta_description,
       brand_id, type_id
     `;
-    let query = supabase
-      .from("products")
+    let query = (supabase
+      .from("products") as any)
       .select(selectCols, { count: "exact" })
       .eq("is_active", true);
     if (idRestriction !== null && idRestriction !== "empty") query = query.in("id", idRestriction);

@@ -12,6 +12,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <NavLink href="/admin" label="Табло" />
           <NavLink href="/admin/operations" label="Операции" />
           <NavLink href="/admin/products" label="Продукти" />
+          <NavLink href="/admin/contacts" label="Контакти" />
           <NavLink href="/admin/articles" label="Статии" />
           <NavLink href="/admin/ratings" label="Оценки" />
           <NavLink href="/admin/inquiries" label="Запитвания" />
