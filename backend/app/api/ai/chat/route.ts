@@ -42,6 +42,9 @@ async function postImpl(req: NextRequest) {
   if (env.AI_ENABLED === false) {
     return withCors(req, NextResponse.json({ error: "AI_DISABLED" }, { status: 403 }));
   }
+  if (!env.GEMINI_API_KEY) {
+    return withCors(req, NextResponse.json({ error: "AI_MISCONFIGURED" }, { status: 503 }));
+  }
 
   const json = await req.json().catch(() => null);
   const parsed = ChatRequestSchema.safeParse(json);
