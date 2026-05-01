@@ -16,7 +16,7 @@ interface ToastSystemProps {
 
 export const ToastSystem = ({ toasts, onDismiss }: ToastSystemProps) => {
   return (
-    <div className="fixed top-6 right-6 z-[9999] flex flex-col gap-3 pointer-events-none">
+    <div className="fixed top-[72px] right-3 sm:top-6 sm:right-6 z-[9999] flex flex-col gap-3 pointer-events-none">
       <AnimatePresence>
         {toasts.map((toast) => (
           <motion.div

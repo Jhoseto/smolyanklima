@@ -35,12 +35,17 @@ export const InteractiveSizeGuide = ({ product }: { product: CatalogProduct }) =
           style={{ 
             width: `${(acWidthCm / 250) * 100}%`, 
             height: `${(acHeightCm / 250) * 100}%`,
-            minWidth: '100px'
+            minWidth: '80px'
           }}
         >
           <img src={product.image} alt="AC" className="w-full h-full object-contain mix-blend-multiply" />
-          <div className="absolute -top-6 text-[10px] font-bold text-gray-400">~{acWidthCm} см</div>
-          <div className="absolute -right-12 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400">{acHeightCm} см</div>
+          {/* Labels inside the visible area to avoid overflow */}
+          <div className="absolute -top-5 left-0 right-0 flex justify-center">
+            <span className="text-[9px] font-bold text-gray-400 bg-white/80 px-1 rounded">~{acWidthCm} см</span>
+          </div>
+          <div className="absolute right-1 top-1/2 -translate-y-1/2">
+            <span className="text-[9px] font-bold text-gray-400 bg-white/80 px-0.5 rounded">{acHeightCm}см</span>
+          </div>
         </motion.div>
 
         {/* The Person */}
@@ -49,8 +54,9 @@ export const InteractiveSizeGuide = ({ product }: { product: CatalogProduct }) =
           style={{ height: `${(personHeight / 250) * 100}%` }}
         >
           <User className="w-full h-full text-gray-300" strokeWidth={1} />
-          <div className="absolute -left-12 top-0 text-[10px] font-bold text-[#FF4D00] border-t border-[#FF4D00] w-10 flex items-center">
-            <span className="-mt-3 ml-2">{personHeight} см</span>
+          {/* Height label overlaid on the person, not floating outside */}
+          <div className="absolute top-1 right-0 text-[9px] font-bold text-[#FF4D00] bg-white/80 px-1 rounded">
+            {personHeight}см
           </div>
         </div>
       </div>

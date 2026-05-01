@@ -93,7 +93,7 @@ export default function EditProductPage() {
   if (loading) return <div className="flex items-center justify-center p-12 text-slate-500 font-medium">Зареждане...</div>;
 
   return (
-    <div className="w-full max-w-none space-y-4">
+    <div className="w-full max-w-none space-y-4 pb-24 md:pb-4">
       {toast && (
         <div
           className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-lg border font-bold text-sm transition-all ${
@@ -107,7 +107,7 @@ export default function EditProductPage() {
       )}
       
       <div>
-        <h1 className="text-xl font-bold text-slate-900 mb-1 leading-tight">
+        <h1 className="text-lg md:text-xl font-bold text-slate-900 mb-1 leading-tight">
           <SectionTitle title="Редакция на продукт" hint="Промяна на параметри, наличности и медия на съществуващ продукт." />
         </h1>
       </div>
@@ -122,29 +122,38 @@ export default function EditProductPage() {
         </div>
       )}
 
-      <Card className="p-6">
+      <Card className="p-4 md:p-6">
         <ProductFormFields brands={brands} types={types} form={form} setForm={setForm} />
       </Card>
 
-      <div className="flex justify-between items-center pt-2">
+      {/* Desktop action row */}
+      <div className="hidden md:flex justify-between items-center pt-2">
         <Button variant="danger" onClick={remove} className="gap-2">
           <Trash2 className="w-4 h-4" /> Изтрий продукт
         </Button>
-        <Button
-          variant="primary"
-          size="lg"
-          onClick={save}
-          disabled={saving}
-          className="gap-2 shadow-sm"
-        >
+        <Button variant="primary" size="lg" onClick={save} disabled={saving} className="gap-2 shadow-sm">
           <Save className="w-5 h-5" />
           {saving ? "Запазвам..." : "Запази промените"}
         </Button>
       </div>
 
+      {/* Mobile sticky save bar */}
+      <div className="fixed bottom-16 left-0 right-0 z-40 md:hidden border-t border-slate-200 bg-white/95 backdrop-blur-sm px-4 py-3 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
+        <div className="flex gap-2">
+          <Button variant="danger" onClick={remove} className="gap-1.5 shrink-0 !py-3 text-xs">
+            <Trash2 className="w-4 h-4" />
+          </Button>
+          <Button variant="primary" className="flex-1 justify-center gap-2 !py-3 text-sm font-bold" onClick={save} disabled={saving}>
+            <Save className="w-4 h-4" />
+            {saving ? "Запазвам..." : "Запази промените"}
+          </Button>
+        </div>
+      </div>
+
       {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-md" onClick={() => setConfirmDelete(false)}>
-          <div className="w-full max-w-lg rounded-3xl border border-white/70 bg-white p-6 shadow-[0_30px_90px_rgba(15,23,42,0.35)]" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4 bg-slate-950/55 backdrop-blur-md" onClick={() => setConfirmDelete(false)}>
+          <div className="w-full md:max-w-lg rounded-t-3xl md:rounded-3xl border border-white/70 bg-white p-6 shadow-[0_-8px_40px_rgba(15,23,42,0.25)]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-center mb-3 md:hidden"><div className="w-10 h-1 rounded-full bg-slate-200" /></div>
             <div className="text-xl font-black text-slate-950">Изтриване на продукт</div>
             <div className="mt-2 text-sm text-slate-500">Сигурни ли сте, че искате да изтриете този продукт и свързаните му данни?</div>
             <div className="mt-6 flex justify-end gap-2">

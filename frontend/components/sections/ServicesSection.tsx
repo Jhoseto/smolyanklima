@@ -51,14 +51,9 @@ export const ServicesSection = () => {
 
   useEffect(() => {
     if (isExpanded) {
-      // Small timeout to allow the expansion animation to begin and DOM to update
       const timer = setTimeout(() => {
-        // Force the scroller to move down to reveal the expanded content
-        window.scrollBy({
-          top: 365,
-          behavior: 'smooth'
-        });
-      }, 250); // Increased delay for smoother transition after expansion starts
+        sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 300);
       return () => clearTimeout(timer);
     }
   }, [isExpanded]);
@@ -70,7 +65,7 @@ export const ServicesSection = () => {
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
 
-        <div className="flex flex-col lg:flex-row justify-between items-end gap-12 mb-20">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-8 lg:gap-12 mb-16 lg:mb-20">
           <div className="max-w-2xl">
             <motion.span
               initial={{ opacity: 0, y: 10 }}
@@ -95,7 +90,7 @@ export const ServicesSection = () => {
                 <div className="absolute -bottom-1 left-0 right-0 h-1 bg-gradient-to-r from-[#00B4D8]/0 via-[#00B4D8] to-[#00B4D8]/0 opacity-30 rounded-full" />
               </span>
               <br />
-              <span className="relative inline-block whitespace-nowrap">
+              <span className="relative inline-block">
                 <span className="absolute -inset-1 blur-lg bg-gradient-to-r from-[#FF4D00]/30 to-[#FF2A4D]/30 opacity-70"></span>
                 <span className="relative text-transparent bg-clip-text bg-gradient-to-r from-[#FF4D00] via-[#FF6A00] to-[#FF2A4D] font-black uppercase drop-shadow-sm">
                   едно място

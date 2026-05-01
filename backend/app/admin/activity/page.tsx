@@ -60,64 +60,51 @@ export default function AdminActivityPage() {
   const pages = Math.max(1, Math.ceil(meta.total / meta.perPage));
 
   return (
-    <div className="w-full space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900 mb-1 leading-tight">
-            <SectionTitle title="Активност" hint="Одит лог: промени по продукти, контакти, заявки, настройки и системни действия." />
-          </h1>
-          <p className="text-sm text-slate-500">Кой какво е променил и кога.</p>
-        </div>
+    <div className="w-full space-y-3">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <h1 className="text-lg md:text-xl font-bold text-slate-900 leading-tight">
+          <SectionTitle title="Активност" hint="Одит лог: промени по продукти, контакти, заявки, настройки и системни действия." />
+        </h1>
         <Button variant="secondary" onClick={() => void load()} className="gap-2">
-          <RefreshCw className="w-4 h-4" /> Обнови
+          <RefreshCw className="w-4 h-4" />
+          <span className="hidden sm:inline">Обнови</span>
         </Button>
       </div>
 
-      <Card className="p-4">
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_180px_150px_150px] gap-3 items-end">
-          <label className="grid gap-1.5">
-            <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Търсене</span>
-            <Input value={q} onChange={(e) => { setPage(1); setQ(e.target.value); }} placeholder="action, напр. product.update" />
-          </label>
-          <label className="grid gap-1.5">
-            <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Тип</span>
-            <Select value={entityType} onChange={(e) => { setPage(1); setEntityType(e.target.value); }}>
-              <option value="">Всички</option>
-              <option value="product">Product</option>
-              <option value="contact">Contact</option>
-              <option value="inquiry">Inquiry</option>
-              <option value="work_item">Work item</option>
-              <option value="settings">Settings</option>
-              <option value="email_outbox">Email</option>
-              <option value="ai">AI</option>
-            </Select>
-          </label>
-          <label className="grid gap-1.5">
-            <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">От</span>
-            <Input type="date" value={from} onChange={(e) => { setPage(1); setFrom(e.target.value); }} />
-          </label>
-          <label className="grid gap-1.5">
-            <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">До</span>
-            <Input type="date" value={to} onChange={(e) => { setPage(1); setTo(e.target.value); }} />
-          </label>
+      <Card className="p-3">
+        <div className="grid grid-cols-2 md:grid-cols-[1fr_180px_150px_150px] gap-2 md:gap-3 items-end">
+          <Input value={q} onChange={(e) => { setPage(1); setQ(e.target.value); }} placeholder="Търси действие..." className="col-span-2 md:col-span-1" />
+          <Select value={entityType} onChange={(e) => { setPage(1); setEntityType(e.target.value); }}>
+            <option value="">Всички типове</option>
+            <option value="product">Product</option>
+            <option value="contact">Contact</option>
+            <option value="inquiry">Inquiry</option>
+            <option value="work_item">Work item</option>
+            <option value="settings">Settings</option>
+            <option value="email_outbox">Email</option>
+            <option value="ai">AI</option>
+          </Select>
+          <Input type="date" value={from} onChange={(e) => { setPage(1); setFrom(e.target.value); }} />
+          <Input type="date" value={to} onChange={(e) => { setPage(1); setTo(e.target.value); }} />
         </div>
       </Card>
 
-      {error && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">{error}</div>}
+      {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">{error}</div>}
 
-      <Table>
-        <thead>
-          <tr>
-            <Th>Действие</Th>
-            <Th>Тип</Th>
-            <Th>Потребител</Th>
-            <Th>Детайли</Th>
-            <Th>Дата</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {!loading &&
-            items.map((row) => (
+      {/* Desktop table */}
+      <div className="hidden md:block">
+        <Table>
+          <thead>
+            <tr>
+              <Th>Действие</Th>
+              <Th>Тип</Th>
+              <Th>Потребител</Th>
+              <Th>Детайли</Th>
+              <Th>Дата</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {!loading && items.map((row) => (
               <tr key={row.id} className="hover:bg-slate-50 transition-colors">
                 <Td className="font-mono text-xs font-bold text-slate-900">{row.action}</Td>
                 <Td>{row.entity_type ?? "—"}</Td>
@@ -133,29 +120,39 @@ export default function AdminActivityPage() {
                 <Td className="text-xs text-slate-500">{new Date(row.created_at).toLocaleString("bg-BG")}</Td>
               </tr>
             ))}
-          {!loading && items.length === 0 && (
-            <tr>
-              <Td colSpan={5} className="text-center py-8 text-slate-500">
-                Няма намерени записи.
-              </Td>
-            </tr>
-          )}
-          {loading && (
-            <tr>
-              <Td colSpan={5} className="text-center py-8 text-slate-500">
-                Зареждане...
-              </Td>
-            </tr>
-          )}
-        </tbody>
-      </Table>
+            {!loading && items.length === 0 && <tr><Td colSpan={5} className="text-center py-8 text-slate-500">Няма намерени записи.</Td></tr>}
+            {loading && <tr><Td colSpan={5} className="text-center py-8 text-slate-500">Зареждане...</Td></tr>}
+          </tbody>
+        </Table>
+      </div>
+
+      {/* Mobile card list */}
+      <div className="md:hidden space-y-2">
+        {loading && <div className="text-center py-10 text-slate-500 text-sm">Зареждане...</div>}
+        {!loading && items.length === 0 && <div className="bg-white rounded-xl border border-slate-200 p-6 text-center text-slate-500 text-sm">Няма намерени записи.</div>}
+        {!loading && items.map((row) => (
+          <div key={row.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-3">
+            <div className="flex items-start justify-between gap-2 mb-1.5">
+              <span className="font-mono text-xs font-bold text-slate-900 leading-snug">{row.action}</span>
+              <span className="text-[10px] text-slate-400 font-medium shrink-0">{new Date(row.created_at).toLocaleDateString("bg-BG")}</span>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {row.entity_type && <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-sky-50 text-sky-700">{row.entity_type}</span>}
+              {row.admin_users?.name && <span className="text-xs text-slate-600 font-medium">{row.admin_users.name}</span>}
+            </div>
+            {row.details && Object.keys(row.details).length > 0 && (
+              <div className="font-mono text-[10px] text-slate-500 mt-1.5 truncate">{JSON.stringify(row.details)}</div>
+            )}
+          </div>
+        ))}
+      </div>
 
       <div className="flex justify-between items-center">
         <span className="text-sm text-slate-500 font-medium">Общо: {meta.total}</span>
-        <div className="flex items-center gap-3">
-          <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Предишна</Button>
-          <span className="text-sm font-medium text-slate-600">Стр. {page} / {pages}</span>
-          <Button variant="secondary" size="sm" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>Следваща</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹</Button>
+          <span className="text-sm font-medium text-slate-600">{page} / {pages}</span>
+          <Button variant="secondary" size="sm" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>›</Button>
         </div>
       </div>
     </div>

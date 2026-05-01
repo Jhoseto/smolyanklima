@@ -38,20 +38,20 @@ export const SearchSortBar = ({
 }: SearchSortBarProps) => {
   return (
     <div className="bg-white/90 backdrop-blur-md border border-gray-100 sm:rounded-2xl shadow-sm transition-all">
-      <div className="px-4 sm:px-6 py-3">
-        <div className="flex items-center gap-3">
-
-          {/* Filter Toggle (mobile) */}
+      <div className="px-3 sm:px-6 py-3">
+        {/* Row 1: Filter toggle + Search + View toggle */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Filter Toggle (mobile/tablet) */}
           <button
             onClick={onToggleSidebar}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-semibold transition-all lg:hidden shrink-0 ${
+            className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-xl border text-sm font-semibold transition-all lg:hidden shrink-0 ${
               sidebarOpen
                 ? 'bg-[#FF4D00] text-white border-[#FF4D00]'
                 : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
             }`}
           >
             <SlidersHorizontal className="w-4 h-4" />
-            Филтри
+            <span className="hidden xs:inline">Филтри</span>
           </button>
 
           {/* Search Input */}
@@ -61,7 +61,7 @@ export const SearchSortBar = ({
               type="text"
               value={search}
               onChange={(e) => onSearchChange(e.target.value)}
-              placeholder="Търси климатик, марка, мощност..."
+              placeholder="Търси климатик..."
               className="w-full pl-10 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B4D8]/30 focus:border-[#00B4D8] transition-all"
             />
             {search && (
@@ -72,27 +72,6 @@ export const SearchSortBar = ({
                 <X className="w-4 h-4" />
               </button>
             )}
-          </div>
-
-          {/* Result count */}
-          <span className="text-xs text-gray-500 font-medium whitespace-nowrap hidden sm:block shrink-0">
-            {filteredCount === totalCount
-              ? `${totalCount} продукта`
-              : `${filteredCount} от ${totalCount}`}
-          </span>
-
-          {/* Sort Dropdown */}
-          <div className="relative shrink-0">
-            <select
-              value={sortBy}
-              onChange={(e) => onSortChange(e.target.value as SortOption)}
-              className="appearance-none pl-3 pr-8 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#00B4D8]/30 focus:border-[#00B4D8] cursor-pointer transition-all"
-            >
-              {SORT_OPTIONS.map(opt => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
           </div>
 
           {/* View Toggle */}
@@ -112,7 +91,29 @@ export const SearchSortBar = ({
               <LayoutList className="w-4 h-4" />
             </button>
           </div>
+        </div>
 
+        {/* Row 2: Count + Sort (always visible, second row) */}
+        <div className="flex items-center gap-3 mt-2 pt-2 border-t border-gray-100/70">
+          <span className="text-xs text-gray-500 font-medium whitespace-nowrap flex-1">
+            {filteredCount === totalCount
+              ? `${totalCount} продукта`
+              : `${filteredCount} от ${totalCount}`}
+          </span>
+
+          {/* Sort Dropdown */}
+          <div className="relative shrink-0">
+            <select
+              value={sortBy}
+              onChange={(e) => onSortChange(e.target.value as SortOption)}
+              className="appearance-none pl-3 pr-7 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#00B4D8]/30 focus:border-[#00B4D8] cursor-pointer transition-all max-w-[180px] sm:max-w-none"
+            >
+              {SORT_OPTIONS.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
+          </div>
         </div>
       </div>
     </div>

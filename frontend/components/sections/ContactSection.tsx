@@ -101,7 +101,7 @@ export const ContactSection = ({
                 </span>
                 <div className="absolute -bottom-1 left-0 right-0 h-1 bg-gradient-to-r from-[#00B4D8]/0 via-[#00B4D8] to-[#00B4D8]/0 opacity-30 rounded-full" />
               </span>
-              <span className="relative inline-block whitespace-nowrap">
+              <span className="relative inline-block">
                 <span className="absolute -inset-1 blur-lg bg-gradient-to-r from-[#FF4D00]/20 to-[#FF2A4D]/20 opacity-60"></span>
                 <span className="relative text-transparent bg-clip-text bg-gradient-to-r from-[#FF4D00] via-[#FF6A00] to-[#FF2A4D] font-black uppercase drop-shadow-sm">
                   {titleBold}
@@ -119,7 +119,7 @@ export const ContactSection = ({
             initial={{ opacity: 0, x: -30 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
-            className="relative rounded-[3rem] overflow-hidden group min-h-[400px] lg:min-h-full flex flex-col justify-end p-8 md:p-12"
+            className="relative rounded-[3rem] overflow-hidden group min-h-[280px] sm:min-h-[360px] lg:min-h-full flex flex-col justify-end p-6 md:p-12"
           >
             {/* Background Image */}
             <div className="absolute inset-0">
@@ -147,7 +147,7 @@ export const ContactSection = ({
                   <div className="absolute -bottom-1 left-0 right-0 h-1 bg-gradient-to-r from-[#48CAE4]/0 via-[#48CAE4] to-[#48CAE4]/0 opacity-50 rounded-full" />
                 </span>
                 <br />
-                <span className="relative inline-block whitespace-nowrap mt-2">
+                <span className="relative inline-block mt-2">
                   <span className="absolute -inset-1 blur-lg bg-gradient-to-r from-[#FF4D00]/40 to-[#FF2A4D]/40 opacity-60"></span>
                   <span className="relative text-transparent bg-clip-text bg-gradient-to-r from-[#FF4D00] via-[#FF6A00] to-[#FF2A4D] font-black uppercase drop-shadow-sm">за вашия дом</span>
                 </span>
@@ -192,7 +192,7 @@ export const ContactSection = ({
             initial={{ opacity: 0, x: 30 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
-            className="bg-white/60 backdrop-blur-3xl border border-gray-100 rounded-[3rem] p-8 md:p-12 shadow-2xl shadow-gray-200/50 relative overflow-hidden flex flex-col justify-center"
+            className="bg-white/60 backdrop-blur-3xl border border-gray-100 rounded-[2rem] sm:rounded-[3rem] p-5 sm:p-8 md:p-12 shadow-2xl shadow-gray-200/50 relative overflow-hidden flex flex-col justify-center"
           >
             {/* Subtle inner glow */}
             <div className="absolute top-0 right-0 w-64 h-64 bg-[#00B4D8]/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
@@ -219,7 +219,7 @@ export const ContactSection = ({
                     />
                   </div>
 
-                  <div className="grid md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
                     {/* Floating Label Input */}
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}

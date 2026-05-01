@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Card, Button, Select, Input, Textarea } from "./ui";
+import { CalendarDays, List } from "lucide-react";
 
 type EventCode =
   | "item_added"
@@ -102,6 +103,7 @@ export function WorkItemsPlanner() {
   const [savingBusy, setSavingBusy] = useState(false);
   const [viewMode, setViewMode] = useState<"all" | "sales" | "services" | "stock">("all");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [displayMode, setDisplayMode] = useState<"calendar" | "agenda">("calendar");
 
   const now = useMemo(() => {
     const d = new Date();
@@ -144,6 +146,27 @@ export function WorkItemsPlanner() {
     }
     return map;
   }, [items]);
+
+  const agendaItems = useMemo(() => {
+    return [...items]
+      .filter(matchesViewMode)
+      .sort((a, b) => String(a.due_date ?? "").localeCompare(String(b.due_date ?? "")));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, viewMode]);
+
+  const agendaByDate = useMemo(() => {
+    const map = new Map<string, WorkItem[]>();
+    for (const item of agendaItems) {
+      const key = String(item.due_date ?? "").slice(0, 10);
+      if (!key) continue;
+      const arr = map.get(key) ?? [];
+      arr.push(item);
+      map.set(key, arr);
+    }
+    return map;
+  }, [agendaItems]);
+
+  const agendaDates = [...agendaByDate.keys()].sort();
 
   const days: Date[] = [];
   const firstWeekday = (monthStart.getDay() + 6) % 7;
@@ -286,24 +309,44 @@ export function WorkItemsPlanner() {
 
   return (
     <Card className="mt-3 p-3">
+      {/* Header */}
       <div className="flex justify-between items-center mb-2 gap-2 flex-wrap">
         <div className="min-w-0">
           <div className="text-sm font-bold text-slate-900 leading-tight">Оперативен календар</div>
           <div className="text-xs text-slate-500 capitalize leading-tight">{title}</div>
         </div>
-        <div className="flex gap-1 shrink-0 flex-wrap justify-end">
-          <Button variant="secondary" size="sm" title="Предишен месец" onClick={() => setMonthOffset((x) => x - 1)}>◀</Button>
-          <Button variant="secondary" size="sm" title="Връщане към текущия месец" onClick={() => setMonthOffset(0)}>Днес</Button>
-          <Button variant="secondary" size="sm" title="Следващ месец" onClick={() => setMonthOffset((x) => x + 1)}>▶</Button>
-          <Button variant="primary" size="sm" title="Показва формата за ново събитие" onClick={() => setCreating((v) => !v)}>+ Събитие</Button>
+        <div className="flex gap-1 shrink-0 flex-wrap justify-end items-center">
+          {/* Mobile view toggle */}
+          <div className="flex md:hidden border border-slate-200 rounded-lg overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setDisplayMode("agenda")}
+              className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold transition-colors ${displayMode === "agenda" ? "bg-sky-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+            >
+              <List className="w-3.5 h-3.5" /> Списък
+            </button>
+            <button
+              type="button"
+              onClick={() => setDisplayMode("calendar")}
+              className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold transition-colors ${displayMode === "calendar" ? "bg-sky-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+            >
+              <CalendarDays className="w-3.5 h-3.5" /> Кал.
+            </button>
+          </div>
+          <Button variant="secondary" size="sm" onClick={() => setMonthOffset((x) => x - 1)}>◀</Button>
+          <Button variant="secondary" size="sm" onClick={() => setMonthOffset(0)}>Днес</Button>
+          <Button variant="secondary" size="sm" onClick={() => setMonthOffset((x) => x + 1)}>▶</Button>
+          <Button variant="primary" size="sm" onClick={() => setCreating((v) => !v)}>+ Събитие</Button>
         </div>
       </div>
+
+      {/* View mode filters */}
       <div className="flex gap-1 mb-2 flex-wrap">
         {[
-          { id: "all", label: "Всички събития" },
-          { id: "sales", label: "Само продажби" },
-          { id: "services", label: "Само услуги" },
-          { id: "stock", label: "Само склад" },
+          { id: "all", label: "Всички" },
+          { id: "sales", label: "Продажби" },
+          { id: "services", label: "Услуги" },
+          { id: "stock", label: "Склад" },
         ].map((m) => (
           <button
             key={m.id}
@@ -320,10 +363,11 @@ export function WorkItemsPlanner() {
         ))}
       </div>
 
+      {/* Quick create form */}
       {creating && (
-        <div className="border border-slate-200 rounded-lg p-2 mb-2 bg-slate-50">
+        <div className="border border-slate-200 rounded-xl p-3 mb-3 bg-slate-50">
           <div className="text-xs font-bold text-slate-700 mb-2">Бързо добавяне на събитие</div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
             <FormField label="Тип събитие"><EventSelect form={form} setForm={setForm} /></FormField>
             <FormField label="Заглавие"><Input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} /></FormField>
             <FormField label="Дата"><Input type="date" value={form.dueDate} onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))} /></FormField>
@@ -343,83 +387,147 @@ export function WorkItemsPlanner() {
         </div>
       )}
 
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-md p-2 mb-2 text-xs font-medium">{error}</div>}
+      {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-2 mb-2 text-xs font-medium">{error}</div>}
 
-      <div className="grid grid-cols-7 gap-1">
-        {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"].map((d) => (
-          <div key={d} className="text-[10px] font-bold text-slate-500 text-center uppercase tracking-wide">{d}</div>
-        ))}
-        {days.map((d, idx) => {
-          const valid = !Number.isNaN(d.getTime());
-          const dateKey = valid ? formatDateKey(d) : "";
-          const dayItems = valid ? (byDate.get(dateKey) ?? []).filter(matchesViewMode) : [];
-          return (
-            <button
-              key={idx}
-              type="button"
-              onClick={() => valid && openDay(dateKey)}
-              className={`min-h-[64px] border rounded-md p-1.5 text-left transition-colors ${
-                valid ? "border-slate-200 bg-white hover:border-sky-300 cursor-pointer" : "border-transparent bg-slate-50 cursor-default"
-              }`}
-              disabled={!valid}
-            >
-              {valid && (
-                <>
-                  <div className="text-[11px] font-bold text-slate-700 mb-0.5 tabular-nums">{d.getDate()}</div>
-                  <div className="grid gap-0.5">
-                    {dayItems.slice(0, 3).map((item) => (
-                      <div
+      {/* DESKTOP: Calendar grid (always visible on md+, hidden on mobile when agenda mode) */}
+      <div className={`${displayMode === "agenda" ? "hidden md:block" : "block"}`}>
+        <div className="grid grid-cols-7 gap-1">
+          {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"].map((d) => (
+            <div key={d} className="text-[10px] font-bold text-slate-500 text-center uppercase tracking-wide">{d}</div>
+          ))}
+          {days.map((d, idx) => {
+            const valid = !Number.isNaN(d.getTime());
+            const dateKey = valid ? formatDateKey(d) : "";
+            const dayItems = valid ? (byDate.get(dateKey) ?? []).filter(matchesViewMode) : [];
+            const isToday = valid && dateKey === formatDateKey(new Date());
+            return (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => valid && openDay(dateKey)}
+                className={`min-h-[52px] md:min-h-[64px] border rounded-md p-1 md:p-1.5 text-left transition-colors ${
+                  valid
+                    ? isToday
+                      ? "border-sky-400 bg-sky-50 hover:border-sky-500 cursor-pointer"
+                      : "border-slate-200 bg-white hover:border-sky-300 cursor-pointer"
+                    : "border-transparent bg-slate-50 cursor-default"
+                }`}
+                disabled={!valid}
+              >
+                {valid && (
+                  <>
+                    <div className={`text-[11px] font-bold mb-0.5 tabular-nums ${isToday ? "text-sky-700" : "text-slate-700"}`}>{d.getDate()}</div>
+                    <div className="grid gap-0.5">
+                      {dayItems.slice(0, 2).map((item) => (
+                        <div
+                          key={item.id}
+                          className="text-[9px] font-medium leading-tight border-l-2 pl-1 text-slate-800 truncate opacity-90"
+                          style={{ borderLeftColor: eventColor(item) }}
+                          title={`${eventCodeLabel(item)} (${statusLabel(item.status)})`}
+                        >
+                          {eventCodeLabel(item)}
+                        </div>
+                      ))}
+                      {dayItems.length > 2 && <div className="text-[9px] text-slate-500 font-medium">+{dayItems.length - 2}</div>}
+                    </div>
+                  </>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex flex-wrap gap-2 mt-2 text-[10px] font-medium text-slate-500">
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-sky-500 shrink-0" /> Продажби</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 shrink-0" /> Добавени</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500 shrink-0" /> Премахнати</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-500 shrink-0" /> Услуги</span>
+        </div>
+      </div>
+
+      {/* MOBILE: Agenda view */}
+      <div className={`${displayMode === "agenda" ? "block md:hidden" : "hidden"}`}>
+        {agendaItems.length === 0 ? (
+          <div className="text-center py-8 text-sm text-slate-500 border border-dashed border-slate-200 rounded-xl">Няма събития за {title}.</div>
+        ) : (
+          <div className="space-y-3">
+            {agendaDates.map((dateKey) => {
+              const dayEvts = agendaByDate.get(dateKey) ?? [];
+              const d = new Date(`${dateKey}T00:00:00`);
+              const isToday = dateKey === formatDateKey(new Date());
+              return (
+                <div key={dateKey}>
+                  <button
+                    type="button"
+                    onClick={() => openDay(dateKey)}
+                    className="w-full text-left"
+                  >
+                    <div className={`text-xs font-bold mb-1.5 px-1 ${isToday ? "text-sky-700" : "text-slate-500"}`}>
+                      {d.toLocaleDateString("bg-BG", { weekday: "long", day: "numeric", month: "long" })}
+                      {isToday && " · Днес"}
+                    </div>
+                  </button>
+                  <div className="space-y-1.5">
+                    {dayEvts.map((item) => (
+                      <button
                         key={item.id}
-                        className={`text-[9px] font-medium leading-tight border-l-2 pl-1 text-slate-800 truncate ${item.status !== "done" ? "opacity-80" : "opacity-100"}`}
-                        style={{ borderLeftColor: eventColor(item) }}
-                        title={`${eventCodeLabel(item)} (${statusLabel(item.status)})`}
+                        type="button"
+                        onClick={() => openDay(dateKey)}
+                        className="w-full text-left bg-white rounded-xl border border-slate-200 px-3 py-3 flex items-start gap-3 hover:border-sky-200 active:bg-slate-50 transition-colors shadow-sm"
                       >
-                        {eventCodeLabel(item)}
-                      </div>
+                        <div className="w-1 self-stretch rounded-full shrink-0" style={{ backgroundColor: eventColor(item) }} />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-bold text-slate-900 leading-tight">{item.title}</div>
+                          <div className="text-xs text-slate-500 mt-0.5">{eventCodeLabel(item)}</div>
+                          {(item.customer_name || item.customer_phone) && (
+                            <div className="text-xs text-slate-400 mt-0.5">
+                              {[item.customer_name, item.customer_phone].filter(Boolean).join(" · ")}
+                            </div>
+                          )}
+                        </div>
+                        <span className={statusPillClass(item.status)}>{statusLabel(item.status)}</span>
+                      </button>
                     ))}
-                    {dayItems.length > 3 && <div className="text-[9px] text-slate-500 font-medium">+{dayItems.length - 3}</div>}
                   </div>
-                </>
-              )}
-            </button>
-          );
-        })}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      <div className="flex flex-wrap gap-2 mt-2 text-[10px] font-medium text-slate-500">
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-sky-500 shrink-0" /> Продажби</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 shrink-0" /> Добавени артикули</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500 shrink-0" /> Премахнати артикули</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-500 shrink-0" /> Услуги</span>
-      </div>
-
+      {/* Day modal — bottom sheet on mobile, centered panel on desktop */}
       {selectedDate && (
         <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-end md:items-start justify-center md:overflow-y-auto bg-slate-900/40 md:p-4 backdrop-blur-sm"
           onClick={() => !savingBusy && closeDayModal()}
         >
           <div
-            className="my-4 flex max-h-[calc(100vh-2rem)] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
+            className="w-full max-h-[92vh] md:max-h-[calc(100vh-2rem)] md:my-4 md:max-w-6xl flex flex-col overflow-hidden rounded-t-3xl md:rounded-xl border border-slate-200 bg-white shadow-[0_-8px_40px_rgba(15,23,42,0.2)] md:shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <header className="flex shrink-0 flex-wrap items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4">
+            {/* Drag handle - mobile only */}
+            <div className="flex justify-center pt-3 pb-1 md:hidden shrink-0">
+              <div className="w-10 h-1 rounded-full bg-slate-200" />
+            </div>
+            <header className="flex shrink-0 flex-wrap items-start justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 md:px-5 md:py-4">
               <div className="min-w-0">
-                <h2 className="text-xl font-semibold text-slate-900">
-                  Детайли за{" "}
+                <h2 className="text-base md:text-xl font-semibold text-slate-900 leading-tight">
                   {new Date(`${selectedDate}T00:00:00`).toLocaleDateString("bg-BG", {
-                    weekday: "long",
+                    weekday: "short",
                     day: "numeric",
                     month: "long",
                     year: "numeric",
                   })}
                 </h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  {selectedItems.length} събития
-                  <span className="mx-2 text-slate-300">·</span>
-                  {selectedItems.filter((x) => x.event_code === "sale").length} продажби
+                <p className="mt-0.5 text-xs md:text-sm text-slate-500">
+                  {selectedItems.length} {selectedItems.length === 1 ? "събитие" : "събития"}
+                  {selectedItems.filter((x) => x.event_code === "sale").length > 0 && (
+                    <> · {selectedItems.filter((x) => x.event_code === "sale").length} продажби</>
+                  )}
                 </p>
               </div>
-              <Button type="button" variant="secondary" onClick={closeDayModal}>
+              <Button type="button" variant="secondary" size="sm" onClick={closeDayModal}>
                 Затвори
               </Button>
             </header>
@@ -516,8 +624,9 @@ export function WorkItemsPlanner() {
       )}
 
       {confirmDeleteId && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-md" onClick={() => setConfirmDeleteId(null)}>
-          <div className="w-full max-w-lg rounded-3xl border border-white/70 bg-white p-6 shadow-[0_30px_90px_rgba(15,23,42,0.35)]" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center md:p-4 bg-slate-950/55 backdrop-blur-md" onClick={() => setConfirmDeleteId(null)}>
+          <div className="w-full md:max-w-lg rounded-t-3xl md:rounded-3xl border border-white/70 bg-white p-6 shadow-[0_-8px_40px_rgba(15,23,42,0.25)]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-center mb-3 md:hidden"><div className="w-10 h-1 rounded-full bg-slate-200" /></div>
             <div className="text-xl font-black text-slate-950">Изтриване на събитие</div>
             <div className="mt-2 text-sm text-slate-500">Сигурни ли сте, че искате да изтриете това събитие от календара?</div>
             <div className="mt-6 flex justify-end gap-2">

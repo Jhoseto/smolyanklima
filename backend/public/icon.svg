@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <linearGradient id="og" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF4D00"/>
+      <stop offset="50%" stop-color="#FF6A00"/>
+      <stop offset="100%" stop-color="#FF2A4D"/>
+    </linearGradient>
+    <linearGradient id="ob" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00B4D8"/>
+      <stop offset="100%" stop-color="#0077B6"/>
+    </linearGradient>
+  </defs>
+  <rect width="200" height="200" fill="white"/>
+  <!-- Logo scaled to ~160×160 area, centered -->
+  <!-- Original viewBox: 0 5 73 90  ’  scale = 160/90 H 1.778 -->
+  <!-- Scaled width H 130; X offset = (200-130)/2 = 35 -->
+  <!-- Y offset = (200-160)/2 - 5*1.778 = 20 - 8.9 H 11 -->
+  <g transform="translate(35, 11) scale(1.778)">
+    <circle cx="12" cy="12" r="5" stroke="url(#og)" stroke-width="3" fill="none"/>
+    <path d="M 70 15.4 A 40 40 0 0 0 10.1 47 L 28.2 47 A 22 22 0 0 1 61 30.9 Z" fill="url(#og)"/>
+    <path d="M 10.1 53 A 40 40 0 0 0 70 84.6 L 61 69.1 A 22 22 0 0 1 28.2 53 Z" fill="url(#ob)"/>
+    <path d="M 62.6 47 A 13 13 0 0 0 37.4 47 Z" fill="url(#og)"/>
+    <path d="M 37.4 53 A 13 13 0 0 0 62.6 53 Z" fill="url(#ob)"/>
+  </g>
+</svg>

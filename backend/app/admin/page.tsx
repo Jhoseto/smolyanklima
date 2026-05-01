@@ -104,31 +104,31 @@ export default async function AdminDashboardPage() {
   const nLowStock = lowStock.count ?? 0;
 
   return (
-    <div className="w-full space-y-4">
+    <div className="w-full space-y-3">
       <div>
-        <h1 className="text-xl font-bold text-slate-900 mb-1 leading-tight">
+        <h1 className="text-lg md:text-xl font-bold text-slate-900 mb-0.5 leading-tight">
           <SectionTitle title="Оперативно табло" hint="Основният работен екран: KPI + календар + бързи действия." />
         </h1>
-        <p className="text-sm text-slate-500 leading-snug">
+        <p className="text-xs md:text-sm text-slate-500 leading-snug hidden sm:block">
           Център за ежедневна работа: текущ статус, календар със събития и бързи действия.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-2 md:gap-3">
         {[
           { label: "Продукти", value: String(nProducts) },
-          { label: "Публикувани статии", value: String(nArticles) },
+          { label: "Публ. статии", value: String(nArticles) },
           { label: "Нови запитвания", value: String(nInquiries) },
           { label: "Днес / просрочени", value: `${nWorkToday} / ${nWorkOverdue}` },
         ].map((card) => (
-          <Card key={card.label} className="p-4">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{card.label}</div>
-            <div className="text-3xl font-bold text-slate-900 mt-2 tabular-nums">{card.value}</div>
+          <Card key={card.label} className="p-3 md:p-4">
+            <div className="text-[10px] md:text-xs font-semibold text-slate-500 uppercase tracking-wider leading-tight">{card.label}</div>
+            <div className="text-2xl md:text-3xl font-bold text-slate-900 mt-1 md:mt-2 tabular-nums">{card.value}</div>
           </Card>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
         <DashboardPanel
           title="Днес"
           description="Задачи и събития, които трябва да се обработят днес."

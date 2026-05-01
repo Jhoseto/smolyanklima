@@ -86,91 +86,117 @@ export default function AdminHistoryPage() {
   const pages = Math.max(1, Math.ceil(meta.total / meta.perPage));
   
   return (
-    <div className="w-full space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900 mb-1 leading-tight">
-            <SectionTitle title="История на продажбите" hint="Само реални продажби. Другите действия са в Активност." />
-          </h1>
-        </div>
+    <div className="w-full space-y-3">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <h1 className="text-lg md:text-xl font-bold text-slate-900 leading-tight">
+          <SectionTitle title="История на продажбите" hint="Само реални продажби. Другите действия са в Активност." />
+        </h1>
         <Button variant="secondary" onClick={load} className="gap-2 shadow-sm">
-          <RefreshCw className="w-4 h-4" /> Обнови
+          <RefreshCw className="w-4 h-4" />
+          <span className="hidden sm:inline">Обнови</span>
         </Button>
       </div>
 
-      <Card className="p-4">
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto_auto] gap-4 items-end">
-          <label className="grid gap-1.5">
-            <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Търсене</span>
-            <Input value={q} onChange={(e) => { setPage(1); setQ(e.target.value); }} placeholder="Търси по събитие/клиент/телефон/адрес..." />
+      <Card className="p-3 md:p-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-[1fr_auto_auto_auto] gap-2 md:gap-4 items-end">
+          <label className="grid gap-1">
+            <span className="text-xs font-bold text-slate-700 uppercase tracking-wide hidden md:block">Търсене</span>
+            <Input value={q} onChange={(e) => { setPage(1); setQ(e.target.value); }} placeholder="Търси по клиент/телефон/адрес..." />
           </label>
-          <label className="grid gap-1.5">
-            <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Статус</span>
-            <Select value={status} onChange={(e) => { setPage(1); setStatus(e.target.value as WorkRow["status"] | ""); }}>
-              <option value="">Всички статуси</option>
-              <option value="planned">Чака</option>
-              <option value="in_progress">В процес</option>
-              <option value="done">Изпълнена</option>
-              <option value="cancelled">Отказана</option>
-            </Select>
-          </label>
-          <label className="grid gap-1.5">
-            <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">От дата</span>
-            <Input value={fromDate} onChange={(e) => { setPage(1); setFromDate(e.target.value); }} type="date" />
-          </label>
-          <label className="grid gap-1.5">
-            <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">До дата</span>
-            <Input value={toDate} onChange={(e) => { setPage(1); setToDate(e.target.value); }} type="date" />
-          </label>
+          <Select value={status} onChange={(e) => { setPage(1); setStatus(e.target.value as WorkRow["status"] | ""); }}>
+            <option value="">Всички статуси</option>
+            <option value="planned">Чака</option>
+            <option value="in_progress">В процес</option>
+            <option value="done">Изпълнена</option>
+            <option value="cancelled">Отказана</option>
+          </Select>
+          <Input value={fromDate} onChange={(e) => { setPage(1); setFromDate(e.target.value); }} type="date" />
+          <Input value={toDate} onChange={(e) => { setPage(1); setToDate(e.target.value); }} type="date" />
         </div>
       </Card>
 
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 text-sm font-medium">{error}</div>}
+      {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm font-medium">{error}</div>}
 
-      <Table>
-        <thead>
-          <tr>
-            <Th>Събитие</Th>
-            <Th>Статус</Th>
-            <Th>Контакт</Th>
-            <Th>Телефон</Th>
-            <Th>Адрес</Th>
-            <Th>Стойност</Th>
-            <Th>Дата</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((row) => (
-            <tr key={row.id} className="hover:bg-slate-50 transition-colors">
-              <Td className="font-bold text-slate-900">
-                Продажба
-              </Td>
-              <Td>
-                <span className={statusPillClass(row.status)}>
-                  {STATUS_TEXT[row.status]}
-                </span>
-              </Td>
-              <Td className="font-medium text-slate-700">{row.customer_name || "—"}</Td>
-              <Td className="text-slate-600">{row.customer_phone || "—"}</Td>
-              <Td className="text-slate-600">{row.customer_address || "—"}</Td>
-              <Td className="font-semibold text-slate-900">
-                {row.total_amount != null ? `€${Number(row.total_amount).toLocaleString()}` : row.unit_price != null ? `€${Number(row.unit_price).toLocaleString()}` : "—"}
-              </Td>
-              <Td className="text-xs text-slate-500 font-medium">{new Date(row.due_date || row.created_at).toLocaleString()}</Td>
+      {/* Desktop table */}
+      <div className="hidden md:block">
+        <Table>
+          <thead>
+            <tr>
+              <Th>Събитие</Th>
+              <Th>Статус</Th>
+              <Th>Контакт</Th>
+              <Th>Телефон</Th>
+              <Th>Адрес</Th>
+              <Th>Стойност</Th>
+              <Th>Дата</Th>
             </tr>
-          ))}
-          {items.length === 0 && (
-            <tr><Td colSpan={7} className="text-center py-8 text-slate-500">Няма намерени продажби.</Td></tr>
-          )}
-        </tbody>
-      </Table>
+          </thead>
+          <tbody>
+            {items.map((row) => (
+              <tr key={row.id} className="hover:bg-slate-50 transition-colors">
+                <Td className="font-bold text-slate-900">Продажба</Td>
+                <Td><span className={statusPillClass(row.status)}>{STATUS_TEXT[row.status]}</span></Td>
+                <Td className="font-medium text-slate-700">{row.customer_name || "—"}</Td>
+                <Td className="text-slate-600">{row.customer_phone || "—"}</Td>
+                <Td className="text-slate-600">{row.customer_address || "—"}</Td>
+                <Td className="font-semibold text-slate-900">
+                  {row.total_amount != null ? `€${Number(row.total_amount).toLocaleString()}` : row.unit_price != null ? `€${Number(row.unit_price).toLocaleString()}` : "—"}
+                </Td>
+                <Td className="text-xs text-slate-500 font-medium">{new Date(row.due_date || row.created_at).toLocaleString()}</Td>
+              </tr>
+            ))}
+            {items.length === 0 && (
+              <tr><Td colSpan={7} className="text-center py-8 text-slate-500">Няма намерени продажби.</Td></tr>
+            )}
+          </tbody>
+        </Table>
+      </div>
+
+      {/* Mobile card list */}
+      <div className="md:hidden space-y-2">
+        {items.length === 0 && (
+          <div className="bg-white rounded-xl border border-slate-200 p-6 text-center text-slate-500 text-sm">Няма намерени продажби.</div>
+        )}
+        {items.map((row) => {
+          const amount = row.total_amount != null ? row.total_amount : row.unit_price;
+          return (
+            <div key={row.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <div>
+                  <div className="font-bold text-slate-900 text-sm">{row.customer_name || "Неизвестен клиент"}</div>
+                  {row.customer_phone && (
+                    <a href={`tel:${row.customer_phone}`} className="text-xs text-sky-600 font-medium mt-0.5 block">
+                      {row.customer_phone}
+                    </a>
+                  )}
+                  {row.customer_address && (
+                    <div className="text-xs text-slate-500 mt-0.5">{row.customer_address}</div>
+                  )}
+                </div>
+                <div className="text-right shrink-0">
+                  {amount != null ? (
+                    <div className="text-lg font-black text-slate-900">€{Number(amount).toLocaleString()}</div>
+                  ) : (
+                    <div className="text-sm text-slate-400">—</div>
+                  )}
+                  <span className={statusPillClass(row.status)}>{STATUS_TEXT[row.status]}</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">Продажба</span>
+                <span className="text-xs text-slate-400 font-medium">{new Date(row.due_date || row.created_at).toLocaleDateString("bg-BG")}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
 
       <div className="flex justify-between items-center">
         <span className="text-sm text-slate-500 font-medium">Общо: {meta.total}</span>
-        <div className="flex items-center gap-3">
-          <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Предишна</Button>
-          <span className="text-sm font-medium text-slate-600">Стр. {page} / {pages}</span>
-          <Button variant="secondary" size="sm" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>Следваща</Button>
+        <div className="flex items-center gap-2 md:gap-3">
+          <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹ Пред.</Button>
+          <span className="text-sm font-medium text-slate-600">{page} / {pages}</span>
+          <Button variant="secondary" size="sm" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>Следв. ›</Button>
         </div>
       </div>
     </div>

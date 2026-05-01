@@ -89,9 +89,9 @@ export const CompareBar = ({ compareList, onRemove, onClear }: CompareBarProps) 
         exit={{ y: 100, opacity: 0 }}
         className="fixed bottom-0 left-0 right-0 z-[150] p-4 pointer-events-none flex justify-center"
       >
-        <div className="bg-white/90 backdrop-blur-xl border border-gray-200 shadow-2xl rounded-2xl p-4 flex flex-col md:flex-row items-center gap-6 pointer-events-auto w-full max-w-4xl">
+        <div className="bg-white/90 backdrop-blur-xl border border-gray-200 shadow-2xl rounded-2xl p-3 md:p-4 flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-6 pointer-events-auto w-full max-w-4xl">
           
-          <div className="flex-1 flex gap-4 w-full md:w-auto overflow-hidden">
+          <div className="flex-1 flex gap-2 md:gap-4 w-full overflow-x-auto pb-0.5 scrollbar-hide">
             <AnimatePresence>
               {compareList.map(p => (
                 <motion.div
@@ -100,7 +100,7 @@ export const CompareBar = ({ compareList, onRemove, onClear }: CompareBarProps) 
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.8 }}
-                  className="relative flex items-center gap-3 bg-gray-50 rounded-xl p-2 pr-4 border border-gray-100 min-w-[200px]"
+                  className="relative flex items-center gap-2 bg-gray-50 rounded-xl p-2 pr-3 border border-gray-100 min-w-[150px] md:min-w-[180px] shrink-0"
                 >
                   <button 
                     onClick={() => onRemove(p.id)}
@@ -108,7 +108,7 @@ export const CompareBar = ({ compareList, onRemove, onClear }: CompareBarProps) 
                   >
                     <X className="w-3 h-3" />
                   </button>
-                  <img src={p.image} alt={p.model} className="w-10 h-10 object-contain mix-blend-multiply bg-white rounded-lg p-1" />
+                  <img src={p.image} alt={p.model} className="w-8 h-8 md:w-10 md:h-10 object-contain mix-blend-multiply bg-white rounded-lg p-1 shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-[10px] font-bold text-[#00B4D8] uppercase truncate">{p.brand}</p>
                     <p className="text-xs font-bold text-gray-900 truncate">{p.model}</p>
@@ -118,20 +118,20 @@ export const CompareBar = ({ compareList, onRemove, onClear }: CompareBarProps) 
             </AnimatePresence>
 
             {compareList.length < 3 && (
-              <div className="flex items-center gap-3 bg-gray-50/50 border border-dashed border-gray-300 rounded-xl p-2 px-6 min-w-[200px] justify-center opacity-50">
-                <span className="text-xs font-semibold text-gray-400">Добави още {3 - compareList.length}</span>
+              <div className="flex items-center gap-2 bg-gray-50/50 border border-dashed border-gray-300 rounded-xl p-2 px-4 min-w-[120px] md:min-w-[160px] justify-center opacity-50 shrink-0">
+                <span className="text-xs font-semibold text-gray-400">+ още {3 - compareList.length}</span>
               </div>
             )}
           </div>
 
-          <div className="flex items-center gap-4 shrink-0">
+          <div className="flex items-center gap-3 shrink-0 justify-between md:justify-start">
             <button onClick={onClear} className="text-sm font-semibold text-gray-500 hover:text-red-500 transition-colors">
               Изчисти
             </button>
             <button
               onClick={() => setShowTable(true)}
               disabled={compareList.length < 2}
-              className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all shadow-md ${
+              className={`flex items-center gap-2 px-5 py-2.5 md:px-6 md:py-3 rounded-full font-bold transition-all shadow-md text-sm ${
                 compareList.length >= 2 
                   ? 'bg-gradient-to-r from-[#FF4D00] to-[#FF2A4D] text-white hover:shadow-lg hover:scale-105' 
                   : 'bg-gray-200 text-gray-400 cursor-not-allowed'
@@ -156,10 +156,10 @@ export const CompareBar = ({ compareList, onRemove, onClear }: CompareBarProps) 
               className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm"
             />
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-5xl bg-white rounded-[2rem] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 30 }}
+              className="relative w-full max-w-5xl bg-white rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl overflow-hidden max-h-[92vh] sm:max-h-[90vh] flex flex-col"
             >
               <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-gray-50/50">
                 <h2 className="text-xl font-black text-gray-900 flex items-center gap-2">

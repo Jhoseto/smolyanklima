@@ -113,6 +113,7 @@ export default function AdminContactsPage() {
   const [showList, setShowList] = useState(false);
   const [showMerge, setShowMerge] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [mobileView, setMobileView] = useState<"list" | "detail">("list");
 
   const qs = useMemo(() => {
     const sp = new URLSearchParams();
@@ -345,20 +346,30 @@ export default function AdminContactsPage() {
   }
 
   return (
-    <div className="w-full space-y-4">
-      <div>
-        <h1 className="text-xl font-bold text-slate-900 mb-1 leading-tight">Контакти</h1>
-        <p className="text-sm text-slate-500 leading-snug">CRM списък с история на събитията за всеки контакт.</p>
+    <div className="w-full space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        {mobileView === "detail" && detail ? (
+          <button
+            type="button"
+            onClick={() => setMobileView("list")}
+            className="lg:hidden flex items-center gap-1.5 text-sm font-semibold text-sky-700 hover:text-sky-800 active:text-sky-900 transition-colors"
+          >
+            <ChevronDown className="w-4 h-4 rotate-90" /> Назад към списъка
+          </button>
+        ) : (
+          <h1 className="text-lg md:text-xl font-bold text-slate-900 leading-tight">Контакти</h1>
+        )}
       </div>
 
-      <HelpCard>
+      <HelpCard className="hidden md:block">
         <HelpRow items={["Ляво: търсене + нов контакт", "Дясно: детайли + история + сливане", "Статуси и суми са в таблицата по дати"]} />
       </HelpCard>
 
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 text-sm font-medium">{error}</div>}
+      {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm font-medium">{error}</div>}
 
       <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-3 items-start">
-        <div className="space-y-2">
+        {/* Left column: list — on mobile hidden when in detail view */}
+        <div className={`space-y-2 ${mobileView === "detail" ? "hidden lg:block" : "block"}`}>
           <CollapsiblePanel
             title="Търсене"
             subtitle="Филтър по име, телефон или имейл."
@@ -428,30 +439,51 @@ export default function AdminContactsPage() {
             open={showList}
             onToggle={() => setShowList((v) => !v)}
           >
-            <div className="max-h-[38vh] overflow-y-auto space-y-1 pr-0.5">
+            <div className="max-h-[38vh] lg:max-h-[55vh] overflow-y-auto space-y-1 pr-0.5">
               {loading ? <div className="text-sm text-slate-500 p-2 text-center">Зареждане...</div> : null}
               {items.map((c) => (
-                <button
+                <div
                   key={c.id}
-                  type="button"
-                  onClick={() => setSelected(c.id)}
-                  className={`w-full text-left p-2 rounded-lg border transition-colors ${
-                    selected === c.id 
-                      ? "bg-sky-50 border-sky-200" 
+                  className={`rounded-lg border transition-colors ${
+                    selected === c.id
+                      ? "bg-sky-50 border-sky-200"
                       : "bg-white border-slate-200 hover:border-sky-300 hover:bg-slate-50"
                   }`}
                 >
-                  <div className="font-bold text-slate-900 text-xs leading-tight">{c.full_name}</div>
-                  <div className="text-[10px] text-slate-600 mt-0.5">{c.phone}</div>
-                  <div className="text-[9px] text-slate-400 mt-1 font-medium">{new Date(c.updated_at).toLocaleString()}</div>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => { setSelected(c.id); setMobileView("detail"); }}
+                    className="w-full text-left p-2.5"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="font-bold text-slate-900 text-xs leading-tight truncate">{c.full_name}</div>
+                      {c.customer_status === "vip" && (
+                        <span className="text-[9px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full shrink-0">VIP</span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-slate-600 mt-0.5">{c.phone}</div>
+                    {c.next_follow_up_at && (
+                      <div className="text-[10px] text-sky-600 font-semibold mt-0.5">→ {new Date(c.next_follow_up_at).toLocaleDateString("bg-BG")}</div>
+                    )}
+                  </button>
+                  <div className="flex border-t border-slate-100 lg:hidden">
+                    <a
+                      href={`tel:${c.phone}`}
+                      className="flex-1 text-center py-2 text-xs font-semibold text-sky-700 hover:bg-sky-50 active:bg-sky-100 transition-colors rounded-b-lg"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Phone className="w-3.5 h-3.5 inline mr-1" />Обади се
+                    </a>
+                  </div>
+                </div>
               ))}
               {!loading && items.length === 0 ? <div className="text-sm text-slate-500 p-4 text-center">Няма намерени контакти.</div> : null}
             </div>
           </CollapsiblePanel>
         </div>
 
-        <div className="space-y-2">
+        {/* Right column: detail — on mobile hidden when in list view */}
+        <div className={`space-y-2 ${mobileView === "list" ? "hidden lg:block" : "block"}`}>
           {!detail ? (
             <Card className="p-12 flex flex-col items-center justify-center text-center text-slate-500 border-dashed">
               <Users className="w-12 h-12 mb-4 text-slate-300" />
@@ -460,48 +492,61 @@ export default function AdminContactsPage() {
             </Card>
           ) : (
             <>
-              <Card className="p-6">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-12 h-12 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center text-xl font-bold">
+              <Card className="p-4 md:p-6">
+                <div className="flex items-center gap-3 mb-4 md:mb-6">
+                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center text-lg md:text-xl font-bold shrink-0">
                     {detail.full_name.charAt(0).toUpperCase()}
                   </div>
-                  <div>
-                    <h2 className="text-xl font-bold text-slate-900">{detail.full_name}</h2>
-                    <p className="text-sm text-slate-500">
-                      {customerStatusLabel(detail.customer_status)} · Клиент от {new Date(detail.updated_at).toLocaleDateString()}
+                  <div className="min-w-0 flex-1">
+                    <h2 className="text-lg md:text-xl font-bold text-slate-900 leading-tight">{detail.full_name}</h2>
+                    <p className="text-xs md:text-sm text-slate-500">
+                      {customerStatusLabel(detail.customer_status)} · {new Date(detail.updated_at).toLocaleDateString("bg-BG")}
                     </p>
+                  </div>
+                  {/* Mobile quick action buttons */}
+                  <div className="flex items-center gap-2 lg:hidden shrink-0">
+                    <a href={`tel:${detail.phone}`} className="w-10 h-10 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center active:bg-sky-200 transition-colors">
+                      <Phone className="w-5 h-5" />
+                    </a>
+                    {detail.email && (
+                      <a href={`mailto:${detail.email}`} className="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center active:bg-slate-200 transition-colors">
+                        <Mail className="w-5 h-5" />
+                      </a>
+                    )}
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <Phone className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
-                    <div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <Phone className="w-4 h-4 text-slate-400 shrink-0" />
+                    <div className="min-w-0">
                       <div className="text-xs font-bold text-slate-500 uppercase tracking-wide">Телефон</div>
-                      <div className="text-sm font-medium text-slate-900 mt-0.5">{detail.phone || "—"}</div>
+                      <a href={`tel:${detail.phone}`} className="text-sm font-medium text-sky-700 mt-0.5 block hover:underline">{detail.phone || "—"}</a>
                     </div>
                   </div>
-                  <div className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <Mail className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
-                    <div>
+                  <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <Mail className="w-4 h-4 text-slate-400 shrink-0" />
+                    <div className="min-w-0">
                       <div className="text-xs font-bold text-slate-500 uppercase tracking-wide">Имейл</div>
-                      <div className="text-sm font-medium text-slate-900 mt-0.5">{detail.email || "—"}</div>
+                      <div className="text-sm font-medium text-slate-900 mt-0.5 truncate">{detail.email || "—"}</div>
                     </div>
                   </div>
                   <div className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 md:col-span-2">
-                    <MapPin className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
+                    <MapPin className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
                     <div>
                       <div className="text-xs font-bold text-slate-500 uppercase tracking-wide">Адрес</div>
                       <div className="text-sm font-medium text-slate-900 mt-0.5">{detail.address || "—"}</div>
                     </div>
                   </div>
-                  <div className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 md:col-span-2">
-                    <FileText className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
-                    <div>
-                      <div className="text-xs font-bold text-slate-500 uppercase tracking-wide">Бележки</div>
-                      <div className="text-sm font-medium text-slate-900 mt-0.5 whitespace-pre-wrap">{detail.notes || "—"}</div>
+                  {detail.notes && (
+                    <div className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 md:col-span-2">
+                      <FileText className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="text-xs font-bold text-slate-500 uppercase tracking-wide">Бележки</div>
+                        <div className="text-sm font-medium text-slate-900 mt-0.5 whitespace-pre-wrap">{detail.notes}</div>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </Card>
 
@@ -575,15 +620,15 @@ export default function AdminContactsPage() {
                 open={showHistory}
                 onToggle={() => setShowHistory((v) => !v)}
               >
-                <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                {/* Desktop table */}
+                <div className="hidden md:block border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
                   <Table>
                     <thead>
                       <tr>
-                        <Th>Източник</Th>
+                        <Th>Тип</Th>
                         <Th>Събитие</Th>
                         <Th>Статус</Th>
                         <Th>Продукт</Th>
-                        <Th>Контакт</Th>
                         <Th>Сума</Th>
                         <Th>Дата</Th>
                       </tr>
@@ -597,23 +642,11 @@ export default function AdminContactsPage() {
                             </span>
                           </Td>
                           <Td className="font-medium text-slate-900">
-                            {r.source === "inquiry"
-                              ? `Запитване${r.service_type ? ` - ${r.service_type}` : ""}`
-                              : r.title}
+                            {r.source === "inquiry" ? `Запитване${r.service_type ? ` - ${r.service_type}` : ""}` : r.title}
                           </Td>
+                          <Td><span className={statusBadgeClass(r.status)}>{statusLabel(r.status)}</span></Td>
                           <Td>
-                            <span className={statusBadgeClass(r.status)}>{statusLabel(r.status)}</span>
-                          </Td>
-                          <Td>
-                            {r.products?.name ? (
-                              <ProductQuickViewButton productId={r.products.id} productName={r.products.name} />
-                            ) : (
-                              "—"
-                            )}
-                          </Td>
-                          <Td>
-                            <div className="font-medium">{r.customer_name || "—"}</div>
-                            <div className="text-xs text-slate-500 mt-0.5">{r.customer_phone || r.customer_email || ""}</div>
+                            {r.products?.name ? <ProductQuickViewButton productId={r.products.id} productName={r.products.name} /> : "—"}
                           </Td>
                           <Td className="font-semibold">
                             {r.total_amount != null ? `€${Number(r.total_amount).toLocaleString()}` : "—"}
@@ -621,11 +654,37 @@ export default function AdminContactsPage() {
                           <Td className="text-xs">{new Date(r.due_date || r.created_at).toLocaleString()}</Td>
                         </tr>
                       ))}
-                      {history.length === 0 ? (
-                        <tr><Td colSpan={7} className="text-center py-8 text-slate-500">Няма събития за този контакт.</Td></tr>
-                      ) : null}
+                      {history.length === 0 && (
+                        <tr><Td colSpan={6} className="text-center py-8 text-slate-500">Няма събития за този контакт.</Td></tr>
+                      )}
                     </tbody>
                   </Table>
+                </div>
+                {/* Mobile card list */}
+                <div className="md:hidden space-y-2">
+                  {history.length === 0 && (
+                    <div className="text-center py-6 text-slate-500 text-sm">Няма събития за този контакт.</div>
+                  )}
+                  {history.map((r) => (
+                    <div key={r.id} className="bg-white rounded-xl border border-slate-200 p-3">
+                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                        <div className="font-semibold text-slate-900 text-sm leading-snug">
+                          {r.source === "inquiry" ? `Запитване${r.service_type ? ` - ${r.service_type}` : ""}` : r.title}
+                        </div>
+                        {r.total_amount != null && (
+                          <span className="font-black text-slate-900 text-sm shrink-0">€{Number(r.total_amount).toLocaleString()}</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${r.source === "inquiry" ? "bg-purple-50 text-purple-700" : "bg-sky-50 text-sky-700"}`}>
+                          {r.source === "inquiry" ? "Запитване" : "Операция"}
+                        </span>
+                        <span className={statusBadgeClass(r.status)}>{statusLabel(r.status)}</span>
+                        {r.products?.name && <ProductQuickViewButton productId={r.products.id} productName={r.products.name} />}
+                        <span className="text-[10px] text-slate-400 ml-auto">{new Date(r.due_date || r.created_at).toLocaleDateString("bg-BG")}</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </CollapsiblePanel>
 
@@ -716,11 +775,11 @@ export default function AdminContactsPage() {
 
       {aiSummaryDraft && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-md"
+          className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/55 md:p-4 backdrop-blur-md"
           onClick={() => setAiSummaryDraft(null)}
         >
           <div
-            className="w-full max-w-2xl overflow-hidden rounded-3xl border border-white/70 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)]"
+            className="w-full max-w-2xl overflow-hidden rounded-t-3xl md:rounded-3xl border border-white/70 bg-white shadow-[0_-8px_60px_rgba(15,23,42,0.35)] md:shadow-[0_30px_90px_rgba(15,23,42,0.35)]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="relative border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#ffffff_42%,#f8fafc_100%)] px-6 py-5">

@@ -152,7 +152,7 @@ export const ProductsSection = () => {
               <div className="absolute -bottom-1 left-4 right-4 h-1 bg-gradient-to-r from-[#00B4D8]/0 via-[#00B4D8] to-[#00B4D8]/0 opacity-40 rounded-full" />
             </span>
             <br />
-            <span className="relative inline-block whitespace-nowrap">
+            <span className="relative inline-block">
               <span className="absolute -inset-2 blur-xl bg-gradient-to-r from-[#FF4D00]/20 to-[#FF2A4D]/20 opacity-70"></span>
               <span className="relative text-transparent bg-clip-text bg-gradient-to-r from-[#FF4D00] via-[#FF6A00] to-[#FF2A4D] font-black uppercase drop-shadow-md">
                 продукти

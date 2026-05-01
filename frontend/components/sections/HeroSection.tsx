@@ -27,17 +27,17 @@ export const HeroSection = () => {
             </div>
 
             {/* Headline */}
-            <h1 className="text-[3rem] lg:text-[3.75rem] font-extrabold leading-[1.05] tracking-tight mb-8">
+            <h1 className="text-[2.5rem] sm:text-[3rem] lg:text-[3.75rem] font-extrabold leading-[1.05] tracking-tight mb-8">
               <span className="text-transparent bg-clip-text bg-gradient-to-br from-gray-900 via-gray-800 to-gray-600 drop-shadow-sm">
                 Климатици за
               </span> <br />
-              <span className="relative inline-block my-1 whitespace-nowrap">
+              <span className="relative inline-block my-1">
                 <span className="absolute -inset-1 blur-lg bg-gradient-to-r from-[#FF4D00]/30 to-[#FF2A4D]/30 opacity-70"></span>
                 <span className="relative text-transparent bg-clip-text bg-gradient-to-r from-[#FF4D00] via-[#FF6A00] to-[#FF2A4D] drop-shadow-sm">
                   Смолян и региона
                 </span>
               </span> <br />
-              <div className="whitespace-nowrap mt-2">
+              <div className="mt-2">
                 <span className="text-transparent bg-clip-text bg-gradient-to-br from-gray-900 via-gray-800 to-gray-600 drop-shadow-sm mr-3">
                   с монтаж
                 </span>
@@ -98,7 +98,7 @@ export const HeroSection = () => {
               <img
                 src="/images/hero-ac.jpg"
                 alt="Климатик в модерен интериор"
-                className="w-full h-[550px] object-cover"
+                className="w-full h-[300px] sm:h-[420px] lg:h-[550px] object-cover"
               />
 
               {/* Glass Stats Banner (Inside image at bottom) */}
@@ -124,28 +124,28 @@ export const HeroSection = () => {
             <motion.div
               animate={{ y: [-5, 5, -5] }}
               transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
-              className="absolute top-8 -left-8 bg-white/95 backdrop-blur-sm shadow-xl rounded-full px-5 py-3 border border-gray-100 flex items-center gap-2"
+              className="absolute top-4 left-3 lg:top-8 lg:-left-8 bg-white/95 backdrop-blur-sm shadow-xl rounded-full px-4 py-2.5 lg:px-5 lg:py-3 border border-gray-100 flex items-center gap-2"
             >
-              <Zap className="w-5 h-5 text-[#FF5722] fill-[#FF5722]/20" />
-              <span className="text-sm font-bold text-gray-800">Монтаж до 48ч</span>
+              <Zap className="w-4 h-4 lg:w-5 lg:h-5 text-[#FF5722] fill-[#FF5722]/20" />
+              <span className="text-xs lg:text-sm font-bold text-gray-800">Монтаж до 48ч</span>
             </motion.div>
 
             <motion.div
               animate={{ y: [5, -5, 5] }}
               transition={{ repeat: Infinity, duration: 5, ease: "easeInOut" }}
-              className="absolute top-1/2 -right-8 -translate-y-1/2 bg-white/95 backdrop-blur-sm shadow-xl rounded-full px-5 py-3 border border-gray-100 flex items-center gap-2"
+              className="absolute top-1/2 right-3 lg:-right-8 -translate-y-1/2 bg-white/95 backdrop-blur-sm shadow-xl rounded-full px-4 py-2.5 lg:px-5 lg:py-3 border border-gray-100 flex items-center gap-2"
             >
-              <ShieldCheck className="w-5 h-5 text-[#00B4D8]" />
-              <span className="text-sm font-bold text-gray-800">2г. гаранция</span>
+              <ShieldCheck className="w-4 h-4 lg:w-5 lg:h-5 text-[#00B4D8]" />
+              <span className="text-xs lg:text-sm font-bold text-gray-800">2г. гаранция</span>
             </motion.div>
 
             <motion.div
               animate={{ y: [-5, 5, -5] }}
               transition={{ repeat: Infinity, duration: 4.5, ease: "easeInOut", delay: 1 }}
-              className="absolute bottom-28 -left-6 bg-white/95 backdrop-blur-sm shadow-xl rounded-full px-5 py-3 border border-gray-100 flex items-center gap-2"
+              className="absolute bottom-8 left-3 lg:bottom-28 lg:-left-6 bg-white/95 backdrop-blur-sm shadow-xl rounded-full px-4 py-2.5 lg:px-5 lg:py-3 border border-gray-100 flex items-center gap-2"
             >
-              <BadgeCheck className="w-5 h-5 text-[#00A8E8]" />
-              <span className="text-sm font-bold text-gray-800">Сертифицирани</span>
+              <BadgeCheck className="w-4 h-4 lg:w-5 lg:h-5 text-[#00A8E8]" />
+              <span className="text-xs lg:text-sm font-bold text-gray-800">Сертифицирани</span>
             </motion.div>
 
           </motion.div>

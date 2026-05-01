@@ -110,9 +110,14 @@ function ProductQuickViewModal({ productId, onClose }: { productId: string; onCl
   ].filter(Boolean) as string[];
 
   return (
-    <div className="fixed inset-0 z-[70]">
+    <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="absolute inset-3 overflow-hidden rounded-3xl bg-white shadow-2xl md:inset-8 lg:inset-auto lg:left-1/2 lg:top-1/2 lg:max-h-[90vh] lg:w-[900px] lg:-translate-x-1/2 lg:-translate-y-1/2">
+      {/* Bottom sheet on mobile, centered panel on desktop */}
+      <div className="relative w-full max-h-[93vh] md:max-h-[90vh] overflow-hidden rounded-t-3xl md:rounded-3xl bg-white shadow-[0_-8px_40px_rgba(0,0,0,0.25)] md:shadow-2xl md:w-[900px] md:mx-4">
+        {/* Mobile drag handle */}
+        <div className="flex justify-center pt-3 pb-1 md:hidden">
+          <div className="w-10 h-1 rounded-full bg-gray-200" />
+        </div>
         <button
           type="button"
           onClick={onClose}
@@ -123,12 +128,12 @@ function ProductQuickViewModal({ productId, onClose }: { productId: string; onCl
         </button>
 
         {loading ? (
-          <div className="flex min-h-[420px] items-center justify-center text-sm font-bold text-slate-500">Зареждане на продукта...</div>
+          <div className="flex min-h-[280px] items-center justify-center text-sm font-bold text-slate-500">Зареждане на продукта...</div>
         ) : error ? (
-          <div className="flex min-h-[420px] items-center justify-center p-8 text-center text-sm font-bold text-red-600">{error}</div>
+          <div className="flex min-h-[280px] items-center justify-center p-8 text-center text-sm font-bold text-red-600">{error}</div>
         ) : product ? (
           <div className="flex max-h-[90vh] flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
-            <div className="relative flex shrink-0 items-center justify-center border-r border-gray-100 bg-gray-50 p-8 lg:w-[420px]">
+            <div className="relative flex shrink-0 items-center justify-center border-r border-gray-100 bg-gray-50 p-5 md:p-8 lg:w-[420px]">
               <div className="relative w-full">
                 <div className="absolute left-4 top-4 z-10 rounded-full bg-white/90 px-3 py-1 text-xs font-black text-[#00B4D8] shadow-sm">
                   {product.product_condition === "used" ? "Втора употреба" : "Нов"}
@@ -168,9 +173,9 @@ function ProductQuickViewModal({ productId, onClose }: { productId: string; onCl
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 lg:p-8">
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
               <p className="mb-1 text-xs font-bold uppercase tracking-wider text-[#00B4D8]">{product.brands?.name ?? "Климатик"}</p>
-              <h2 className="mb-1 text-2xl font-black leading-tight text-gray-900">{product.name}</h2>
+              <h2 className="mb-1 text-lg md:text-2xl font-black leading-tight text-gray-900">{product.name}</h2>
               <p className="mb-4 text-sm text-gray-500">
                 {[product.product_types?.name, specs?.coverage_m2 ? `${specs.coverage_m2} м²` : null].filter(Boolean).join(" · ")}
               </p>
@@ -211,9 +216,9 @@ function ProductQuickViewModal({ productId, onClose }: { productId: string; onCl
                 ))}
               </div>
 
-              <div className="mb-6 rounded-2xl border border-gray-100 bg-gray-50 p-5">
+              <div className="mb-6 rounded-2xl border border-gray-100 bg-gray-50 p-4 md:p-5">
                 <div className="mb-4 flex items-baseline gap-3">
-                  <span className="text-4xl font-extrabold text-gray-900">€{price.toLocaleString()}</span>
+                  <span className="text-3xl md:text-4xl font-extrabold text-gray-900">€{price.toLocaleString()}</span>
                   {product.old_price ? <span className="text-lg font-bold text-gray-400 line-through">€{Number(product.old_price).toLocaleString()}</span> : null}
                 </div>
                 {priceWithMount != null && priceWithMount >= price && (
@@ -252,6 +257,7 @@ function ProductQuickViewModal({ productId, onClose }: { productId: string; onCl
       </div>
     </div>
   );
+
 }
 
 function Spec({ icon, label, value }: { icon: ReactNode; label: string; value?: string | number | null }) {

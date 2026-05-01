@@ -70,105 +70,115 @@ export default function AdminRatingsPage() {
   const pages = Math.max(1, Math.ceil(meta.total / meta.perPage));
 
   return (
-    <div className="w-full space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900 mb-1 leading-tight">
-            <SectionTitle title="Оценки" hint="Модерация на клиентски оценки и звезди по продукти." />
-          </h1>
-          <p className="text-sm text-slate-500">Модерация на клиентските звезди</p>
-        </div>
+    <div className="w-full space-y-3">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <h1 className="text-lg md:text-xl font-bold text-slate-900 leading-tight">
+          <SectionTitle title="Оценки" hint="Модерация на клиентски оценки и звезди по продукти." />
+        </h1>
         <Button variant="secondary" onClick={load} className="gap-2 shadow-sm">
-          <RefreshCw className="w-4 h-4" /> Обнови
+          <RefreshCw className="w-4 h-4" />
+          <span className="hidden sm:inline">Обнови</span>
         </Button>
       </div>
 
-      <HelpCard>
+      <HelpCard className="hidden md:block">
         <HelpRow items={["Филтър по звезди за бърза проверка", "Изтриване при невалиден/спам вот", "Общо брой оценки и странициране"]} />
       </HelpCard>
 
-      <Card className="p-4">
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_200px] gap-4">
-          <label className="grid gap-1.5">
-            <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Търсене</span>
-            <Input value={q} onChange={(e) => { setPage(1); setQ(e.target.value); }} placeholder="Търси продукт..." />
-          </label>
-          <label className="grid gap-1.5">
-            <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Звезди</span>
-            <Select value={stars} onChange={(e) => { setPage(1); setStars(e.target.value); }}>
-              <option value="">Всички звезди</option>
-              <option value="5">5 звезди</option>
-              <option value="4">4 звезди</option>
-              <option value="3">3 звезди</option>
-              <option value="2">2 звезди</option>
-              <option value="1">1 звезда</option>
-            </Select>
-          </label>
+      <Card className="p-3">
+        <div className="flex gap-2">
+          <Input value={q} onChange={(e) => { setPage(1); setQ(e.target.value); }} placeholder="Търси продукт..." className="flex-1" />
+          <Select value={stars} onChange={(e) => { setPage(1); setStars(e.target.value); }} className="w-36 shrink-0">
+            <option value="">Всички ★</option>
+            <option value="5">★★★★★</option>
+            <option value="4">★★★★</option>
+            <option value="3">★★★</option>
+            <option value="2">★★</option>
+            <option value="1">★</option>
+          </Select>
         </div>
       </Card>
 
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 text-sm font-medium">{error}</div>}
+      {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm font-medium">{error}</div>}
 
-      <Table>
-        <thead>
-          <tr>
-            <Th>Продукт</Th>
-            <Th>Звезди</Th>
-            <Th>Дата</Th>
-            <Th></Th>
-          </tr>
-        </thead>
-        <tbody>
-          {!loading && items.map((r) => (
-            <tr key={r.id} className="hover:bg-slate-50 transition-colors group">
-              <Td className="font-bold text-slate-900">
-                {r.products?.name ? (
-                  <ProductQuickViewButton productId={r.products.id} productName={r.products.name} />
-                ) : (
-                  "—"
-                )}
-              </Td>
-              <Td>
+      {/* Desktop table */}
+      <div className="hidden md:block">
+        <Table>
+          <thead>
+            <tr>
+              <Th>Продукт</Th>
+              <Th>Звезди</Th>
+              <Th>Дата</Th>
+              <Th></Th>
+            </tr>
+          </thead>
+          <tbody>
+            {!loading && items.map((r) => (
+              <tr key={r.id} className="hover:bg-slate-50 transition-colors group">
+                <Td className="font-bold text-slate-900">
+                  {r.products?.name ? <ProductQuickViewButton productId={r.products.id} productName={r.products.name} /> : "—"}
+                </Td>
+                <Td>
+                  <div className="flex gap-0.5">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <Star key={i} className={`w-4 h-4 ${i < r.stars ? "fill-amber-400 text-amber-400" : "fill-slate-100 text-slate-300"}`} />
+                    ))}
+                  </div>
+                </Td>
+                <Td className="text-slate-500 font-medium">{new Date(r.created_at).toLocaleString()}</Td>
+                <Td className="text-right">
+                  <Button variant="danger" size="sm" onClick={() => void remove(r.id)} className="opacity-0 group-hover:opacity-100 transition-opacity gap-1.5 !py-1.5 !px-2.5">
+                    <Trash2 className="w-3.5 h-3.5" /> Изтрий
+                  </Button>
+                </Td>
+              </tr>
+            ))}
+            {!loading && items.length === 0 && (
+              <tr><Td colSpan={4} className="text-center py-8 text-slate-500">Няма намерени оценки.</Td></tr>
+            )}
+          </tbody>
+        </Table>
+      </div>
+
+      {/* Mobile card list */}
+      <div className="md:hidden space-y-2">
+        {!loading && items.length === 0 && (
+          <div className="bg-white rounded-xl border border-slate-200 p-6 text-center text-slate-500 text-sm">Няма намерени оценки.</div>
+        )}
+        {!loading && items.map((r) => (
+          <div key={r.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-4 flex items-center justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="font-bold text-slate-900 text-sm leading-snug mb-1.5">
+                  {r.products?.name ? <ProductQuickViewButton productId={r.products.id} productName={r.products.name} /> : "Неизвестен продукт"}
+                </div>
                 <div className="flex gap-0.5">
                   {Array.from({ length: 5 }).map((_, i) => (
-                    <Star 
-                      key={i} 
-                      className={`w-4 h-4 ${i < r.stars ? "fill-amber-400 text-amber-400" : "fill-slate-100 text-slate-300"}`} 
-                    />
+                    <Star key={i} className={`w-4 h-4 ${i < r.stars ? "fill-amber-400 text-amber-400" : "fill-slate-100 text-slate-300"}`} />
                   ))}
                 </div>
-              </Td>
-              <Td className="text-slate-500 font-medium">{new Date(r.created_at).toLocaleString()}</Td>
-              <Td className="text-right">
-                <Button 
-                  variant="danger" 
-                  size="sm" 
-                  onClick={() => void remove(r.id)} 
-                  className="opacity-0 group-hover:opacity-100 transition-opacity gap-1.5 !py-1.5 !px-2.5"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> Изтрий
-                </Button>
-              </Td>
-            </tr>
-          ))}
-          {!loading && items.length === 0 && (
-            <tr><Td colSpan={4} className="text-center py-8 text-slate-500">Няма намерени оценки.</Td></tr>
-          )}
-        </tbody>
-      </Table>
+                <div className="text-xs text-slate-400 font-medium mt-1">{new Date(r.created_at).toLocaleDateString("bg-BG")}</div>
+              </div>
+              <Button variant="danger" size="sm" onClick={() => void remove(r.id)} className="gap-1.5 shrink-0">
+                <Trash2 className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
 
       <div className="flex justify-between items-center">
         <span className="text-sm text-slate-500 font-medium">Общо: {meta.total}</span>
-        <div className="flex items-center gap-3">
-          <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Предишна</Button>
-          <span className="text-sm font-medium text-slate-600">Стр. {page} / {pages}</span>
-          <Button variant="secondary" size="sm" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>Следваща</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹</Button>
+          <span className="text-sm font-medium text-slate-600">{page} / {pages}</span>
+          <Button variant="secondary" size="sm" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>›</Button>
         </div>
       </div>
 
       {confirmDeleteId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-md" onClick={() => setConfirmDeleteId(null)}>
-          <div className="w-full max-w-lg rounded-3xl border border-white/70 bg-white p-6 shadow-[0_30px_90px_rgba(15,23,42,0.35)]" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/55 md:p-4 backdrop-blur-md" onClick={() => setConfirmDeleteId(null)}>
+          <div className="w-full max-w-lg rounded-t-3xl md:rounded-3xl border border-white/70 bg-white p-6 shadow-[0_-8px_40px_rgba(15,23,42,0.25)] md:shadow-[0_30px_90px_rgba(15,23,42,0.35)]" onClick={(e) => e.stopPropagation()}>
             <div className="text-xl font-black text-slate-950">Изтриване на оценка</div>
             <div className="mt-2 text-sm text-slate-500">Сигурни ли сте, че искате да изтриете тази оценка?</div>
             <div className="mt-6 flex justify-end gap-2">

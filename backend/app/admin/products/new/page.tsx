@@ -67,7 +67,7 @@ export default function NewProductPage() {
   }
 
   return (
-    <div className="w-full max-w-none space-y-4">
+    <div className="w-full max-w-none space-y-4 pb-24 md:pb-4">
       {toast && (
         <div
           className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-lg border font-bold text-sm transition-all ${
@@ -81,7 +81,7 @@ export default function NewProductPage() {
       )}
       
       <div>
-        <h1 className="text-xl font-bold text-slate-900 mb-1 leading-tight">
+        <h1 className="text-lg md:text-xl font-bold text-slate-900 mb-1 leading-tight">
           <SectionTitle title="Нов продукт" hint="Създаване на нова продуктова карта за каталога." />
         </h1>
       </div>
@@ -96,19 +96,22 @@ export default function NewProductPage() {
         </div>
       )}
 
-      <Card className="p-6">
+      <Card className="p-4 md:p-6">
         <ProductFormFields brands={brands} types={types} form={form} setForm={setForm} />
       </Card>
 
-      <div className="flex justify-end">
-        <Button
-          variant="primary"
-          size="lg"
-          onClick={submit}
-          disabled={submitting}
-          className="gap-2 shadow-sm"
-        >
+      {/* Desktop save button */}
+      <div className="hidden md:flex justify-end">
+        <Button variant="primary" size="lg" onClick={submit} disabled={submitting} className="gap-2 shadow-sm">
           <Save className="w-5 h-5" />
+          {submitting ? "Създавам..." : "Създай продукт"}
+        </Button>
+      </div>
+
+      {/* Mobile sticky save bar */}
+      <div className="fixed bottom-16 left-0 right-0 z-40 md:hidden border-t border-slate-200 bg-white/95 backdrop-blur-sm px-4 py-3 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
+        <Button variant="primary" className="w-full justify-center gap-2 !py-3 text-sm font-bold" onClick={submit} disabled={submitting}>
+          <Save className="w-4 h-4" />
           {submitting ? "Създавам..." : "Създай продукт"}
         </Button>
       </div>

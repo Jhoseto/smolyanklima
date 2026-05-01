@@ -281,196 +281,195 @@ function AdminInquiriesClient() {
   }
 
   return (
-    <div className="w-full space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900 mb-1 leading-tight">
-            <SectionTitle title="Запитвания" hint="Входящи заявки от клиенти с бърза промяна на статус и приоритет." />
-          </h1>
-        </div>
+    <div className="w-full space-y-3">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <h1 className="text-lg md:text-xl font-bold text-slate-900 leading-tight">
+          <SectionTitle title="Запитвания" hint="Входящи заявки от клиенти с бърза промяна на статус и приоритет." />
+        </h1>
         <Button variant="secondary" onClick={() => void load()} className="gap-2 shadow-sm">
-          <RefreshCw className="w-4 h-4" /> Обнови
+          <RefreshCw className="w-4 h-4" />
+          <span className="hidden sm:inline">Обнови</span>
         </Button>
       </div>
 
-      <HelpCard>
+      <HelpCard className="hidden md:block">
         <HelpRow items={["Филтрирай по статус и текст", "Използвай 'В работа' и 'Приключи' за бърз workflow", "Бележки са вътрешни и не се виждат от клиента"]} />
       </HelpCard>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      {/* Live status indicator */}
+      <div className="flex items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
         <div className="flex items-center gap-2">
-          <span className={`h-2.5 w-2.5 rounded-full ${liveConnected ? "bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.14)]" : "bg-amber-500 shadow-[0_0_0_4px_rgba(245,158,11,0.14)]"}`} />
-          <span className="text-sm font-bold text-slate-900">
-            {liveConnected ? "Real-time връзката е активна" : "Възстановяване на real-time връзката..."}
+          <span className={`h-2 w-2 rounded-full shrink-0 ${liveConnected ? "bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.14)]" : "bg-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.14)]"}`} />
+          <span className="text-xs font-bold text-slate-900">
+            {liveConnected ? "Live активен" : "Възстановяване..."}
           </span>
         </div>
-        <div className="text-xs font-medium text-slate-500">
-          {lastLiveUpdate ? `Последно автоматично обновяване: ${lastLiveUpdate}` : "Новите запитвания ще се появяват автоматично."}
+        <div className="text-xs font-medium text-slate-500 truncate">
+          {lastLiveUpdate ? `Обновено: ${lastLiveUpdate}` : "Автоматично обновяване"}
         </div>
       </div>
 
+      {/* Filters */}
       <Card className="p-3">
-        <div className="flex flex-col sm:flex-row gap-2 items-end sm:items-center">
-          <label className="grid gap-1.5 w-full sm:w-auto min-w-[200px]">
-            <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Статус</span>
-            <Select value={status} onChange={(e) => setStatus(e.target.value)}>
-              <option value="">Всички</option>
-              <option value="new">Ново</option>
-              <option value="in_progress">В работа</option>
-              <option value="done">Приключено</option>
-              <option value="spam">Спам</option>
-            </Select>
-          </label>
-          <label className="grid gap-1.5 w-full sm:flex-1">
-            <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Търсене</span>
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Име, телефон, имейл, текст..." />
-          </label>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Select value={status} onChange={(e) => setStatus(e.target.value)} className="sm:w-44">
+            <option value="">Всички статуси</option>
+            <option value="new">Ново</option>
+            <option value="in_progress">В работа</option>
+            <option value="done">Приключено</option>
+            <option value="spam">Спам</option>
+          </Select>
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Търси по клиент, телефон, текст..." className="flex-1" />
         </div>
       </Card>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 text-sm font-medium">
-          {error}
-        </div>
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm font-medium">{error}</div>
       )}
 
       {loading ? (
         <div className="text-center py-12 text-slate-500 font-medium">Зареждане...</div>
       ) : (
-        <Table>
-          <thead>
-            <tr>
-              <Th>Клиент</Th>
-              <Th>Контакт</Th>
-              <Th>Статус</Th>
-              <Th>Приоритет</Th>
-              <Th>Източник</Th>
-              <Th>Създадено</Th>
-              <Th>Действия</Th>
-            </tr>
-          </thead>
-          <tbody>
+        <>
+          {/* Desktop table */}
+          <div className="hidden md:block">
+            <Table>
+              <thead>
+                <tr>
+                  <Th>Клиент</Th>
+                  <Th>Контакт</Th>
+                  <Th>Статус</Th>
+                  <Th>Приоритет</Th>
+                  <Th>Източник</Th>
+                  <Th>Създадено</Th>
+                  <Th>Действия</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((i) => {
+                  const s = statusLabel(i.status);
+                  const p = priorityLabel(i.priority);
+                  return (
+                    <tr key={i.id} className="hover:bg-slate-50 transition-colors">
+                      <Td className="font-bold text-slate-900">
+                        <button type="button" onClick={() => setSelectedInquiry(i)} className="rounded text-left font-bold text-slate-900 underline-offset-4 transition-colors hover:text-sky-700 hover:underline focus:outline-none focus:ring-2 focus:ring-sky-200">
+                          {i.customer_name}
+                        </button>
+                      </Td>
+                      <Td>
+                        <div className="font-medium text-slate-700">{i.customer_phone}</div>
+                        {i.customer_email && <div className="text-xs text-slate-500 mt-0.5">{i.customer_email}</div>}
+                      </Td>
+                      <Td><Badge label={s.label} colorClass={s.colorClass} /></Td>
+                      <Td><Badge label={p.label} colorClass={p.colorClass} /></Td>
+                      <Td><span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">{i.source}</span></Td>
+                      <Td className="text-xs text-slate-500 font-medium">{new Date(i.created_at).toLocaleString()}</Td>
+                      <Td>
+                        <div className="flex flex-wrap gap-1.5 items-center">
+                          <Button variant="secondary" size="sm" onClick={() => setSelectedInquiry(i)} className="gap-1.5 !py-1 !px-2.5 !text-xs border-sky-200 bg-sky-50 text-sky-700">Детайли</Button>
+                          <Button variant="secondary" size="sm" onClick={() => setNotesForId(i.id)} className={`gap-1 !py-1 !px-2.5 !text-xs ${i.admin_notes ? "border-sky-300 bg-sky-50 text-sky-700" : ""}`}>
+                            <StickyNote className="w-3.5 h-3.5" />{i.admin_notes ? " ●" : ""}
+                          </Button>
+                          <Button variant="secondary" size="sm" onClick={() => quickUpdate(i.id, { status: "in_progress" })} className="!py-1 !px-2.5 !text-xs">
+                            <PlayCircle className="w-3.5 h-3.5 text-sky-500" />
+                          </Button>
+                          <Button variant="secondary" size="sm" disabled={actionBusy === `contact:${i.id}`} onClick={() => void createContactFromInquiry(i)} className="!py-1 !px-2.5 !text-xs">Контакт</Button>
+                          <Button variant="secondary" size="sm" disabled={actionBusy === `work:${i.id}`} onClick={() => void createInspectionFromInquiry(i)} className="!py-1 !px-2.5 !text-xs">Оглед</Button>
+                          <Button variant="secondary" size="sm" disabled={actionBusy === `ai:${i.id}`} onClick={() => void generateAiReply(i)} className="!py-1 !px-2.5 !text-xs">AI</Button>
+                          <Button variant="secondary" size="sm" onClick={() => quickUpdate(i.id, { status: "done" })} className="!py-1 !px-2.5 !text-xs">
+                            <CheckCircle className="w-3.5 h-3.5 text-green-500" />
+                          </Button>
+                          <Button variant="danger" size="sm" onClick={() => quickUpdate(i.id, { status: "spam" })} className="!py-1 !px-2 !text-xs">
+                            <ShieldAlert className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </Td>
+                    </tr>
+                  );
+                })}
+                {items.length === 0 && (
+                  <tr><Td colSpan={7} className="text-center py-8 text-slate-500">Няма намерени запитвания.</Td></tr>
+                )}
+              </tbody>
+            </Table>
+          </div>
+
+          {/* Mobile card list */}
+          <div className="md:hidden space-y-2">
+            {items.length === 0 && (
+              <div className="bg-white rounded-xl border border-slate-200 p-6 text-center text-slate-500 text-sm">Няма намерени запитвания.</div>
+            )}
             {items.map((i) => {
               const s = statusLabel(i.status);
               const p = priorityLabel(i.priority);
               return (
-                <tr key={i.id} className="hover:bg-slate-50 transition-colors">
-                  <Td className="font-bold text-slate-900">
+                <div key={i.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                  <button
+                    type="button"
+                    className="w-full text-left p-4 active:bg-slate-50 transition-colors"
+                    onClick={() => setSelectedInquiry(i)}
+                  >
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div className="min-w-0">
+                        <div className="font-bold text-slate-900 text-sm leading-snug">{i.customer_name}</div>
+                        <a
+                          href={`tel:${i.customer_phone}`}
+                          className="text-xs text-sky-600 font-medium mt-0.5 block"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {i.customer_phone}
+                        </a>
+                        {i.customer_email && (
+                          <div className="text-xs text-slate-400 mt-0.5 truncate">{i.customer_email}</div>
+                        )}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <Badge label={s.label} colorClass={s.colorClass} />
+                        <div className="mt-1.5">
+                          <Badge label={p.label} colorClass={p.colorClass} />
+                        </div>
+                      </div>
+                    </div>
+                    {i.message && (
+                      <div className="text-xs text-slate-600 line-clamp-2 leading-relaxed bg-slate-50 rounded-lg px-3 py-2 mb-2">
+                        {i.message}
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">{i.source}</span>
+                      <span className="text-[10px] text-slate-400 font-medium">{new Date(i.created_at).toLocaleDateString("bg-BG")}</span>
+                    </div>
+                  </button>
+                  {/* Quick action row */}
+                  <div className="flex border-t border-slate-100 divide-x divide-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => quickUpdate(i.id, { status: "in_progress" })}
+                      className="flex-1 py-3 flex items-center justify-center gap-1 text-xs font-semibold text-sky-700 hover:bg-sky-50 active:bg-sky-100 transition-colors"
+                    >
+                      <PlayCircle className="w-4 h-4" /> В работа
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => quickUpdate(i.id, { status: "done" })}
+                      className="flex-1 py-3 flex items-center justify-center gap-1 text-xs font-semibold text-green-700 hover:bg-green-50 active:bg-green-100 transition-colors"
+                    >
+                      <CheckCircle className="w-4 h-4" /> Приключи
+                    </button>
                     <button
                       type="button"
                       onClick={() => setSelectedInquiry(i)}
-                      className="rounded text-left font-bold text-slate-900 underline-offset-4 transition-colors hover:text-sky-700 hover:underline focus:outline-none focus:ring-2 focus:ring-sky-200"
+                      className="flex-1 py-3 flex items-center justify-center gap-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 active:bg-slate-100 transition-colors"
                     >
-                      {i.customer_name}
+                      Детайли
                     </button>
-                  </Td>
-                  <Td>
-                    <div className="font-medium text-slate-700">{i.customer_phone}</div>
-                    {i.customer_email && <div className="text-xs text-slate-500 mt-0.5">{i.customer_email}</div>}
-                  </Td>
-                  <Td>
-                    <Badge label={s.label} colorClass={s.colorClass} />
-                  </Td>
-                  <Td>
-                    <Badge label={p.label} colorClass={p.colorClass} />
-                  </Td>
-                  <Td>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
-                      {i.source}
-                    </span>
-                  </Td>
-                  <Td className="text-xs text-slate-500 font-medium">{new Date(i.created_at).toLocaleString()}</Td>
-                  <Td>
-                    <div className="flex flex-wrap gap-2 items-center">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        title="Отваря пълните детайли на заявката"
-                        onClick={() => setSelectedInquiry(i)}
-                        className="gap-1.5 !py-1 !px-2.5 !text-xs border-sky-200 bg-sky-50 text-sky-700"
-                      >
-                        Детайли
-                      </Button>
-                      <Button 
-                        variant="secondary" 
-                        size="sm" 
-                        title="Вътрешни CRM бележки за екипа" 
-                        onClick={() => setNotesForId(i.id)} 
-                        className={`gap-1.5 !py-1 !px-2.5 !text-xs ${i.admin_notes ? "border-sky-300 bg-sky-50 text-sky-700" : ""}`}
-                      >
-                        <StickyNote className="w-3.5 h-3.5" /> Бележки{i.admin_notes ? " ●" : ""}
-                      </Button>
-                      <Button 
-                        variant="secondary" 
-                        size="sm" 
-                        title="Сменя статус на 'В работа'" 
-                        onClick={() => quickUpdate(i.id, { status: "in_progress" })} 
-                        className="gap-1.5 !py-1 !px-2.5 !text-xs"
-                      >
-                        <PlayCircle className="w-3.5 h-3.5 text-sky-500" /> В работа
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        title="Създава CRM контакт от данните в заявката"
-                        disabled={actionBusy === `contact:${i.id}`}
-                        onClick={() => void createContactFromInquiry(i)}
-                        className="gap-1.5 !py-1 !px-2.5 !text-xs"
-                      >
-                        Контакт
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        title="Създава задача за оглед/услуга в календара"
-                        disabled={actionBusy === `work:${i.id}`}
-                        onClick={() => void createInspectionFromInquiry(i)}
-                        className="gap-1.5 !py-1 !px-2.5 !text-xs"
-                      >
-                        Оглед
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        title="Генерира чернова за отговор и вътрешна бележка"
-                        disabled={actionBusy === `ai:${i.id}`}
-                        onClick={() => void generateAiReply(i)}
-                        className="gap-1.5 !py-1 !px-2.5 !text-xs"
-                      >
-                        AI чернова
-                      </Button>
-                      <Button 
-                        variant="secondary" 
-                        size="sm" 
-                        title="Сменя статус на 'Приключено'" 
-                        onClick={() => quickUpdate(i.id, { status: "done" })} 
-                        className="gap-1.5 !py-1 !px-2.5 !text-xs"
-                      >
-                        <CheckCircle className="w-3.5 h-3.5 text-green-500" /> Приключи
-                      </Button>
-                      <Button 
-                        variant="danger" 
-                        size="sm" 
-                        title="Маркира като спам" 
-                        onClick={() => quickUpdate(i.id, { status: "spam" })} 
-                        className="gap-1.5 !py-1 !px-2.5 !text-xs"
-                      >
-                        <ShieldAlert className="w-3.5 h-3.5" /> Спам
-                      </Button>
-                    </div>
-                  </Td>
-                </tr>
+                  </div>
+                </div>
               );
             })}
-            {items.length === 0 && (
-              <tr>
-                <Td colSpan={7} className="text-center py-8 text-slate-500">
-                  Няма намерени запитвания.
-                </Td>
-              </tr>
-            )}
-          </tbody>
-        </Table>
+          </div>
+        </>
       )}
 
       {notesForId && (
@@ -487,11 +486,11 @@ function AdminInquiriesClient() {
 
       {selectedInquiry && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-md"
+          className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/55 md:p-4 backdrop-blur-md"
           onClick={() => setSelectedInquiry(null)}
         >
           <div
-            className="w-full max-w-4xl max-h-[calc(100vh-2rem)] overflow-hidden rounded-3xl border border-white/70 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)]"
+            className="w-full max-w-4xl max-h-[96vh] md:max-h-[calc(100vh-2rem)] overflow-hidden rounded-t-3xl md:rounded-3xl border border-white/70 bg-white shadow-[0_-8px_60px_rgba(15,23,42,0.35)] md:shadow-[0_30px_90px_rgba(15,23,42,0.35)]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="relative border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#ffffff_42%,#f8fafc_100%)] px-6 py-5">

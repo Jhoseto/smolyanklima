@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { logoutAction } from "@/app/login/actions";
 import { InfoDot } from "./ui";
+import { MobileNav } from "./MobileNav";
+import { SplashScreen } from "./SplashScreen";
 import {
   LayoutDashboard,
   Package,
@@ -18,8 +20,11 @@ export const dynamic = "force-dynamic";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-[220px_minmax(0,1fr)] h-screen overflow-hidden bg-slate-50 text-slate-900 font-sans text-sm">
-      <aside className="flex flex-col border-r border-slate-200 bg-white p-3 min-h-0 overflow-y-auto">
+    <>
+      <SplashScreen />
+      <div className="h-screen flex flex-col overflow-hidden bg-slate-50 text-slate-900 font-sans text-sm md:grid md:grid-cols-[220px_minmax(0,1fr)]">
+      {/* Desktop sidebar — hidden on mobile */}
+      <aside className="hidden md:flex flex-col border-r border-slate-200 bg-white p-3 min-h-0 overflow-y-auto">
         <div className="inline-flex items-center gap-2 font-bold mb-3 text-slate-900 text-sm tracking-wide px-0.5">
           <div className="w-8 h-8 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center shrink-0">
             <LayoutDashboard className="w-4 h-4" />
@@ -39,8 +44,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <NavLink href="/admin/settings" label="Настройки" icon={<Settings className="w-4 h-4" />} />
         </nav>
         <form action={logoutAction} className="mt-2 pt-2 border-t border-slate-100">
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             className="flex items-center gap-2 w-full px-2.5 py-2 rounded-lg border border-slate-200 bg-white font-semibold text-slate-700 text-xs hover:bg-slate-50 hover:text-red-600 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-200"
           >
             <LogOut className="w-4 h-4" />
@@ -48,9 +53,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </button>
         </form>
       </aside>
-      <main className="w-full min-w-0 p-4 overflow-x-hidden overflow-y-auto">{children}</main>
+
+      {/* Main content */}
+      <main className="flex-1 min-h-0 w-full min-w-0 overflow-x-hidden overflow-y-auto p-3 md:p-4 pb-24 md:pb-4">
+        {children}
+      </main>
+
+      {/* Mobile bottom navigation (client component) */}
+      <MobileNav />
     </div>
+    </>
   );
+
 }
 
 function NavLink({ href, label, icon }: { href: string; label: string; icon: React.ReactNode }) {

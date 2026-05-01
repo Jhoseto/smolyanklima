@@ -2,14 +2,27 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseMiddlewareClient } from "@/lib/supabase/middleware";
 
 export async function proxy(req: NextRequest) {
-  // Only protect admin routes (matchers below).
   const res = NextResponse.next();
+  const { pathname } = req.nextUrl;
   const supabase = createSupabaseMiddlewareClient(req, res);
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // If an already-authenticated user lands on /login (e.g. via mobile swipe-back),
+  // redirect them straight to /admin so the login form is never shown.
+  if (pathname === "/login" || pathname === "/login/") {
+    if (user) {
+      const url = req.nextUrl.clone();
+      url.pathname = "/admin";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    return res;
+  }
+
+  // Protect admin routes — unauthenticated users go to /login.
   if (!user) {
     const nextUrl = req.nextUrl.clone();
     nextUrl.pathname = "/login";
@@ -35,6 +48,6 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/api/admin/:path*"],
+  matcher: ["/login", "/login/", "/admin/:path*", "/api/admin/:path*"],
 };
 

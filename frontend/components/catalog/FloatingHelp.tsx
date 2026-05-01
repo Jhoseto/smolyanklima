@@ -6,7 +6,7 @@ export const FloatingHelp = () => {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="fixed bottom-6 right-6 z-[400] flex flex-col items-end gap-3">
+    <div className="fixed bottom-6 left-6 z-[400] flex flex-col items-start gap-3">
       <AnimatePresence>
         {open && (
           <motion.div
@@ -21,7 +21,7 @@ export const FloatingHelp = () => {
               Нашите специалисти са на ваше разположение за безплатна консултация.
             </p>
             <a
-              href="tel:088858581"
+              href="tel:+359888585816"
               className="flex items-center gap-3 w-full py-3 px-4 bg-gradient-to-r from-[#FF4D00] to-[#FF2A4D] text-white rounded-xl font-bold text-sm hover:shadow-lg hover:shadow-orange-500/30 transition-all mb-2"
             >
               <Phone className="w-4 h-4" />

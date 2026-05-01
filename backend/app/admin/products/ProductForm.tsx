@@ -2,7 +2,7 @@
 
 import { useState, type ChangeEvent, type Dispatch, type SetStateAction } from "react";
 import { Input, Select, Textarea, Button } from "../ui";
-import { AlertCircle, CheckCircle2, Sparkles, Wand2, Upload, Plus, Trash2, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronDown, Sparkles, Wand2, Upload, Plus, Trash2, X } from "lucide-react";
 
 export type SpecsForm = {
   coverage_m2: string;
@@ -254,6 +254,38 @@ export function mapLoadedProductToForm(p: {
   };
 }
 
+function CollapsibleSection({
+  title,
+  badge,
+  defaultOpen = true,
+  children,
+}: {
+  title: string;
+  badge?: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="border-t border-slate-200 pt-4 md:pt-6">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between gap-2 mb-3 group"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <h2 className="text-base md:text-lg font-bold text-slate-900 leading-tight">{title}</h2>
+          {badge && <span className="text-xs text-slate-500 font-normal hidden sm:inline">{badge}</span>}
+        </div>
+        <ChevronDown
+          className={`w-5 h-5 text-slate-400 shrink-0 transition-transform duration-200 group-hover:text-slate-600 ${open ? "rotate-180" : "rotate-0"}`}
+        />
+      </button>
+      {open && children}
+    </div>
+  );
+}
+
 type Props = {
   brands: { id: string; name: string }[];
   types: { id: string; name: string }[];
@@ -478,10 +510,7 @@ export function ProductFormFields({ brands, types, form, setForm, cloudinaryKind
         </div>
       </div>
 
-      <div className="border-t border-slate-200 pt-6">
-        <h2 className="text-lg font-bold text-slate-900 mb-1">Технически данни</h2>
-        <div className="text-xs text-slate-500 mb-4">Остави празно поле, ако нямаш надеждна стойност от спецификацията.</div>
-        
+      <CollapsibleSection title="Технически данни" badge="Остави празно поле, ако нямаш надеждна стойност">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <label className="block">
             <FieldTitle label="Площ (м²)" info="Препоръчителна квадратура/покритие на помещението (по спецификация)." />
@@ -528,12 +557,11 @@ export function ProductFormFields({ brands, types, form, setForm, cloudinaryKind
             <Input value={form.specs.warranty_months} onChange={(e) => setSpec("warranty_months", e.target.value)} list="warranty-months-options" placeholder="36" />
           </label>
         </div>
-      </div>
+      </CollapsibleSection>
 
-      <div className="border-t border-slate-200 pt-6">
-        <h2 className="text-lg font-bold text-slate-900 mb-1">Снимки (до {MAX_PRODUCT_IMAGES}, Cloudinary)</h2>
-        <p className="text-xs text-slate-500 mb-4">
-          Всяка снимка се качва в отделна папка по slug: <code className="bg-slate-100 px-1 py-0.5 rounded">smolyanklima/{cloudinaryKind === "accessory" ? "aksesoari" : "klimatici"}/&lt;slug&gt;/</code>. В базата се пази само URL.
+      <CollapsibleSection title={`Снимки (до ${MAX_PRODUCT_IMAGES}, Cloudinary)`} badge={`smolyanklima/${cloudinaryKind === "accessory" ? "aksesoari" : "klimatici"}/<slug>/`}>
+        <p className="text-xs text-slate-500 mb-4 -mt-1">
+          Всяка снимка се качва в отделна папка по slug. В базата се пази само URL.
         </p>
         
         <div className="mb-4">
@@ -585,17 +613,18 @@ export function ProductFormFields({ brands, types, form, setForm, cloudinaryKind
             <Plus className="w-4 h-4" /> Добави ред с URL
           </Button>
         </div>
-      </div>
+      </CollapsibleSection>
 
       {aiDialog && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-md"
+          className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4 bg-slate-950/55 backdrop-blur-md"
           onClick={() => !aiBusy && setAiDialog(null)}
         >
           <div
-            className="w-full max-w-xl overflow-hidden rounded-3xl border border-white/70 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)]"
+            className="w-full md:max-w-xl overflow-hidden rounded-t-3xl md:rounded-3xl border border-white/70 bg-white shadow-[0_-8px_40px_rgba(15,23,42,0.3)]"
             onClick={(e) => e.stopPropagation()}
           >
+            <div className="flex justify-center pt-3 pb-1 md:hidden"><div className="w-10 h-1 rounded-full bg-slate-200" /></div>
             <div className="relative border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#ffffff_42%,#f8fafc_100%)] px-6 py-5">
               <button
                 type="button"
@@ -662,10 +691,11 @@ export function ProductFormFields({ brands, types, form, setForm, cloudinaryKind
 
       {uploadNotice && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-md"
+          className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4 bg-slate-950/55 backdrop-blur-md"
           onClick={() => setUploadNotice(null)}
         >
-          <div className="w-full max-w-lg overflow-hidden rounded-3xl border border-white/70 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)]" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full md:max-w-lg overflow-hidden rounded-t-3xl md:rounded-3xl border border-white/70 bg-white shadow-[0_-8px_40px_rgba(15,23,42,0.25)]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-center pt-3 pb-1 md:hidden"><div className="w-10 h-1 rounded-full bg-slate-200" /></div>
             <div className="border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#ffffff_42%,#f8fafc_100%)] px-6 py-5">
               <div className="text-xs font-bold uppercase tracking-[0.24em] text-sky-700">Качване на снимка</div>
               <div className="mt-1 text-2xl font-black leading-tight text-slate-950">Нужно е действие</div>

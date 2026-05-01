@@ -41,10 +41,10 @@ const Chip = ({ label, onRemove, color = 'blue' }: ChipProps) => {
       {label}
       <button
         onClick={onRemove}
-        className="hover:opacity-60 transition-opacity"
+        className="hover:opacity-60 transition-opacity p-0.5 -mr-0.5 rounded"
         aria-label={`Премахни ${label}`}
       >
-        <X className="w-3 h-3" />
+        <X className="w-3.5 h-3.5" />
       </button>
     </motion.span>
   );
