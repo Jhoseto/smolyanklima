@@ -62,17 +62,9 @@ export const ContactSection = ({
 
   return (
     <section id="contact" className="py-24 bg-white relative overflow-hidden">
-      {/* Decorative Parallax Background Elements */}
-      <motion.div
-        animate={{ y: [0, -30, 0], x: [0, 20, 0] }}
-        transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-        className="absolute top-0 right-0 w-[600px] h-[600px] bg-orange-50 rounded-full blur-[120px] opacity-40 translate-x-1/2 -translate-y-1/2 pointer-events-none"
-      />
-      <motion.div
-        animate={{ y: [0, 30, 0], x: [0, -20, 0] }}
-        transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
-        className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-blue-50 rounded-full blur-[120px] opacity-40 -translate-x-1/2 translate-y-1/2 pointer-events-none"
-      />
+      {/* Decorative Parallax Background Elements — само на десктоп */}
+      <div className="hidden md:block absolute top-0 right-0 w-[600px] h-[600px] bg-orange-50 rounded-full blur-[120px] opacity-40 translate-x-1/2 -translate-y-1/2 pointer-events-none" />
+      <div className="hidden md:block absolute bottom-0 left-0 w-[600px] h-[600px] bg-blue-50 rounded-full blur-[120px] opacity-40 -translate-x-1/2 translate-y-1/2 pointer-events-none" />
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
 
@@ -175,7 +167,7 @@ export const ContactSection = ({
                     whileInView={{ opacity: 1, x: 0 }}
                     viewport={{ once: true }}
                     transition={{ delay: 0.4 + idx * 0.1, type: "spring" }}
-                    className="flex items-center gap-3 bg-white/10 backdrop-blur-md rounded-2xl p-3 border border-white/10 w-max hover:bg-white/20 transition-colors cursor-default"
+                    className="flex items-center gap-3 bg-white/10 md:backdrop-blur-md rounded-2xl p-3 border border-white/10 w-max hover:bg-white/20 transition-colors cursor-default"
                   >
                     <div className="w-8 h-8 rounded-full bg-gradient-to-r from-[#00B4D8] to-[#0077B6] flex items-center justify-center text-white shrink-0 shadow-[0_0_15px_rgba(0,180,216,0.5)]">
                       <point.icon className="w-4 h-4" />
@@ -192,7 +184,7 @@ export const ContactSection = ({
             initial={{ opacity: 0, x: 30 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
-            className="bg-white/60 backdrop-blur-3xl border border-gray-100 rounded-[2rem] sm:rounded-[3rem] p-5 sm:p-8 md:p-12 shadow-2xl shadow-gray-200/50 relative overflow-hidden flex flex-col justify-center"
+            className="bg-white border md:bg-white/60 md:backdrop-blur-3xl border-gray-100 rounded-[2rem] sm:rounded-[3rem] p-5 sm:p-8 md:p-12 shadow-xl md:shadow-2xl shadow-gray-200/50 relative overflow-hidden flex flex-col justify-center"
           >
             {/* Subtle inner glow */}
             <div className="absolute top-0 right-0 w-64 h-64 bg-[#00B4D8]/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />

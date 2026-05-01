@@ -61,7 +61,7 @@ export const ServicesSection = () => {
   return (
     <section id="services" ref={sectionRef} className="py-24 relative overflow-hidden">
       {/* Decorative background blur */}
-      <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-red-50 rounded-full blur-[120px] opacity-60 translate-x-1/3 -translate-y-1/3 pointer-events-none" />
+      <div className="hidden md:block absolute top-0 right-0 w-[500px] h-[500px] bg-red-50 rounded-full blur-[120px] opacity-60 translate-x-1/3 -translate-y-1/3 pointer-events-none" />
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
 
@@ -99,26 +99,24 @@ export const ServicesSection = () => {
             </motion.h2>
           </div>
 
-          <motion.div
+          <motion.a
+            href="tel:+359888585816"
             initial={{ opacity: 0, x: 20 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
-            className="flex items-center gap-6 bg-gray-50/50 backdrop-blur-xl border border-gray-100 p-6 rounded-[2.5rem] group hover:bg-white transition-all duration-500 shadow-sm hover:shadow-xl shadow-gray-100/50"
+            className="flex items-center gap-6 bg-gray-50/50 md:backdrop-blur-xl border border-gray-100 p-6 rounded-[2.5rem] group hover:bg-white transition-all duration-500 shadow-sm hover:shadow-xl shadow-gray-100/50 active:scale-[0.98]"
           >
             <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-lg shadow-gray-200/50 group-hover:scale-110 transition-transform duration-500">
               <Phone className="w-5 h-5 text-[#00B4D8]" />
             </div>
-            <div>
+            <div className="flex-1">
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Безплатна консултация</p>
-              <h4 className="text-gray-900 font-bold text-lg leading-tight tracking-tight">088 858 5816</h4>
+              <h4 className="text-gray-900 font-bold text-lg leading-tight tracking-tight">0888 58 58 16</h4>
             </div>
-            <div
-              onClick={() => setIsExpanded(!isExpanded)}
-              className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center group-hover:bg-[#FF4D00] group-hover:border-[#FF4D00] transition-all duration-500 cursor-pointer"
-            >
+            <div className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center group-hover:bg-[#FF4D00] group-hover:border-[#FF4D00] transition-all duration-500">
               <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" />
             </div>
-          </motion.div>
+          </motion.a>
         </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">

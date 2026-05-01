@@ -36,17 +36,21 @@ const AccessoryDetailsPage = lazy(() => import('./pages/AccessoryDetailsPage'));
 const HomePage = () => (
   <div className="min-h-screen bg-[#FAFAFA] font-sans selection:bg-[#FF4D00]/20 selection:text-[#FF4D00]">
     <main>
-      {/* Hero с Gradient Mesh */}
+      {/* Hero с Gradient Mesh — ефектът само на десктоп */}
       <section className="relative min-h-screen overflow-hidden">
-        <GradientMeshMorphing intensity="normal" />
+        <div className="hidden md:block">
+          <GradientMeshMorphing intensity="normal" />
+        </div>
         <div className="relative z-10">
           <HeroSection />
         </div>
       </section>
       
-      {/* Features с Tech Grid */}
+      {/* Features с Tech Grid — ефектът само на десктоп */}
       <section className="relative min-h-screen overflow-hidden">
-        <TechGrid gridSize={80} />
+        <div className="hidden md:block">
+          <TechGrid gridSize={80} />
+        </div>
         <div className="relative z-10">
           <FeaturesSection />
         </div>
@@ -54,9 +58,11 @@ const HomePage = () => (
       
       <ProductsSection />
       
-      {/* Services с Bokeh Orbs */}
+      {/* Services с Bokeh Orbs — ефектът само на десктоп */}
       <section className="relative min-h-screen overflow-hidden bg-white/50">
-        <BokehOrbs orbCount={8} />
+        <div className="hidden md:block">
+          <BokehOrbs orbCount={8} />
+        </div>
         <div className="relative z-10">
           <ServicesSection />
         </div>

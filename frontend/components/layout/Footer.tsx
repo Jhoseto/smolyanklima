@@ -84,12 +84,16 @@ export const Footer = () => {
                 <span className="text-sm">гр. Смолян, п.к. 4700<br />ул. Примерна 1</span>
               </li>
               <li className="flex gap-3 text-gray-400">
-                <Phone className="w-5 h-5 text-[#FF4D00] shrink-0" />
-                <span className="text-sm">0888 58 58 16</span>
+                <Phone className="w-5 h-5 text-[#FF4D00] shrink-0 mt-0.5" />
+                <a href="tel:+359888585816" className="text-sm hover:text-white transition-colors">
+                  0888 58 58 16
+                </a>
               </li>
               <li className="flex gap-3 text-gray-400">
-                <Mail className="w-5 h-5 text-[#FF4D00] shrink-0" />
-                <span className="text-sm">office@smolyanklima.bg</span>
+                <Mail className="w-5 h-5 text-[#FF4D00] shrink-0 mt-0.5" />
+                <a href="mailto:office@smolyanklima.bg" className="text-sm hover:text-white transition-colors">
+                  office@smolyanklima.bg
+                </a>
               </li>
             </ul>
           </div>

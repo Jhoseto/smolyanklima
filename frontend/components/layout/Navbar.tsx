@@ -33,7 +33,7 @@ export const Navbar = () => {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled ? 'bg-white/90 backdrop-blur-md shadow-sm py-3' : 'bg-transparent py-5'
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled ? 'bg-white/98 md:bg-white/90 md:backdrop-blur-md shadow-sm py-3' : 'bg-transparent py-5'
         }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -73,13 +73,16 @@ export const Navbar = () => {
 
           {/* Desktop Actions */}
           <div className="hidden md:flex items-center gap-4">
-            <div className="hidden lg:flex items-center gap-2 text-gray-700 font-bold text-sm">
+            <a
+              href="tel:+359888585816"
+              className="hidden lg:flex items-center gap-2 text-gray-700 font-bold text-sm hover:text-[#FF4D00] transition-colors"
+            >
               <Phone className="w-4 h-4 text-[#FF4D00]" />
               0888 58 58 16
-            </div>
+            </a>
             <a href="#contact">
               <Button size="sm" className="hidden lg:flex">
-                Заяви оглед
+                Заяви услуга
               </Button>
             </a>
           </div>
@@ -125,13 +128,16 @@ export const Navbar = () => {
                 )
               ))}
               <div className="pt-4 border-t border-gray-100 space-y-4">
-                <div className="flex items-center gap-2 text-gray-900 font-bold text-lg">
+                <a
+                  href="tel:+359888585816"
+                  className="flex items-center gap-2 text-gray-900 font-bold text-lg hover:text-[#FF4D00] transition-colors active:scale-95"
+                >
                   <Phone className="w-5 h-5 text-[#FF4D00]" />
                   0888 58 58 16
-                </div>
+                </a>
                 <a href="#contact" className="block w-full">
                   <Button className="w-full" onClick={() => setMobileMenuOpen(false)}>
-                    Заяви оглед
+                    Заяви услуга
                   </Button>
                 </a>
               </div>

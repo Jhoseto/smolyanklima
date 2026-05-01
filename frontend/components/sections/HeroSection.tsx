@@ -1,14 +1,17 @@
 import React from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router-dom';
-import { Phone, ArrowRight, CheckCircle2, Zap, ShieldCheck, BadgeCheck } from 'lucide-react';
+import { Phone, ArrowRight, CheckCircle2, Zap, ShieldCheck, BadgeCheck, Smartphone, Download } from 'lucide-react';
 import { BrandsSection } from './BrandsSection';
+import { usePWAInstall } from '../../lib/usePWAInstall';
 
 export const HeroSection = () => {
+  const { canInstall, promptInstall } = usePWAInstall();
+
   return (
     <section id="home" className="relative pt-32 pb-12 lg:pt-40 lg:pb-16 overflow-hidden">
-      {/* Background Soft Glow */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-red-50/80 rounded-full blur-[100px] pointer-events-none z-0" />
+      {/* Background Soft Glow — само на десктоп */}
+      <div className="hidden md:block absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-red-50/80 rounded-full blur-[100px] pointer-events-none z-0" />
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <div className="grid lg:grid-cols-2 gap-16 lg:gap-12 items-center mb-16 lg:mb-24">
@@ -20,6 +23,40 @@ export const HeroSection = () => {
             transition={{ duration: 0.6 }}
             className="max-w-[650px]"
           >
+            {/* PWA Install Banner — само на мобилен, само ако браузърът поддържа */}
+            <AnimatePresence>
+              {canInstall && (
+                <motion.button
+                  onClick={promptInstall}
+                  initial={{ opacity: 0, y: -12, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.96 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                  className="md:hidden w-full mb-5 flex items-center gap-3 px-4 py-3 rounded-2xl border border-[#FF4D00]/25 bg-gradient-to-r from-[#FFF5ED] to-white shadow-md shadow-orange-100/60 active:scale-[0.97] transition-transform"
+                >
+                  {/* Icon */}
+                  <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#FF4D00] to-[#FF2A4D] flex items-center justify-center shadow-sm shrink-0">
+                    <Smartphone className="w-5 h-5 text-white" strokeWidth={1.75} />
+                  </div>
+
+                  {/* Text */}
+                  <div className="text-left flex-1 min-w-0">
+                    <p className="text-[10px] font-bold text-[#FF4D00] uppercase tracking-widest leading-none mb-0.5">
+                      Безплатно приложение
+                    </p>
+                    <p className="text-sm font-black text-gray-900 leading-tight">
+                      Инсталирай на телефона
+                    </p>
+                  </div>
+
+                  {/* Arrow */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Download className="w-4 h-4 text-[#FF4D00]" strokeWidth={2} />
+                  </div>
+                </motion.button>
+              )}
+            </AnimatePresence>
+
             {/* Top Badge */}
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#FFF5ED] border border-[#FFDCC2] rounded-full mb-8">
               <div className="w-2 h-2 rounded-full bg-[#FF5722]" />
@@ -65,10 +102,13 @@ export const HeroSection = () => {
                 <ArrowRight className="w-5 h-5" />
               </Link>
 
-              <button className="h-14 px-8 rounded-full bg-transparent border border-gray-200 text-[#111827] font-bold text-lg flex items-center gap-2 hover:bg-gray-50 transition-all">
+              <a
+                href="tel:+359888585816"
+                className="h-14 px-8 rounded-full bg-transparent border border-gray-200 text-[#111827] font-bold text-lg flex items-center gap-2 hover:bg-gray-50 active:scale-95 transition-all"
+              >
                 <Phone className="w-5 h-5 text-[#00B4D8]" />
                 Безплатна консултация
-              </button>
+              </a>
             </div>
 
             {/* Checkmarks */}
@@ -120,32 +160,32 @@ export const HeroSection = () => {
               </div>
             </div>
 
-            {/* Floating Badges */}
+            {/* Floating Badges — само на десктоп (безкрайни анимации + backdrop-blur са тежки на мобилен) */}
             <motion.div
               animate={{ y: [-5, 5, -5] }}
               transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
-              className="absolute top-4 left-3 lg:top-8 lg:-left-8 bg-white/95 backdrop-blur-sm shadow-xl rounded-full px-4 py-2.5 lg:px-5 lg:py-3 border border-gray-100 flex items-center gap-2"
+              className="hidden lg:flex absolute top-8 -left-8 bg-white/95 backdrop-blur-sm shadow-xl rounded-full px-5 py-3 border border-gray-100 items-center gap-2"
             >
-              <Zap className="w-4 h-4 lg:w-5 lg:h-5 text-[#FF5722] fill-[#FF5722]/20" />
-              <span className="text-xs lg:text-sm font-bold text-gray-800">Монтаж до 48ч</span>
+              <Zap className="w-5 h-5 text-[#FF5722] fill-[#FF5722]/20" />
+              <span className="text-sm font-bold text-gray-800">Монтаж до 48ч</span>
             </motion.div>
 
             <motion.div
               animate={{ y: [5, -5, 5] }}
               transition={{ repeat: Infinity, duration: 5, ease: "easeInOut" }}
-              className="absolute top-1/2 right-3 lg:-right-8 -translate-y-1/2 bg-white/95 backdrop-blur-sm shadow-xl rounded-full px-4 py-2.5 lg:px-5 lg:py-3 border border-gray-100 flex items-center gap-2"
+              className="hidden lg:flex absolute top-1/2 -right-8 -translate-y-1/2 bg-white/95 backdrop-blur-sm shadow-xl rounded-full px-5 py-3 border border-gray-100 items-center gap-2"
             >
-              <ShieldCheck className="w-4 h-4 lg:w-5 lg:h-5 text-[#00B4D8]" />
-              <span className="text-xs lg:text-sm font-bold text-gray-800">2г. гаранция</span>
+              <ShieldCheck className="w-5 h-5 text-[#00B4D8]" />
+              <span className="text-sm font-bold text-gray-800">2г. гаранция</span>
             </motion.div>
 
             <motion.div
               animate={{ y: [-5, 5, -5] }}
               transition={{ repeat: Infinity, duration: 4.5, ease: "easeInOut", delay: 1 }}
-              className="absolute bottom-8 left-3 lg:bottom-28 lg:-left-6 bg-white/95 backdrop-blur-sm shadow-xl rounded-full px-4 py-2.5 lg:px-5 lg:py-3 border border-gray-100 flex items-center gap-2"
+              className="hidden lg:flex absolute bottom-28 -left-6 bg-white/95 backdrop-blur-sm shadow-xl rounded-full px-5 py-3 border border-gray-100 items-center gap-2"
             >
-              <BadgeCheck className="w-4 h-4 lg:w-5 lg:h-5 text-[#00A8E8]" />
-              <span className="text-xs lg:text-sm font-bold text-gray-800">Сертифицирани</span>
+              <BadgeCheck className="w-5 h-5 text-[#00A8E8]" />
+              <span className="text-sm font-bold text-gray-800">Сертифицирани</span>
             </motion.div>
 
           </motion.div>
