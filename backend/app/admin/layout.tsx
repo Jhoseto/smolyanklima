@@ -1,53 +1,66 @@
 import Link from "next/link";
 import { logoutAction } from "@/app/login/actions";
+import { InfoDot } from "./ui";
+import {
+  LayoutDashboard,
+  Package,
+  Users,
+  FileText,
+  Star,
+  MessageSquare,
+  History,
+  Activity,
+  Settings,
+  LogOut,
+} from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", minHeight: "100vh", background: "#f8fafc", color: "#0f172a", fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" }}>
-      <aside style={{ borderRight: "1px solid #e2e8f0", background: "white", padding: 16 }}>
-        <div style={{ fontWeight: 700, marginBottom: 14, color: "#0f172a", fontSize: 15, letterSpacing: 0.2 }}>Админ панел</div>
-        <nav style={{ display: "grid", gap: 7, fontSize: 13 }}>
-          <NavLink href="/admin" label="Табло" />
-          <NavLink href="/admin/operations" label="Операции" />
-          <NavLink href="/admin/products" label="Продукти" />
-          <NavLink href="/admin/contacts" label="Контакти" />
-          <NavLink href="/admin/articles" label="Статии" />
-          <NavLink href="/admin/ratings" label="Оценки" />
-          <NavLink href="/admin/inquiries" label="Запитвания" />
-          <NavLink href="/admin/history" label="История" />
-          <NavLink href="/admin/settings" label="Настройки" />
+    <div className="grid grid-cols-[220px_minmax(0,1fr)] h-screen overflow-hidden bg-slate-50 text-slate-900 font-sans text-sm">
+      <aside className="flex flex-col border-r border-slate-200 bg-white p-3 min-h-0 overflow-y-auto">
+        <div className="inline-flex items-center gap-2 font-bold mb-3 text-slate-900 text-sm tracking-wide px-0.5">
+          <div className="w-8 h-8 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center shrink-0">
+            <LayoutDashboard className="w-4 h-4" />
+          </div>
+          Админ панел
+          <InfoDot text="Център за управление: продукти, контакти, съдържание и настройки." />
+        </div>
+        <nav className="flex flex-col gap-0.5 flex-1">
+          <NavLink href="/admin" label="Табло" icon={<LayoutDashboard className="w-4 h-4" />} />
+          <NavLink href="/admin/products" label="Продукти" icon={<Package className="w-4 h-4" />} />
+          <NavLink href="/admin/contacts" label="Контакти" icon={<Users className="w-4 h-4" />} />
+          <NavLink href="/admin/articles" label="Статии" icon={<FileText className="w-4 h-4" />} />
+          <NavLink href="/admin/ratings" label="Оценки" icon={<Star className="w-4 h-4" />} />
+          <NavLink href="/admin/inquiries" label="Запитвания" icon={<MessageSquare className="w-4 h-4" />} />
+          <NavLink href="/admin/history" label="История продажби" icon={<History className="w-4 h-4" />} />
+          <NavLink href="/admin/activity" label="Активност" icon={<Activity className="w-4 h-4" />} />
+          <NavLink href="/admin/settings" label="Настройки" icon={<Settings className="w-4 h-4" />} />
         </nav>
-        <form action={logoutAction} style={{ marginTop: 14 }}>
-          <button type="submit" style={{ width: "100%", padding: "9px 11px", borderRadius: 10, border: "1px solid #cbd5e1", background: "white", fontWeight: 600, color: "#0f172a", fontSize: 12 }}>
+        <form action={logoutAction} className="mt-2 pt-2 border-t border-slate-100">
+          <button 
+            type="submit" 
+            className="flex items-center gap-2 w-full px-2.5 py-2 rounded-lg border border-slate-200 bg-white font-semibold text-slate-700 text-xs hover:bg-slate-50 hover:text-red-600 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-200"
+          >
+            <LogOut className="w-4 h-4" />
             Изход
           </button>
         </form>
       </aside>
-      <main style={{ padding: 18 }}>{children}</main>
+      <main className="w-full min-w-0 p-4 overflow-x-hidden overflow-y-auto">{children}</main>
     </div>
   );
 }
 
-function NavLink({ href, label }: { href: string; label: string }) {
+function NavLink({ href, label, icon }: { href: string; label: string; icon: React.ReactNode }) {
   return (
     <Link
       href={href}
-      style={{
-        display: "block",
-        padding: "8px 10px",
-        borderRadius: 10,
-        color: "#334155",
-        fontWeight: 600,
-        textDecoration: "none",
-        background: "#f8fafc",
-        border: "1px solid #e2e8f0",
-        fontSize: 12,
-      }}
+      className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-slate-600 font-semibold no-underline bg-transparent hover:bg-slate-50 hover:text-slate-900 transition-colors text-xs border border-transparent focus:outline-none focus:ring-2 focus:ring-slate-200"
     >
-      {label}
+      <span className="text-slate-400">{icon}</span>
+      <span>{label}</span>
     </Link>
   );
 }
-

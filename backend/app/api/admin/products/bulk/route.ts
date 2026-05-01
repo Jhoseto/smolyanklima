@@ -21,27 +21,6 @@ export async function POST(req: NextRequest) {
   const { ids, action } = parsed.data;
   const supabase = await adminDb();
   if (action === "delete") {
-    const { data: rows } = await supabase.from("products").select("id,name,price").in("id", ids);
-    if (rows?.length) {
-      try {
-        await supabase.from("work_items").insert(
-          rows.map((r) => ({
-            type: "stock_out",
-            event_code: "item_removed",
-            status: "done",
-            priority: "medium",
-            title: `Премахнат артикул: ${r.name}`,
-            product_id: r.id,
-            due_date: new Date().toISOString().slice(0, 10),
-            quantity: 1,
-            unit_price: Number((r as { price?: number | null }).price ?? 0),
-            total_amount: Number((r as { price?: number | null }).price ?? 0),
-          })),
-        );
-      } catch {
-        // Non-blocking if work_items schema is not migrated yet.
-      }
-    }
     const { error } = await supabase.from("products").delete().in("id", ids);
     if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
     await logAdminActivity({

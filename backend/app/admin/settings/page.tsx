@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { HelpRow, SectionTitle, HelpCard, Card, Input, Textarea, Button, Table, Th, Td } from "../ui";
+import { RefreshCw, Save } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -48,99 +50,103 @@ export default function AdminSettingsPage() {
   }
 
   return (
-    <div style={{ maxWidth: 980 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
-        <h1 style={{ fontSize: 17, fontWeight: 700, color: "#0f172a", margin: 0 }}>Настройки</h1>
-        <button onClick={load} style={{ padding: "8px 11px", borderRadius: 10, border: "1px solid #e5e7eb", fontWeight: 600, fontSize: 12 }}>
-          Обнови
-        </button>
+    <div className="w-full space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 mb-1 leading-tight">
+            <SectionTitle title="Настройки" hint="Ключ-стойност конфигурация за системни параметри." />
+          </h1>
+        </div>
+        <Button variant="secondary" onClick={load} className="gap-2 shadow-sm">
+          <RefreshCw className="w-4 h-4" /> Обнови
+        </Button>
       </div>
 
+      <HelpCard>
+        <HelpRow items={["Добави или обнови ключ от формата", "Таблицата показва текущите стойности", "Тест запис валидира права за запис"]} />
+      </HelpCard>
+
       {error && (
-        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", padding: 12, borderRadius: 12, marginBottom: 12 }}>
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 text-sm font-medium">
           {error}
         </div>
       )}
 
-      <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, padding: 14, marginBottom: 12, background: "white" }}>
-        <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10 }}>Добави / обнови настройка</div>
-        <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 10, alignItems: "start" }}>
-          <label>
-            <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 4 }}>Ключ</div>
-            <input value={newRow.key} onChange={(e) => setNewRow({ ...newRow, key: e.target.value })} style={{ width: "100%", padding: 10, borderRadius: 12, border: "1px solid #e5e7eb" }} />
+      <Card className="p-3 bg-slate-50 border-slate-200">
+        <div className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4">Добави / обнови настройка</div>
+        <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-4 items-start">
+          <label className="grid gap-1.5">
+            <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Ключ</span>
+            <Input value={newRow.key} onChange={(e) => setNewRow({ ...newRow, key: e.target.value })} />
           </label>
-          <label>
-            <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 4 }}>Стойност</div>
-            <input value={newRow.value} onChange={(e) => setNewRow({ ...newRow, value: e.target.value })} style={{ width: "100%", padding: 10, borderRadius: 12, border: "1px solid #e5e7eb" }} />
+          <label className="grid gap-1.5">
+            <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Стойност</span>
+            <Input value={newRow.value} onChange={(e) => setNewRow({ ...newRow, value: e.target.value })} />
           </label>
-          <label style={{ gridColumn: "1 / -1" }}>
-            <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 4 }}>Описание</div>
-            <textarea value={newRow.description} onChange={(e) => setNewRow({ ...newRow, description: e.target.value })} rows={2} style={{ width: "100%", padding: 10, borderRadius: 12, border: "1px solid #e5e7eb" }} />
+          <label className="grid gap-1.5 md:col-span-2">
+            <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Описание</span>
+            <Textarea value={newRow.description} onChange={(e) => setNewRow({ ...newRow, description: e.target.value })} rows={2} />
           </label>
         </div>
-        <button
-          onClick={() => saveRow({ key: newRow.key.trim(), value: newRow.value || null, description: newRow.description || null })}
-          disabled={!newRow.key.trim()}
-          style={{
-            marginTop: 10,
-            padding: "10px 12px",
-            borderRadius: 12,
-            border: "1px solid #0ea5e9",
-            background: "#0ea5e9",
-            color: "white",
-            fontWeight: 900,
-            opacity: newRow.key.trim() ? 1 : 0.6,
-            cursor: newRow.key.trim() ? "pointer" : "not-allowed",
-          }}
-        >
-          Запази
-        </button>
-      </div>
+        <div className="mt-4 flex justify-end">
+          <Button
+            variant="primary"
+            onClick={() => saveRow({ key: newRow.key.trim(), value: newRow.value || null, description: newRow.description || null })}
+            disabled={!newRow.key.trim()}
+            className="gap-2"
+          >
+            <Save className="w-4 h-4" /> Запази настройка
+          </Button>
+        </div>
+      </Card>
 
       {loading ? (
-        <div>Зареждане...</div>
+        <div className="text-center py-12 text-slate-500 font-medium">Зареждане...</div>
       ) : (
-        <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, overflow: "hidden", background: "white" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead style={{ background: "#f8fafc" }}>
-              <tr>
-                {["Ключ", "Стойност", "Описание", "Обновено", ""].map((h) => (
-                  <th key={h} style={{ textAlign: "left", padding: "10px 12px", fontSize: 12, color: "#374151" }}>
-                    {h}
-                  </th>
-                ))}
+        <Table>
+          <thead>
+            <tr>
+              <Th>Ключ</Th>
+              <Th>Стойност</Th>
+              <Th>Описание</Th>
+              <Th>Обновено</Th>
+              <Th></Th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((s) => (
+              <tr key={s.key} className="hover:bg-slate-50 transition-colors">
+                <Td className="font-bold text-slate-900 font-mono text-xs">{s.key}</Td>
+                <Td>
+                  <div className="max-w-[300px] truncate font-mono text-xs text-slate-600" title={s.value ?? ""}>
+                    {s.value ?? "—"}
+                  </div>
+                </Td>
+                <Td className="text-slate-500">{s.description ?? "—"}</Td>
+                <Td className="text-xs text-slate-500 font-medium">{new Date(s.updated_at).toLocaleString()}</Td>
+                <Td className="text-right">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => saveRow({ key: s.key, value: s.value, description: s.description })}
+                    title="Запази (без промяна) – полезно за проверка на права"
+                    className="!py-1.5 !px-3 !text-xs font-bold"
+                  >
+                    Тест запис
+                  </Button>
+                </Td>
               </tr>
-            </thead>
-            <tbody>
-              {items.map((s) => (
-                <tr key={s.key} style={{ borderTop: "1px solid #e5e7eb" }}>
-                  <td style={{ padding: "10px 12px", fontWeight: 900 }}>{s.key}</td>
-                  <td style={{ padding: "10px 12px", color: "#374151" }}>{s.value ?? "—"}</td>
-                  <td style={{ padding: "10px 12px", color: "#6b7280" }}>{s.description ?? "—"}</td>
-                  <td style={{ padding: "10px 12px", color: "#6b7280" }}>{new Date(s.updated_at).toLocaleString()}</td>
-                  <td style={{ padding: "10px 12px" }}>
-                    <button
-                      onClick={() => saveRow({ key: s.key, value: s.value, description: s.description })}
-                      style={{ padding: "6px 10px", borderRadius: 10, border: "1px solid #e5e7eb", fontWeight: 800 }}
-                      title="Запази (без промяна) – полезно за проверка на права"
-                    >
-                      Тест запис
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {items.length === 0 && (
-                <tr>
-                  <td colSpan={5} style={{ padding: 14, color: "#6b7280" }}>
-                    Няма настройки.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+            ))}
+            {items.length === 0 && (
+              <tr>
+                <Td colSpan={5} className="text-center py-8 text-slate-500">
+                  Няма намерени настройки.
+                </Td>
+              </tr>
+            )}
+          </tbody>
+        </Table>
       )}
     </div>
   );
 }
-

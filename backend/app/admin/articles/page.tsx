@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { adminDb } from "@/lib/admin/db";
+import { SectionTitle, Table, Th, Td, Button } from "../ui";
+import { Plus, Edit } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -11,57 +13,76 @@ export default async function AdminArticlesPage() {
     .order("created_at", { ascending: false });
 
   return (
-    <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
-        <h1 style={{ fontSize: 17, fontWeight: 700, color: "#0f172a", margin: 0 }}>Статии</h1>
-        <Link href="/admin/articles/new" style={{ padding: "8px 12px", borderRadius: 10, background: "#0ea5e9", color: "white", fontWeight: 700, fontSize: 12 }}>
-          + Нова статия
+    <div className="w-full space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 mb-1 leading-tight">
+            <SectionTitle title="Статии" hint="Управление на блог съдържание, SEO и публикуване." />
+          </h1>
+        </div>
+        <Link href="/admin/articles/new" className="inline-flex items-center gap-2 bg-sky-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-sky-700 transition-colors shadow-sm">
+          <Plus className="w-4 h-4" />
+          Нова статия
         </Link>
       </div>
 
       {error && (
-        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", padding: 12, borderRadius: 12, marginBottom: 12 }}>
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 text-sm font-medium">
           <strong>Грешка в базата:</strong> {error.message}
         </div>
       )}
 
-      <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, overflow: "hidden", background: "white" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead style={{ background: "#f8fafc" }}>
-            <tr>
-              {["Заглавие", "Категория", "Автор", "Публикувана", "Избрана", ""].map((h) => (
-                <th key={h} style={{ textAlign: "left", padding: "10px 12px", fontSize: 12, color: "#374151" }}>
-                  {h}
-                </th>
-              ))}
+      <Table>
+        <thead>
+          <tr>
+            <Th>Заглавие</Th>
+            <Th>Категория</Th>
+            <Th>Автор</Th>
+            <Th>Публикувана</Th>
+            <Th>Избрана</Th>
+            <Th></Th>
+          </tr>
+        </thead>
+        <tbody>
+          {(data ?? []).map((a) => (
+            <tr key={a.id} className="hover:bg-slate-50 transition-colors">
+              <Td className="font-bold text-slate-900">{a.title}</Td>
+              <Td>
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
+                  {a.category_slug}
+                </span>
+              </Td>
+              <Td>
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
+                  {a.author_slug}
+                </span>
+              </Td>
+              <Td>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${a.is_published ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>
+                  {a.is_published ? "Да" : "Не"}
+                </span>
+              </Td>
+              <Td>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${a.is_featured ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"}`}>
+                  {a.is_featured ? "Да" : "Не"}
+                </span>
+              </Td>
+              <Td>
+                <Link href={`/admin/articles/${a.id}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:border-sky-300 hover:bg-sky-50 text-slate-700 hover:text-sky-700 rounded-lg text-xs font-bold transition-colors shadow-sm">
+                  <Edit className="w-3.5 h-3.5" /> Редакция
+                </Link>
+              </Td>
             </tr>
-          </thead>
-          <tbody>
-            {(data ?? []).map((a) => (
-              <tr key={a.id} style={{ borderTop: "1px solid #e5e7eb" }}>
-                <td style={{ padding: "10px 12px", fontWeight: 800 }}>{a.title}</td>
-                <td style={{ padding: "10px 12px", color: "#6b7280" }}>{a.category_slug}</td>
-                <td style={{ padding: "10px 12px", color: "#6b7280" }}>{a.author_slug}</td>
-                <td style={{ padding: "10px 12px" }}>{a.is_published ? "Да" : "Не"}</td>
-                <td style={{ padding: "10px 12px" }}>{a.is_featured ? "Да" : "Не"}</td>
-                <td style={{ padding: "10px 12px" }}>
-                  <Link href={`/admin/articles/${a.id}`} style={{ fontWeight: 800 }}>
-                    Редакция →
-                  </Link>
-                </td>
-              </tr>
-            ))}
-            {(data ?? []).length === 0 && (
-              <tr>
-                <td colSpan={6} style={{ padding: 14, color: "#6b7280" }}>
-                  Няма статии.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+          ))}
+          {(data ?? []).length === 0 && (
+            <tr>
+              <Td colSpan={6} className="text-center py-8 text-slate-500">
+                Няма намерени статии.
+              </Td>
+            </tr>
+          )}
+        </tbody>
+      </Table>
     </div>
   );
 }
-

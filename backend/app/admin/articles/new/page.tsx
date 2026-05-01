@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { HelpRow, InfoDot, SectionTitle, HelpCard, Card, Input, Textarea, Select, Button } from "../../ui";
+import { Save, Upload, Wand2 } from "lucide-react";
 
 type BlogCategory = { slug: string; name: string; description?: string; color?: string };
 type BlogAuthor = { slug: string; name: string; role?: string };
@@ -145,149 +147,187 @@ export default function NewArticlePage() {
   }
 
   return (
-    <div style={{ maxWidth: 860 }}>
-      <h1 style={{ fontSize: 17, fontWeight: 700, marginBottom: 10 }}>Нова статия</h1>
+    <div className="w-full max-w-none space-y-4">
+      <div>
+        <h1 className="text-xl font-bold text-slate-900 mb-1 leading-tight">
+          <SectionTitle title="Нова статия" hint="Създаване на статия с SEO и Cloudinary изображение." />
+        </h1>
+      </div>
+
+      <HelpCard>
+        <HelpRow items={["Slug се генерира автоматично от заглавието", "SEO полетата се попълват автоматично до ръчна редакция", "Качи изображение в папка по slug"]} />
+      </HelpCard>
+
       {error && (
-        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", padding: 12, borderRadius: 12, marginBottom: 12 }}>
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 text-sm font-medium">
           {error}
         </div>
       )}
 
-      <div style={{ display: "grid", gap: 10 }}>
-        <label>
-          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Slug</div>
-          <input
-            value={form.slug}
-            onChange={(e) => {
-              setSlugTouched(true);
-              setForm({ ...form, slug: e.target.value });
-            }}
-            style={{ width: "100%", padding: 10, border: "1px solid #e5e7eb", borderRadius: 12 }}
-          />
-        </label>
-        <label>
-          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Заглавие</div>
-          <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} style={{ width: "100%", padding: 10, border: "1px solid #e5e7eb", borderRadius: 12 }} />
-        </label>
-        <label>
-          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Кратко описание</div>
-          <textarea value={form.excerpt} onChange={(e) => setForm({ ...form, excerpt: e.target.value })} rows={3} style={{ width: "100%", padding: 10, border: "1px solid #e5e7eb", borderRadius: 12 }} />
-        </label>
-        <label>
-          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Съдържание</div>
-          <textarea value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} rows={14} style={{ width: "100%", padding: 10, border: "1px solid #e5e7eb", borderRadius: 12, fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace" }} />
-        </label>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <label>
-            <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Категория</div>
-            <select value={form.categorySlug} onChange={(e) => setForm({ ...form, categorySlug: e.target.value })} style={{ width: "100%", padding: 10, border: "1px solid #e5e7eb", borderRadius: 12 }}>
-              {categories.map((c) => (
-                <option key={c.slug} value={c.slug}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+      <Card className="p-6">
+        <div className="grid gap-3">
+          <label className="block">
+            <div className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">Slug</div>
+            <div className="text-[11px] text-slate-500 mb-1.5">Частта от URL адреса на статията. Използвай кратък и ясен формат с тирета.</div>
+            <Input
+              value={form.slug}
+              onChange={(e) => {
+                setSlugTouched(true);
+                setForm({ ...form, slug: e.target.value });
+              }}
+            />
           </label>
-          <label>
-            <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Автор</div>
-            <select value={form.authorSlug} onChange={(e) => setForm({ ...form, authorSlug: e.target.value })} style={{ width: "100%", padding: 10, border: "1px solid #e5e7eb", borderRadius: 12 }}>
-              {authors.map((a) => (
-                <option key={a.slug} value={a.slug}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+          
+          <label className="block">
+            <div className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">Заглавие</div>
+            <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
           </label>
-        </div>
+          
+          <label className="block">
+            <div className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">Кратко описание</div>
+            <div className="text-[11px] text-slate-500 mb-1.5">Показва се в listing страниците и често се използва за SEO description.</div>
+            <Textarea value={form.excerpt} onChange={(e) => setForm({ ...form, excerpt: e.target.value })} rows={3} />
+          </label>
+          
+          <label className="block">
+            <div className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">Съдържание</div>
+            <div className="text-[11px] text-slate-500 mb-1.5">Основният текст на статията (може да е markdown).</div>
+            <Textarea 
+              value={form.content} 
+              onChange={(e) => setForm({ ...form, content: e.target.value })} 
+              rows={14} 
+              className="font-mono text-sm"
+            />
+          </label>
 
-        <label>
-          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Основна снимка (URL)</div>
-          <input value={form.featuredImage} onChange={(e) => setForm({ ...form, featuredImage: e.target.value })} style={{ width: "100%", padding: 10, border: "1px solid #e5e7eb", borderRadius: 12 }} />
-        </label>
-        <label>
-          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Качи снимка от компютъра (Cloudinary)</div>
-          <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 6 }}>Папка: smolyanklima/blog/{"{slug}"}/ (отделна папка за всяка статия; вътре — снимките).</div>
-          <input
-            type="file"
-            accept="image/*"
-            disabled={uploading}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (!f) return;
-              uploadFeaturedImage(f).catch((err) => setError(String(err?.message ?? err)));
-            }}
-          />
-          {uploading && <div style={{ fontSize: 12, color: "#6b7280", marginTop: 6 }}>Качване...</div>}
-        </label>
-        <label>
-          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Тагове (разделени със запетая)</div>
-          <input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} style={{ width: "100%", padding: 10, border: "1px solid #e5e7eb", borderRadius: 12 }} />
-        </label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label className="block">
+              <div className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">Категория</div>
+              <Select value={form.categorySlug} onChange={(e) => setForm({ ...form, categorySlug: e.target.value })}>
+                {categories.map((c) => (
+                  <option key={c.slug} value={c.slug}>
+                    {c.name}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <label className="block">
+              <div className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">Автор</div>
+              <Select value={form.authorSlug} onChange={(e) => setForm({ ...form, authorSlug: e.target.value })}>
+                {authors.map((a) => (
+                  <option key={a.slug} value={a.slug}>
+                    {a.name}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          </div>
 
-        <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 10, marginTop: 4 }}>
-          <div style={{ fontWeight: 900, marginBottom: 8 }}>SEO</div>
-          <div style={{ display: "grid", gap: 10 }}>
-            <label>
-              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>SEO заглавие (title)</div>
-              <input
-                value={form.seoTitle}
-                onChange={(e) => {
-                  setSeoTouched(true);
-                  setForm({ ...form, seoTitle: e.target.value });
-                }}
-                style={{ width: "100%", padding: 10, border: "1px solid #e5e7eb", borderRadius: 12 }}
-              />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label className="block">
+              <div className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">Основна снимка (URL)</div>
+              <Input value={form.featuredImage} onChange={(e) => setForm({ ...form, featuredImage: e.target.value })} />
             </label>
-            <label>
-              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>SEO описание (description)</div>
-              <textarea
-                value={form.seoDescription}
-                onChange={(e) => {
-                  setSeoTouched(true);
-                  setForm({ ...form, seoDescription: e.target.value });
-                }}
-                rows={2}
-                style={{ width: "100%", padding: 10, border: "1px solid #e5e7eb", borderRadius: 12 }}
-              />
+            <label className="block">
+              <div className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">Качи снимка (Cloudinary)</div>
+              <div className="text-[11px] text-slate-500 mb-1.5">Папка: smolyanklima/blog/{"{slug}"}/</div>
+              <div className="relative">
+                <input
+                  type="file"
+                  accept="image/*"
+                  disabled={uploading}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    uploadFeaturedImage(f).catch((err) => setError(String(err?.message ?? err)));
+                  }}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                />
+                <div className="flex items-center justify-center gap-2 w-full px-4 py-2 border-2 border-dashed border-sky-200 bg-sky-50 text-sky-600 hover:bg-sky-100 hover:border-sky-300 rounded-lg text-sm font-semibold transition-colors">
+                  <Upload className="w-4 h-4" />
+                  {uploading ? "Качване..." : "Кликни или пусни файл тук"}
+                </div>
+              </div>
             </label>
-            <label>
-              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>SEO ключови думи (keywords, със запетая)</div>
-              <input
-                value={form.seoKeywords}
-                onChange={(e) => {
-                  setSeoTouched(true);
-                  setForm({ ...form, seoKeywords: e.target.value });
-                }}
-                style={{ width: "100%", padding: 10, border: "1px solid #e5e7eb", borderRadius: 12 }}
-              />
+          </div>
+
+          <label className="block">
+            <div className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">Тагове (разделени със запетая)</div>
+            <Input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} />
+          </label>
+
+          <div className="border-t border-slate-200 pt-6 mt-2">
+            <div className="flex items-center gap-2 mb-4">
+              <h2 className="text-lg font-bold text-slate-900">SEO</h2>
+              <InfoDot text="Настройва title/description/keywords/og:image за търсачки и споделяне." />
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <label className="block">
+                <div className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">SEO заглавие (title)</div>
+                <div className="text-[11px] text-slate-500 mb-1.5">До ~60 символа. Ако е празно, ползва заглавието.</div>
+                <Input
+                  value={form.seoTitle}
+                  onChange={(e) => {
+                    setSeoTouched(true);
+                    setForm({ ...form, seoTitle: e.target.value });
+                  }}
+                />
+              </label>
+              <label className="block">
+                <div className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">SEO описание (description)</div>
+                <div className="text-[11px] text-slate-500 mb-1.5">До ~160 символа. Кратко и конкретно.</div>
+                <Textarea
+                  value={form.seoDescription}
+                  onChange={(e) => {
+                    setSeoTouched(true);
+                    setForm({ ...form, seoDescription: e.target.value });
+                  }}
+                  rows={2}
+                />
+              </label>
+              <label className="block">
+                <div className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">SEO ключови думи</div>
+                <div className="text-[11px] text-slate-500 mb-1.5">По избор. Разделени със запетая.</div>
+                <Input
+                  value={form.seoKeywords}
+                  onChange={(e) => {
+                    setSeoTouched(true);
+                    setForm({ ...form, seoKeywords: e.target.value });
+                  }}
+                />
+              </label>
+              <label className="block">
+                <div className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">OG снимка (og:image URL)</div>
+                <div className="text-[11px] text-slate-500 mb-1.5">Снимка за споделяне в социални мрежи.</div>
+                <Input
+                  value={form.seoOgImage}
+                  onChange={(e) => {
+                    setSeoTouched(true);
+                    setForm({ ...form, seoOgImage: e.target.value });
+                  }}
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-3 pt-3 border-t border-slate-200">
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500" checked={form.isPublished} onChange={(e) => setForm({ ...form, isPublished: e.target.checked })} />
+              <span className="text-sm font-semibold text-slate-700">Публикувана</span>
             </label>
-            <label>
-              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>OG снимка (og:image URL)</div>
-              <input
-                value={form.seoOgImage}
-                onChange={(e) => {
-                  setSeoTouched(true);
-                  setForm({ ...form, seoOgImage: e.target.value });
-                }}
-                style={{ width: "100%", padding: 10, border: "1px solid #e5e7eb", borderRadius: 12 }}
-              />
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500" checked={form.isFeatured} onChange={(e) => setForm({ ...form, isFeatured: e.target.checked })} />
+              <span className="text-sm font-semibold text-slate-700">Избрана</span>
             </label>
           </div>
         </div>
+      </Card>
 
-        <label style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <input type="checkbox" checked={form.isPublished} onChange={(e) => setForm({ ...form, isPublished: e.target.checked })} />
-          Публикувана
-        </label>
-        <label style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <input type="checkbox" checked={form.isFeatured} onChange={(e) => setForm({ ...form, isFeatured: e.target.checked })} />
-          Избрана
-        </label>
-
-        <button onClick={submit} style={{ padding: "8px 12px", borderRadius: 10, background: "#0ea5e9", color: "white", fontWeight: 700, border: "1px solid #0ea5e9", fontSize: 12 }}>
-          Създай
-        </button>
+      <div className="flex justify-end">
+        <Button variant="primary" size="lg" onClick={submit} className="gap-2 shadow-sm">
+          <Save className="w-5 h-5" /> Създай статия
+        </Button>
       </div>
     </div>
   );
@@ -347,4 +387,3 @@ function deriveSeo(input: { title: string; excerpt: string; content: string; tag
   const ogImage = input.featuredImage || "/images/blog/og-blog-home.jpg";
   return { title: baseTitle, description, keywords, ogImage };
 }
-

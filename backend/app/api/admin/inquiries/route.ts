@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
   let query = supabase
     .from("inquiries")
     .select(
-      "id,source,customer_name,customer_phone,customer_email,message,service_type,status,priority,assigned_to,admin_notes,created_at,updated_at",
+      "id,source,customer_name,customer_phone,customer_email,message,product_id,service_type,status,priority,assigned_to,admin_notes,created_at,updated_at",
     );
 
   if (parsed.data.status) query = query.eq("status", parsed.data.status);

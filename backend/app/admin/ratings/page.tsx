@@ -1,6 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { HelpRow, SectionTitle, HelpCard, Card, Input, Select, Button, Table, Th, Td } from "../ui";
+import { RefreshCw, Trash2, Star } from "lucide-react";
+import { ProductQuickViewButton } from "../ProductQuickView";
 
 type RatingRow = {
   id: string;
@@ -17,6 +20,7 @@ export default function AdminRatingsPage() {
   const [meta, setMeta] = useState({ page: 1, perPage: 25, total: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const qs = useMemo(() => {
     const sp = new URLSearchParams();
@@ -49,86 +53,131 @@ export default function AdminRatingsPage() {
   }, [qs]);
 
   async function remove(id: string) {
-    if (!confirm("Да изтрия ли оценката?")) return;
+    if (confirmDeleteId !== id) {
+      setConfirmDeleteId(id);
+      return;
+    }
     const res = await fetch(`/api/admin/ratings/${id}`, { method: "DELETE", credentials: "include" });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
       setError((json as any).error || "Грешка при изтриване");
       return;
     }
+    setConfirmDeleteId(null);
     await load();
   }
 
   const pages = Math.max(1, Math.ceil(meta.total / meta.perPage));
 
   return (
-    <div>
-      <h1 style={{ fontSize: 17, fontWeight: 700, marginBottom: 6, color: "#0f172a" }}>Оценки</h1>
-      <p style={{ marginTop: 0, color: "#64748b", fontSize: 13, marginBottom: 12 }}>Модерация на клиентските звезди</p>
-
-      <div style={{ border: "1px solid #e2e8f0", background: "white", borderRadius: 16, padding: 12, marginBottom: 12, display: "grid", gridTemplateColumns: "1fr 180px auto", gap: 10 }}>
-        <input value={q} onChange={(e) => { setPage(1); setQ(e.target.value); }} placeholder="Търси продукт..." style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
-        <select value={stars} onChange={(e) => { setPage(1); setStars(e.target.value); }} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}>
-          <option value="">Всички звезди</option>
-          <option value="5">5 звезди</option>
-          <option value="4">4 звезди</option>
-          <option value="3">3 звезди</option>
-          <option value="2">2 звезди</option>
-          <option value="1">1 звезда</option>
-        </select>
-        <button onClick={load} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1", fontWeight: 700 }}>Обнови</button>
+    <div className="w-full space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 mb-1 leading-tight">
+            <SectionTitle title="Оценки" hint="Модерация на клиентски оценки и звезди по продукти." />
+          </h1>
+          <p className="text-sm text-slate-500">Модерация на клиентските звезди</p>
+        </div>
+        <Button variant="secondary" onClick={load} className="gap-2 shadow-sm">
+          <RefreshCw className="w-4 h-4" /> Обнови
+        </Button>
       </div>
 
-      {error && <div style={{ background: "#fef2f2", border: "1px solid #fecaca", padding: 12, borderRadius: 12, marginBottom: 12 }}>{error}</div>}
+      <HelpCard>
+        <HelpRow items={["Филтър по звезди за бърза проверка", "Изтриване при невалиден/спам вот", "Общо брой оценки и странициране"]} />
+      </HelpCard>
 
-      <div style={{ border: "1px solid #e2e8f0", borderRadius: 16, overflow: "hidden", background: "white" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead style={{ background: "#f8fafc" }}>
-            <tr>
-              {["Продукт", "Звезди", "Дата", ""].map((h) => (
-                <th key={h} style={{ textAlign: "left", padding: "10px 12px", fontSize: 12, color: "#334155" }}>{h}</th>
-              ))}
+      <Card className="p-4">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_200px] gap-4">
+          <label className="grid gap-1.5">
+            <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Търсене</span>
+            <Input value={q} onChange={(e) => { setPage(1); setQ(e.target.value); }} placeholder="Търси продукт..." />
+          </label>
+          <label className="grid gap-1.5">
+            <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Звезди</span>
+            <Select value={stars} onChange={(e) => { setPage(1); setStars(e.target.value); }}>
+              <option value="">Всички звезди</option>
+              <option value="5">5 звезди</option>
+              <option value="4">4 звезди</option>
+              <option value="3">3 звезди</option>
+              <option value="2">2 звезди</option>
+              <option value="1">1 звезда</option>
+            </Select>
+          </label>
+        </div>
+      </Card>
+
+      {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 text-sm font-medium">{error}</div>}
+
+      <Table>
+        <thead>
+          <tr>
+            <Th>Продукт</Th>
+            <Th>Звезди</Th>
+            <Th>Дата</Th>
+            <Th></Th>
+          </tr>
+        </thead>
+        <tbody>
+          {!loading && items.map((r) => (
+            <tr key={r.id} className="hover:bg-slate-50 transition-colors group">
+              <Td className="font-bold text-slate-900">
+                {r.products?.name ? (
+                  <ProductQuickViewButton productId={r.products.id} productName={r.products.name} />
+                ) : (
+                  "—"
+                )}
+              </Td>
+              <Td>
+                <div className="flex gap-0.5">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <Star 
+                      key={i} 
+                      className={`w-4 h-4 ${i < r.stars ? "fill-amber-400 text-amber-400" : "fill-slate-100 text-slate-300"}`} 
+                    />
+                  ))}
+                </div>
+              </Td>
+              <Td className="text-slate-500 font-medium">{new Date(r.created_at).toLocaleString()}</Td>
+              <Td className="text-right">
+                <Button 
+                  variant="danger" 
+                  size="sm" 
+                  onClick={() => void remove(r.id)} 
+                  className="opacity-0 group-hover:opacity-100 transition-opacity gap-1.5 !py-1.5 !px-2.5"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Изтрий
+                </Button>
+              </Td>
             </tr>
-          </thead>
-          <tbody>
-            {!loading && items.map((r) => (
-              <tr key={r.id} style={{ borderTop: "1px solid #e2e8f0" }}>
-                <td style={{ padding: "10px 12px", fontWeight: 700 }}>{r.products?.name ?? "—"}</td>
-                <td style={{ padding: "10px 12px" }}>{"★".repeat(r.stars)}{"☆".repeat(5 - r.stars)}</td>
-                <td style={{ padding: "10px 12px", color: "#64748b" }}>{new Date(r.created_at).toLocaleString()}</td>
-                <td style={{ padding: "10px 12px" }}>
-                  <button onClick={() => void remove(r.id)} style={{ padding: "6px 10px", borderRadius: 10, border: "1px solid #fecaca", color: "#b91c1c", background: "white", fontWeight: 700 }}>
-                    Изтрий
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {!loading && items.length === 0 && <tr><td colSpan={4} style={{ padding: 14, color: "#64748b" }}>Няма оценки.</td></tr>}
-          </tbody>
-        </table>
-      </div>
+          ))}
+          {!loading && items.length === 0 && (
+            <tr><Td colSpan={4} className="text-center py-8 text-slate-500">Няма намерени оценки.</Td></tr>
+          )}
+        </tbody>
+      </Table>
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12 }}>
-        <span style={{ color: "#64748b", fontSize: 13 }}>Общо: {meta.total}</span>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} style={pager(page > 1)}>Предишна</button>
-          <span style={{ fontSize: 13, color: "#475569", alignSelf: "center" }}>Стр. {page} / {pages}</span>
-          <button disabled={page >= pages} onClick={() => setPage((p) => p + 1)} style={pager(page < pages)}>Следваща</button>
+      <div className="flex justify-between items-center">
+        <span className="text-sm text-slate-500 font-medium">Общо: {meta.total}</span>
+        <div className="flex items-center gap-3">
+          <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Предишна</Button>
+          <span className="text-sm font-medium text-slate-600">Стр. {page} / {pages}</span>
+          <Button variant="secondary" size="sm" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>Следваща</Button>
         </div>
       </div>
+
+      {confirmDeleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-md" onClick={() => setConfirmDeleteId(null)}>
+          <div className="w-full max-w-lg rounded-3xl border border-white/70 bg-white p-6 shadow-[0_30px_90px_rgba(15,23,42,0.35)]" onClick={(e) => e.stopPropagation()}>
+            <div className="text-xl font-black text-slate-950">Изтриване на оценка</div>
+            <div className="mt-2 text-sm text-slate-500">Сигурни ли сте, че искате да изтриете тази оценка?</div>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setConfirmDeleteId(null)}>Отказ</Button>
+              <Button variant="danger" onClick={() => void remove(confirmDeleteId)}>Изтрий</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
-}
-
-function pager(enabled: boolean): CSSProperties {
-  return {
-    padding: "8px 10px",
-    borderRadius: 10,
-    border: "1px solid #cbd5e1",
-    background: "white",
-    color: "#0f172a",
-    fontWeight: 700,
-    opacity: enabled ? 1 : 0.45,
-    cursor: enabled ? "pointer" : "not-allowed",
-  };
 }

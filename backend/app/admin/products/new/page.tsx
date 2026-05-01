@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ProductFormFields, emptyProductForm, buildPostBody, type AdminProductForm } from "../ProductForm";
+import { HelpRow, SectionTitle, HelpCard, Card, Button } from "../../ui";
+import { Save } from "lucide-react";
 
 type Brand = { id: string; name: string };
 type ProductType = { id: string; name: string };
@@ -65,55 +67,51 @@ export default function NewProductPage() {
   }
 
   return (
-    <div style={{ maxWidth: 720 }}>
+    <div className="w-full max-w-none space-y-4">
       {toast && (
         <div
-          style={{
-            position: "fixed",
-            top: 14,
-            right: 14,
-            zIndex: 50,
-            background: toast.kind === "ok" ? "#ecfdf5" : "#fef2f2",
-            border: toast.kind === "ok" ? "1px solid #a7f3d0" : "1px solid #fecaca",
-            color: toast.kind === "ok" ? "#065f46" : "#991b1b",
-            padding: "10px 12px",
-            borderRadius: 12,
-            boxShadow: "0 10px 25px rgba(0,0,0,.08)",
-            fontWeight: 800,
-          }}
+          className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-lg border font-bold text-sm transition-all ${
+            toast.kind === "ok" ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-red-50 border-red-200 text-red-800"
+          }`}
           role="status"
           aria-live="polite"
         >
           {toast.text}
         </div>
       )}
-      <h1 style={{ fontSize: 20, fontWeight: 900, marginBottom: 10 }}>Нов продукт</h1>
+      
+      <div>
+        <h1 className="text-xl font-bold text-slate-900 mb-1 leading-tight">
+          <SectionTitle title="Нов продукт" hint="Създаване на нова продуктова карта за каталога." />
+        </h1>
+      </div>
+
+      <HelpCard>
+        <HelpRow items={["Slug се ползва за URL и Cloudinary папка", "Маркирай състояние: Нови/Втора употреба", "Пази поне една главна снимка"]} />
+      </HelpCard>
+
       {error && (
-        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", padding: 12, borderRadius: 12, marginBottom: 12 }}>
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 text-sm font-medium">
           {error}
         </div>
       )}
-      <ProductFormFields brands={brands} types={types} form={form} setForm={setForm} />
-      <button
-        onClick={submit}
-        disabled={submitting}
-        style={{
-          marginTop: 14,
-          padding: "10px 12px",
-          borderRadius: 12,
-          background: submitting ? "#0284c7" : "#0ea5e9",
-          color: "white",
-          fontWeight: 900,
-          border: "1px solid #0ea5e9",
-          opacity: submitting ? 0.85 : 1,
-          cursor: submitting ? "not-allowed" : "pointer",
-          transform: submitting ? "translateY(1px)" : "translateY(0)",
-          boxShadow: submitting ? "none" : "0 8px 20px rgba(14,165,233,.25)",
-          transition: "transform .06s ease, box-shadow .12s ease, opacity .12s ease",
-        }}
-      >
-        {submitting ? "Създавам..." : "Създай"}
-      </button>
+
+      <Card className="p-6">
+        <ProductFormFields brands={brands} types={types} form={form} setForm={setForm} />
+      </Card>
+
+      <div className="flex justify-end">
+        <Button
+          variant="primary"
+          size="lg"
+          onClick={submit}
+          disabled={submitting}
+          className="gap-2 shadow-sm"
+        >
+          <Save className="w-5 h-5" />
+          {submitting ? "Създавам..." : "Създай продукт"}
+        </Button>
+      </div>
     </div>
   );
 }

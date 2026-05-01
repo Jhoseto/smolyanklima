@@ -210,23 +210,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  try {
-    await supabase.from("work_items").insert({
-      type: "stock_in",
-      event_code: "item_added",
-      status: "done",
-      priority: "medium",
-      title: `Добавен артикул: ${parsed.data.name}`,
-      product_id: data.id,
-      due_date: new Date().toISOString().slice(0, 10),
-      quantity: Math.max(1, Number(parsed.data.stockQuantity ?? 1)),
-      unit_price: Number(parsed.data.price),
-      total_amount: Number(parsed.data.price) * Math.max(1, Number(parsed.data.stockQuantity ?? 1)),
-    });
-  } catch {
-    // Non-blocking if work_items schema is not migrated yet.
-  }
-
   await logAdminActivity({
     action: "product.create",
     entityType: "product",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { InfoDot, Card, Button } from "./ui";
 
 export function EmailOutboxDrain({ pendingCount }: { pendingCount: number }) {
   const [msg, setMsg] = useState<string | null>(null);
@@ -24,20 +25,25 @@ export function EmailOutboxDrain({ pendingCount }: { pendingCount: number }) {
   if (pendingCount === 0) return null;
 
   return (
-    <div style={{ border: "1px solid #e5e7eb", borderRadius: 16, padding: 14, maxWidth: 520 }}>
-      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Имейл опашка</div>
-      <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 10 }}>
-        Има {pendingCount} чакащи съобщения. Натиснете за изпращане чрез Resend (ако е конфигуриран <code>RESEND_API_KEY</code>).
+    <Card className="p-3 w-full">
+      <div className="font-bold text-xs mb-1 inline-flex items-center gap-1.5 text-slate-900">
+        Имейл опашка
+        <InfoDot text="Ръчно пуска изпращане на чакащи имейли от outbox." />
+      </div>
+      <p className="text-sm text-slate-500 mb-2 leading-snug">
+        Има {pendingCount} чакащи съобщения. Натиснете за изпращане чрез Resend (ако е конфигуриран <code className="bg-slate-100 px-1 py-0.5 rounded text-xs text-slate-700">RESEND_API_KEY</code>).
       </p>
-      <button
+      <Button
         type="button"
+        variant="secondary"
+        size="sm"
         disabled={busy}
         onClick={drain}
-        style={{ padding: "8px 12px", borderRadius: 10, fontWeight: 600, fontSize: 12, border: "1px solid #e5e7eb", cursor: busy ? "wait" : "pointer" }}
+        className={busy ? "cursor-wait opacity-70" : ""}
       >
         {busy ? "Изпращане…" : "Изпрати pending имейли"}
-      </button>
-      {msg ? <p style={{ marginTop: 10, fontSize: 13 }}>{msg}</p> : null}
-    </div>
+      </Button>
+      {msg && <p className="mt-2 text-xs text-slate-700 font-medium">{msg}</p>}
+    </Card>
   );
 }

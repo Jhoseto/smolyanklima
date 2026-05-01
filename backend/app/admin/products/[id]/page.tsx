@@ -9,6 +9,8 @@ import {
   buildPutBody,
   type AdminProductForm,
 } from "../ProductForm";
+import { HelpRow, SectionTitle, HelpCard, Card, Button } from "../../ui";
+import { Save, Trash2 } from "lucide-react";
 
 type Brand = { id: string; name: string };
 type ProductType = { id: string; name: string };
@@ -25,6 +27,7 @@ export default function EditProductPage() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<AdminProductForm>(emptyProductForm);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     if (!toast) return;
@@ -77,69 +80,80 @@ export default function EditProductPage() {
   }
 
   async function remove() {
-    if (!confirm("Да изтрия ли продукта?")) return;
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
     const res = await fetch(`/api/admin/products/${id}`, { method: "DELETE", credentials: "include" });
     const json = await res.json();
     if (!res.ok) setError(json.error || "Грешка");
     else router.push("/admin/products");
   }
 
-  if (loading) return <div>Зареждане...</div>;
+  if (loading) return <div className="flex items-center justify-center p-12 text-slate-500 font-medium">Зареждане...</div>;
 
   return (
-    <div style={{ maxWidth: 720 }}>
+    <div className="w-full max-w-none space-y-4">
       {toast && (
         <div
-          style={{
-            position: "fixed",
-            top: 14,
-            right: 14,
-            zIndex: 50,
-            background: toast.kind === "ok" ? "#ecfdf5" : "#fef2f2",
-            border: toast.kind === "ok" ? "1px solid #a7f3d0" : "1px solid #fecaca",
-            color: toast.kind === "ok" ? "#065f46" : "#991b1b",
-            padding: "10px 12px",
-            borderRadius: 12,
-            boxShadow: "0 10px 25px rgba(0,0,0,.08)",
-            fontWeight: 800,
-          }}
+          className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-lg border font-bold text-sm transition-all ${
+            toast.kind === "ok" ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-red-50 border-red-200 text-red-800"
+          }`}
           role="status"
           aria-live="polite"
         >
           {toast.text}
         </div>
       )}
-      <h1 style={{ fontSize: 20, fontWeight: 900, marginBottom: 10 }}>Редакция на продукт</h1>
+      
+      <div>
+        <h1 className="text-xl font-bold text-slate-900 mb-1 leading-tight">
+          <SectionTitle title="Редакция на продукт" hint="Промяна на параметри, наличности и медия на съществуващ продукт." />
+        </h1>
+      </div>
+
+      <HelpCard>
+        <HelpRow items={["Запис запазва всички промени в картата", "Изтрий премахва продукта и свързаните му публични данни", "Провери stock и active преди запазване"]} />
+      </HelpCard>
+
       {error && (
-        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", padding: 12, borderRadius: 12, marginBottom: 12 }}>
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 text-sm font-medium">
           {error}
         </div>
       )}
-      <ProductFormFields brands={brands} types={types} form={form} setForm={setForm} />
-      <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
-        <button
+
+      <Card className="p-6">
+        <ProductFormFields brands={brands} types={types} form={form} setForm={setForm} />
+      </Card>
+
+      <div className="flex justify-between items-center pt-2">
+        <Button variant="danger" onClick={remove} className="gap-2">
+          <Trash2 className="w-4 h-4" /> Изтрий продукт
+        </Button>
+        <Button
+          variant="primary"
+          size="lg"
           onClick={save}
           disabled={saving}
-          style={{
-            padding: "10px 12px",
-            borderRadius: 12,
-            background: saving ? "#0284c7" : "#0ea5e9",
-            color: "white",
-            fontWeight: 900,
-            border: "1px solid #0ea5e9",
-            opacity: saving ? 0.85 : 1,
-            cursor: saving ? "not-allowed" : "pointer",
-            transform: saving ? "translateY(1px)" : "translateY(0)",
-            boxShadow: saving ? "none" : "0 8px 20px rgba(14,165,233,.25)",
-            transition: "transform .06s ease, box-shadow .12s ease, opacity .12s ease",
-          }}
+          className="gap-2 shadow-sm"
         >
-          {saving ? "Запазвам..." : "Запази"}
-        </button>
-        <button onClick={remove} style={{ padding: "10px 12px", borderRadius: 12, background: "#fff", color: "#b91c1c", fontWeight: 900, border: "1px solid #fecaca" }}>
-          Изтрий
-        </button>
+          <Save className="w-5 h-5" />
+          {saving ? "Запазвам..." : "Запази промените"}
+        </Button>
       </div>
+
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-md" onClick={() => setConfirmDelete(false)}>
+          <div className="w-full max-w-lg rounded-3xl border border-white/70 bg-white p-6 shadow-[0_30px_90px_rgba(15,23,42,0.35)]" onClick={(e) => e.stopPropagation()}>
+            <div className="text-xl font-black text-slate-950">Изтриване на продукт</div>
+            <div className="mt-2 text-sm text-slate-500">Сигурни ли сте, че искате да изтриете този продукт и свързаните му данни?</div>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setConfirmDelete(false)}>Отказ</Button>
+              <Button variant="danger" onClick={() => void remove()}>Изтрий</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

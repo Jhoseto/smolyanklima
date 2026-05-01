@@ -1,6 +1,8 @@
 "use client";
 
-import type { ChangeEvent, Dispatch, SetStateAction } from "react";
+import { useState, type ChangeEvent, type Dispatch, type SetStateAction } from "react";
+import { Input, Select, Textarea, Button } from "../ui";
+import { AlertCircle, CheckCircle2, Sparkles, Wand2, Upload, Plus, Trash2, X } from "lucide-react";
 
 export type SpecsForm = {
   coverage_m2: string;
@@ -84,36 +86,7 @@ const HEATING_KW_OPTIONS = ["2.2", "2.8", "3.4", "4.0", "4.5", "5.6", "6.3", "7.
 
 function slugifyBg(input: string) {
   const map: Record<string, string> = {
-    а: "a",
-    б: "b",
-    в: "v",
-    г: "g",
-    д: "d",
-    е: "e",
-    ж: "zh",
-    з: "z",
-    и: "i",
-    й: "y",
-    к: "k",
-    л: "l",
-    м: "m",
-    н: "n",
-    о: "o",
-    п: "p",
-    р: "r",
-    с: "s",
-    т: "t",
-    у: "u",
-    ф: "f",
-    х: "h",
-    ц: "ts",
-    ч: "ch",
-    ш: "sh",
-    щ: "sht",
-    ъ: "a",
-    ь: "",
-    ю: "yu",
-    я: "ya",
+    а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ж: "zh", з: "z", и: "i", й: "y", к: "k", л: "l", м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t", у: "u", ф: "f", х: "h", ц: "ts", ч: "ch", ш: "sh", щ: "sht", ъ: "a", ь: "", ю: "yu", я: "ya",
   };
   const s = input
     .trim()
@@ -130,38 +103,11 @@ function slugifyBg(input: string) {
     .slice(0, 120);
 }
 
-function InfoBadge({ text }: { text: string }) {
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: 18,
-        height: 18,
-        borderRadius: 999,
-        background: "#f3f4f6",
-        border: "1px solid #e5e7eb",
-        color: "#111827",
-        fontSize: 12,
-        fontWeight: 900,
-        cursor: "help",
-        position: "relative",
-        userSelect: "none",
-      }}
-      tabIndex={0}
-      aria-label="Информация"
-      title={text}
-    >
-      i
-    </span>
-  );
-}
-
 function FieldTitle({ label, info }: { label: string; info: string }) {
   return (
-    <div style={{ ...lab, display: "flex", alignItems: "center", gap: 8 }}>
-      {label} <InfoBadge text={info} />
+    <div className="mb-1">
+      <div className="text-xs font-bold text-slate-700 uppercase tracking-wide">{label}</div>
+      <div className="text-[11px] text-slate-500 mt-0.5">{info}</div>
     </div>
   );
 }
@@ -308,19 +254,19 @@ export function mapLoadedProductToForm(p: {
   };
 }
 
-const inp = { width: "100%" as const, padding: 10, border: "1px solid #e5e7eb", borderRadius: 12 };
-const lab = { fontSize: 12, fontWeight: 700 as const, marginBottom: 4 };
-
 type Props = {
   brands: { id: string; name: string }[];
   types: { id: string; name: string }[];
   form: AdminProductForm;
   setForm: Dispatch<SetStateAction<AdminProductForm>>;
-  /** Папка в Cloudinary: `smolyanklima/klimatici/...` или `smolyanklima/aksesoari/...` */
   cloudinaryKind?: "product" | "accessory";
 };
 
 export function ProductFormFields({ brands, types, form, setForm, cloudinaryKind = "product" }: Props) {
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiDialog, setAiDialog] = useState<"missing_name" | "replace_description" | "error" | null>(null);
+  const [aiError, setAiError] = useState("");
+  const [uploadNotice, setUploadNotice] = useState<string | null>(null);
   const setSpec = (k: keyof SpecsForm, v: string | boolean) =>
     setForm((f) => ({ ...f, specs: { ...f.specs, [k]: v } }));
 
@@ -329,17 +275,77 @@ export function ProductFormFields({ brands, types, form, setForm, cloudinaryKind
     if (next.length >= 2) setForm((f) => ({ ...f, slug: next }));
   }
 
+  function requestAiDraft() {
+    if (!form.name.trim()) {
+      setAiDialog("missing_name");
+      return;
+    }
+    if (form.description.trim()) {
+      setAiDialog("replace_description");
+      return;
+    }
+    void generateAiDraft();
+  }
+
+  async function generateAiDraft() {
+    setAiDialog(null);
+    setAiError("");
+    setAiBusy(true);
+    try {
+      const brandName = brands.find((b) => b.id === form.brandId)?.name;
+      const typeName = types.find((t) => t.id === form.typeId)?.name;
+      const res = await fetch("/api/admin/ai", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          task: "product_draft",
+          input: {
+            name: form.name,
+            brandName,
+            typeName,
+            condition: form.productCondition,
+            price: Number(form.price || 0),
+            currentDescription: form.description,
+            specs: form.specs,
+          },
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((json as any).error || "AI заявката не успя");
+      const draft = (json as any).data ?? {};
+      setForm((prev) => ({
+        ...prev,
+        slug: typeof draft.slug === "string" && draft.slug.length >= 2 ? draft.slug : prev.slug,
+        description: typeof draft.description === "string" ? draft.description : prev.description,
+        specs: {
+          ...prev.specs,
+          ...Object.fromEntries(
+            Object.entries((draft.specs ?? {}) as Record<string, unknown>).filter(([key, value]) => {
+              return key in prev.specs && value != null && value !== "";
+            }),
+          ),
+        } as SpecsForm,
+      }));
+    } catch (e: any) {
+      setAiError(String(e?.message ?? e));
+      setAiDialog("error");
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
   async function onUploadFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     const slug = form.slug.trim();
     if (slug.length < 2) {
-      alert("Попълнете slug (мин. 2 знака). Под него в Cloudinary се създава отделна папка за снимките на този продукт.");
+      setUploadNotice("Попълнете slug (мин. 2 знака). Под него в Cloudinary се създава отделна папка за снимките на този продукт.");
       e.target.value = "";
       return;
     }
     if (form.images.length >= MAX_PRODUCT_IMAGES) {
-      alert(`Максимум ${MAX_PRODUCT_IMAGES} снимки на продукт.`);
+      setUploadNotice(`Максимум ${MAX_PRODUCT_IMAGES} снимки на продукт.`);
       e.target.value = "";
       return;
     }
@@ -350,7 +356,7 @@ export function ProductFormFields({ brands, types, form, setForm, cloudinaryKind
     const res = await fetch("/api/admin/uploads/image", { method: "POST", credentials: "include", body: fd });
     const json = await res.json();
     if (!res.ok) {
-      alert(json.error || "Качването се провали");
+      setUploadNotice(json.error || "Качването се провали");
       return;
     }
     const url = json.data?.url as string;
@@ -363,338 +369,318 @@ export function ProductFormFields({ brands, types, form, setForm, cloudinaryKind
   }
 
   return (
-    <div style={{ display: "grid", gap: 12 }}>
-      {/* Suggestions (dropdown while keeping manual typing) */}
-      <datalist id="energy-class-options">
-        {ENERGY_CLASS_OPTIONS.map((v) => (
-          <option key={v} value={v} />
-        ))}
-      </datalist>
-      <datalist id="refrigerant-options">
-        {REFRIGERANT_OPTIONS.map((v) => (
-          <option key={v} value={v} />
-        ))}
-      </datalist>
-      <datalist id="warranty-months-options">
-        {WARRANTY_MONTHS_OPTIONS.map((v) => (
-          <option key={v} value={v} />
-        ))}
-      </datalist>
-      <datalist id="coverage-m2-options">
-        {COVERAGE_M2_OPTIONS.map((v) => (
-          <option key={v} value={v} />
-        ))}
-      </datalist>
-      <datalist id="noise-db-options">
-        {NOISE_DB_OPTIONS.map((v) => (
-          <option key={v} value={v} />
-        ))}
-      </datalist>
-      <datalist id="cooling-kw-options">
-        {COOLING_KW_OPTIONS.map((v) => (
-          <option key={v} value={v} />
-        ))}
-      </datalist>
-      <datalist id="heating-kw-options">
-        {HEATING_KW_OPTIONS.map((v) => (
-          <option key={v} value={v} />
-        ))}
-      </datalist>
+    <div className="grid gap-6">
+      <datalist id="energy-class-options">{ENERGY_CLASS_OPTIONS.map((v) => <option key={v} value={v} />)}</datalist>
+      <datalist id="refrigerant-options">{REFRIGERANT_OPTIONS.map((v) => <option key={v} value={v} />)}</datalist>
+      <datalist id="warranty-months-options">{WARRANTY_MONTHS_OPTIONS.map((v) => <option key={v} value={v} />)}</datalist>
+      <datalist id="coverage-m2-options">{COVERAGE_M2_OPTIONS.map((v) => <option key={v} value={v} />)}</datalist>
+      <datalist id="noise-db-options">{NOISE_DB_OPTIONS.map((v) => <option key={v} value={v} />)}</datalist>
+      <datalist id="cooling-kw-options">{COOLING_KW_OPTIONS.map((v) => <option key={v} value={v} />)}</datalist>
+      <datalist id="heating-kw-options">{HEATING_KW_OPTIONS.map((v) => <option key={v} value={v} />)}</datalist>
 
-      <label>
-        <div style={{ ...lab, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            Slug{" "}
-            <InfoBadge text="Slug = технически идентификатор (уникален). Ползва се за URL и за папката на снимките в Cloudinary: smolyanklima/klimatici/<slug>/. Обикновено не се променя често." />
-          </span>
-          <button
-            type="button"
-            onClick={generateSlugFromName}
-            style={{
-              padding: "6px 10px",
-              borderRadius: 999,
-              border: "1px solid #e5e7eb",
-              background: "#fff",
-              fontSize: 12,
-              fontWeight: 800,
-              cursor: "pointer",
+      <div className="grid gap-4">
+        <label className="block">
+          <div className="flex items-center justify-between gap-3 mb-1">
+            <div className="text-xs font-bold text-slate-700 uppercase tracking-wide">Slug</div>
+            <Button type="button" variant="secondary" size="sm" onClick={generateSlugFromName} title="Генерирай slug от името" className="!py-1 !px-2.5 !text-xs gap-1.5">
+              <Wand2 className="w-3.5 h-3.5" /> Генерирай
+            </Button>
+          </div>
+          <div className="text-[11px] text-slate-500 mb-1.5">
+            Технически идентификатор за URL и папка със снимки. Пример: <code className="bg-slate-100 px-1 py-0.5 rounded">daikin-perfera-ftxm25r</code>.
+          </div>
+          <Input value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} placeholder="napr. daikin-perfera-ftxm25r" />
+        </label>
+
+        <label className="block">
+          <FieldTitle label="Име" info="Показваното име за клиента (може да е дълго и с интервали/кирилица). Може да се редактира свободно без да чупи папки/URL." />
+          <Input
+            value={form.name}
+            onChange={(e) => {
+              const name = e.target.value;
+              setForm((prev) => {
+                if (prev.slug.trim().length >= 2) return { ...prev, name };
+                const nextSlug = slugifyBg(name);
+                return { ...prev, name, slug: nextSlug.length >= 2 ? nextSlug : prev.slug };
+              });
             }}
-            title="Генерирай slug от името"
-          >
-            Генерирай
-          </button>
+          />
+        </label>
+
+        <label className="block">
+          <div className="flex items-center justify-between gap-3">
+            <FieldTitle label="Описание" info="Кратко описание/текст за продукта. Показва се на детайлната страница." />
+            <Button type="button" variant="secondary" size="sm" onClick={requestAiDraft} disabled={aiBusy} className="mb-1 gap-1.5 whitespace-nowrap">
+              <Wand2 className="w-3.5 h-3.5" /> {aiBusy ? "AI..." : "AI чернова"}
+            </Button>
+          </div>
+          <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={5} />
+        </label>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label className="block">
+            <FieldTitle label="Марка" info="Производител/бранда на уреда (Daikin, Mitsubishi и т.н.)." />
+            <Select value={form.brandId} onChange={(e) => setForm({ ...form, brandId: e.target.value })}>
+              {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </Select>
+          </label>
+          <label className="block">
+            <FieldTitle label="Тип" info="Тип продукт (стенен, мулти-сплит, касетъчен и т.н.). Ползва се за филтри и групиране." />
+            <Select value={form.typeId} onChange={(e) => setForm({ ...form, typeId: e.target.value })}>
+              {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </Select>
+          </label>
         </div>
-        <input
-          value={form.slug}
-          onChange={(e) => setForm({ ...form, slug: e.target.value })}
-          placeholder="napr. daikin-perfera-ftxm25r"
-          style={inp}
-        />
-      </label>
-      <label>
-        <FieldTitle
-          label="Име"
-          info="Показваното име за клиента (може да е дълго и с интервали/кирилица). Може да се редактира свободно без да чупи папки/URL."
-        />
-        <input
-          value={form.name}
-          onChange={(e) => {
-            const name = e.target.value;
-            setForm((prev) => {
-              if (prev.slug.trim().length >= 2) return { ...prev, name };
-              const nextSlug = slugifyBg(name);
-              return { ...prev, name, slug: nextSlug.length >= 2 ? nextSlug : prev.slug };
-            });
-          }}
-          style={inp}
-        />
-      </label>
-      <label>
-        <FieldTitle label="Описание" info="Кратко описание/текст за продукта. Показва се на детайлната страница." />
-        <textarea
-          value={form.description}
-          onChange={(e) => setForm({ ...form, description: e.target.value })}
-          rows={5}
-          style={{ ...inp, resize: "vertical" }}
-        />
-      </label>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <label>
-          <FieldTitle label="Марка" info="Производител/бранда на уреда (Daikin, Mitsubishi и т.н.)." />
-          <select value={form.brandId} onChange={(e) => setForm({ ...form, brandId: e.target.value })} style={inp}>
-            {brands.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <FieldTitle label="Тип" info="Тип продукт (стенен, мулти-сплит, касетъчен и т.н.). Ползва се за филтри и групиране." />
-          <select value={form.typeId} onChange={(e) => setForm({ ...form, typeId: e.target.value })} style={inp}>
-            {types.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <label>
-        <FieldTitle label="Състояние" info="Основна подкатегория за климатици: Нови или Втора употреба." />
-        <select
-          value={form.productCondition}
-          onChange={(e) => setForm({ ...form, productCondition: e.target.value as AdminProductForm["productCondition"] })}
-          style={inp}
-        >
-          <option value="new">Нови</option>
-          <option value="used">Втора употреба</option>
-        </select>
-      </label>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-        <label>
-          <FieldTitle label="Цена (EUR)" info="Цена на уреда (без монтаж), в евро." />
-          <input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} style={inp} />
-        </label>
-        <label>
-          <FieldTitle label="Цена с монтаж" info="Цена с включен стандартен монтаж (по избор). Ако е празно, системата може да изчислява ориентировъчно." />
-          <input value={form.priceWithMount} onChange={(e) => setForm({ ...form, priceWithMount: e.target.value })} placeholder="по избор" style={inp} />
-        </label>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <label>
-          <FieldTitle label="Наличност" info="Статус на наличност: в наличност / изчерпан / по поръчка." />
-          <select value={form.stockStatus} onChange={(e) => setForm({ ...form, stockStatus: e.target.value as AdminProductForm["stockStatus"] })} style={inp}>
-            <option value="in_stock">В наличност</option>
-            <option value="out_of_stock">Изчерпан</option>
-            <option value="on_order">По поръчка</option>
-          </select>
-        </label>
-        <label>
-          <FieldTitle label="Количество (бр.)" info="Брой налични бройки (по избор). Полезно за вътрешен контрол." />
-          <input type="number" min={0} value={form.stockQuantity} onChange={(e) => setForm({ ...form, stockQuantity: Math.max(0, Number(e.target.value)) })} style={inp} />
-        </label>
-      </div>
-      <label style={{ display: "flex", gap: 10, alignItems: "center" }}>
-        <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-          Активен <InfoBadge text="Ако е изключено, продуктът няма да се показва публично в каталога." />
-        </span>
-      </label>
-      <label style={{ display: "flex", gap: 10, alignItems: "center" }}>
-        <input type="checkbox" checked={form.isFeatured} onChange={(e) => setForm({ ...form, isFeatured: e.target.checked })} />
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-          Избран <InfoBadge text="Маркира продукта като специален/препоръчан (ползва се за витрини/секции по избор)." />
-        </span>
-      </label>
 
-      <h2 style={{ fontSize: 14, fontWeight: 900, margin: "8px 0 0" }}>Технически данни</h2>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <label>
-          <FieldTitle label="Площ (м²)" info="Препоръчителна квадратура/покритие на помещението (по спецификация)." />
-          <input
-            value={form.specs.coverage_m2}
-            onChange={(e) => setSpec("coverage_m2", e.target.value)}
-            list="coverage-m2-options"
-            placeholder="25"
-            style={inp}
-          />
+        <label className="block">
+          <FieldTitle label="Състояние" info="Основна подкатегория за климатици: Нови или Втора употреба." />
+          <Select value={form.productCondition} onChange={(e) => setForm({ ...form, productCondition: e.target.value as AdminProductForm["productCondition"] })}>
+            <option value="new">Нови</option>
+            <option value="used">Втора употреба</option>
+          </Select>
         </label>
-        <label>
-          <FieldTitle label="Шум (dB)" info="Ниво на шум (обикновено вътрешно тяло), в децибели. По-ниско = по-тих." />
-          <input
-            value={form.specs.noise_db}
-            onChange={(e) => setSpec("noise_db", e.target.value)}
-            list="noise-db-options"
-            placeholder="19"
-            style={inp}
-          />
-        </label>
-        <label>
-          <FieldTitle label="Охлаждане (kW)" info="Номинална охладителна мощност в kW (по спецификация)." />
-          <input
-            value={form.specs.cooling_power_kw}
-            onChange={(e) => setSpec("cooling_power_kw", e.target.value)}
-            list="cooling-kw-options"
-            placeholder="2.5"
-            style={inp}
-          />
-        </label>
-        <label>
-          <FieldTitle label="Отопление (kW)" info="Номинална отоплителна мощност в kW (по спецификация)." />
-          <input
-            value={form.specs.heating_power_kw}
-            onChange={(e) => setSpec("heating_power_kw", e.target.value)}
-            list="heating-kw-options"
-            placeholder="3.2"
-            style={inp}
-          />
-        </label>
-        <label>
-          <FieldTitle label="Хладилен агент" info="Тип хладилен агент (напр. R-32). Взима се от табелката/документацията." />
-          <input
-            value={form.specs.refrigerant}
-            onChange={(e) => setSpec("refrigerant", e.target.value)}
-            list="refrigerant-options"
-            placeholder="R-32"
-            style={inp}
-          />
-        </label>
-        <label style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 22 }}>
-          <input type="checkbox" checked={form.specs.wifi} onChange={(e) => setSpec("wifi", e.target.checked)} />
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            WiFi <InfoBadge text="Отбележете дали моделът има вграден WiFi модул/управление." />
-          </span>
-        </label>
-        <label>
-          <FieldTitle label="Енергиен клас (охлаждане)" info="Енергиен клас при охлаждане (напр. A+++). Ползва се и в каталога." />
-          <input
-            value={form.specs.energy_class_cool}
-            onChange={(e) => setSpec("energy_class_cool", e.target.value)}
-            list="energy-class-options"
-            placeholder="A+++"
-            style={inp}
-          />
-        </label>
-        <label>
-          <FieldTitle label="Енергиен клас (отопление)" info="Енергиен клас при отопление (напр. A++)." />
-          <input
-            value={form.specs.energy_class_heat}
-            onChange={(e) => setSpec("energy_class_heat", e.target.value)}
-            list="energy-class-options"
-            placeholder="A++"
-            style={inp}
-          />
-        </label>
-        <label>
-          <div style={{ ...lab, display: "flex", alignItems: "center", gap: 8 }}>
-            SEER{" "}
-            <InfoBadge text="SEER (Seasonal Energy Efficiency Ratio) — сезонна ефективност при охлаждане. Колкото е по-висок, толкова по-икономично охлажда през сезона. Ако не сте сигурни, оставете празно." />
-          </div>
-          <input value={form.specs.seer} onChange={(e) => setSpec("seer", e.target.value)} style={inp} />
-        </label>
-        <label>
-          <div style={{ ...lab, display: "flex", alignItems: "center", gap: 8 }}>
-            SCOP{" "}
-            <InfoBadge text="SCOP (Seasonal Coefficient of Performance) — сезонна ефективност при отопление. Колкото е по-висок, толкова по-икономично отоплява през сезона. Ако не сте сигурни, оставете празно." />
-          </div>
-          <input value={form.specs.scop} onChange={(e) => setSpec("scop", e.target.value)} style={inp} />
-        </label>
-        <label>
-          <FieldTitle label="Гаранция (месеци)" info="Гаранционен срок в месеци (по избор). Пример: 36 = 3 години." />
-          <input
-            value={form.specs.warranty_months}
-            onChange={(e) => setSpec("warranty_months", e.target.value)}
-            list="warranty-months-options"
-            placeholder="36"
-            style={inp}
-          />
-        </label>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label className="block">
+            <FieldTitle label="Цена (EUR)" info="Цена на уреда (без монтаж), в евро." />
+            <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} />
+          </label>
+          <label className="block">
+            <FieldTitle label="Цена с монтаж" info="Цена с включен стандартен монтаж (по избор). Ако е празно, системата може да изчислява ориентировъчно." />
+            <Input value={form.priceWithMount} onChange={(e) => setForm({ ...form, priceWithMount: e.target.value })} placeholder="по избор" />
+          </label>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label className="block">
+            <FieldTitle label="Наличност" info="Статус на наличност: в наличност / изчерпан / по поръчка." />
+            <Select value={form.stockStatus} onChange={(e) => setForm({ ...form, stockStatus: e.target.value as AdminProductForm["stockStatus"] })}>
+              <option value="in_stock">В наличност</option>
+              <option value="out_of_stock">Изчерпан</option>
+              <option value="on_order">По поръчка</option>
+            </Select>
+          </label>
+          <label className="block">
+            <FieldTitle label="Количество (бр.)" info="Брой налични бройки (по избор). Полезно за вътрешен контрол." />
+            <Input type="number" min={0} value={form.stockQuantity} onChange={(e) => setForm({ ...form, stockQuantity: Math.max(0, Number(e.target.value)) })} />
+          </label>
+        </div>
+
+        <div className="flex flex-wrap gap-3 mt-2">
+          <label className="flex items-center gap-2.5 cursor-pointer">
+            <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
+            <span className="text-sm font-semibold text-slate-700">Активен <span className="text-slate-400 font-normal">(показва се в каталога)</span></span>
+          </label>
+          <label className="flex items-center gap-2.5 cursor-pointer">
+            <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500" checked={form.isFeatured} onChange={(e) => setForm({ ...form, isFeatured: e.target.checked })} />
+            <span className="text-sm font-semibold text-slate-700">Избран <span className="text-slate-400 font-normal">(за витрина/подчертаване)</span></span>
+          </label>
+        </div>
       </div>
 
-      <h2 style={{ fontSize: 14, fontWeight: 900, margin: "8px 0 0" }}>Снимки (до {MAX_PRODUCT_IMAGES}, Cloudinary)</h2>
-      <p style={{ fontSize: 11, color: "#6b7280", margin: 0 }}>
-        Всяка снимка се качва в отделна папка по slug: <code>smolyanklima/{cloudinaryKind === "accessory" ? "aksesoari" : "klimatici"}/&lt;slug&gt;/</code>. В базата се пази само URL.
-      </p>
-      <label>
-        <FieldTitle
-          label="Качи файл (изисква попълнен slug)"
-          info="Качва снимка в Cloudinary в папка по slug. Първата снимка по подразбиране става главна."
-        />
-        <input type="file" accept="image/*" onChange={onUploadFile} disabled={form.images.length >= MAX_PRODUCT_IMAGES} />
-      </label>
-      <div style={{ display: "grid", gap: 8 }}>
-        {form.images.map((im, idx) => (
-          <div key={`${im.url}-${idx}`} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 8, alignItems: "center" }}>
-            <input
-              value={im.url}
-              onChange={(e) => {
-                const images = [...form.images];
-                images[idx] = { ...images[idx], url: e.target.value };
-                setForm({ ...form, images });
-              }}
-              placeholder="URL"
-              title="URL към снимката (обикновено Cloudinary). Може да добавите ръчно URL или чрез качване."
-              style={inp}
-            />
-            <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, whiteSpace: "nowrap" }}>
-              <input type="radio" name="mainimg" checked={im.is_main} onChange={() => {
-                setForm({
-                  ...form,
-                  images: form.images.map((row, i) => ({ ...row, is_main: i === idx })),
-                });
-              }} />
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                Главна <InfoBadge text="Главната снимка се показва първа в каталога и детайлната страница." />
-              </span>
-            </label>
-            <button type="button" onClick={() => setForm({ ...form, images: form.images.filter((_, i) => i !== idx) })} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #fecaca", color: "#b91c1c", background: "#fff" }}>
-              Махни
-            </button>
-          </div>
-        ))}
-        <button
-          type="button"
-          disabled={form.images.length >= MAX_PRODUCT_IMAGES}
-          onClick={() =>
-            setForm({
-              ...form,
-              images: [...form.images, { url: "", sort_order: form.images.length, is_main: form.images.length === 0 }],
-            })
-          }
-          title="Добавя нов ред за ръчно поставяне на URL към снимка."
-          style={{
-            padding: "8px 10px",
-            borderRadius: 10,
-            border: "1px solid #e5e7eb",
-            background: "#f9fafb",
-            fontWeight: 700,
-            opacity: form.images.length >= MAX_PRODUCT_IMAGES ? 0.5 : 1,
-          }}
-        >
-          + Ред с URL
-        </button>
+      <div className="border-t border-slate-200 pt-6">
+        <h2 className="text-lg font-bold text-slate-900 mb-1">Технически данни</h2>
+        <div className="text-xs text-slate-500 mb-4">Остави празно поле, ако нямаш надеждна стойност от спецификацията.</div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label className="block">
+            <FieldTitle label="Площ (м²)" info="Препоръчителна квадратура/покритие на помещението (по спецификация)." />
+            <Input value={form.specs.coverage_m2} onChange={(e) => setSpec("coverage_m2", e.target.value)} list="coverage-m2-options" placeholder="25" />
+          </label>
+          <label className="block">
+            <FieldTitle label="Шум (dB)" info="Ниво на шум (обикновено вътрешно тяло), в децибели. По-ниско = по-тих." />
+            <Input value={form.specs.noise_db} onChange={(e) => setSpec("noise_db", e.target.value)} list="noise-db-options" placeholder="19" />
+          </label>
+          <label className="block">
+            <FieldTitle label="Охлаждане (kW)" info="Номинална охладителна мощност в kW (по спецификация)." />
+            <Input value={form.specs.cooling_power_kw} onChange={(e) => setSpec("cooling_power_kw", e.target.value)} list="cooling-kw-options" placeholder="2.5" />
+          </label>
+          <label className="block">
+            <FieldTitle label="Отопление (kW)" info="Номинална отоплителна мощност в kW (по спецификация)." />
+            <Input value={form.specs.heating_power_kw} onChange={(e) => setSpec("heating_power_kw", e.target.value)} list="heating-kw-options" placeholder="3.2" />
+          </label>
+          <label className="block">
+            <FieldTitle label="Хладилен агент" info="Тип хладилен агент (напр. R-32). Взима се от табелката/документацията." />
+            <Input value={form.specs.refrigerant} onChange={(e) => setSpec("refrigerant", e.target.value)} list="refrigerant-options" placeholder="R-32" />
+          </label>
+          <label className="flex items-center gap-2.5 cursor-pointer md:mt-7">
+            <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500" checked={form.specs.wifi} onChange={(e) => setSpec("wifi", e.target.checked)} />
+            <span className="text-sm font-semibold text-slate-700">WiFi <span className="text-slate-400 font-normal">(вграден модул/управление)</span></span>
+          </label>
+          <label className="block">
+            <FieldTitle label="Енергиен клас (охлаждане)" info="Енергиен клас при охлаждане (напр. A+++). Ползва се и в каталога." />
+            <Input value={form.specs.energy_class_cool} onChange={(e) => setSpec("energy_class_cool", e.target.value)} list="energy-class-options" placeholder="A+++" />
+          </label>
+          <label className="block">
+            <FieldTitle label="Енергиен клас (отопление)" info="Енергиен клас при отопление (напр. A++)." />
+            <Input value={form.specs.energy_class_heat} onChange={(e) => setSpec("energy_class_heat", e.target.value)} list="energy-class-options" placeholder="A++" />
+          </label>
+          <label className="block">
+            <FieldTitle label="SEER" info="Сезонна ефективност при охлаждане. По-висока стойност = по-икономичен режим." />
+            <Input value={form.specs.seer} onChange={(e) => setSpec("seer", e.target.value)} />
+          </label>
+          <label className="block">
+            <FieldTitle label="SCOP" info="Сезонна ефективност при отопление. По-висока стойност = по-икономичен режим." />
+            <Input value={form.specs.scop} onChange={(e) => setSpec("scop", e.target.value)} />
+          </label>
+          <label className="block">
+            <FieldTitle label="Гаранция (месеци)" info="Гаранционен срок в месеци (по избор). Пример: 36 = 3 години." />
+            <Input value={form.specs.warranty_months} onChange={(e) => setSpec("warranty_months", e.target.value)} list="warranty-months-options" placeholder="36" />
+          </label>
+        </div>
       </div>
+
+      <div className="border-t border-slate-200 pt-6">
+        <h2 className="text-lg font-bold text-slate-900 mb-1">Снимки (до {MAX_PRODUCT_IMAGES}, Cloudinary)</h2>
+        <p className="text-xs text-slate-500 mb-4">
+          Всяка снимка се качва в отделна папка по slug: <code className="bg-slate-100 px-1 py-0.5 rounded">smolyanklima/{cloudinaryKind === "accessory" ? "aksesoari" : "klimatici"}/&lt;slug&gt;/</code>. В базата се пази само URL.
+        </p>
+        
+        <div className="mb-4">
+          <FieldTitle label="Качи файл (изисква попълнен slug)" info="Качва снимка в Cloudinary в папка по slug. Първата снимка по подразбиране става главна." />
+          <div className="relative">
+            <input type="file" accept="image/*" onChange={onUploadFile} disabled={form.images.length >= MAX_PRODUCT_IMAGES} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed" />
+            <div className={`flex items-center justify-center gap-2 w-full px-4 py-3 border-2 border-dashed rounded-xl text-sm font-semibold transition-colors ${form.images.length >= MAX_PRODUCT_IMAGES ? "border-slate-200 bg-slate-50 text-slate-400" : "border-sky-200 bg-sky-50 text-sky-600 hover:bg-sky-100 hover:border-sky-300"}`}>
+              <Upload className="w-4 h-4" />
+              {form.images.length >= MAX_PRODUCT_IMAGES ? "Достигнат лимит от снимки" : "Кликни или пусни файл тук"}
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          {form.images.map((im, idx) => (
+            <div key={`${im.url}-${idx}`} className="flex flex-col sm:flex-row items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+              <Input
+                value={im.url}
+                onChange={(e) => {
+                  const images = [...form.images];
+                  images[idx] = { ...images[idx], url: e.target.value };
+                  setForm({ ...form, images });
+                }}
+                placeholder="URL"
+                title="URL към снимката (обикновено Cloudinary). Може да добавите ръчно URL или чрез качване."
+                className="flex-1"
+              />
+              <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700 whitespace-nowrap">
+                <input type="radio" name="mainimg" className="w-4 h-4 text-sky-600 focus:ring-sky-500 border-slate-300" checked={im.is_main} onChange={() => {
+                  setForm({
+                    ...form,
+                    images: form.images.map((row, i) => ({ ...row, is_main: i === idx })),
+                  });
+                }} />
+                Главна
+              </label>
+              <Button variant="danger" size="sm" className="w-full sm:w-auto gap-1.5" onClick={() => setForm({ ...form, images: form.images.filter((_, i) => i !== idx) })}>
+                <Trash2 className="w-4 h-4" /> Махни
+              </Button>
+            </div>
+          ))}
+          <Button
+            variant="secondary"
+            disabled={form.images.length >= MAX_PRODUCT_IMAGES}
+            onClick={() => setForm({ ...form, images: [...form.images, { url: "", sort_order: form.images.length, is_main: form.images.length === 0 }] })}
+            title="Добавя нов ред за ръчно поставяне на URL към снимка."
+            className="w-full gap-2 border-dashed border-2"
+          >
+            <Plus className="w-4 h-4" /> Добави ред с URL
+          </Button>
+        </div>
+      </div>
+
+      {aiDialog && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-md"
+          onClick={() => !aiBusy && setAiDialog(null)}
+        >
+          <div
+            className="w-full max-w-xl overflow-hidden rounded-3xl border border-white/70 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="relative border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#ffffff_42%,#f8fafc_100%)] px-6 py-5">
+              <button
+                type="button"
+                onClick={() => setAiDialog(null)}
+                disabled={aiBusy}
+                className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white/80 text-slate-500 shadow-sm transition-colors hover:bg-white hover:text-slate-900 disabled:opacity-50"
+                aria-label="Затвори AI прозореца"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <div className="flex items-center gap-3 pr-10">
+                <div className={`flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-lg ${aiDialog === "error" ? "bg-red-600 shadow-red-600/25" : "bg-sky-600 shadow-sky-600/25"}`}>
+                  {aiDialog === "error" ? <AlertCircle className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
+                </div>
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-[0.24em] text-sky-700">Gemini продуктова чернова</div>
+                  <div className="mt-1 text-2xl font-black leading-tight text-slate-950">
+                    {aiDialog === "missing_name" ? "Нужно е име на продукта" : aiDialog === "replace_description" ? "Да заменя описанието?" : "AI заявката не успя"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6">
+              {aiDialog === "missing_name" && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium leading-6 text-amber-900">
+                  Попълни първо името на продукта. AI черновата използва името, марката, типа и цената, за да направи смислено описание и спецификации.
+                </div>
+              )}
+              {aiDialog === "replace_description" && (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Текущо описание</div>
+                    <div className="max-h-32 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                      {form.description}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-sky-100 bg-sky-50/70 p-4 text-sm font-semibold leading-6 text-slate-900">
+                    AI черновата ще замени това описание и ще допълни празните спецификации, когато Gemini има достатъчно информация.
+                  </div>
+                </div>
+              )}
+              {aiDialog === "error" && (
+                <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium leading-6 text-red-800">
+                  {aiError || "Възникна неочаквана грешка при AI черновата."}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50 px-6 py-4 sm:flex-row sm:justify-end">
+              <Button variant="secondary" onClick={() => setAiDialog(null)} disabled={aiBusy} className="justify-center">
+                {aiDialog === "missing_name" || aiDialog === "error" ? "Разбрах" : "Отказ"}
+              </Button>
+              {aiDialog === "replace_description" && (
+                <Button onClick={() => void generateAiDraft()} disabled={aiBusy} className="justify-center gap-2 shadow-lg shadow-sky-600/20">
+                  <CheckCircle2 className="h-4 w-4" />
+                  {aiBusy ? "Генериране..." : "Замени с AI чернова"}
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {uploadNotice && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-md"
+          onClick={() => setUploadNotice(null)}
+        >
+          <div className="w-full max-w-lg overflow-hidden rounded-3xl border border-white/70 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)]" onClick={(e) => e.stopPropagation()}>
+            <div className="border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#ffffff_42%,#f8fafc_100%)] px-6 py-5">
+              <div className="text-xs font-bold uppercase tracking-[0.24em] text-sky-700">Качване на снимка</div>
+              <div className="mt-1 text-2xl font-black leading-tight text-slate-950">Нужно е действие</div>
+            </div>
+            <div className="p-6">
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium leading-6 text-amber-900">
+                {uploadNotice}
+              </div>
+            </div>
+            <div className="flex justify-end border-t border-slate-100 bg-slate-50 px-6 py-4">
+              <Button variant="secondary" onClick={() => setUploadNotice(null)}>Разбрах</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -16,6 +16,9 @@ const BodySchema = z.object({
   email: z.string().email().max(200).optional().nullable(),
   address: z.string().max(500).optional().nullable(),
   notes: z.string().max(4000).optional().nullable(),
+  customerStatus: z.enum(["new", "active", "vip", "lost"]).optional().default("new"),
+  nextFollowUpAt: z.string().optional().nullable(),
+  lastContactedAt: z.string().optional().nullable(),
 });
 
 export async function OPTIONS(req: NextRequest) {
@@ -29,7 +32,9 @@ export async function GET(req: NextRequest) {
 
   const { q, page, perPage } = parsed.data;
   const supabase = await adminDb();
-  let query = supabase.from("contacts").select("id,full_name,phone,email,address,updated_at,created_at", { count: "exact" });
+  let query = supabase
+    .from("contacts")
+    .select("id,full_name,phone,email,address,notes,customer_status,next_follow_up_at,last_contacted_at,updated_at,created_at", { count: "exact" });
   if (q?.trim()) {
     query = query.or(
       `full_name.ilike.%${q.trim()}%,phone.ilike.%${q.trim()}%,email.ilike.%${q.trim()}%,address.ilike.%${q.trim()}%`,
@@ -38,8 +43,25 @@ export async function GET(req: NextRequest) {
   const from = (page - 1) * perPage;
   const to = from + perPage - 1;
   const { data, error, count } = await query.order("updated_at", { ascending: false }).range(from, to);
+  if (error && isMissingFollowupColumns(error.message)) {
+    let fallback = supabase.from("contacts").select("id,full_name,phone,email,address,notes,updated_at,created_at", { count: "exact" });
+    if (q?.trim()) {
+      fallback = fallback.or(
+        `full_name.ilike.%${q.trim()}%,phone.ilike.%${q.trim()}%,email.ilike.%${q.trim()}%,address.ilike.%${q.trim()}%`,
+      );
+    }
+    const fallbackRes = await fallback.order("updated_at", { ascending: false }).range(from, to);
+    if (fallbackRes.error) return withCors(req, NextResponse.json({ error: fallbackRes.error.message }, { status: 500 }));
+    return withCors(
+      req,
+      NextResponse.json({
+        data: (fallbackRes.data ?? []).map(withDefaultFollowupFields),
+        meta: { page, perPage, total: fallbackRes.count ?? 0 },
+      }),
+    );
+  }
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
-  return withCors(req, NextResponse.json({ data: data ?? [], meta: { page, perPage, total: count ?? 0 } }));
+  return withCors(req, NextResponse.json({ data: (data ?? []).map(withDefaultFollowupFields), meta: { page, perPage, total: count ?? 0 } }));
 }
 
 export async function POST(req: NextRequest) {
@@ -54,9 +76,18 @@ export async function POST(req: NextRequest) {
     email: parsed.data.email?.trim() || null,
     address: parsed.data.address?.trim() || null,
     notes: parsed.data.notes?.trim() || null,
+    customer_status: parsed.data.customerStatus,
+    next_follow_up_at: parsed.data.nextFollowUpAt || null,
+    last_contacted_at: parsed.data.lastContactedAt || null,
   };
 
-  const { data, error } = await supabase.from("contacts").insert(payload).select("*").single();
+  let { data, error } = await supabase.from("contacts").insert(payload).select("*").single();
+  if (error && isMissingFollowupColumns(error.message)) {
+    const { customer_status: _customerStatus, next_follow_up_at: _nextFollowUpAt, last_contacted_at: _lastContactedAt, ...legacyPayload } = payload;
+    const legacyRes = await supabase.from("contacts").insert(legacyPayload).select("*").single();
+    data = legacyRes.data;
+    error = legacyRes.error;
+  }
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
 
   await logAdminActivity({
@@ -67,4 +98,22 @@ export async function POST(req: NextRequest) {
   });
 
   return withCors(req, NextResponse.json({ data }, { status: 201 }));
+}
+
+function isMissingFollowupColumns(message: string) {
+  return (
+    message.includes("customer_status") ||
+    message.includes("next_follow_up_at") ||
+    message.includes("last_contacted_at") ||
+    message.includes("schema cache")
+  );
+}
+
+function withDefaultFollowupFields<T extends Record<string, unknown>>(row: T) {
+  return {
+    customer_status: "new",
+    next_follow_up_at: null,
+    last_contacted_at: null,
+    ...row,
+  };
 }

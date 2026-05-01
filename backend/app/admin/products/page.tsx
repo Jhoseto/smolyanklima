@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { HelpRow, SectionTitle, HelpCard, Card, Button, Input, Select, Table, Th, Td, Textarea, InfoDot } from "../ui";
+import { Plus, Search, FilterX, CheckCircle, XCircle, Tag, Trash2, Edit } from "lucide-react";
+import { ProductQuickViewButton } from "../ProductQuickView";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +66,11 @@ export default function AdminProductsPage() {
   const [contactQuery, setContactQuery] = useState("");
   const [contactLoading, setContactLoading] = useState(false);
   const [contactResults, setContactResults] = useState<ContactChoice[]>([]);
+  const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
+  const [priceDraft, setPriceDraft] = useState("");
+  const [priceBusy, setPriceBusy] = useState(false);
+  const [saleSuccess, setSaleSuccess] = useState<{ productName: string; customerName: string; amount: number } | null>(null);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
 
   const qs = useMemo(() => {
     const sp = new URLSearchParams();
@@ -170,7 +178,10 @@ export default function AdminProductsPage() {
 
   async function bulk(action: "activate" | "deactivate" | "set_new" | "set_used" | "delete") {
     if (selected.length === 0) return;
-    if (action === "delete" && !confirm("Сигурни ли сте за изтриване на избраните продукти?")) return;
+    if (action === "delete" && !confirmBulkDelete) {
+      setConfirmBulkDelete(true);
+      return;
+    }
     const res = await fetch("/api/admin/products/bulk", {
       method: "POST",
       credentials: "include",
@@ -182,6 +193,7 @@ export default function AdminProductsPage() {
       setError((json as any).error || "Грешка при масова операция");
       return;
     }
+    setConfirmBulkDelete(false);
     await load();
   }
 
@@ -231,7 +243,7 @@ export default function AdminProductsPage() {
     p: ProductRow,
     customer: { id?: string; name: string; phone: string; address: string; email?: string; notes: string },
   ) {
-    if (p.stock_quantity <= 0) return;
+    if (p.stock_quantity <= 0) return false;
     const nextQty = Math.max(0, p.stock_quantity - 1);
     const nextSold = Math.max(0, Number(p.sold_quantity ?? 0) + 1);
     const shouldHideFromCatalog = nextQty === 0;
@@ -249,7 +261,7 @@ export default function AdminProductsPage() {
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
       setError((json as any).error || "Грешка при маркиране на продажба");
-      return;
+      return false;
     }
     setItems((prev) =>
       prev.map((x) =>
@@ -289,68 +301,110 @@ export default function AdminProductsPage() {
         totalAmount: Number(p.price),
       }),
     });
+    return true;
+  }
+
+  function startPriceEdit(p: ProductRow) {
+    setEditingPriceId(p.id);
+    setPriceDraft(String(Number(p.price)));
+  }
+
+  async function savePrice(p: ProductRow) {
+    const nextPrice = Number(String(priceDraft).replace(",", "."));
+    if (!Number.isFinite(nextPrice) || nextPrice < 0) {
+      setError("Въведете валидна цена.");
+      return;
+    }
+    setPriceBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/products/${p.id}`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ price: nextPrice }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((json as any).error || "Грешка при редакция на цена");
+      setItems((prev) => prev.map((x) => (x.id === p.id ? { ...x, price: nextPrice } : x)));
+      setEditingPriceId(null);
+      setPriceDraft("");
+    } catch (e: any) {
+      setError(String(e?.message ?? e));
+    } finally {
+      setPriceBusy(false);
+    }
   }
 
   const pages = Math.max(1, Math.ceil(meta.total / meta.perPage));
 
   return (
-    <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 16 }}>
+    <div className="w-full space-y-4">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 style={{ fontSize: 17, fontWeight: 700, margin: 0, color: "#0f172a" }}>Продукти</h1>
-          <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: 12 }}>Професионално управление с филтри и масови действия</p>
+          <h1 className="text-xl font-bold text-slate-900 mb-1 leading-tight">
+            <SectionTitle title="Продукти" hint="Пълен контрол: филтри, наличности, продажби и масови действия." />
+          </h1>
+          <p className="text-sm text-slate-500">Професионално управление с филтри и масови действия</p>
         </div>
-        <Link href="/admin/products/new" style={{ padding: "8px 12px", borderRadius: 10, background: "#0ea5e9", color: "white", fontWeight: 700, fontSize: 12 }}>
-          + Нов продукт
+        <Link href="/admin/products/new" className="inline-flex items-center gap-2 bg-sky-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-sky-700 transition-colors shadow-sm">
+          <Plus className="w-4 h-4" />
+          Нов продукт
         </Link>
       </div>
 
-      <div style={{ border: "1px solid #e2e8f0", background: "white", borderRadius: 16, padding: 12, marginBottom: 12 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 180px 180px 180px 180px auto", gap: 10, marginBottom: 10 }}>
-          <input value={q} onChange={(e) => { setPage(1); setQ(e.target.value); }} placeholder="Търси по име..." style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
-          <select value={condition} onChange={(e) => { setPage(1); setCondition(e.target.value as any); }} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}>
+      <HelpCard>
+        <HelpRow items={["Търси и филтрирай по всички полета", "Бутон Продаден намалява наличността с 1", "При 0 бройки продуктът се скрива от каталога"]} />
+      </HelpCard>
+
+      <Card className="p-4">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto_auto_auto_auto] gap-3 mb-3">
+          <Input value={q} onChange={(e) => { setPage(1); setQ(e.target.value); }} placeholder="Търси по име..." />
+          <Select value={condition} onChange={(e) => { setPage(1); setCondition(e.target.value as any); }}>
             <option value="">Всички състояния</option>
             <option value="new">Нови</option>
             <option value="used">Втора употреба</option>
-          </select>
-          <select value={status} onChange={(e) => { setPage(1); setStatus(e.target.value as any); }} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}>
+          </Select>
+          <Select value={status} onChange={(e) => { setPage(1); setStatus(e.target.value as any); }}>
             <option value="">Всички статуси</option>
             <option value="active">Активни</option>
             <option value="inactive">Неактивни</option>
-          </select>
-          <select value={featured} onChange={(e) => { setPage(1); setFeatured(e.target.value as any); }} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}>
+          </Select>
+          <Select value={featured} onChange={(e) => { setPage(1); setFeatured(e.target.value as any); }}>
             <option value="">Featured: всички</option>
             <option value="featured">Само избрани</option>
             <option value="regular">Само нормални</option>
-          </select>
-          <select value={stockStatus} onChange={(e) => { setPage(1); setStockStatus(e.target.value as any); }} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}>
+          </Select>
+          <Select value={stockStatus} onChange={(e) => { setPage(1); setStockStatus(e.target.value as any); }}>
             <option value="">Наличност: всички</option>
             <option value="in_stock">В наличност</option>
             <option value="out_of_stock">Изчерпан</option>
             <option value="on_order">По поръчка</option>
-          </select>
-          <button onClick={load} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1", fontWeight: 700, background: "#f8fafc" }}>Обнови</button>
+          </Select>
+          <Button variant="secondary" onClick={load} className="gap-2">
+            <Search className="w-4 h-4" /> Обнови
+          </Button>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: 10, marginBottom: 10 }}>
-          <select value={brandId} onChange={(e) => { setPage(1); setBrandId(e.target.value); }} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-3">
+          <Select value={brandId} onChange={(e) => { setPage(1); setBrandId(e.target.value); }}>
             <option value="">Марка: всички</option>
             {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </select>
-          <select value={typeId} onChange={(e) => { setPage(1); setTypeId(e.target.value); }} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}>
+          </Select>
+          <Select value={typeId} onChange={(e) => { setPage(1); setTypeId(e.target.value); }}>
             <option value="">Тип: всички</option>
             {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
-          <input value={priceMin} onChange={(e) => { setPage(1); setPriceMin(e.target.value); }} placeholder="Цена от" type="number" min={0} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
-          <input value={priceMax} onChange={(e) => { setPage(1); setPriceMax(e.target.value); }} placeholder="Цена до" type="number" min={0} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
-          <input value={stockMin} onChange={(e) => { setPage(1); setStockMin(e.target.value); }} placeholder="Налични от" type="number" min={0} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
-          <input value={stockMax} onChange={(e) => { setPage(1); setStockMax(e.target.value); }} placeholder="Налични до" type="number" min={0} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
+          </Select>
+          <Input value={priceMin} onChange={(e) => { setPage(1); setPriceMin(e.target.value); }} placeholder="Цена от" type="number" min={0} />
+          <Input value={priceMax} onChange={(e) => { setPage(1); setPriceMax(e.target.value); }} placeholder="Цена до" type="number" min={0} />
+          <Input value={stockMin} onChange={(e) => { setPage(1); setStockMin(e.target.value); }} placeholder="Налични от" type="number" min={0} />
+          <Input value={stockMax} onChange={(e) => { setPage(1); setStockMax(e.target.value); }} placeholder="Налични до" type="number" min={0} />
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: 10 }}>
-          <input value={soldMin} onChange={(e) => { setPage(1); setSoldMin(e.target.value); }} placeholder="Продадени от" type="number" min={0} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
-          <input value={soldMax} onChange={(e) => { setPage(1); setSoldMax(e.target.value); }} placeholder="Продадени до" type="number" min={0} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
-          <input value={createdFrom} onChange={(e) => { setPage(1); setCreatedFrom(e.target.value); }} type="date" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
-          <input value={createdTo} onChange={(e) => { setPage(1); setCreatedTo(e.target.value); }} type="date" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }} />
-          <select value={sortBy} onChange={(e) => { setPage(1); setSortBy(e.target.value as SortField); }} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+          <Input value={soldMin} onChange={(e) => { setPage(1); setSoldMin(e.target.value); }} placeholder="Продадени от" type="number" min={0} />
+          <Input value={soldMax} onChange={(e) => { setPage(1); setSoldMax(e.target.value); }} placeholder="Продадени до" type="number" min={0} />
+          <Input value={createdFrom} onChange={(e) => { setPage(1); setCreatedFrom(e.target.value); }} type="date" />
+          <Input value={createdTo} onChange={(e) => { setPage(1); setCreatedTo(e.target.value); }} type="date" />
+          <Select value={sortBy} onChange={(e) => { setPage(1); setSortBy(e.target.value as SortField); }}>
             <option value="created_at">Сортиране: дата</option>
             <option value="name">Сортиране: име</option>
             <option value="price">Сортиране: цена</option>
@@ -358,139 +412,203 @@ export default function AdminProductsPage() {
             <option value="sold_quantity">Сортиране: продадени</option>
             <option value="is_active">Сортиране: активност</option>
             <option value="is_featured">Сортиране: избрани</option>
-          </select>
-          <div style={{ display: "flex", gap: 8 }}>
-            <select value={sortDir} onChange={(e) => { setPage(1); setSortDir(e.target.value as SortDir); }} style={{ flex: 1, padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1" }}>
+          </Select>
+          <div className="flex gap-2">
+            <Select value={sortDir} onChange={(e) => { setPage(1); setSortDir(e.target.value as SortDir); }} className="flex-1">
               <option value="desc">Низходящо</option>
               <option value="asc">Възходящо</option>
-            </select>
-            <button onClick={resetFilters} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1", background: "#fff", fontWeight: 700 }}>
-              Изчисти
-            </button>
+            </Select>
+            <Button variant="secondary" onClick={resetFilters} title="Изчисти филтрите" className="px-3">
+              <FilterX className="w-4 h-4 text-slate-500" />
+            </Button>
           </div>
         </div>
+      </Card>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-700 mr-2">
+          Масови действия <InfoDot text="Прилагат се само върху избраните редове." />
+        </span>
+        <Button variant="secondary" size="sm" onClick={() => bulk("activate")} disabled={selected.length === 0} className="gap-1.5">
+          <CheckCircle className="w-3.5 h-3.5 text-green-600" /> Активирай
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => bulk("deactivate")} disabled={selected.length === 0} className="gap-1.5">
+          <XCircle className="w-3.5 h-3.5 text-slate-400" /> Деактивирай
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => bulk("set_new")} disabled={selected.length === 0} className="gap-1.5">
+          <Tag className="w-3.5 h-3.5 text-sky-500" /> Маркирай Нови
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => bulk("set_used")} disabled={selected.length === 0} className="gap-1.5">
+          <Tag className="w-3.5 h-3.5 text-amber-500" /> Маркирай Втора употреба
+        </Button>
+        <Button variant="danger" size="sm" onClick={() => bulk("delete")} disabled={selected.length === 0} className="gap-1.5">
+          <Trash2 className="w-3.5 h-3.5" /> Изтрий
+        </Button>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <button onClick={() => bulk("activate")} disabled={selected.length === 0} style={bulkBtn(selected.length > 0)}>Активирай</button>
-        <button onClick={() => bulk("deactivate")} disabled={selected.length === 0} style={bulkBtn(selected.length > 0)}>Деактивирай</button>
-        <button onClick={() => bulk("set_new")} disabled={selected.length === 0} style={bulkBtn(selected.length > 0)}>Маркирай Нови</button>
-        <button onClick={() => bulk("set_used")} disabled={selected.length === 0} style={bulkBtn(selected.length > 0)}>Маркирай Втора употреба</button>
-        <button onClick={() => bulk("delete")} disabled={selected.length === 0} style={{ ...bulkBtn(selected.length > 0), borderColor: "#fecaca", color: "#b91c1c" }}>Изтрий</button>
-      </div>
+      {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm font-medium">{error}</div>}
 
-      {error && <div style={{ background: "#fef2f2", border: "1px solid #fecaca", padding: 12, borderRadius: 12, marginBottom: 12 }}>{error}</div>}
-
-      <div style={{ border: "1px solid #e2e8f0", background: "white", borderRadius: 16, overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead style={{ background: "#f8fafc" }}>
-            <tr>
-              <th style={th}>
-                <input
-                  type="checkbox"
-                  checked={items.length > 0 && selected.length === items.length}
-                  onChange={(e) => setSelected(e.target.checked ? items.map((x) => x.id) : [])}
+      <Table>
+        <thead>
+          <tr>
+            <Th className="w-10">
+              <input
+                type="checkbox"
+                className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                checked={items.length > 0 && selected.length === items.length}
+                onChange={(e) => setSelected(e.target.checked ? items.map((x) => x.id) : [])}
+              />
+            </Th>
+            <Th>Име</Th>
+            <Th>Марка</Th>
+            <Th>Състояние</Th>
+            <Th>Тип</Th>
+            <Th>Цена</Th>
+            <Th>Налични</Th>
+            <Th>Продадени</Th>
+            <Th>Статус</Th>
+            <Th></Th>
+          </tr>
+        </thead>
+        <tbody>
+          {!loading && items.map((p) => (
+            <tr key={p.id} className="hover:bg-slate-50 transition-colors group">
+              <Td>
+                <input 
+                  type="checkbox" 
+                  className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                  checked={selected.includes(p.id)} 
+                  onChange={(e) => setSelected((prev) => e.target.checked ? [...prev, p.id] : prev.filter((x) => x !== p.id))} 
                 />
-              </th>
-              {["Име", "Марка", "Състояние", "Тип", "Цена", "Налични", "Продадени", "Статус", ""].map((h) => (
-                <th key={h} style={th}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {!loading && items.map((p) => (
-              <tr key={p.id} style={{ borderTop: "1px solid #e2e8f0" }}>
-                <td style={td}><input type="checkbox" checked={selected.includes(p.id)} onChange={(e) => setSelected((prev) => e.target.checked ? [...prev, p.id] : prev.filter((x) => x !== p.id))} /></td>
-                <td style={{ ...td, fontWeight: 800 }}>{p.name}</td>
-                <td style={td}>{p.brands?.name ?? "—"}</td>
-                <td style={td}>{p.product_condition === "used" ? "Втора употреба" : "Нови"}</td>
-                <td style={td}>{p.product_types?.name ?? "—"}</td>
-                <td style={td}>€{Number(p.price).toLocaleString()}</td>
-                <td style={td}>{Number(p.stock_quantity ?? 0)}</td>
-                <td style={td}>{Number(p.sold_quantity ?? 0)}</td>
-                <td style={td}>{p.is_active ? "Активен" : "Неактивен"}</td>
-                <td style={td}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <button
-                      type="button"
+              </Td>
+              <Td className="font-bold text-slate-900">
+                <ProductQuickViewButton productId={p.id} productName={p.name} />
+              </Td>
+              <Td>{p.brands?.name ?? "—"}</Td>
+              <Td>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${p.product_condition === "used" ? "bg-amber-100 text-amber-800" : "bg-sky-100 text-sky-800"}`}>
+                  {p.product_condition === "used" ? "Втора употреба" : "Нови"}
+                </span>
+              </Td>
+              <Td>{p.product_types?.name ?? "—"}</Td>
+              <Td className="font-semibold">
+                {editingPriceId === p.id ? (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min={0}
+                      value={priceDraft}
+                      onChange={(e) => setPriceDraft(e.target.value)}
+                      className="max-w-[120px]"
+                      autoFocus
+                    />
+                    <Button size="sm" onClick={() => void savePrice(p)} disabled={priceBusy}>
+                      Запази
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={() => {
-                        setSaleFor(p);
-                        setSaleForm({ contactId: "", customerName: "", customerPhone: "", customerAddress: "", customerEmail: "", notes: "" });
-                        setContactQuery("");
-                        setContactResults([]);
+                        setEditingPriceId(null);
+                        setPriceDraft("");
                       }}
-                      disabled={p.stock_quantity <= 0}
-                      style={{
-                        padding: "6px 10px",
-                        borderRadius: 10,
-                        border: "1px solid #cbd5e1",
-                        background: "white",
-                        fontWeight: 700,
-                        color: "#0f172a",
-                        opacity: p.stock_quantity > 0 ? 1 : 0.45,
-                        cursor: p.stock_quantity > 0 ? "pointer" : "not-allowed",
-                      }}
-                      title="Намалява бройката с 1. При 0 се скрива от каталога."
+                      disabled={priceBusy}
                     >
-                      Продаден
-                    </button>
-                    <Link href={`/admin/products/${p.id}`} style={{ fontWeight: 800, color: "#0284c7" }}>Редакция</Link>
+                      Отказ
+                    </Button>
                   </div>
-                </td>
-              </tr>
-            ))}
-            {!loading && items.length === 0 && (
-              <tr><td colSpan={10} style={{ padding: 14, color: "#64748b" }}>Няма продукти.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => startPriceEdit(p)}
+                    className="rounded-md px-2 py-1 text-left font-semibold text-slate-900 hover:bg-sky-50 hover:text-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-200"
+                    title="Кликни за редакция на цена"
+                  >
+                    €{Number(p.price).toLocaleString()}
+                  </button>
+                )}
+              </Td>
+              <Td>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${p.stock_quantity > 0 ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
+                  {Number(p.stock_quantity ?? 0)}
+                </span>
+              </Td>
+              <Td>{Number(p.sold_quantity ?? 0)}</Td>
+              <Td>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${p.is_active ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>
+                  {p.is_active ? "Активен" : "Неактивен"}
+                </span>
+              </Td>
+              <Td>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setSaleFor(p);
+                      setSaleForm({ contactId: "", customerName: "", customerPhone: "", customerAddress: "", customerEmail: "", notes: "" });
+                      setContactQuery("");
+                      setContactResults([]);
+                    }}
+                    disabled={p.stock_quantity <= 0}
+                    title="Намалява бройката с 1. При 0 се скрива от каталога."
+                    className="!py-1 !px-2 !text-xs font-bold"
+                  >
+                    Продажба
+                  </Button>
+                  <Link href={`/admin/products/${p.id}`} className="inline-flex items-center gap-1.5 px-2 py-1 bg-sky-50 text-sky-700 hover:bg-sky-100 rounded-lg text-xs font-bold transition-colors">
+                    <Edit className="w-3.5 h-3.5" /> Редакция
+                  </Link>
+                </div>
+              </Td>
+            </tr>
+          ))}
+          {!loading && items.length === 0 && (
+            <tr><Td colSpan={10} className="text-center py-8 text-slate-500">Няма намерени продукти.</Td></tr>
+          )}
+        </tbody>
+      </Table>
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12 }}>
-        <span style={{ color: "#64748b", fontSize: 13 }}>Общо: {meta.total}</span>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} style={bulkBtn(page > 1)}>Предишна</button>
-          <span style={{ fontSize: 13, color: "#475569", alignSelf: "center" }}>Стр. {page} / {pages}</span>
-          <button disabled={page >= pages} onClick={() => setPage((p) => p + 1)} style={bulkBtn(page < pages)}>Следваща</button>
+      <div className="flex justify-between items-center">
+        <span className="text-sm text-slate-500 font-medium">Общо: {meta.total}</span>
+        <div className="flex items-center gap-3">
+          <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Предишна</Button>
+          <span className="text-sm font-medium text-slate-600">Стр. {page} / {pages}</span>
+          <Button variant="secondary" size="sm" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>Следваща</Button>
         </div>
       </div>
 
       {saleFor && (
         <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(15,23,42,0.28)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 60,
-            padding: 16,
-          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-md"
           onClick={() => !saleBusy && setSaleFor(null)}
         >
           <div
-            style={{ background: "white", borderRadius: 14, border: "1px solid #e2e8f0", width: "min(760px, 100%)", padding: 14 }}
+            className="w-full max-w-3xl max-h-[calc(100vh-2rem)] overflow-hidden rounded-3xl border border-white/70 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a", marginBottom: 4 }}>Продажба - {saleFor.name}</div>
-            <div style={{ fontSize: 12, color: "#64748b", marginBottom: 10 }}>Избери съществуващ контакт (live search) или създай нов. Данните влизат в История и Календар.</div>
+            <div className="border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#ffffff_42%,#f8fafc_100%)] px-6 py-5">
+              <div className="text-xs font-bold uppercase tracking-[0.24em] text-sky-700">Запис на продажба</div>
+              <div className="mt-1 text-2xl font-black leading-tight text-slate-950">{saleFor.name}</div>
+              <div className="mt-1 text-sm font-medium text-slate-500">
+                Създава продажба в календара, намалява наличността и връзва контакт към сделката.
+              </div>
+            </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10, position: "relative" }}>
-              <div style={{ gridColumn: "1 / -1", position: "relative" }}>
-                <input
+            <div className="grid max-h-[calc(100vh-12rem)] grid-cols-1 gap-3 overflow-y-auto p-6 md:grid-cols-2">
+              <div className="col-span-full relative">
+                <Input
                   value={contactQuery}
                   onChange={(e) => {
                     setContactQuery(e.target.value);
                     setSaleForm((s) => ({ ...s, contactId: "" }));
                   }}
                   placeholder="Търси контакт (име/телефон) ..."
-                  style={inputField}
                 />
                 {(contactLoading || contactResults.length > 0) && (
-                  <div style={{ position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", border: "1px solid #cbd5e1", borderRadius: 10, background: "white", zIndex: 5, maxHeight: 180, overflow: "auto" }}>
+                  <div className="absolute left-0 right-0 top-[calc(100%+4px)] border border-slate-200 rounded-lg bg-white shadow-lg z-10 max-h-32 overflow-y-auto p-1">
                     {contactLoading ? (
-                      <div style={{ padding: "8px 10px", fontSize: 12, color: "#64748b" }}>Търсене...</div>
+                      <div className="p-3 text-sm text-slate-500 text-center">Търсене...</div>
                     ) : (
                       contactResults.map((c) => (
                         <button
@@ -508,28 +626,28 @@ export default function AdminProductsPage() {
                             setContactQuery(`${c.full_name} (${c.phone})`);
                             setContactResults([]);
                           }}
-                          style={{ display: "block", width: "100%", textAlign: "left", border: "none", background: "white", padding: "8px 10px", cursor: "pointer", fontSize: 12 }}
+                          className="block w-full text-left p-2 hover:bg-slate-50 rounded-lg transition-colors"
                         >
-                          <div style={{ fontWeight: 700, color: "#0f172a" }}>{c.full_name}</div>
-                          <div style={{ color: "#64748b" }}>{c.phone}{c.email ? ` / ${c.email}` : ""}</div>
+                          <div className="font-bold text-slate-900 text-sm">{c.full_name}</div>
+                          <div className="text-xs text-slate-500 mt-0.5">{c.phone}{c.email ? ` / ${c.email}` : ""}</div>
                         </button>
                       ))
                     )}
                   </div>
                 )}
               </div>
-              <input value={saleForm.customerName} onChange={(e) => setSaleForm((s) => ({ ...s, customerName: e.target.value }))} placeholder="Контактно лице*" style={inputField} />
-              <input value={saleForm.customerPhone} onChange={(e) => setSaleForm((s) => ({ ...s, customerPhone: e.target.value }))} placeholder="Телефон*" style={inputField} />
-              <input value={saleForm.customerEmail} onChange={(e) => setSaleForm((s) => ({ ...s, customerEmail: e.target.value }))} placeholder="Имейл" style={inputField} />
-              <input value={saleForm.customerAddress} onChange={(e) => setSaleForm((s) => ({ ...s, customerAddress: e.target.value }))} placeholder="Адрес" style={{ ...inputField, gridColumn: "1 / -1" }} />
-              <textarea value={saleForm.notes} onChange={(e) => setSaleForm((s) => ({ ...s, notes: e.target.value }))} placeholder="Бележки (по желание)" rows={3} style={{ ...inputField, gridColumn: "1 / -1", resize: "vertical" }} />
+              <Input value={saleForm.customerName} onChange={(e) => setSaleForm((s) => ({ ...s, customerName: e.target.value }))} placeholder="Контактно лице*" />
+              <Input value={saleForm.customerPhone} onChange={(e) => setSaleForm((s) => ({ ...s, customerPhone: e.target.value }))} placeholder="Телефон*" />
+              <Input value={saleForm.customerEmail} onChange={(e) => setSaleForm((s) => ({ ...s, customerEmail: e.target.value }))} placeholder="Имейл" />
+              <Input value={saleForm.customerAddress} onChange={(e) => setSaleForm((s) => ({ ...s, customerAddress: e.target.value }))} placeholder="Адрес" className="md:col-span-2" />
+              <Textarea value={saleForm.notes} onChange={(e) => setSaleForm((s) => ({ ...s, notes: e.target.value }))} placeholder="Бележки (по желание)" rows={2} className="md:col-span-2 min-h-[2.75rem]" />
             </div>
 
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 12, color: "#64748b" }}>Сума: €{Number(saleFor.price).toLocaleString()}</span>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  type="button"
+            <div className="flex justify-between items-center border-t border-slate-100 bg-slate-50 px-6 py-4 gap-2 flex-wrap">
+              <span className="text-sm font-black text-slate-900">Сума: €{Number(saleFor.price).toLocaleString()}</span>
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
                   disabled={saleBusy || !saleForm.customerName.trim() || !saleForm.customerPhone.trim()}
                   onClick={async () => {
                     setSaleBusy(true);
@@ -541,18 +659,17 @@ export default function AdminProductsPage() {
                       setSaleBusy(false);
                     }
                   }}
-                  style={bulkBtn(!saleBusy && !!saleForm.customerName.trim() && !!saleForm.customerPhone.trim())}
                 >
                   + Нов контакт
-                </button>
-                <button type="button" disabled={saleBusy} onClick={() => setSaleFor(null)} style={bulkBtn(!saleBusy)}>Отказ</button>
-                <button
-                  type="button"
+                </Button>
+                <Button variant="secondary" disabled={saleBusy} onClick={() => setSaleFor(null)}>Отказ</Button>
+                <Button
+                  variant="primary"
                   disabled={saleBusy || !saleForm.customerName.trim() || !saleForm.customerPhone.trim()}
                   onClick={async () => {
                     setSaleBusy(true);
                     try {
-                      await markAsSold(saleFor, {
+                      const ok = await markAsSold(saleFor, {
                         id: saleForm.contactId || undefined,
                         name: saleForm.customerName.trim(),
                         phone: saleForm.customerPhone.trim(),
@@ -560,16 +677,62 @@ export default function AdminProductsPage() {
                         email: saleForm.customerEmail.trim(),
                         notes: saleForm.notes.trim(),
                       });
-                      setSaleFor(null);
+                      if (ok) {
+                        setSaleSuccess({ productName: saleFor.name, customerName: saleForm.customerName.trim(), amount: Number(saleFor.price) });
+                        setSaleFor(null);
+                      }
                     } finally {
                       setSaleBusy(false);
                     }
                   }}
-                  style={{ ...bulkBtn(!saleBusy && !!saleForm.customerName.trim() && !!saleForm.customerPhone.trim()), borderColor: "#0ea5e9", color: "#0369a1" }}
                 >
                   {saleBusy ? "Запис..." : "Запиши продажба"}
-                </button>
+                </Button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {saleSuccess && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-md" onClick={() => setSaleSuccess(null)}>
+          <div
+            className="w-full max-w-xl overflow-hidden rounded-3xl border border-white/70 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-[radial-gradient(circle_at_top_left,#dcfce7_0,#ffffff_44%,#f8fafc_100%)] px-6 py-6 text-center">
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-lg shadow-emerald-600/25">
+                <CheckCircle className="h-7 w-7" />
+              </div>
+              <div className="text-2xl font-black text-slate-950">Продажбата е записана</div>
+              <div className="mt-2 text-sm font-medium text-slate-500">
+                {saleSuccess.productName} · {saleSuccess.customerName}
+              </div>
+            </div>
+            <div className="grid gap-3 p-6">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Сума</div>
+                <div className="mt-1 text-2xl font-black text-slate-900">€{saleSuccess.amount.toLocaleString()}</div>
+              </div>
+              <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-semibold leading-6 text-emerald-900">
+                Наличността е намалена, продажбата е добавена в историята на продажбите и в календара.
+              </div>
+            </div>
+            <div className="flex justify-end border-t border-slate-100 bg-slate-50 px-6 py-4">
+              <Button onClick={() => setSaleSuccess(null)}>Готово</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmBulkDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-md" onClick={() => setConfirmBulkDelete(false)}>
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="text-xl font-black text-slate-950">Изтриване на продукти</div>
+            <div className="mt-2 text-sm text-slate-500">Сигурни ли сте, че искате да изтриете {selected.length} избрани продукта?</div>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setConfirmBulkDelete(false)}>Отказ</Button>
+              <Button variant="danger" onClick={() => void bulk("delete")}>Изтрий</Button>
             </div>
           </div>
         </div>
@@ -577,28 +740,3 @@ export default function AdminProductsPage() {
     </div>
   );
 }
-
-const th: CSSProperties = { textAlign: "left", padding: "10px 12px", fontSize: 12, color: "#334155", fontWeight: 800 };
-const td: CSSProperties = { padding: "10px 12px", color: "#334155", fontSize: 13 };
-function bulkBtn(enabled: boolean): CSSProperties {
-  return {
-    padding: "8px 10px",
-    borderRadius: 10,
-    border: "1px solid #cbd5e1",
-    background: "#fff",
-    color: "#0f172a",
-    fontWeight: 700,
-    opacity: enabled ? 1 : 0.45,
-    cursor: enabled ? "pointer" : "not-allowed",
-  };
-}
-
-const inputField: CSSProperties = {
-  padding: "9px 11px",
-  borderRadius: 10,
-  border: "1px solid #cbd5e1",
-  fontSize: 12,
-  color: "#0f172a",
-  background: "white",
-};
-

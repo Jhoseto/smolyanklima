@@ -2,6 +2,8 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminDb } from "@/lib/admin/db";
+import { getEnv } from "@/lib/env";
+import { withCloudinaryWebOptimization } from "@/lib/services/cloudinaryService";
 import { logAdminActivity } from "@/lib/admin/audit";
 import { formatSupabaseError, mapProductDbError, mergedOldPriceInvalid } from "@/lib/admin/productDbErrors";
 import { replaceProductImages, upsertProductSpecs, type ImageInput, type SpecsInput } from "@/lib/admin/syncProductChildren";
@@ -73,23 +75,39 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   if (!row) return withCors(req, NextResponse.json({ error: "Not found" }, { status: 404 }));
 
-  const [specsRes, imagesRes] = await Promise.all([
+  const env = getEnv();
+  const [specsRes, imagesRes, brandRes, typeRes] = await Promise.all([
     supabase.from("product_specs").select("*").eq("product_id", id).maybeSingle(),
     supabase.from("product_images").select("id,url,sort_order,is_main").eq("product_id", id).order("sort_order", { ascending: true }),
+    row.brand_id ? supabase.from("brands").select("id,name").eq("id", row.brand_id).maybeSingle() : Promise.resolve({ data: null, error: null } as any),
+    row.type_id ? supabase.from("product_types").select("id,name").eq("id", row.type_id).maybeSingle() : Promise.resolve({ data: null, error: null } as any),
   ]);
   if (specsRes.error) return withCors(req, NextResponse.json({ error: specsRes.error.message }, { status: 500 }));
   if (imagesRes.error) return withCors(req, NextResponse.json({ error: imagesRes.error.message }, { status: 500 }));
+  if (brandRes.error) return withCors(req, NextResponse.json({ error: brandRes.error.message }, { status: 500 }));
+  if (typeRes.error) return withCors(req, NextResponse.json({ error: typeRes.error.message }, { status: 500 }));
 
   return withCors(
     req,
     NextResponse.json({
       data: {
         ...row,
+        brands: brandRes.data ?? null,
+        product_types: typeRes.data ?? null,
         product_specs: specsRes.data ?? null,
-        product_images: imagesRes.data ?? [],
+        product_images: (imagesRes.data ?? []).map((image) => ({
+          ...image,
+          url: resolveAdminImageUrl(image.url, env.FRONTEND_ORIGIN),
+        })),
       },
     }),
   );
+}
+
+function resolveAdminImageUrl(url: string, frontendOrigin: string) {
+  if (!url) return url;
+  if (url.startsWith("/")) return `${frontendOrigin.replace(/\/$/, "")}${url}`;
+  return withCloudinaryWebOptimization(url);
 }
 
 export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -178,12 +196,19 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   }
 
   const { data: out } = await supabase.from("products").select("id,slug").eq("id", id).maybeSingle();
+  const changedFields = Object.keys(patch);
+  const isPriceOnlyUpdate =
+    changedFields.length === 1 &&
+    changedFields[0] === "price" &&
+    parsed.data.specs === undefined &&
+    parsed.data.images === undefined;
   await logAdminActivity({
-    action: "product.update",
+    action: isPriceOnlyUpdate ? "product.price.update" : "product.update",
     entityType: "product",
     entityId: id,
     details: {
-      changedFields: Object.keys(patch),
+      changedFields,
+      price: parsed.data.price ?? null,
       hasSpecsUpdate: Boolean(parsed.data.specs),
       hasImagesUpdate: Boolean(parsed.data.images),
       slug: out?.slug ?? null,
@@ -195,26 +220,6 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
 export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   const supabase = await adminDb();
-  const { data: current } = await supabase.from("products").select("id,name,price").eq("id", id).maybeSingle();
-
-  if (current) {
-    try {
-      await supabase.from("work_items").insert({
-        type: "stock_out",
-        event_code: "item_removed",
-        status: "done",
-        priority: "medium",
-        title: `Премахнат артикул: ${current.name}`,
-        product_id: current.id,
-        due_date: new Date().toISOString().slice(0, 10),
-        quantity: 1,
-        unit_price: Number(current.price ?? 0),
-        total_amount: Number(current.price ?? 0),
-      });
-    } catch {
-      // Non-blocking if work_items schema is not migrated yet.
-    }
-  }
 
   const { error } = await supabase.from("products").delete().eq("id", id);
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
