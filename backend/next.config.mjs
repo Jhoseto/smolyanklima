@@ -13,9 +13,12 @@ const nextConfig = {
   async rewrites() {
     // Serve the Vite SPA (built into /public) from the same origin in production.
     // Keep backend routes working normally.
+    // SPA fallback за публичния сайт. Изключваме PWA/manifest и статични коренни файлове,
+    // иначе браузърът взима HTML вместо JSON → "Manifest: Line 1 Syntax error".
     return [
       {
-        source: "/:path((?!api/|admin/|login$|_next/|assets/|images/|favicon\\.ico).*)",
+        source:
+          "/:path((?!api/|admin/|login$|_next/|assets/|images/|favicon\\.ico|manifest\\.webmanifest|manifest\\.json|icon\\.svg$).*)",
         destination: "/index.html",
       },
     ];

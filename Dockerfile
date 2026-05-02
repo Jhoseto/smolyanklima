@@ -43,6 +43,9 @@ RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 COPY --from=backend_builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=backend_builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=frontend_builder --chown=nextjs:nodejs /repo/dist ./public
+# Vite dist презаписва целия public — върни admin PWA manifest + икона (layout.tsx + manifest)
+COPY --chown=nextjs:nodejs backend/public/manifest.webmanifest ./public/manifest.webmanifest
+COPY --chown=nextjs:nodejs backend/public/icon.svg ./public/icon.svg
 
 USER nextjs
 EXPOSE 8080

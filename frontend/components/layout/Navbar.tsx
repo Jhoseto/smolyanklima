@@ -33,16 +33,16 @@ export const Navbar = () => {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled ? 'bg-white/98 md:bg-white/90 md:backdrop-blur-md shadow-sm py-3' : 'bg-transparent py-5'
+      className={`fixed top-0 left-0 right-0 z-[200] transition-all duration-300 pt-[env(safe-area-inset-top,0px)] ${isScrolled ? 'bg-white/98 md:bg-white/90 md:backdrop-blur-md shadow-sm py-3' : 'bg-transparent py-5'
         }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3 min-w-0">
 
-          {/* Logo */}
-          <a href="#" className="flex items-center cursor-pointer">
+          {/* Logo — min-w-0 за да не „изяде“ hamburger-а на тесни екрани */}
+          <Link to="/" className="flex min-w-0 shrink items-center cursor-pointer max-w-[min(100%,calc(100vw-5rem))] md:max-w-none overflow-hidden">
             <Logo size="sm" />
-          </a>
+          </Link>
 
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center gap-8">
@@ -87,12 +87,14 @@ export const Navbar = () => {
             </a>
           </div>
 
-          {/* Mobile Menu Button */}
+          {/* Mobile Menu Button — винаги видим и кликваем */}
           <button
-            className="md:hidden p-2 text-gray-600 hover:text-gray-900"
+            type="button"
+            aria-label={mobileMenuOpen ? 'Затвори меню' : 'Отвори меню'}
+            className={`md:hidden shrink-0 p-2 rounded-xl transition-colors touch-manipulation ${isScrolled ? 'text-gray-800 hover:bg-gray-100' : 'text-gray-800 hover:bg-black/5 shadow-sm bg-white/70 backdrop-blur-sm'}`}
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           >
-            {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" strokeWidth={2.25} />}
           </button>
         </div>
       </div>
