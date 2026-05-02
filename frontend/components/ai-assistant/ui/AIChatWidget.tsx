@@ -4,11 +4,10 @@
  */
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { X, Send, MessageCircle, ChevronDown, ChevronUp, Mic, Paperclip, Bot } from 'lucide-react';
+import { X, Send, MessageCircle, ChevronDown, Mic, Bot, Headphones } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useAIChat } from '../hooks/useAIChat';
-import { useCrossTabSync } from '../hooks/useCrossTabSync';
 import type { Message, QuickReply, TypingIndicator } from '../types';
 import { ChatMessage } from './ChatMessage';
 import { QuickReplyButtons } from './QuickReplyButtons';
@@ -22,6 +21,12 @@ export interface AIChatWidgetProps {
   accentColor?: string;
   welcomeMessage?: string;
   enableVoiceInput?: boolean;
+  /** Извиква се когато потребителят поиска прехвърляне към реален консултант */
+  onRequestLiveChat?: (context: Array<{ role: 'user' | 'assistant'; content: string }>) => void;
+  /** Брой непрочетени съобщения от жив консултант (за badge на бутона) */
+  liveUnread?: number;
+  /** Има активна сесия за жив чат — при отваряне директно превключи */
+  hasActiveLiveSession?: boolean;
 }
 
 const DEFAULT_COLORS = {
@@ -42,6 +47,9 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
   accentColor = DEFAULT_COLORS.accent,
   welcomeMessage,
   enableVoiceInput = true,
+  onRequestLiveChat,
+  liveUnread = 0,
+  hasActiveLiveSession = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [inputMessage, setInputMessage] = useState('');
@@ -56,9 +64,14 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const widgetRef = useRef<HTMLDivElement>(null);
   const consentStorageKeyRef = useRef('ai_chat_privacy_consent_v1');
+  const isOpenRef = useRef(isOpen);
   const navigate = useNavigate();
 
-  // Initialize AI Chat hook
+  useEffect(() => {
+    isOpenRef.current = isOpen;
+  }, [isOpen]);
+
+  // Initialize AI Chat hook (+ синхрон между табове в useAIChat)
   const {
     messages,
     isLoading,
@@ -68,14 +81,9 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
     conversation,
     suggestedProducts,
     actions,
-  } = useAIChat({});
-
-  // Cross-tab synchronization
-  const { syncState, lastSyncMessage } = useCrossTabSync({
-    conversationId: conversation?.id || null,
-    onExternalMessage: (message) => {
-      // Show notification when message arrives from another tab
-      if (!isOpen) {
+  } = useAIChat({
+    onSyncedFromOtherTab: () => {
+      if (!isOpenRef.current) {
         setUnreadCount((prev) => prev + 1);
       }
     },
@@ -115,8 +123,12 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
     if (isOpen) {
       setTimeout(() => inputRef.current?.focus(), 100);
       setUnreadCount(0);
+      // If there's an active live chat session, switch to it immediately
+      if (hasActiveLiveSession && onRequestLiveChat) {
+        onRequestLiveChat([]);
+      }
     }
-  }, [isOpen]);
+  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handle typing indicator
   useEffect(() => {
@@ -306,96 +318,152 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
               transition={{ delay: 0.1 }}
               style={{
                 background: '#ffffff',
-                padding: '16px 18px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
                 color: '#0f172a',
                 borderBottom: '1px solid #f1f5f9',
                 position: 'relative',
+                flexShrink: 0,
               }}
             >
-              {/* Brand accent bar - split: cyan + orange */}
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: 3,
-                  display: 'flex',
-                }}
-              >
+              {/* Brand accent bar */}
+              <div style={{ display: 'flex', height: 3 }}>
                 <span style={{ flex: 1, backgroundColor: primaryColor }} />
                 <span style={{ flex: 1, backgroundColor: accentColor }} />
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div
+
+              {/* Title row */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px 0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div
+                    style={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: '50%',
+                      backgroundColor: primaryColor,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'white',
+                      boxShadow: `0 4px 12px ${primaryColor}33`,
+                      position: 'relative',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Bot size={18} strokeWidth={1.75} />
+                    <span
+                      style={{
+                        position: 'absolute',
+                        bottom: -1,
+                        right: -1,
+                        width: 11,
+                        height: 11,
+                        borderRadius: '50%',
+                        backgroundColor: '#22c55e',
+                        border: '2px solid white',
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 14, letterSpacing: '-0.01em', lineHeight: 1.2 }}>Смолян Клима</div>
+                    <div style={{ fontSize: 11, color: '#64748b', display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                      <span style={{ color: '#22c55e', fontWeight: 600 }}>• На линия</span>
+                      <span style={{ color: '#cbd5e1' }}>·</span>
+                      <span>Отговаря веднага</span>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={toggleChat}
                   style={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: '50%',
-                    backgroundColor: primaryColor,
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    color: '#64748b',
+                    cursor: 'pointer',
+                    padding: 0,
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    transition: 'all 0.2s',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: 'white',
-                    boxShadow: `0 6px 16px ${primaryColor}33`,
-                    position: 'relative',
+                    flexShrink: 0,
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#fef2f2';
+                    e.currentTarget.style.borderColor = '#fecaca';
+                    e.currentTarget.style.color = '#ef4444';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = '#f8fafc';
+                    e.currentTarget.style.borderColor = '#e2e8f0';
+                    e.currentTarget.style.color = '#64748b';
                   }}
                 >
-                  <Bot size={20} strokeWidth={1.75} />
-                  {/* Online dot on avatar */}
-                  <span
-                    style={{
-                      position: 'absolute',
-                      bottom: -1,
-                      right: -1,
-                      width: 12,
-                      height: 12,
-                      borderRadius: '50%',
-                      backgroundColor: '#22c55e',
-                      border: '2px solid white',
-                    }}
-                  />
-                </div>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 15, letterSpacing: '-0.01em' }}>Вашият асистент</div>
-                  <div style={{ fontSize: 12, color: '#64748b', display: 'flex', alignItems: 'center', gap: 5, marginTop: 2 }}>
-                    <span style={{ color: '#22c55e', fontWeight: 600 }}>• На линия</span>
-                    <span style={{ color: '#cbd5e1' }}>|</span>
-                    <span>Отговаря веднага</span>
-                  </div>
-                </div>
+                  <X size={15} />
+                </button>
               </div>
 
-              <button
-                onClick={toggleChat}
-                style={{
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
-                  color: '#64748b',
-                  cursor: 'pointer',
-                  padding: 8,
-                  borderRadius: 10,
-                  transition: 'all 0.2s',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#fef2f2';
-                  e.currentTarget.style.borderColor = '#fecaca';
-                  e.currentTarget.style.color = '#ef4444';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = '#f8fafc';
-                  e.currentTarget.style.borderColor = '#e2e8f0';
-                  e.currentTarget.style.color = '#64748b';
-                }}
-              >
-                <X size={18} />
-              </button>
+              {/* Tab bar */}
+              <div style={{ display: 'flex', padding: '8px 12px 0', gap: 4 }}>
+                {/* AI tab — active */}
+                <button
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    padding: '7px 0',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: primaryColor,
+                    background: 'none',
+                    border: 'none',
+                    borderBottom: `2px solid ${primaryColor}`,
+                    cursor: 'default',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <Bot size={13} strokeWidth={2} />
+                  AI Асистент
+                </button>
+                {/* Live tab */}
+                {onRequestLiveChat && (
+                  <button
+                    onClick={() => {
+                      const ctx = messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })).filter(m => m.role !== 'system');
+                      onRequestLiveChat(ctx);
+                    }}
+                    style={{
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      padding: '7px 0',
+                      fontSize: 12,
+                      fontWeight: 500,
+                      color: '#94a3b8',
+                      background: 'none',
+                      border: 'none',
+                      borderBottom: '2px solid transparent',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.color = accentColor;
+                      e.currentTarget.style.borderBottomColor = `${accentColor}66`;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = '#94a3b8';
+                      e.currentTarget.style.borderBottomColor = 'transparent';
+                    }}
+                  >
+                    <Headphones size={13} strokeWidth={2} />
+                    Жива връзка
+                  </button>
+                )}
+              </div>
             </motion.div>
 
             {/* Messages Area */}
@@ -661,7 +729,7 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
         )}
         {isOpen ? <ChevronDown size={24} strokeWidth={1.75} /> : <MessageCircle size={24} strokeWidth={1.75} />}
 
-        {/* Unread Badge */}
+        {/* Unread Badge — AI messages */}
         {unreadCount > 0 && !isOpen && (
           <motion.span
             initial={{ scale: 0 }}
@@ -684,6 +752,32 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
             }}
           >
             {unreadCount}
+          </motion.span>
+        )}
+
+        {/* Unread Badge — live chat messages (when widget minimized) */}
+        {liveUnread > 0 && !isOpen && unreadCount === 0 && (
+          <motion.span
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            style={{
+              position: 'absolute',
+              top: -4,
+              right: -4,
+              backgroundColor: '#FF4D00',
+              color: 'white',
+              fontSize: 12,
+              fontWeight: 600,
+              width: 22,
+              height: 22,
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '2px solid white',
+            }}
+          >
+            {liveUnread}
           </motion.span>
         )}
       </motion.button>

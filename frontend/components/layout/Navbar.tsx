@@ -33,14 +33,17 @@ export const Navbar = () => {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-[200] transition-all duration-300 pt-[env(safe-area-inset-top,0px)] pl-[env(safe-area-inset-left,0px)] pr-[env(safe-area-inset-right,0px)] isolation isolate ${isScrolled ? 'bg-white/98 md:bg-white/90 md:backdrop-blur-md shadow-sm py-3' : 'bg-transparent py-5'
-        }`}
+      className={`fixed top-0 left-0 right-0 z-[200] transition-all duration-300 pl-[env(safe-area-inset-left,0px)] pr-[env(safe-area-inset-right,0px)] isolation isolate ${isScrolled ? 'bg-white/98 md:bg-white/90 md:backdrop-blur-md shadow-sm' : 'bg-transparent'}`}
+      style={{
+        paddingTop: `calc(env(safe-area-inset-top, 0px) + ${isScrolled ? '10px' : '16px'})`,
+        paddingBottom: isScrolled ? '10px' : '16px',
+      }}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between gap-3 min-w-0 w-full">
 
           {/* Logo — flex-1 + min-w-0: стабилно оразмеряване в PWA (без 100vw, което чупи layout в standalone) */}
-          <Link to="/" className="flex min-w-0 flex-1 md:flex-none items-center cursor-pointer overflow-hidden">
+          <Link to="/" className="flex min-w-0 flex-1 md:flex-none items-center cursor-pointer">
             <Logo size="sm" />
           </Link>
 

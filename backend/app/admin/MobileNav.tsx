@@ -17,11 +17,13 @@ import {
   Activity,
   Settings,
   LogOut,
+  Headphones,
 } from "lucide-react";
 
 const primaryLinks = [
   { href: "/admin", label: "Табло", icon: LayoutDashboard, exact: true },
   { href: "/admin/products", label: "Продукти", icon: Package, exact: false },
+  { href: "/admin/chat", label: "Чат", icon: Headphones, exact: false },
   { href: "/admin/inquiries", label: "Запитвания", icon: MessageSquare, exact: false },
   { href: "/admin/contacts", label: "Контакти", icon: Users, exact: false },
 ];

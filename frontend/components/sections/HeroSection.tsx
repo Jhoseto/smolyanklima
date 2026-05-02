@@ -98,7 +98,7 @@ export const HeroSection = () => {
                 to="/catalog"
                 className="h-14 px-8 rounded-full bg-gradient-to-r from-[#FF5722] to-[#FF2A4D] text-white font-bold text-lg flex items-center gap-2 hover:shadow-lg hover:shadow-red-500/30 hover:scale-[1.02] transition-all"
               >
-                Разгледай продукти
+                Разгледай каталога
                 <ArrowRight className="w-5 h-5" />
               </Link>
 

@@ -428,8 +428,16 @@ export interface APIError {
 // Cross-Tab Sync Types
 // ============================================================================
 
+/** Пълно състояние за синхрон между табове (без сървър). */
+export interface ChatRemotePayload {
+  messages: Message[];
+  conversation: Conversation;
+  savedAt: number;
+  writerTabId: string;
+}
+
 export interface CrossTabMessage {
-  type: 'CHAT_STATE_UPDATE' | 'CONVERSATION_SYNC' | 'USER_CONTEXT_UPDATE';
+  type: 'CHAT_STATE_UPDATE' | 'CONVERSATION_SYNC' | 'USER_CONTEXT_UPDATE' | 'FULL_STATE_SYNC';
   conversationId: string;
   payload: unknown;
   timestamp: number;

@@ -18,12 +18,57 @@ import type {
   Product,
   AIAction,
   UserIntent,
+  ChatRemotePayload,
 } from '../types';
+import {
+  loadPersistedChat,
+  savePersistedChat,
+  clearPersistedChat,
+  validatePersistedBlob,
+  chatStateDiffers,
+  CHAT_STATE_STORAGE_KEY,
+} from '../lib/chatPersistence';
 
 const MAX_USER_MESSAGE_CHARS = 1000;
 
+const BROADCAST_CHANNEL_NAME = 'smolyan-klima-ai-chat';
+
+function tabSessionId(): string {
+  try {
+    const k = 'smolyan-klima-ai-tab-id';
+    let id = sessionStorage.getItem(k);
+    if (!id || id.length < 8) {
+      id = uuidv4();
+      sessionStorage.setItem(k, id);
+    }
+    return id;
+  } catch {
+    return uuidv4();
+  }
+}
+
+function readInitialChatState(): {
+  messages: Message[];
+  conversation: Conversation | null;
+  lastSeenSavedAt: number;
+} {
+  if (typeof window === 'undefined') {
+    return { messages: [], conversation: null, lastSeenSavedAt: 0 };
+  }
+  const blob = loadPersistedChat();
+  if (!blob) return { messages: [], conversation: null, lastSeenSavedAt: 0 };
+  const conversation = { ...blob.conversation, messages: blob.messages };
+  return {
+    messages: blob.messages,
+    conversation,
+    lastSeenSavedAt: blob.savedAt,
+  };
+}
+
 export interface UseAIChatOptions {
   userContext?: Partial<UserContext>;
+  /** Извиква се когато друг таб приложи по-ново състояние на чата. */
+  onSyncedFromOtherTab?: () => void;
 }
 
 export interface UseAIChatReturn {
@@ -38,8 +83,9 @@ export interface UseAIChatReturn {
 }
 
 export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [conversation, setConversation] = useState<Conversation | null>(null);
+  const initial = readInitialChatState();
+  const [messages, setMessages] = useState<Message[]>(() => initial.messages);
+  const [conversation, setConversation] = useState<Conversation | null>(() => initial.conversation);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [suggestedProducts, setSuggestedProducts] = useState<Product[]>([]);
@@ -47,10 +93,18 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
 
   const aiProductsRef = useRef<Product[]>([]);
   const hallucinationGuard = useRef(createHallucinationGuard([]));
-  const messagesRef = useRef<Message[]>([]);
-  const conversationRef = useRef<Conversation | null>(null);
+  const messagesRef = useRef<Message[]>(initial.messages);
+  const conversationRef = useRef<Conversation | null>(initial.conversation);
   const optionsRef = useRef(options);
   optionsRef.current = options;
+
+  const tabIdRef = useRef(tabSessionId());
+  const channelRef = useRef<BroadcastChannel | null>(null);
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isSendingRef = useRef(false);
+  const lastSeenSavedAtRef = useRef(initial.lastSeenSavedAt);
+  /** След apply от друг таб пропускаме един publish цикъл (иначе се получава ехо към BroadcastChannel). */
+  const mutationSourceRef = useRef<'local' | 'remote'>('local');
 
   useEffect(() => {
     let cancelled = false;
@@ -74,8 +128,128 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
   useEffect(() => {
     conversationRef.current = conversation;
   }, [conversation]);
-  
-  // Initialize conversation on first load
+
+  const applyRemoteBlob = useCallback((blob: NonNullable<ReturnType<typeof validatePersistedBlob>>) => {
+    if (blob.savedAt <= lastSeenSavedAtRef.current) return;
+    lastSeenSavedAtRef.current = blob.savedAt;
+    if (!chatStateDiffers(messagesRef.current, blob.messages)) return;
+
+    const conv = { ...blob.conversation, messages: blob.messages };
+    mutationSourceRef.current = 'remote';
+    setMessages(blob.messages);
+    setConversation(conv);
+    savePersistedChat({
+      messages: blob.messages,
+      conversation: conv,
+      savedAt: blob.savedAt,
+      writerTabId: blob.writerTabId,
+    });
+    optionsRef.current.onSyncedFromOtherTab?.();
+  }, []);
+
+  // BroadcastChannel — жив синхрон между табове
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return;
+
+    const ch = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
+    channelRef.current = ch;
+
+    ch.onmessage = (event: MessageEvent) => {
+      const data = event.data as {
+        type?: string;
+        conversationId?: string;
+        payload?: ChatRemotePayload;
+        tabId?: string;
+      };
+      if (!data || data.type !== 'FULL_STATE_SYNC') return;
+      if (data.tabId === tabIdRef.current) return;
+      const payload = data.payload;
+      if (!payload || typeof payload.savedAt !== 'number') return;
+
+      const blob = validatePersistedBlob({
+        v: 1,
+        messages: payload.messages,
+        conversation: { ...payload.conversation, messages: payload.messages },
+        savedAt: payload.savedAt,
+        writerTabId: payload.writerTabId,
+      });
+      if (!blob) return;
+      applyRemoteBlob(blob);
+    };
+
+    return () => {
+      ch.close();
+      channelRef.current = null;
+    };
+  }, [applyRemoteBlob]);
+
+  // storage — друг таб е записал в localStorage
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== CHAT_STATE_STORAGE_KEY || !e.newValue) return;
+      try {
+        const parsed: unknown = JSON.parse(e.newValue);
+        const blob = validatePersistedBlob(parsed);
+        if (!blob) return;
+        if (blob.writerTabId === tabIdRef.current) return;
+        applyRemoteBlob(blob);
+      } catch {
+        // ignore
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [applyRemoteBlob]);
+
+  // Публикувай локални промени към други табове + отложен запис в localStorage
+  useEffect(() => {
+    if (!conversation) return;
+    if (mutationSourceRef.current === 'remote') {
+      mutationSourceRef.current = 'local';
+      return;
+    }
+
+    const savedAt = Date.now();
+    lastSeenSavedAtRef.current = savedAt;
+    const writerTabId = tabIdRef.current;
+    const payload: ChatRemotePayload = {
+      messages,
+      conversation: { ...conversation, messages },
+      savedAt,
+      writerTabId,
+    };
+
+    try {
+      channelRef.current?.postMessage({
+        type: 'FULL_STATE_SYNC',
+        conversationId: conversation.id,
+        payload,
+        timestamp: savedAt,
+        tabId: writerTabId,
+      });
+    } catch {
+      // ignore
+    }
+
+    if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+    persistTimerRef.current = window.setTimeout(() => {
+      savePersistedChat({
+        messages,
+        conversation: { ...conversation, messages },
+        savedAt,
+        writerTabId,
+      });
+    }, 150);
+
+    return () => {
+      if (persistTimerRef.current) {
+        clearTimeout(persistTimerRef.current);
+        persistTimerRef.current = null;
+      }
+    };
+  }, [messages, conversation]);
+
+  // Initialize conversation on first load (ако няма персистирано състояние)
   useEffect(() => {
     if (!conversation) {
       const newConversation: Conversation = {
@@ -100,6 +274,7 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
   // Send message and get AI response
   const sendMessage = useCallback(async (content: string) => {
     if (!conversation) return;
+    if (isSendingRef.current) return;
     const trimmed = content.trim();
     if (!trimmed) return;
     if (trimmed.length > MAX_USER_MESSAGE_CHARS) {
@@ -107,6 +282,7 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
       return;
     }
 
+    isSendingRef.current = true;
     setIsLoading(true);
     setError(null);
     setSuggestedProducts([]);
@@ -256,11 +432,15 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
       }
     } finally {
       setIsLoading(false);
+      isSendingRef.current = false;
     }
   }, [conversation]);
 
   // Reset conversation
   const resetConversation = useCallback(() => {
+    clearPersistedChat();
+    const savedAt = Date.now();
+    lastSeenSavedAtRef.current = savedAt;
     const newConversation: Conversation = {
       id: uuidv4(),
       messages: [],
@@ -276,12 +456,36 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
         convertedToPurchase: false,
       },
     };
-    
+
     setConversation(newConversation);
     setMessages([]);
     setSuggestedProducts([]);
     setActions([]);
     setError(null);
+
+    const writerTabId = tabIdRef.current;
+    savePersistedChat({
+      messages: [],
+      conversation: newConversation,
+      savedAt,
+      writerTabId,
+    });
+    try {
+      channelRef.current?.postMessage({
+        type: 'FULL_STATE_SYNC',
+        conversationId: newConversation.id,
+        payload: {
+          messages: [],
+          conversation: newConversation,
+          savedAt,
+          writerTabId,
+        },
+        timestamp: savedAt,
+        tabId: writerTabId,
+      });
+    } catch {
+      // ignore
+    }
   }, []);
 
   return {

@@ -10,18 +10,18 @@ export const Logo = ({ className = "", isDark = false, size = 'md' }: LogoProps)
   const sizes = {
     sm: {
       text: 'text-lg sm:text-xl',
-      icon: 'h-6 sm:h-7',
-      margin: '-mb-[0.2em] mr-1'
+      icon: 'h-7 sm:h-8',
+      margin: 'mr-1'
     },
     md: {
       text: 'text-xl sm:text-2xl',
       icon: 'h-8 sm:h-9',
-      margin: '-mb-[0.25em] mr-1.5'
+      margin: 'mr-1.5'
     },
     lg: {
       text: 'text-2xl sm:text-3xl',
       icon: 'h-10 sm:h-12',
-      margin: '-mb-[0.3em] mr-2'
+      margin: 'mr-2'
     }
   };
 
@@ -31,7 +31,7 @@ export const Logo = ({ className = "", isDark = false, size = 'md' }: LogoProps)
     <div className={`flex items-center group select-none ${className}`}>
 
       {/* Unified word container */}
-      <div className={`flex items-end tracking-[-0.05em] font-sans font-black leading-none uppercase ${current.text}`}>
+      <div className={`flex items-center tracking-[-0.05em] font-sans font-black leading-none uppercase ${current.text}`}>
 
         {/* Precision SVG Icon acting as the letter C */}
         <svg

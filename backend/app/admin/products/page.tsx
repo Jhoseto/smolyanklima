@@ -3,13 +3,15 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { HelpRow, SectionTitle, HelpCard, Card, Button, Input, Select, Table, Th, Td, Textarea, InfoDot } from "../ui";
-import { Plus, Search, FilterX, CheckCircle, XCircle, Tag, Trash2, Edit, Filter, ChevronDown } from "lucide-react";
+import { Plus, Search, FilterX, CheckCircle, XCircle, Tag, Trash2, Edit, Filter, ChevronDown, MessageCircle } from "lucide-react";
+import { ShareToChatModal } from "../chat/ShareToChatModal";
 import { ProductQuickViewButton } from "../ProductQuickView";
 
 export const dynamic = "force-dynamic";
 
 type ProductRow = {
   id: string;
+  slug: string;
   name: string;
   price: number;
   is_active: boolean;
@@ -32,6 +34,7 @@ export default function AdminProductsPage() {
   const [brands, setBrands] = useState<OptionRow[]>([]);
   const [types, setTypes] = useState<OptionRow[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
+  const [shareProduct, setShareProduct] = useState<ProductRow | null>(null);
   const [q, setQ] = useState("");
   const [condition, setCondition] = useState<"" | "new" | "used">("");
   const [status, setStatus] = useState<"" | "active" | "inactive">("");
@@ -566,6 +569,13 @@ export default function AdminProductsPage() {
                     <Link href={`/admin/products/${p.id}`} className="inline-flex items-center gap-1.5 px-2 py-1 bg-sky-50 text-sky-700 hover:bg-sky-100 rounded-lg text-xs font-bold transition-colors">
                       <Edit className="w-3.5 h-3.5" /> Редакция
                     </Link>
+                    <button
+                      onClick={() => setShareProduct(p)}
+                      title="Сподели в чат"
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-orange-50 text-orange-600 hover:bg-orange-100 rounded-lg text-xs font-bold transition-colors"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </Td>
               </tr>
@@ -644,6 +654,13 @@ export default function AdminProductsPage() {
               <Link href={`/admin/products/${p.id}`} className="flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-semibold text-sky-700 hover:bg-sky-50 active:bg-sky-100 transition-colors">
                 <Edit className="w-4 h-4" /> Редакция
               </Link>
+              <button
+                onClick={() => setShareProduct(p)}
+                className="flex items-center justify-center gap-1.5 px-4 py-3 text-sm font-semibold text-orange-600 hover:bg-orange-50 active:bg-orange-100 transition-colors"
+                title="Сподели в чат"
+              >
+                <MessageCircle className="w-4 h-4" />
+              </button>
             </div>
           </div>
         ))}
@@ -817,6 +834,19 @@ export default function AdminProductsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {shareProduct && (
+        <ShareToChatModal
+          product={{
+            id: shareProduct.id,
+            name: shareProduct.name,
+            slug: shareProduct.id,
+            price_from: shareProduct.price,
+            brand_name: shareProduct.brands?.name ?? null,
+          }}
+          onClose={() => setShareProduct(null)}
+        />
       )}
     </div>
   );

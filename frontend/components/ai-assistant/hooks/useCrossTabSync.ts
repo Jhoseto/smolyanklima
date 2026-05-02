@@ -106,6 +106,10 @@ export function useCrossTabSync(options: UseCrossTabSyncOptions): UseCrossTabSyn
             // User context updated
             setIsSynced(true);
             break;
+
+          case 'FULL_STATE_SYNC':
+            // Пълният синхрон се обработва в useAIChat (BroadcastChannel същият канал).
+            break;
         }
       };
 

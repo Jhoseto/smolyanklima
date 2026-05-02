@@ -3,6 +3,7 @@ import { logoutAction } from "@/app/login/actions";
 import { InfoDot } from "./ui";
 import { MobileNav } from "./MobileNav";
 import { SplashScreen } from "./SplashScreen";
+import { ChatNavBadge } from "./chat/ChatNavBadge";
 import {
   LayoutDashboard,
   Package,
@@ -14,6 +15,7 @@ import {
   Activity,
   Settings,
   LogOut,
+  Headphones,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +41,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <NavLink href="/admin/articles" label="Статии" icon={<FileText className="w-4 h-4" />} />
           <NavLink href="/admin/ratings" label="Оценки" icon={<Star className="w-4 h-4" />} />
           <NavLink href="/admin/inquiries" label="Запитвания" icon={<MessageSquare className="w-4 h-4" />} />
+          {/* Live chat с badge за чакащи */}
+          <ChatNavBadge />
           <NavLink href="/admin/history" label="История продажби" icon={<History className="w-4 h-4" />} />
           <NavLink href="/admin/activity" label="Активност" icon={<Activity className="w-4 h-4" />} />
           <NavLink href="/admin/settings" label="Настройки" icon={<Settings className="w-4 h-4" />} />
