@@ -21,7 +21,7 @@ export const HeroSection = () => {
             initial={{ opacity: 0, x: -30 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6 }}
-            className="max-w-[650px]"
+            className="w-full min-w-0 lg:max-w-[650px]"
           >
             {/* PWA Install Banner — само на мобилен, само ако браузърът поддържа */}
             <AnimatePresence>
@@ -131,7 +131,7 @@ export const HeroSection = () => {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.8, delay: 0.2 }}
-            className="relative lg:ml-auto w-full max-w-[600px]"
+            className="relative w-full min-w-0 max-w-[600px] mx-auto lg:mx-0 lg:ml-auto"
           >
             {/* Main Image */}
             <div className="relative rounded-[2.5rem] overflow-hidden shadow-2xl">

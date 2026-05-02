@@ -13,16 +13,22 @@
 @layer base {
   html {
     scroll-behavior: smooth;
+    width: 100%;
+    overflow-x: clip;
   }
 
   body {
     @apply font-sans antialiased text-gray-900 bg-[#FAFAFA];
+    width: 100%;
+    overflow-x: clip;
   }
 
   /* Stable layout root for Motion useScroll / offset calculations */
   #root {
     position: relative;
     min-height: 100dvh;
+    width: 100%;
+    max-width: 100%;
   }
 }
 
