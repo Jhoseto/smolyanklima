@@ -61,8 +61,7 @@ export { AIProvider, useAIContext } from './context';
 export { sanitizeInput, escapeHtml, formatPrice, generateId, debounce, throttle, isClient, now, formatDate, truncateText } from './utils';
 export { getComparisonAIService } from './core/ComparisonAIService';
 
-// Core
-export { GeminiClient, getGeminiClient, resetGeminiClient } from './core/GeminiClient';
+// Core (GeminiClient NOT exported — browser key exposure risk; use /api/ai/chat server proxy)
 export { PromptBuilder, promptBuilder } from './core/PromptBuilder';
 export { SkillRouter, skillRouter } from './core/SkillRouter';
 export { EmotionalIntelligence, emotionalIntelligence } from './core/EmotionalIntelligence';

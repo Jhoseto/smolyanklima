@@ -46,10 +46,10 @@ const features = [
 
 export const FeaturesSection = () => {
   return (
-    <section id="features" className="py-24">
+    <section id="features" className="py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
-        <div className="text-center mb-16">
+        <div className="text-center mb-10">
           <motion.p 
             initial={{ opacity: 0, y: 10 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -97,7 +97,7 @@ export const FeaturesSection = () => {
                 {feature.description}
               </p>
               
-              <ul className="space-y-3 mb-10 mt-auto">
+              <ul className="space-y-3 mb-6 mt-auto">
                 {feature.list.map((item, i) => (
                   <li key={i} className="flex items-center gap-3 text-sm text-gray-700 font-medium">
                     <Check className={`w-4 h-4 ${feature.colorClass}`} />

@@ -6,14 +6,14 @@ import { getEnv } from "@/lib/env";
 
 const GeminiMessageSchema = z.object({
   role: z.enum(["user", "assistant"]),
-  content: z.string().min(1),
+  content: z.string().min(1).max(2000), // max ~500 tokens per message
 });
 
 const ChatRequestSchema = z.object({
-  messages: z.array(GeminiMessageSchema).min(1),
-  systemPrompt: z.string().optional(),
-  // Client overrides are ignored by default for security/stability.
-  // We keep these fields optional only for forward-compatibility.
+  messages: z.array(GeminiMessageSchema).min(1).max(20), // max 20 turns
+  // Layered prompt + каталогни откъси лесно надхвърлят 4k символа; горна граница срещу злоупотреба.
+  systemPrompt: z.string().max(24000).optional(),
+  // Client overrides are ignored for security/stability.
   model: z.string().optional(),
   temperature: z.number().min(0).max(1).optional(),
   maxOutputTokens: z.number().int().min(1).max(8192).optional(),
@@ -54,11 +54,21 @@ async function postImpl(req: NextRequest) {
 
   const { messages, systemPrompt } = parsed.data;
 
-  // Daily rate limit (best-effort, in-memory; good enough for Cloud Run single instance / low traffic)
-  const maxDaily = env.AI_MAX_DAILY_REQUESTS ?? 500;
+  // ── Rate limiting ─────────────────────────────────────────────────────────
+  // 1. Per-IP: max 8 requests per minute (burst protection)
+  // 2. Per-IP: daily cap (env-configurable, default 100)
+  // 3. Global: hard daily ceiling across all IPs (default 300)
+  const maxDaily = env.AI_MAX_DAILY_REQUESTS ?? 100;
   const clientId = getClientId(req);
+
+  if (!allowPerMinute(clientId)) {
+    return withCors(req, NextResponse.json({ error: "RATE_LIMIT_EXCEEDED" }, { status: 429 }));
+  }
   if (!allowDaily(clientId, maxDaily)) {
     return withCors(req, NextResponse.json({ error: "RATE_LIMIT_EXCEEDED" }, { status: 429 }));
+  }
+  if (!allowGlobalDaily(300)) {
+    return withCors(req, NextResponse.json({ error: "SERVICE_BUSY" }, { status: 503 }));
   }
 
   const finalModel = env.GEMINI_MODEL ?? "gemini-2.5-flash";
@@ -93,13 +103,10 @@ async function postImpl(req: NextRequest) {
   const upstreamJson = await upstream.json().catch(() => ({}));
 
   if (!upstream.ok) {
-    return withCors(
-      req,
-      NextResponse.json(
-        { error: "UPSTREAM_ERROR", status: upstream.status, upstream: upstreamJson },
-        { status: upstream.status }
-      )
-    );
+    // Sanitized error — never leak upstream details to clients
+    const status = upstream.status === 429 ? 429 : 502;
+    const error  = upstream.status === 429 ? "RATE_LIMIT_EXCEEDED" : "AI_UNAVAILABLE";
+    return withCors(req, NextResponse.json({ error }, { status }));
   }
 
   const data = upstreamJson as {
@@ -133,7 +140,12 @@ async function postImpl(req: NextRequest) {
 }
 
 type DailyBucket = { dayKey: string; count: number };
-const dailyCounts = new Map<string, DailyBucket>();
+const dailyCounts  = new Map<string, DailyBucket>();
+const globalDaily  = new Map<string, DailyBucket>();
+
+// Sliding-window per-minute counter (simple token bucket)
+type MinuteBucket = { windowStart: number; count: number };
+const minuteCounts = new Map<string, MinuteBucket>();
 
 function dayKeyNow() {
   const d = new Date();
@@ -143,12 +155,25 @@ function dayKeyNow() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function allowDaily(clientId: string, maxDaily: number) {
-  const key = `${clientId}`;
+/** Max 8 requests per IP per 60-second window */
+function allowPerMinute(clientId: string): boolean {
+  const MAX_PER_MIN = 8;
+  const now = Date.now();
+  const existing = minuteCounts.get(clientId);
+  if (!existing || now - existing.windowStart > 60_000) {
+    minuteCounts.set(clientId, { windowStart: now, count: 1 });
+    return true;
+  }
+  if (existing.count >= MAX_PER_MIN) return false;
+  existing.count += 1;
+  return true;
+}
+
+function allowDaily(clientId: string, maxDaily: number): boolean {
   const today = dayKeyNow();
-  const existing = dailyCounts.get(key);
+  const existing = dailyCounts.get(clientId);
   if (!existing || existing.dayKey !== today) {
-    dailyCounts.set(key, { dayKey: today, count: 1 });
+    dailyCounts.set(clientId, { dayKey: today, count: 1 });
     return true;
   }
   if (existing.count >= maxDaily) return false;
@@ -156,8 +181,20 @@ function allowDaily(clientId: string, maxDaily: number) {
   return true;
 }
 
+/** Hard global daily cap across all IPs */
+function allowGlobalDaily(maxGlobal: number): boolean {
+  const today = dayKeyNow();
+  const existing = globalDaily.get("__global__");
+  if (!existing || existing.dayKey !== today) {
+    globalDaily.set("__global__", { dayKey: today, count: 1 });
+    return true;
+  }
+  if (existing.count >= maxGlobal) return false;
+  existing.count += 1;
+  return true;
+}
+
 function getClientId(req: NextRequest) {
-  // Prefer Cloud Run / proxy headers. Fallbacks are best-effort.
   const forwardedFor = req.headers.get("x-forwarded-for");
   if (forwardedFor) return forwardedFor.split(",")[0]?.trim() || forwardedFor;
   const realIp = req.headers.get("x-real-ip");

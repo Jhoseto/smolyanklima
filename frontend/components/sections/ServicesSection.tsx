@@ -59,13 +59,13 @@ export const ServicesSection = () => {
   }, [isExpanded]);
 
   return (
-    <section id="services" ref={sectionRef} className="py-24 relative overflow-hidden">
+    <section id="services" ref={sectionRef} className="py-14 relative overflow-hidden">
       {/* Decorative background blur */}
       <div className="hidden md:block absolute top-0 right-0 w-[500px] h-[500px] bg-red-50 rounded-full blur-[120px] opacity-60 translate-x-1/3 -translate-y-1/3 pointer-events-none" />
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
 
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-8 lg:gap-12 mb-16 lg:mb-20">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-8 lg:gap-12 mb-10 lg:mb-12">
           <div className="max-w-2xl">
             <motion.span
               initial={{ opacity: 0, y: 10 }}
@@ -191,7 +191,7 @@ export const ServicesSection = () => {
         </div>
 
         {/* Bottom Trust Row */}
-        <div className="mt-20 pt-10 border-t border-gray-50 flex flex-wrap justify-center gap-12">
+        <div className="mt-8 pt-6 border-t border-gray-50 flex flex-wrap justify-center gap-12">
           {[
             { icon: ShieldCheck, text: "Официален сервиз", color: "text-[#00B4D8]" },
             { icon: BadgeCheck, text: "Сертифициран екип", color: "text-[#FF4D00]" },

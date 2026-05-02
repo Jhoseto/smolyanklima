@@ -47,7 +47,7 @@ const HomePage = () => (
       </section>
       
       {/* Features с Tech Grid — ефектът само на десктоп */}
-      <section className="relative min-h-screen overflow-hidden">
+      <section className="relative overflow-hidden">
         <div className="hidden md:block">
           <TechGrid gridSize={80} />
         </div>
@@ -59,7 +59,7 @@ const HomePage = () => (
       <ProductsSection />
       
       {/* Services с Bokeh Orbs — ефектът само на десктоп */}
-      <section className="relative min-h-screen overflow-hidden bg-white/50">
+      <section className="relative overflow-hidden bg-white/50">
         <div className="hidden md:block">
           <BokehOrbs orbCount={8} />
         </div>
