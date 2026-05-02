@@ -33,14 +33,14 @@ export const Navbar = () => {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-[200] transition-all duration-300 pt-[env(safe-area-inset-top,0px)] ${isScrolled ? 'bg-white/98 md:bg-white/90 md:backdrop-blur-md shadow-sm py-3' : 'bg-transparent py-5'
+      className={`fixed top-0 left-0 right-0 z-[200] transition-all duration-300 pt-[env(safe-area-inset-top,0px)] pl-[env(safe-area-inset-left,0px)] pr-[env(safe-area-inset-right,0px)] isolation isolate ${isScrolled ? 'bg-white/98 md:bg-white/90 md:backdrop-blur-md shadow-sm py-3' : 'bg-transparent py-5'
         }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between gap-3 min-w-0">
+        <div className="flex items-center justify-between gap-3 min-w-0 w-full">
 
-          {/* Logo — min-w-0 за да не „изяде“ hamburger-а на тесни екрани */}
-          <Link to="/" className="flex min-w-0 shrink items-center cursor-pointer max-w-[min(100%,calc(100vw-5rem))] md:max-w-none overflow-hidden">
+          {/* Logo — flex-1 + min-w-0: стабилно оразмеряване в PWA (без 100vw, което чупи layout в standalone) */}
+          <Link to="/" className="flex min-w-0 flex-1 md:flex-none items-center cursor-pointer overflow-hidden">
             <Logo size="sm" />
           </Link>
 
@@ -91,7 +91,7 @@ export const Navbar = () => {
           <button
             type="button"
             aria-label={mobileMenuOpen ? 'Затвори меню' : 'Отвори меню'}
-            className={`md:hidden shrink-0 p-2 rounded-xl transition-colors touch-manipulation ${isScrolled ? 'text-gray-800 hover:bg-gray-100' : 'text-gray-800 hover:bg-black/5 shadow-sm bg-white/70 backdrop-blur-sm'}`}
+            className={`md:hidden shrink-0 p-2 rounded-xl transition-colors touch-manipulation ring-1 ring-black/5 ${isScrolled ? 'text-gray-800 hover:bg-gray-100 bg-transparent' : 'text-gray-800 hover:bg-black/5 shadow-sm bg-white/95'}`}
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           >
             {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" strokeWidth={2.25} />}
