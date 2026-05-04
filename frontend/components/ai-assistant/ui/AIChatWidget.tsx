@@ -27,6 +27,8 @@ export interface AIChatWidgetProps {
   liveUnread?: number;
   /** Има активна сесия за жив чат — при отваряне директно превключи */
   hasActiveLiveSession?: boolean;
+  /** При увеличаване от родителя — отваря прозореца на асистента (напр. от CTA в херо) */
+  openSignal?: number;
 }
 
 const DEFAULT_COLORS = {
@@ -50,6 +52,7 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
   onRequestLiveChat,
   liveUnread = 0,
   hasActiveLiveSession = false,
+  openSignal = 0,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [inputMessage, setInputMessage] = useState('');
@@ -65,6 +68,9 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
   const widgetRef = useRef<HTMLDivElement>(null);
   const consentStorageKeyRef = useRef('ai_chat_privacy_consent_v1');
   const isOpenRef = useRef(isOpen);
+  /** Следващото отваряне идва от външен CTA — не превключвай автоматично към жив чат */
+  const skipLiveHandoffOnceRef = useRef(false);
+  const lastProcessedOpenSignalRef = useRef(0);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -118,15 +124,28 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, typingIndicator]);
 
+  // Отваряне от родител (херо CTA и др.) — само при нова стойност на openSignal
+  useEffect(() => {
+    if (openSignal <= 0 || openSignal === lastProcessedOpenSignalRef.current) return;
+    lastProcessedOpenSignalRef.current = openSignal;
+    if (isOpenRef.current) {
+      setTimeout(() => inputRef.current?.focus(), 100);
+      return;
+    }
+    skipLiveHandoffOnceRef.current = true;
+    setIsOpen(true);
+  }, [openSignal]);
+
   // Focus input when opened
   useEffect(() => {
     if (isOpen) {
       setTimeout(() => inputRef.current?.focus(), 100);
       setUnreadCount(0);
-      // If there's an active live chat session, switch to it immediately
-      if (hasActiveLiveSession && onRequestLiveChat) {
+      // Ако има активна жива сесия, при нормално отваряне превключи към нея (CTA от херо пропуска)
+      if (hasActiveLiveSession && onRequestLiveChat && !skipLiveHandoffOnceRef.current) {
         onRequestLiveChat([]);
       }
+      skipLiveHandoffOnceRef.current = false;
     }
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 

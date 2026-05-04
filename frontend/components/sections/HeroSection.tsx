@@ -1,11 +1,16 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router-dom';
-import { Phone, ArrowRight, CheckCircle2, Zap, ShieldCheck, BadgeCheck, Smartphone, Download } from 'lucide-react';
+import { Phone, ArrowRight, Zap, ShieldCheck, BadgeCheck, Smartphone, Download } from 'lucide-react';
 import { BrandsSection } from './BrandsSection';
 import { usePWAInstall } from '../../lib/usePWAInstall';
 
-export const HeroSection = () => {
+export interface HeroSectionProps {
+  /** Отваря прозореца на AI асистента (напр. от бутона „Безплатна консултация“) */
+  onFreeConsultationClick?: () => void;
+}
+
+export const HeroSection = ({ onFreeConsultationClick }: HeroSectionProps) => {
   const { canInstall, promptInstall } = usePWAInstall();
 
   return (
@@ -102,28 +107,26 @@ export const HeroSection = () => {
                 <ArrowRight className="w-5 h-5" />
               </Link>
 
-              <a
-                href="tel:+359888585816"
-                className="h-14 px-8 rounded-full bg-transparent border border-gray-200 text-[#111827] font-bold text-lg flex items-center gap-2 hover:bg-gray-50 active:scale-95 transition-all"
-              >
-                <Phone className="w-5 h-5 text-[#00B4D8]" />
-                Безплатна консултация
-              </a>
+              {onFreeConsultationClick ? (
+                <button
+                  type="button"
+                  onClick={onFreeConsultationClick}
+                  className="h-14 px-8 rounded-full bg-transparent border border-gray-200 text-[#111827] font-bold text-lg flex items-center gap-2 hover:bg-gray-50 active:scale-95 transition-all"
+                >
+                  <Phone className="w-5 h-5 text-[#00B4D8]" />
+                  Безплатна консултация
+                </button>
+              ) : (
+                <a
+                  href="tel:+359888585816"
+                  className="h-14 px-8 rounded-full bg-transparent border border-gray-200 text-[#111827] font-bold text-lg flex items-center gap-2 hover:bg-gray-50 active:scale-95 transition-all"
+                >
+                  <Phone className="w-5 h-5 text-[#00B4D8]" />
+                  Безплатна консултация
+                </a>
+              )}
             </div>
 
-            {/* Checkmarks */}
-            <div className="flex flex-wrap items-center gap-6">
-              {[
-                { text: 'Безплатна консултация' },
-                { text: 'Гаранция 2 години' },
-                { text: 'Монтаж с гаранция' }
-              ].map((item, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-[#10B981]" />
-                  <span className="text-sm font-semibold text-[#4B5563]">{item.text}</span>
-                </div>
-              ))}
-            </div>
           </motion.div>
 
           {/* Right Image Content */}
@@ -185,7 +188,7 @@ export const HeroSection = () => {
               className="hidden lg:flex absolute bottom-28 -left-6 bg-white/95 backdrop-blur-sm shadow-xl rounded-full px-5 py-3 border border-gray-100 items-center gap-2"
             >
               <BadgeCheck className="w-5 h-5 text-[#00A8E8]" />
-              <span className="text-sm font-bold text-gray-800">Сертифицирани</span>
+              <span className="text-sm font-bold text-gray-800">Сертифициран сервиз</span>
             </motion.div>
 
           </motion.div>

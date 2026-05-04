@@ -5,6 +5,7 @@ import { adminDb } from "@/lib/admin/db";
 
 const QuerySchema = z.object({
   status: z.string().optional(), // new|in_progress|done|spam|...
+  source: z.string().optional(), // contact|product|wizard|quick_view|ai
   q: z.string().optional(),
 });
 
@@ -25,6 +26,7 @@ export async function GET(req: NextRequest) {
     );
 
   if (parsed.data.status) query = query.eq("status", parsed.data.status);
+  if (parsed.data.source) query = query.eq("source", parsed.data.source);
 
   if (parsed.data.q) {
     // Best-effort search (works without extra indexes)

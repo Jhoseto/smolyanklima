@@ -9,7 +9,7 @@ import { AnimatePresence } from 'motion/react';
 import { PageTransition } from './components/layout/PageTransition';
 import { Navbar } from './components/layout/Navbar';
 import { HeroSection } from './components/sections/HeroSection';
-import { FeaturesSection } from './components/sections/FeaturesSection';
+import { SmartAdvisorSection } from './components/sections/SmartAdvisor';
 import { ProductsSection } from './components/sections/ProductsSection';
 import { ServicesSection } from './components/sections/ServicesSection';
 import { StatsSection } from './components/sections/StatsSection';
@@ -20,7 +20,7 @@ import { ContactInfoSection } from './components/sections/ContactInfoSection';
 import { FAQSection } from './components/sections/FAQSection';
 import { BrandsSection } from './components/sections/BrandsSection';
 import { Footer } from './components/layout/Footer';
-import { GradientMeshMorphing, BokehOrbs, TechGrid } from './components/effects';
+import { GradientMeshMorphing, BokehOrbs } from './components/effects';
 import { AIChatWidget } from './components/ai-assistant';
 import { LiveChatWidget } from './components/live-chat/LiveChatWidget';
 
@@ -34,7 +34,7 @@ const BlogArticlePage = lazy(() => import('./pages/BlogArticlePage'));
 const AccessoryDetailsPage = lazy(() => import('./pages/AccessoryDetailsPage'));
 
 // ── Главна страница ──────────────────────────────────
-const HomePage = () => (
+const HomePage = ({ onOpenAssistantChat }: { onOpenAssistantChat?: () => void }) => (
   <div className="min-h-screen bg-[#FAFAFA] font-sans selection:bg-[#FF4D00]/20 selection:text-[#FF4D00]">
     <main>
       {/* Hero с Gradient Mesh — ефектът само на десктоп */}
@@ -43,19 +43,12 @@ const HomePage = () => (
           <GradientMeshMorphing intensity="normal" />
         </div>
         <div className="relative z-10">
-          <HeroSection />
+          <HeroSection onFreeConsultationClick={onOpenAssistantChat} />
         </div>
       </section>
       
-      {/* Features с Tech Grid — ефектът само на десктоп */}
-      <section className="relative overflow-hidden">
-        <div className="hidden md:block">
-          <TechGrid gridSize={80} />
-        </div>
-        <div className="relative z-10">
-          <FeaturesSection />
-        </div>
-      </section>
+      {/* Smart Advisor — замества FeaturesSection */}
+      <SmartAdvisorSection onOpenChat={onOpenAssistantChat} />
       
       <ProductsSection />
       
@@ -120,6 +113,7 @@ function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const [liveChat, setLiveChat] = useState<{ open: boolean; context?: Array<{ role: 'user' | 'assistant'; content: string }> }>({ open: false });
+  const [assistantOpenSignal, setAssistantOpenSignal] = useState(0);
   const [liveUnread, setLiveUnread] = useState(0);
   const [hasLiveSession, setHasLiveSession] = useState(() => !!loadLiveChatSession());
   const lastAdminMsgCountRef = useRef(-1);
@@ -154,12 +148,17 @@ function App() {
     return () => clearInterval(timer);
   }, [liveChat.open]);
 
+  const openAssistantFromHero = () => {
+    setLiveChat({ open: false });
+    setAssistantOpenSignal((n) => n + 1);
+  };
+
   return (
     <Suspense fallback={<PageLoader />}>
       <Navbar />
       <AnimatePresence mode="wait">
         <Routes location={location}>
-          <Route path="/" element={<PageTransition><HomePage /></PageTransition>} />
+          <Route path="/" element={<PageTransition><HomePage onOpenAssistantChat={openAssistantFromHero} /></PageTransition>} />
           <Route path="/catalog" element={<PageTransition><CatalogPage /></PageTransition>} />
           <Route path="/product/:id" element={<PageTransition><ProductDetailsPage /></PageTransition>} />
           <Route path="/contact" element={<PageTransition><ContactPage /></PageTransition>} />
@@ -171,7 +170,7 @@ function App() {
           <Route path="/blog/:slug" element={<PageTransition><BlogArticlePage /></PageTransition>} />
           <Route path="/aksesoari" element={<Navigate to="/catalog?tab=accessories" replace />} />
           <Route path="/aksesoar/:id" element={<PageTransition><AccessoryDetailsPage /></PageTransition>} />
-          <Route path="*" element={<PageTransition><HomePage /></PageTransition>} />
+          <Route path="*" element={<PageTransition><HomePage onOpenAssistantChat={openAssistantFromHero} /></PageTransition>} />
         </Routes>
       </AnimatePresence>
       <Footer />
@@ -206,6 +205,7 @@ function App() {
           enableVoiceInput={true}
           liveUnread={liveUnread}
           hasActiveLiveSession={hasLiveSession}
+          openSignal={assistantOpenSignal}
           onRequestLiveChat={(context) => { setLiveChat({ open: true, context }); setLiveUnread(0); }}
         />
       )}

@@ -21,6 +21,20 @@ export const Navbar = () => {
   const location = useLocation();
   const isHome = location.pathname === '/';
 
+  // Logo → full page reload (refreshes homepage)
+  const handleLogoClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    window.location.href = '/';
+  };
+
+  // "Начало" → scroll to top if already on homepage, otherwise navigate
+  const handleHomeClick = (e: React.MouseEvent) => {
+    if (isHome) {
+      e.preventDefault();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
   const navLinks = [
     { name: 'Начало', href: '/', isRouter: true },
     { name: 'Каталог', href: '/catalog', isRouter: true },
@@ -42,10 +56,10 @@ export const Navbar = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between gap-3 min-w-0 w-full">
 
-          {/* Logo — flex-1 + min-w-0: стабилно оразмеряване в PWA (без 100vw, което чупи layout в standalone) */}
-          <Link to="/" className="flex min-w-0 flex-1 md:flex-none items-center cursor-pointer">
+          {/* Logo — full reload on click */}
+          <a href="/" onClick={handleLogoClick} className="flex min-w-0 flex-1 md:flex-none items-center cursor-pointer">
             <Logo size="sm" />
-          </Link>
+          </a>
 
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center gap-8">
@@ -54,6 +68,7 @@ export const Navbar = () => {
                 <Link
                   key={link.name}
                   to={link.href}
+                  onClick={link.name === 'Начало' ? handleHomeClick : undefined}
                   className={`text-sm font-semibold transition-colors ${
                     location.pathname === link.href
                       ? 'text-[#FF4D00]'
@@ -117,7 +132,10 @@ export const Navbar = () => {
                   <Link
                     key={link.name}
                     to={link.href}
-                    onClick={() => setMobileMenuOpen(false)}
+                    onClick={(e) => {
+                      if (link.name === 'Начало') handleHomeClick(e);
+                      setMobileMenuOpen(false);
+                    }}
                     className="block text-lg font-semibold text-gray-900 hover:text-[#FF4D00]"
                   >
                     {link.name}
@@ -126,6 +144,7 @@ export const Navbar = () => {
                   <a
                     key={link.name}
                     href={link.href}
+                    onClick={() => setMobileMenuOpen(false)}
                     className="block text-lg font-semibold text-gray-900 hover:text-[#FF4D00]"
                   >
                     {link.name}

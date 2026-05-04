@@ -33,6 +33,17 @@ function priorityLabel(priority: string) {
   return { label: priority || "—", colorClass: "bg-slate-100 border-slate-200 text-slate-600" };
 }
 
+function sourceLabel(source: string): { label: string; colorClass: string } {
+  const map: Record<string, { label: string; colorClass: string }> = {
+    contact:    { label: "📝 Форма",        colorClass: "bg-slate-100 border-slate-200 text-slate-600" },
+    product:    { label: "🛒 Продукт",      colorClass: "bg-blue-50 border-blue-200 text-blue-700" },
+    wizard:     { label: "📋 Анкета",       colorClass: "bg-violet-50 border-violet-200 text-violet-700" },
+    quick_view: { label: "👁 Бърз преглед", colorClass: "bg-amber-50 border-amber-200 text-amber-700" },
+    ai:         { label: "🤖 AI чат",       colorClass: "bg-emerald-50 border-emerald-200 text-emerald-700" },
+  };
+  return map[source] ?? { label: source || "—", colorClass: "bg-slate-100 border-slate-200 text-slate-600" };
+}
+
 type Inquiry = {
   id: string;
   source: string;
@@ -63,6 +74,7 @@ function AdminInquiriesClient() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<string>("");
+  const [source, setSource] = useState<string>("");
   const [q, setQ] = useState("");
   const [notesForId, setNotesForId] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
@@ -74,10 +86,11 @@ function AdminInquiriesClient() {
   const queryString = useMemo(() => {
     const sp = new URLSearchParams();
     if (status) sp.set("status", status);
+    if (source) sp.set("source", source);
     if (q.trim()) sp.set("q", q.trim());
     const s = sp.toString();
     return s ? `?${s}` : "";
-  }, [status, q]);
+  }, [status, source, q]);
 
   const load = useCallback(async (options?: { silent?: boolean }) => {
     if (!options?.silent) setLoading(true);
@@ -320,6 +333,14 @@ function AdminInquiriesClient() {
             <option value="done">Приключено</option>
             <option value="spam">Спам</option>
           </Select>
+          <Select value={source} onChange={(e) => setSource(e.target.value)} className="sm:w-44">
+            <option value="">Всички източници</option>
+            <option value="contact">📝 Форма</option>
+            <option value="product">🛒 Продукт</option>
+            <option value="wizard">📋 Анкета</option>
+            <option value="quick_view">👁 Бърз преглед</option>
+            <option value="ai">🤖 AI чат</option>
+          </Select>
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Търси по клиент, телефон, текст..." className="flex-1" />
         </div>
       </Card>
@@ -363,7 +384,7 @@ function AdminInquiriesClient() {
                       </Td>
                       <Td><Badge label={s.label} colorClass={s.colorClass} /></Td>
                       <Td><Badge label={p.label} colorClass={p.colorClass} /></Td>
-                      <Td><span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">{i.source}</span></Td>
+                      <Td><Badge label={sourceLabel(i.source).label} colorClass={sourceLabel(i.source).colorClass} /></Td>
                       <Td className="text-xs text-slate-500 font-medium">{new Date(i.created_at).toLocaleString()}</Td>
                       <Td>
                         <div className="flex flex-wrap gap-1.5 items-center">
@@ -437,7 +458,7 @@ function AdminInquiriesClient() {
                       </div>
                     )}
                     <div className="flex items-center justify-between">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">{i.source}</span>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${sourceLabel(i.source).colorClass}`}>{sourceLabel(i.source).label}</span>
                       <span className="text-[10px] text-slate-400 font-medium">{new Date(i.created_at).toLocaleDateString("bg-BG")}</span>
                     </div>
                   </button>
@@ -503,11 +524,13 @@ function AdminInquiriesClient() {
                 <X className="h-4 w-4" />
               </button>
               <div className="flex items-center gap-3 pr-10">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-600 text-white shadow-lg shadow-sky-600/25">
+                <div className={`flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-lg ${selectedInquiry.source === "wizard" ? "bg-violet-600 shadow-violet-600/25" : "bg-sky-600 shadow-sky-600/25"}`}>
                   <MessageSquare className="h-5 w-5" />
                 </div>
                 <div>
-                  <div className="text-xs font-bold uppercase tracking-[0.24em] text-sky-700">Клиентско запитване</div>
+                  <div className={`text-xs font-bold uppercase tracking-[0.24em] ${selectedInquiry.source === "wizard" ? "text-violet-700" : "text-sky-700"}`}>
+                    {selectedInquiry.source === "wizard" ? "Анкетно запитване" : "Клиентско запитване"}
+                  </div>
                   <div className="mt-1 text-2xl font-black leading-tight text-slate-950">{selectedInquiry.customer_name}</div>
                   <div className="mt-1 text-sm font-medium text-slate-500">
                     {selectedInquiry.customer_phone} · {new Date(selectedInquiry.created_at).toLocaleString("bg-BG")}
@@ -518,9 +541,16 @@ function AdminInquiriesClient() {
 
             <div className="grid max-h-[calc(100vh-11rem)] gap-4 overflow-y-auto p-6 lg:grid-cols-[1fr_320px]">
               <div className="space-y-4">
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <div className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Съобщение</div>
-                  <div className="whitespace-pre-wrap text-sm font-medium leading-6 text-slate-900">
+                <div className={`rounded-2xl border p-4 shadow-sm ${selectedInquiry.source === "wizard" ? "border-violet-200 bg-violet-50/40" : "border-slate-200 bg-white"}`}>
+                  <div className="mb-2 flex items-center gap-2">
+                    <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                      {selectedInquiry.source === "wizard" ? "Анкетни отговори" : "Съобщение"}
+                    </div>
+                    {selectedInquiry.source === "wizard" && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border bg-violet-50 border-violet-200 text-violet-700">📋 Анкета</span>
+                    )}
+                  </div>
+                  <div className="whitespace-pre-wrap text-sm font-medium leading-6 text-slate-900 font-mono">
                     {selectedInquiry.message || "Няма допълнително съобщение."}
                   </div>
                 </div>
@@ -528,7 +558,7 @@ function AdminInquiriesClient() {
                   <InfoBox label="Телефон" value={selectedInquiry.customer_phone} />
                   <InfoBox label="Имейл" value={selectedInquiry.customer_email || "—"} />
                   <InfoBox label="Тип заявка" value={serviceTypeLabel(selectedInquiry.service_type)} />
-                  <InfoBox label="Източник" value={selectedInquiry.source} />
+                  <InfoBox label="Източник" value={sourceLabel(selectedInquiry.source).label} />
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
                   <div className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Вътрешни бележки</div>
