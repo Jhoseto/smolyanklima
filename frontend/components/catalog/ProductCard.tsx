@@ -172,7 +172,7 @@ export const ProductCard = ({
         )}
 
         {/* Price & Actions */}
-        <div className={`${isList ? 'flex items-center gap-4 sm:gap-8 ml-4 sm:ml-8' : 'flex flex-col gap-3'}`}>
+        <div className={`${isList ? 'flex items-center gap-4 sm:gap-8 ml-4 sm:ml-8' : 'mt-auto flex flex-col gap-3'}`}>
           {!isList && (
             <div className="flex flex-col gap-1 mb-3">
               <div className="flex items-center gap-1">
@@ -234,7 +234,7 @@ export const ProductCard = ({
 
         {/* Grid-only bottom area */}
         {!isList && (
-          <div className="text-center pt-3 mt-auto border-t border-gray-100">
+          <div className="text-center pt-3 border-t border-gray-100">
             <Link
               to={`/product/${product.id}`}
               className="inline-flex items-center text-[10px] font-semibold text-gray-500 hover:text-[#FF4D00] transition-colors"

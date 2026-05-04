@@ -153,6 +153,7 @@ export const ServicesSection = () => {
                   {service.description}
                 </p>
 
+                {/* Extra info — animates height independently */}
                 <AnimatePresence>
                   {isExpanded && (
                     <motion.div
@@ -162,26 +163,38 @@ export const ServicesSection = () => {
                       transition={{ duration: 0.4, ease: "circOut" }}
                       className="overflow-hidden"
                     >
-                      <div className="pt-6 mt-6 border-t border-gray-100 space-y-6">
+                      <div className="pt-6 mt-6 border-t border-gray-100">
                         <p className="text-gray-600 text-sm leading-relaxed bg-gray-50/80 p-5 rounded-2xl border border-gray-100 italic">
                           {service.extraInfo}
                         </p>
-
-                        <div className="space-y-3">
-                          {service.features.map((feature, fIdx) => (
-                            <div key={fIdx} className="flex items-center gap-3">
-                              <div className="w-5 h-5 rounded-full bg-[#10B981]/10 flex items-center justify-center">
-                                <Check className="w-3 h-3 text-[#10B981]" />
-                              </div>
-                              <span className="text-xs font-semibold text-gray-700">{feature}</span>
-                            </div>
-                          ))}
-                        </div>
-
-                        <button className="w-full py-4 bg-[#00B4D8] text-white rounded-2xl font-bold text-xs hover:bg-[#FF4D00] transition-all hover:shadow-lg hover:shadow-[#FF4D00]/20 active:scale-[0.98]">
-                          Заяви консултация
-                        </button>
                       </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Features + button — always at the bottom via mt-auto */}
+                <AnimatePresence>
+                  {isExpanded && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.3, delay: 0.15 }}
+                      className="mt-auto pt-6 space-y-6"
+                    >
+                      <div className="space-y-3">
+                        {service.features.map((feature, fIdx) => (
+                          <div key={fIdx} className="flex items-center gap-3">
+                            <div className="w-5 h-5 rounded-full bg-[#10B981]/10 flex items-center justify-center">
+                              <Check className="w-3 h-3 text-[#10B981]" />
+                            </div>
+                            <span className="text-xs font-semibold text-gray-700">{feature}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <button className="w-full py-4 bg-[#00B4D8] text-white rounded-2xl font-bold text-xs hover:bg-[#FF4D00] transition-all hover:shadow-lg hover:shadow-[#FF4D00]/20 active:scale-[0.98]">
+                        Заяви консултация
+                      </button>
                     </motion.div>
                   )}
                 </AnimatePresence>

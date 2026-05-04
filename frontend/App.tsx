@@ -65,9 +65,9 @@ const HomePage = ({ onOpenAssistantChat }: { onOpenAssistantChat?: () => void })
       <StatsSection />
       <TestimonialsSection />
       <ProjectsSection />
+      <FAQSection />
       <ContactSection />
       <ContactInfoSection />
-      <FAQSection />
     </main>
   </div>
 );
