@@ -51,11 +51,12 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   if (error || !msg) return NextResponse.json({ error: "DB_ERROR" }, { status: 500 });
 
-  if (chat.status === "waiting") {
-    await supabase.from("live_chats").update({ status: "active", last_message_at: new Date().toISOString() }).eq("id", id);
-  } else {
-    await supabase.from("live_chats").update({ last_message_at: new Date().toISOString() }).eq("id", id);
-  }
+  const update = {
+    last_message_at: new Date().toISOString(),
+    last_warned_at: null,
+    ...(chat.status === "waiting" ? { status: "active" } : {}),
+  };
+  await supabase.from("live_chats").update(update).eq("id", id);
 
   return NextResponse.json({ message: msg });
 }
