@@ -13,6 +13,18 @@ interface SchemaMarkupProps {
   faqs?: FAQItem[];
 }
 
+const JSON_LD_ESCAPE_MAP: Record<string, string> = {
+  '<': '\\u003c',
+  '>': '\\u003e',
+  '&': '\\u0026'
+};
+
+export function serializeJsonLd(schema: unknown): string {
+  return JSON.stringify(schema).replace(/[<>&\u2028\u2029]/g, (char) => {
+    return JSON_LD_ESCAPE_MAP[char] ?? `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`;
+  });
+}
+
 export const SchemaMarkup: React.FC<SchemaMarkupProps> = ({ 
   article, 
   type,
@@ -128,7 +140,7 @@ export const SchemaMarkup: React.FC<SchemaMarkupProps> = ({
   return (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+      dangerouslySetInnerHTML={{ __html: serializeJsonLd(schema) }}
     />
   );
 };
