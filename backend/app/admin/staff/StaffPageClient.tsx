@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   Users, Plus, ShieldCheck, Briefcase, Wrench,
   CheckCircle2, XCircle, Pencil, Trash2, KeyRound,
-  Loader2, X, Eye, EyeOff,
+  Loader2, X, Eye, EyeOff, Phone,
 } from "lucide-react";
 import { Button, Input, Select } from "../ui";
 
@@ -12,7 +12,7 @@ type AdminRole = "master_admin" | "office_staff" | "service_staff";
 
 interface StaffMember {
   id: string;
-  email: string;
+  phone: string | null;
   name: string;
   role: AdminRole;
   is_active: boolean;
@@ -55,7 +55,7 @@ export function StaffPageClient({ currentUserId }: { currentUserId: string }) {
   // Add form
   const [showAddForm, setShowAddForm] = useState(false);
   const [addName, setAddName] = useState("");
-  const [addEmail, setAddEmail] = useState("");
+  const [addPhone, setAddPhone] = useState("");
   const [addPassword, setAddPassword] = useState("");
   const [addRole, setAddRole] = useState<"office_staff" | "service_staff">("office_staff");
   const [showPw, setShowPw] = useState(false);
@@ -65,6 +65,7 @@ export function StaffPageClient({ currentUserId }: { currentUserId: string }) {
   // Edit modal
   const [editMember, setEditMember] = useState<StaffMember | null>(null);
   const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
   const [editRole, setEditRole] = useState<AdminRole>("office_staff");
   const [editPw, setEditPw] = useState("");
   const [showEditPw, setShowEditPw] = useState(false);
@@ -78,7 +79,7 @@ export function StaffPageClient({ currentUserId }: { currentUserId: string }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/admin/staff");
+      const res = await fetch("/api/admin/staff", { credentials: "include" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Грешка при зареждане");
       setStaff(data.staff);
@@ -93,20 +94,21 @@ export function StaffPageClient({ currentUserId }: { currentUserId: string }) {
 
   const handleAdd = async () => {
     setAddError(null);
-    if (!addName.trim() || !addEmail.trim() || !addPassword.trim()) {
+    if (!addName.trim() || !addPhone.trim() || !addPassword.trim()) {
       setAddError("Всички полета са задължителни."); return;
     }
     setAdding(true);
     try {
       const res = await fetch("/api/admin/staff", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: addName.trim(), email: addEmail.trim(), password: addPassword, role: addRole }),
+        body: JSON.stringify({ name: addName.trim(), phone: addPhone.trim(), password: addPassword, role: addRole }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Грешка");
       setShowAddForm(false);
-      setAddName(""); setAddEmail(""); setAddPassword(""); setAddRole("office_staff");
+      setAddName(""); setAddPhone(""); setAddPassword(""); setAddRole("office_staff");
       fetchStaff();
     } catch (e: unknown) {
       setAddError(e instanceof Error ? e.message : "Грешка");
@@ -118,6 +120,7 @@ export function StaffPageClient({ currentUserId }: { currentUserId: string }) {
   const handleToggleActive = async (member: StaffMember) => {
     const res = await fetch(`/api/admin/staff/${member.id}`, {
       method: "PUT",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ is_active: !member.is_active }),
     });
@@ -127,6 +130,7 @@ export function StaffPageClient({ currentUserId }: { currentUserId: string }) {
   const openEdit = (m: StaffMember) => {
     setEditMember(m);
     setEditName(m.name);
+    setEditPhone(m.phone ?? "");
     setEditRole(m.role);
     setEditPw("");
     setEditError(null);
@@ -138,9 +142,11 @@ export function StaffPageClient({ currentUserId }: { currentUserId: string }) {
     setSaving(true);
     try {
       const body: Record<string, unknown> = { name: editName.trim(), role: editRole };
+      if (editPhone.trim()) body.phone = editPhone.trim();
       if (editPw.trim()) body.password = editPw.trim();
       const res = await fetch(`/api/admin/staff/${editMember.id}`, {
         method: "PUT",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
@@ -158,7 +164,7 @@ export function StaffPageClient({ currentUserId }: { currentUserId: string }) {
   const handleDelete = async () => {
     if (!confirmDelete) return;
     setDeleting(true);
-    const res = await fetch(`/api/admin/staff/${confirmDelete.id}`, { method: "DELETE" });
+    const res = await fetch(`/api/admin/staff/${confirmDelete.id}`, { method: "DELETE", credentials: "include" });
     setDeleting(false);
     if (res.ok) { setConfirmDelete(null); fetchStaff(); }
   };
@@ -216,8 +222,18 @@ export function StaffPageClient({ currentUserId }: { currentUserId: string }) {
               <Input value={addName} onChange={e => setAddName(e.target.value)} placeholder="Иван Петров" />
             </div>
             <div>
-              <label className="text-xs font-semibold text-slate-600 block mb-1">Имейл *</label>
-              <Input type="email" value={addEmail} onChange={e => setAddEmail(e.target.value)} placeholder="ivan@smolyanklima.bg" />
+              <label className="text-xs font-semibold text-slate-600 block mb-1">Телефон *</label>
+              <div className="relative">
+                <Phone className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Input
+                  type="tel"
+                  value={addPhone}
+                  onChange={e => setAddPhone(e.target.value)}
+                  placeholder="+359 888 123 456"
+                  autoComplete="off"
+                  className="pl-8"
+                />
+              </div>
             </div>
             <div>
               <label className="text-xs font-semibold text-slate-600 block mb-1">Парола *</label>
@@ -226,7 +242,8 @@ export function StaffPageClient({ currentUserId }: { currentUserId: string }) {
                   type={showPw ? "text" : "password"}
                   value={addPassword}
                   onChange={e => setAddPassword(e.target.value)}
-                  placeholder="Мин. 8 символа"
+                  placeholder="Мин. 4 символа"
+                  autoComplete="new-password"
                   className="pr-8"
                 />
                 <button type="button" onClick={() => setShowPw(v => !v)}
@@ -291,7 +308,13 @@ export function StaffPageClient({ currentUserId }: { currentUserId: string }) {
                           <p className="font-semibold text-slate-800">{m.name}
                             {m.id === currentUserId && <span className="ml-1.5 text-[10px] text-slate-400">(ти)</span>}
                           </p>
-                          <p className="text-slate-400">{m.email}</p>
+                          {m.phone ? (
+                            <p className="text-slate-400 flex items-center gap-1">
+                              <Phone className="w-2.5 h-2.5" />{m.phone}
+                            </p>
+                          ) : (
+                            <p className="text-slate-300 italic">без телефон</p>
+                          )}
                           <span className="sm:hidden"><RoleBadge role={m.role} /></span>
                         </div>
                       </div>
@@ -352,6 +375,20 @@ export function StaffPageClient({ currentUserId }: { currentUserId: string }) {
                 <Input value={editName} onChange={e => setEditName(e.target.value)} />
               </div>
               <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1">Телефон</label>
+                <div className="relative">
+                  <Phone className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    type="tel"
+                    value={editPhone}
+                    onChange={e => setEditPhone(e.target.value)}
+                    placeholder="+359 888 123 456"
+                    autoComplete="off"
+                    className="pl-8"
+                  />
+                </div>
+              </div>
+              <div>
                 <label className="text-xs font-semibold text-slate-600 block mb-1">Роля</label>
                 <Select
                   value={editRole}
@@ -376,7 +413,8 @@ export function StaffPageClient({ currentUserId }: { currentUserId: string }) {
                     type={showEditPw ? "text" : "password"}
                     value={editPw}
                     onChange={e => setEditPw(e.target.value)}
-                    placeholder="Мин. 8 символа"
+                    placeholder="Мин. 4 символа"
+                    autoComplete="new-password"
                     className="pr-8"
                   />
                   <button type="button" onClick={() => setShowEditPw(v => !v)}

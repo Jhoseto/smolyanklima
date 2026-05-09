@@ -5,10 +5,21 @@ import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const Schema = z.object({
-  email: z.string().email(),
-  password: z.string().min(6),
+  email: z.string().min(1),
+  password: z.string().min(1),
   next: z.string().optional(),
 });
+
+/** Converts a phone number to the internal Supabase Auth email format. */
+function resolveEmail(input: string): string {
+  const trimmed = input.trim();
+  // If it looks like a phone number (contains only digits, spaces, +, -, (, ))
+  if (/^[\d\s+\-().]+$/.test(trimmed) && !/^[\w.-]+@[\w.-]+\.\w+$/.test(trimmed)) {
+    const digits = trimmed.replace(/\D/g, "");
+    return `staff_${digits}@smolyanklima.internal`;
+  }
+  return trimmed;
+}
 
 export async function loginAction(formData: FormData) {
   const parsed = Schema.safeParse({
@@ -21,9 +32,11 @@ export async function loginAction(formData: FormData) {
     redirect("/login?error=invalid_input");
   }
 
+  const email = resolveEmail(parsed.data.email);
+
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.signInWithPassword({
-    email: parsed.data.email,
+    email,
     password: parsed.data.password,
   });
 
@@ -44,7 +57,6 @@ export async function loginAction(formData: FormData) {
     .eq("id", user.id)
     .maybeSingle();
 
-  // If admin_users is missing/inactive, block access early.
   if (adminErr || !adminRow || !adminRow.is_active) {
     redirect(`/login?reason=not_admin&next=${encodeURIComponent(parsed.data.next || "/admin")}`);
   }
@@ -64,4 +76,3 @@ export async function logoutAction() {
   await supabase.auth.signOut();
   redirect("/login");
 }
-

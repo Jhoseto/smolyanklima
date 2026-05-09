@@ -1,12 +1,7 @@
-import { WorkItemsPlanner } from "../WorkItemsPlanner";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Поръчки & Монтажи | Смолян Клима Админ" };
 
 export default function AdminOperationsPage() {
-  return (
-    <div className="space-y-4">
-      <WorkItemsPlanner />
-    </div>
-  );
+  redirect("/admin");
 }

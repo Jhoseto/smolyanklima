@@ -9,6 +9,8 @@ export async function sendResendEmail(input: {
   subject: string;
   html: string;
   text?: string;
+  /** Base64-encoded файлове (без data: префикс). Виж https://resend.com/docs/api-reference/emails/send-email */
+  attachments?: { filename: string; content: string }[];
 }): Promise<SendResult> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return { ok: false, skipped: true };
@@ -25,6 +27,7 @@ export async function sendResendEmail(input: {
       subject: input.subject,
       html: input.html,
       text: input.text ?? undefined,
+      ...(input.attachments?.length ? { attachments: input.attachments } : {}),
     }),
   });
 

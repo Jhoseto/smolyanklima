@@ -93,26 +93,32 @@ function groupByDate(tasks: Task[]): { label: string; date: string | null; items
   return groups;
 }
 
-export function ServiceDashboard({ userId, userName }: { userId: string; userName: string }) {
+export function ServiceDashboard({ userId, userName, role }: { userId: string; userName: string; role: string }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
+  const isMasterAdmin = role === "master_admin";
+
   const fetchTasks = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const res = await fetch(`/api/admin/work-items?assignedTo=${userId}&status=planned,in_progress&perPage=100`);
+      // master_admin sees ALL service tasks; service_staff sees only their own
+      const params = isMasterAdmin
+        ? `/api/admin/work-items?type=service&status=planned,in_progress&perPage=200`
+        : `/api/admin/work-items?assignedTo=${userId}&status=planned,in_progress&perPage=100`;
+      const res = await fetch(params);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Грешка");
-      setTasks(data.items ?? []);
+      setTasks(data.data ?? []);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Грешка при зареждане");
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [userId, isMasterAdmin]);
 
   useEffect(() => { fetchTasks(); }, [fetchTasks]);
 
@@ -143,8 +149,12 @@ export function ServiceDashboard({ userId, userName }: { userId: string; userNam
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-base font-bold text-slate-900">Здравей, {userName.split(" ")[0]} 👋</h1>
-          <p className="text-xs text-slate-500 mt-0.5">Твоите задачи за обслужване</p>
+          <h1 className="text-base font-bold text-slate-900">
+            {isMasterAdmin ? "Сервизни задачи" : `Здравей, ${userName.split(" ")[0]} 👋`}
+          </h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {isMasterAdmin ? "Всички активни задачи за обслужване" : "Твоите задачи за обслужване"}
+          </p>
         </div>
         <button onClick={fetchTasks} className="p-2 rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-slate-700 transition-colors">
           <RefreshCw className="w-4 h-4" />

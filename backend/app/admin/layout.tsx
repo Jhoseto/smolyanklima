@@ -8,8 +8,8 @@ import { SplashScreen } from "./SplashScreen";
 import { ChatNavBadge } from "./chat/ChatNavBadge";
 import {
   LayoutDashboard, Package, Users, FileText, Star,
-  MessageSquare, History, Activity, Settings, LogOut,
-  CalendarClock, ShieldCheck, ClipboardList,
+  History, Activity, Settings, LogOut,
+  ShieldCheck, Wrench, CalendarClock, FolderOpen,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -26,32 +26,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     redirect("/login");
   }
 
-  // service_staff has their own minimal layout — render only children
-  if (role === "service_staff") {
-    return (
-      <>
-        <SplashScreen />
-        <div className="min-h-screen bg-slate-50 text-slate-900 font-sans text-sm">
-          <header className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
-            <div className="flex items-center gap-2 font-bold text-slate-800 text-sm">
-              <ClipboardList className="w-4 h-4 text-amber-500" />
-              Мои задачи
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-slate-500">{userName}</span>
-              <form action={logoutAction}>
-                <button type="submit" className="text-xs text-slate-400 hover:text-red-500 flex items-center gap-1 transition-colors">
-                  <LogOut className="w-3.5 h-3.5" /> Изход
-                </button>
-              </form>
-            </div>
-          </header>
-          <main className="p-4 pb-10">{children}</main>
-        </div>
-      </>
-    );
-  }
-
   return (
     <>
       <SplashScreen />
@@ -63,30 +37,44 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <div className="w-8 h-8 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center shrink-0">
               <LayoutDashboard className="w-4 h-4" />
             </div>
-            Админ панел
-            <InfoDot text="Център за управление: продукти, контакти, съдържание и настройки." />
+            {role === "service_staff" ? "Смолян Клима" : "Админ панел"}
+            {role !== "service_staff" && <InfoDot text="Център за управление: продукти, контакти, съдържание и настройки." />}
           </div>
 
           <nav className="flex flex-col gap-0.5 flex-1">
-            {/* Visible to all (office + master) */}
-            <NavLink href="/admin" label="Табло" icon={<LayoutDashboard className="w-4 h-4" />} />
-            <NavLink href="/admin/operations" label="Поръчки & Монтажи" icon={<CalendarClock className="w-4 h-4" />} />
-            <NavLink href="/admin/contacts" label="Контакти" icon={<Users className="w-4 h-4" />} />
-            <NavLink href="/admin/inquiries" label="Запитвания" icon={<MessageSquare className="w-4 h-4" />} />
-            <ChatNavBadge />
-            <NavLink href="/admin/products" label="Продукти" icon={<Package className="w-4 h-4" />} />
-            <NavLink href="/admin/articles" label="Статии" icon={<FileText className="w-4 h-4" />} />
-
-            {/* master_admin only */}
-            {role === "master_admin" && (
+            {role === "service_staff" ? (
+              /* service_staff sees ONLY the Сервиз section */
               <>
-                <div className="mt-2 mb-1 px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Отчети</div>
-                <NavLink href="/admin/ratings" label="Оценки" icon={<Star className="w-4 h-4" />} />
-                <NavLink href="/admin/history" label="История продажби" icon={<History className="w-4 h-4" />} />
-                <NavLink href="/admin/activity" label="Активност" icon={<Activity className="w-4 h-4" />} />
-                <div className="mt-2 mb-1 px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Администрация</div>
-                <NavLink href="/admin/staff" label="Персонал" icon={<ShieldCheck className="w-4 h-4" />} />
-                <NavLink href="/admin/settings" label="Настройки" icon={<Settings className="w-4 h-4" />} />
+                <div className="mt-1 mb-1 px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Сервиз</div>
+                <NavLink href="/admin/service/tasks" label="Задачи" icon={<CalendarClock className="w-4 h-4" />} />
+                <NavLink href="/admin/service/documents" label="Документи" icon={<FolderOpen className="w-4 h-4" />} />
+              </>
+            ) : (
+              <>
+                {/* office_staff + master_admin */}
+                <NavLink href="/admin" label="Табло" icon={<LayoutDashboard className="w-4 h-4" />} />
+                <NavLink href="/admin/contacts" label="Контакти" icon={<Users className="w-4 h-4" />} />
+                <ChatNavBadge />
+                <NavLink href="/admin/products" label="Продукти" icon={<Package className="w-4 h-4" />} />
+                <NavLink href="/admin/articles" label="Статии" icon={<FileText className="w-4 h-4" />} />
+
+                {/* Сервиз section */}
+                <div className="mt-2 mb-1 px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Сервиз</div>
+                <NavLink href="/admin/service/tasks" label="Задачи" icon={<CalendarClock className="w-4 h-4" />} />
+                <NavLink href="/admin/service/documents" label="Документи" icon={<FolderOpen className="w-4 h-4" />} />
+
+                {/* master_admin only */}
+                {role === "master_admin" && (
+                  <>
+                    <div className="mt-2 mb-1 px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Отчети</div>
+                    <NavLink href="/admin/ratings" label="Оценки" icon={<Star className="w-4 h-4" />} />
+                    <NavLink href="/admin/history" label="История продажби" icon={<History className="w-4 h-4" />} />
+                    <NavLink href="/admin/activity" label="Активност" icon={<Activity className="w-4 h-4" />} />
+                    <div className="mt-2 mb-1 px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Администрация</div>
+                    <NavLink href="/admin/staff" label="Персонал" icon={<ShieldCheck className="w-4 h-4" />} />
+                    <NavLink href="/admin/settings" label="Настройки" icon={<Settings className="w-4 h-4" />} />
+                  </>
+                )}
               </>
             )}
           </nav>

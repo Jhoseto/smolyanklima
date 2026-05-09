@@ -41,7 +41,7 @@ export default async function LoginPage({
         </div>
 
         <h1 className="login-title">Вход в системата</h1>
-        <p className="login-sub">Въведете корпоративните си идентификационни данни.</p>
+        <p className="login-sub">Въведете телефонния си номер или имейл и паролата си.</p>
 
         {reason === "not_admin" && (
           <div className="login-alert login-alert--warn" role="alert">
@@ -64,13 +64,13 @@ export default async function LoginPage({
           <input type="hidden" name="next" value={next} />
 
           <label className="login-label">
-            <span>Имейл</span>
+            <span>Телефон или имейл</span>
             <input
               name="email"
-              type="email"
+              type="text"
               required
               autoComplete="username"
-              placeholder="office@smolyanklima.bg"
+              placeholder="0888 123 456 или admin@example.com"
               className="login-input"
             />
           </label>
@@ -82,7 +82,7 @@ export default async function LoginPage({
               type="password"
               required
               autoComplete="current-password"
-              placeholder="••••••••"
+              placeholder=""
               className="login-input"
             />
           </label>

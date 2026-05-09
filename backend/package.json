@@ -7,9 +7,12 @@
     "build": "next build",
     "start": "next start",
     "import:products": "tsx scripts/import_products.ts",
-    "import:blog": "tsx scripts/import_blog.ts"
+    "import:blog": "tsx scripts/import_blog.ts",
+    "catalog:images": "node scripts/sync-ddg-images.mjs",
+    "catalog:images:stale": "node scripts/sync-ddg-images.mjs --only-stale"
   },
   "dependencies": {
+    "@react-pdf/renderer": "^4.5.1",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.105.1",
     "cloudinary": "^2.10.0",

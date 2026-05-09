@@ -52,8 +52,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error, count } = await query
     .order("created_at", { ascending: false })
-    .range(from, to)
-    .returns<typeof data>();
+    .range(from, to);
 
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   return withCors(

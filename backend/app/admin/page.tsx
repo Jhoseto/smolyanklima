@@ -1,9 +1,8 @@
-import Link from "next/link";
 import { adminDb } from "@/lib/admin/db";
 import { EmailOutboxDrain } from "./EmailOutboxDrain";
 import { SectionTitle, Card } from "./ui";
 import { DashboardPanel } from "./DashboardPanel";
-import { CalendarClock } from "lucide-react";
+import { WorkItemsPlanner } from "./WorkItemsPlanner";
 
 export const dynamic = "force-dynamic";
 
@@ -106,13 +105,13 @@ export default async function AdminDashboardPage() {
 
   return (
     <div className="w-full space-y-3">
+      {/* Operations planner — top of dashboard */}
+      <WorkItemsPlanner />
+
       <div>
         <h1 className="text-lg md:text-xl font-bold text-slate-900 mb-0.5 leading-tight">
-          <SectionTitle title="Оперативно табло" hint="Основният работен екран: KPI + календар + бързи действия." />
+          <SectionTitle title="Оперативно табло" hint="Основният работен екран: KPI + бързи действия." />
         </h1>
-        <p className="text-xs md:text-sm text-slate-500 leading-snug hidden sm:block">
-          Център за ежедневна работа: текущ статус, календар със събития и бързи действия.
-        </p>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-2 md:gap-3">
@@ -274,19 +273,6 @@ export default async function AdminDashboardPage() {
         </Card>
       )}
 
-      {/* Quick-link to operations planner */}
-      <Link
-        href="/admin/operations"
-        className="flex items-center gap-3 px-4 py-3 bg-white border border-slate-200 rounded-xl hover:border-sky-300 hover:bg-sky-50 transition-colors group"
-      >
-        <div className="w-9 h-9 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center shrink-0">
-          <CalendarClock className="w-4 h-4" />
-        </div>
-        <div className="min-w-0">
-          <p className="text-sm font-bold text-slate-800 group-hover:text-sky-700">Поръчки & Монтажи →</p>
-          <p className="text-xs text-slate-500">Планер, задачи, инсталации</p>
-        </div>
-      </Link>
     </div>
   );
 }

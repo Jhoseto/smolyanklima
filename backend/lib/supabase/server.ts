@@ -1,27 +1,13 @@
 import { createServerClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { getEnv } from "@/lib/env";
 
-/**
- * On Windows in development, Node.js cannot verify Supabase's SSL certificate
- * because it doesn't use the Windows CA store.  Instead of disabling TLS
- * globally (NODE_TLS_REJECT_UNAUTHORIZED=0), we scope the bypass to just the
- * fetch layer via an undici Agent — production is completely unaffected.
- */
-function patchDevTls() {
-  if (process.env.NODE_ENV !== "development") return;
-  try {
-    // undici is bundled with Node.js 18+ — no extra dependency needed
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Agent, setGlobalDispatcher } = require("undici") as typeof import("undici");
-    setGlobalDispatcher(new Agent({ connect: { rejectUnauthorized: false } }));
-  } catch {
-    // undici not available — fall back silently
-  }
+// On Windows dev, Node.js cannot verify Supabase's TLS cert via the bundled CA store.
+// We disable verification only in development — production is completely unaffected.
+if (process.env.NODE_ENV === "development") {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 }
-
-// Apply once at module load (dev only)
-patchDevTls();
 
 export async function createSupabaseServerClient() {
   const env = getEnv();
@@ -55,5 +41,13 @@ export function createSupabaseServiceRoleClient() {
         // no-op
       },
     },
+  });
+}
+
+/** Direct admin client using supabase-js — supports auth.admin.* API. */
+export function createSupabaseAdminClient() {
+  const env = getEnv();
+  return createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
   });
 }

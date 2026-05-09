@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { adminSession, requireRole } from "@/lib/admin/db";
-import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
+import { createSupabaseServiceRoleClient, createSupabaseAdminClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
+
+/** Converts a phone number to an internal Supabase Auth email. */
+function phoneToEmail(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  return `staff_${digits}@smolyanklima.internal`;
+}
 
 /** GET /api/admin/staff — list all staff (master_admin only) */
 export async function GET() {
@@ -13,7 +19,7 @@ export async function GET() {
 
     const { data, error } = await session.db
       .from("admin_users")
-      .select("id,email,name,role,is_active,created_at,last_login_at")
+      .select("id,phone,name,role,is_active,created_at,last_login_at")
       .order("created_at", { ascending: true });
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -27,8 +33,8 @@ export async function GET() {
 }
 
 const CreateSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8, "Паролата трябва да е поне 8 символа"),
+  phone: z.string().min(6, "Въведи валиден телефонен номер"),
+  password: z.string().min(4, "Паролата трябва да е поне 4 символа"),
   name: z.string().min(2).max(80),
   role: z.enum(["office_staff", "service_staff"]),
 });
@@ -42,14 +48,15 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => null);
     const parsed = CreateSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "INVALID_REQUEST" }, { status: 400 });
+      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "INVALID_REQUEST" }, { status: 400 });
     }
 
-    const { email, password, name, role } = parsed.data;
+    const { phone, password, name, role } = parsed.data;
+    const email = phoneToEmail(phone);
 
-    // Create Supabase Auth user via service role admin API
-    const serviceClient = createSupabaseServiceRoleClient();
-    const { data: authData, error: authError } = await serviceClient.auth.admin.createUser({
+    // Create Supabase Auth user via admin API
+    const adminClient = createSupabaseAdminClient();
+    const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
@@ -57,7 +64,7 @@ export async function POST(req: NextRequest) {
 
     if (authError) {
       const msg = authError.message.includes("already registered")
-        ? "Потребител с този имейл вече съществува."
+        ? "Служител с този телефон вече съществува."
         : authError.message;
       return NextResponse.json({ error: msg }, { status: 400 });
     }
@@ -65,15 +72,15 @@ export async function POST(req: NextRequest) {
     const userId = authData.user.id;
 
     // Insert into admin_users
+    const serviceClient = createSupabaseServiceRoleClient();
     const { data: staffRow, error: dbError } = await serviceClient
       .from("admin_users")
-      .insert({ id: userId, email, name, role, is_active: true })
-      .select("id,email,name,role,is_active,created_at")
+      .insert({ id: userId, email, phone, name, role, is_active: true })
+      .select("id,phone,name,role,is_active,created_at")
       .single();
 
     if (dbError) {
-      // Rollback auth user on DB failure
-      await serviceClient.auth.admin.deleteUser(userId);
+      await adminClient.auth.admin.deleteUser(userId);
       return NextResponse.json({ error: dbError.message }, { status: 500 });
     }
 
