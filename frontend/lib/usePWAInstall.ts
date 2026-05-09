@@ -1,37 +1,57 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
+const IOS_BANNER_DISMISS_KEY = 'pwa-ios-hint-dismiss';
+
+function isStandaloneDisplay(): boolean {
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true
+  );
+}
+
+function isIOSLike(): boolean {
+  const ua = navigator.userAgent;
+  if (/iPad|iPhone|iPod/.test(ua)) return true;
+  return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+}
+
 /**
- * Captures the browser's PWA install prompt and exposes
- * a `promptInstall()` function to trigger it on demand.
- *
- * `canInstall` is true only when:
- *   1. The browser fired `beforeinstallprompt` (app is installable)
- *   2. The app is NOT already running in standalone mode
+ * Android/Desktop Chromium: `beforeinstallprompt` + install диалог.
+ * iPhone/iPad: няма API — показваме същия банер в hero и модал със стъпки „Добавяне към началния екран“.
  */
 export function usePWAInstall() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [canInstall, setCanInstall] = useState(false);
+  const [chromiumInstallable, setChromiumInstallable] = useState(false);
+  const [iosBannerVisible, setIosBannerVisible] = useState(false);
+  const [iosGuideOpen, setIosGuideOpen] = useState(false);
 
   useEffect(() => {
-    // Already installed — nothing to show
-    const isStandalone =
-      window.matchMedia('(display-mode: standalone)').matches ||
-      (navigator as Navigator & { standalone?: boolean }).standalone === true;
-    if (isStandalone) return;
+    if (isStandaloneDisplay()) return;
+
+    let iosDismissed = false;
+    try {
+      iosDismissed = sessionStorage.getItem(IOS_BANNER_DISMISS_KEY) === '1';
+    } catch {
+      /* private mode */
+    }
+
+    if (!iosDismissed && isIOSLike()) {
+      setIosBannerVisible(true);
+    }
 
     const onBeforeInstall = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
-      setCanInstall(true);
+      setChromiumInstallable(true);
     };
 
     const onAppInstalled = () => {
-      setCanInstall(false);
+      setChromiumInstallable(false);
       setDeferredPrompt(null);
     };
 
@@ -43,15 +63,46 @@ export function usePWAInstall() {
     };
   }, []);
 
-  const promptInstall = async () => {
+  const promptChromiumInstall = useCallback(async () => {
     if (!deferredPrompt) return;
     await deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
     if (outcome === 'accepted') {
-      setCanInstall(false);
+      setChromiumInstallable(false);
       setDeferredPrompt(null);
     }
-  };
+  }, [deferredPrompt]);
 
-  return { canInstall, promptInstall };
+  const dismissIosBanner = useCallback(() => {
+    try {
+      sessionStorage.setItem(IOS_BANNER_DISMISS_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+    setIosBannerVisible(false);
+    setIosGuideOpen(false);
+  }, []);
+
+  const openIosGuide = useCallback(() => setIosGuideOpen(true), []);
+  const closeIosGuide = useCallback(() => setIosGuideOpen(false), []);
+
+  const standalone = typeof window !== 'undefined' && isStandaloneDisplay();
+  const showHeroBanner =
+    typeof window !== 'undefined' && !standalone && (chromiumInstallable || iosBannerVisible);
+
+  const heroUsesChromiumPrompt = chromiumInstallable;
+
+  const onHeroBannerActivate = useCallback(async () => {
+    if (deferredPrompt) await promptChromiumInstall();
+    else openIosGuide();
+  }, [deferredPrompt, promptChromiumInstall, openIosGuide]);
+
+  return {
+    showHeroBanner,
+    heroUsesChromiumPrompt,
+    iosGuideOpen,
+    dismissIosBanner,
+    closeIosGuide,
+    onHeroBannerActivate,
+  };
 }

@@ -1,9 +1,10 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router-dom';
-import { Phone, ArrowRight, Zap, ShieldCheck, BadgeCheck, Smartphone, Download } from 'lucide-react';
+import { Phone, ArrowRight, Zap, ShieldCheck, BadgeCheck, Smartphone, Download, X } from 'lucide-react';
 import { BrandsSection } from './BrandsSection';
 import { usePWAInstall } from '../../lib/usePWAInstall';
+import { PWAInstallGuideModal } from '../pwa/PWAInstallGuideModal';
 
 export interface HeroSectionProps {
   /** Отваря прозореца на AI асистента (напр. от бутона „Безплатна консултация“) */
@@ -11,7 +12,14 @@ export interface HeroSectionProps {
 }
 
 export const HeroSection = ({ onFreeConsultationClick }: HeroSectionProps) => {
-  const { canInstall, promptInstall } = usePWAInstall();
+  const {
+    showHeroBanner,
+    heroUsesChromiumPrompt,
+    iosGuideOpen,
+    dismissIosBanner,
+    closeIosGuide,
+    onHeroBannerActivate,
+  } = usePWAInstall();
 
   return (
     <section id="home" className="relative pt-32 pb-12 lg:pt-40 lg:pb-16 overflow-hidden">
@@ -28,37 +36,52 @@ export const HeroSection = ({ onFreeConsultationClick }: HeroSectionProps) => {
             transition={{ duration: 0.6 }}
             className="w-full min-w-0 lg:max-w-[650px]"
           >
-            {/* PWA Install Banner — само на мобилен, само ако браузърът поддържа */}
+            {/* PWA — Android: инсталация; iPhone: същият банер → модал със стъпки „Добавяне към началния екран“ */}
             <AnimatePresence>
-              {canInstall && (
-                <motion.button
-                  onClick={promptInstall}
+              {showHeroBanner && (
+                <motion.div
                   initial={{ opacity: 0, y: -12, scale: 0.96 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -8, scale: 0.96 }}
                   transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                  className="md:hidden w-full mb-5 flex items-center gap-3 px-4 py-3 rounded-2xl border border-[#FF4D00]/25 bg-gradient-to-r from-[#FFF5ED] to-white shadow-md shadow-orange-100/60 active:scale-[0.97] transition-transform"
+                  className="md:hidden relative w-full mb-5"
                 >
-                  {/* Icon */}
-                  <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#FF4D00] to-[#FF2A4D] flex items-center justify-center shadow-sm shrink-0">
-                    <Smartphone className="w-5 h-5 text-white" strokeWidth={1.75} />
-                  </div>
-
-                  {/* Text */}
-                  <div className="text-left flex-1 min-w-0">
-                    <p className="text-[10px] font-bold text-[#FF4D00] uppercase tracking-widest leading-none mb-0.5">
-                      Безплатно приложение
-                    </p>
-                    <p className="text-sm font-black text-gray-900 leading-tight">
-                      Инсталирай на телефона
-                    </p>
-                  </div>
-
-                  {/* Arrow */}
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Download className="w-4 h-4 text-[#FF4D00]" strokeWidth={2} />
-                  </div>
-                </motion.button>
+                  {!heroUsesChromiumPrompt && (
+                    <button
+                      type="button"
+                      onClick={dismissIosBanner}
+                      className="absolute -top-1 -right-1 z-[2] flex h-8 w-8 items-center justify-center rounded-full bg-white/95 border border-gray-200 text-gray-500 shadow-sm active:scale-95"
+                      aria-label="Скрий напомнянето"
+                    >
+                      <X className="w-4 h-4" strokeWidth={2} />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={onHeroBannerActivate}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl border border-[#FF4D00]/25 bg-gradient-to-r from-[#FFF5ED] to-white shadow-md shadow-orange-100/60 active:scale-[0.97] transition-transform text-left"
+                  >
+                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#FF4D00] to-[#FF2A4D] flex items-center justify-center shadow-sm shrink-0">
+                      <Smartphone className="w-5 h-5 text-white" strokeWidth={1.75} />
+                    </div>
+                    <div className="text-left flex-1 min-w-0 pr-2">
+                      <p className="text-[10px] font-bold text-[#FF4D00] uppercase tracking-widest leading-none mb-0.5">
+                        Безплатно приложение
+                      </p>
+                      <p className="text-sm font-black text-gray-900 leading-tight">
+                        {heroUsesChromiumPrompt ? 'Инсталирай на телефона' : 'Добави към началния екран'}
+                      </p>
+                      {!heroUsesChromiumPrompt && (
+                        <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">
+                          Цял екран като приложение · докосни за стъпки
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Download className="w-4 h-4 text-[#FF4D00]" strokeWidth={2} />
+                    </div>
+                  </button>
+                </motion.div>
               )}
             </AnimatePresence>
 
@@ -200,6 +223,8 @@ export const HeroSection = ({ onFreeConsultationClick }: HeroSectionProps) => {
       <div className="mt-0 lg:mt-[-20px] relative z-20 w-full bg-transparent">
         <BrandsSection />
       </div>
+
+      <PWAInstallGuideModal open={iosGuideOpen} onClose={closeIosGuide} />
     </section>
   );
 };
