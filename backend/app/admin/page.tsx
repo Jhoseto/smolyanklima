@@ -1,8 +1,9 @@
+import Link from "next/link";
 import { adminDb } from "@/lib/admin/db";
 import { EmailOutboxDrain } from "./EmailOutboxDrain";
-import { WorkItemsPlanner } from "./WorkItemsPlanner";
 import { SectionTitle, Card } from "./ui";
 import { DashboardPanel } from "./DashboardPanel";
+import { CalendarClock } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -273,11 +274,19 @@ export default async function AdminDashboardPage() {
         </Card>
       )}
 
-      <div>
-        {nOutbox === 0 && nFailedEmails === 0 ? null : null}
-      </div>
-      
-      <WorkItemsPlanner />
+      {/* Quick-link to operations planner */}
+      <Link
+        href="/admin/operations"
+        className="flex items-center gap-3 px-4 py-3 bg-white border border-slate-200 rounded-xl hover:border-sky-300 hover:bg-sky-50 transition-colors group"
+      >
+        <div className="w-9 h-9 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center shrink-0">
+          <CalendarClock className="w-4 h-4" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-slate-800 group-hover:text-sky-700">Поръчки & Монтажи →</p>
+          <p className="text-xs text-slate-500">Планер, задачи, инсталации</p>
+        </div>
+      </Link>
     </div>
   );
 }

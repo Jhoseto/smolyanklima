@@ -1,6 +1,12 @@
-import { redirect } from "next/navigation";
+import { WorkItemsPlanner } from "../WorkItemsPlanner";
 
-/** Календарът и операциите са на основното табло (/admin). */
-export default function AdminOperationsRedirectPage() {
-  redirect("/admin");
+export const dynamic = "force-dynamic";
+export const metadata = { title: "Поръчки & Монтажи | Смолян Клима Админ" };
+
+export default function AdminOperationsPage() {
+  return (
+    <div className="space-y-4">
+      <WorkItemsPlanner />
+    </div>
+  );
 }

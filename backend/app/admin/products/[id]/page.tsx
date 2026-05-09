@@ -22,6 +22,7 @@ export default function EditProductPage() {
 
   const [brands, setBrands] = useState<Brand[]>([]);
   const [types, setTypes] = useState<ProductType[]>([]);
+  const [canEditPrice, setCanEditPrice] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
@@ -38,16 +39,19 @@ export default function EditProductPage() {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const [bRes, tRes, pRes] = await Promise.all([
+      const [bRes, tRes, pRes, wRes] = await Promise.all([
         fetch("/api/admin/meta/brands", { credentials: "include" }),
         fetch("/api/admin/meta/product-types", { credentials: "include" }),
         fetch(`/api/admin/products/${id}`, { credentials: "include" }),
+        fetch("/api/admin/whoami", { credentials: "include" }),
       ]);
       const b = await bRes.json();
       const t = await tRes.json();
       const p = await pRes.json();
+      const w = await wRes.json();
       setBrands(b.data ?? []);
       setTypes(t.data ?? []);
+      setCanEditPrice(((w.data?.admin?.role) ?? "master_admin") !== "office_staff");
       if (!pRes.ok) throw new Error(p.error || "Failed to load product");
       setForm(mapLoadedProductToForm(p.data));
     })()
@@ -123,7 +127,7 @@ export default function EditProductPage() {
       )}
 
       <Card className="p-4 md:p-6">
-        <ProductFormFields brands={brands} types={types} form={form} setForm={setForm} />
+        <ProductFormFields brands={brands} types={types} form={form} setForm={setForm} canEditPrice={canEditPrice} />
       </Card>
 
       {/* Desktop action row */}

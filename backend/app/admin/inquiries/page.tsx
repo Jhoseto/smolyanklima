@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { HelpRow, InfoDot, SectionTitle, HelpCard, Card, Input, Select, Button, Table, Th, Td, Textarea } from "../ui";
-import { RefreshCw, MessageSquare, PlayCircle, CheckCircle, ShieldAlert, StickyNote, Sparkles, X, CheckCircle2 } from "lucide-react";
+import { RefreshCw, MessageSquare, PlayCircle, CheckCircle, ShieldAlert, StickyNote, Sparkles, X, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
+import { useDebounce } from "@/lib/hooks/useDebounce";
 
 export const dynamic = "force-dynamic";
 
@@ -82,15 +83,25 @@ function AdminInquiriesClient() {
   const [lastLiveUpdate, setLastLiveUpdate] = useState<string | null>(null);
   const [aiReplyDraft, setAiReplyDraft] = useState<AiReplyDraft | null>(null);
   const [selectedInquiry, setSelectedInquiry] = useState<Inquiry | null>(null);
+  const [inqPage, setInqPage] = useState(1);
+  const [inqTotal, setInqTotal] = useState(0);
+  const INQ_PER_PAGE = 50;
+
+  const debouncedQ = useDebounce(q, 350);
 
   const queryString = useMemo(() => {
     const sp = new URLSearchParams();
     if (status) sp.set("status", status);
     if (source) sp.set("source", source);
-    if (q.trim()) sp.set("q", q.trim());
+    if (debouncedQ.trim()) sp.set("q", debouncedQ.trim());
+    sp.set("page", String(inqPage));
+    sp.set("perPage", String(INQ_PER_PAGE));
     const s = sp.toString();
     return s ? `?${s}` : "";
-  }, [status, source, q]);
+  }, [status, source, debouncedQ, inqPage]);
+
+  // Reset page when filters/search change
+  useEffect(() => { setInqPage(1); }, [status, source, debouncedQ]);
 
   const load = useCallback(async (options?: { silent?: boolean }) => {
     if (!options?.silent) setLoading(true);
@@ -100,6 +111,7 @@ function AdminInquiriesClient() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Грешка");
       setItems(json.data ?? []);
+      setInqTotal(json.meta?.total ?? (json.data?.length ?? 0));
     } catch (e: any) {
       setError(String(e?.message ?? e));
     } finally {
@@ -490,6 +502,31 @@ function AdminInquiriesClient() {
               );
             })}
           </div>
+
+          {/* Pagination */}
+          {inqTotal > INQ_PER_PAGE && (
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-xs text-slate-400">
+                {(inqPage - 1) * INQ_PER_PAGE + 1}–{Math.min(inqPage * INQ_PER_PAGE, inqTotal)} от {inqTotal}
+              </span>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setInqPage(p => Math.max(1, p - 1))}
+                  disabled={inqPage === 1}
+                  className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setInqPage(p => p + 1)}
+                  disabled={inqPage * INQ_PER_PAGE >= inqTotal}
+                  className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
         </>
       )}
 

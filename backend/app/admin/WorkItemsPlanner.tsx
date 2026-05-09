@@ -112,9 +112,12 @@ export function WorkItemsPlanner() {
     return d;
   }, [monthOffset]);
 
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  const title = monthStart.toLocaleDateString("bg-BG", { month: "long", year: "numeric" });
+  // Precomputed once per render cycle — avoids calling formatDateKey(new Date()) inside every calendar cell
+  const todayKey = useMemo(() => formatDateKey(new Date()), []);
+
+  const monthStart = useMemo(() => new Date(now.getFullYear(), now.getMonth(), 1), [now]);
+  const monthEnd = useMemo(() => new Date(now.getFullYear(), now.getMonth() + 1, 0), [now]);
+  const title = useMemo(() => monthStart.toLocaleDateString("bg-BG", { month: "long", year: "numeric" }), [monthStart]);
 
   const monthFrom = formatDateKey(monthStart);
   const monthTo = formatDateKey(monthEnd);
@@ -168,11 +171,16 @@ export function WorkItemsPlanner() {
 
   const agendaDates = [...agendaByDate.keys()].sort();
 
-  const days: Date[] = [];
-  const firstWeekday = (monthStart.getDay() + 6) % 7;
-  for (let i = 0; i < firstWeekday; i++) days.push(new Date(NaN));
-  for (let d = 1; d <= monthEnd.getDate(); d++) days.push(new Date(monthStart.getFullYear(), monthStart.getMonth(), d));
-  while (days.length % 7 !== 0) days.push(new Date(NaN));
+  // Memoize expensive calendar grid — avoids recomputing on every render tick
+  const days = useMemo<Date[]>(() => {
+    const grid: Date[] = [];
+    const firstWeekday = (monthStart.getDay() + 6) % 7;
+    for (let i = 0; i < firstWeekday; i++) grid.push(new Date(NaN));
+    for (let d = 1; d <= monthEnd.getDate(); d++) grid.push(new Date(monthStart.getFullYear(), monthStart.getMonth(), d));
+    while (grid.length % 7 !== 0) grid.push(new Date(NaN));
+    return grid;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthStart.getTime(), monthEnd.getTime()]);
 
   function matchesViewMode(item: WorkItem) {
     if (viewMode === "all") return true;
@@ -399,7 +407,7 @@ export function WorkItemsPlanner() {
             const valid = !Number.isNaN(d.getTime());
             const dateKey = valid ? formatDateKey(d) : "";
             const dayItems = valid ? (byDate.get(dateKey) ?? []).filter(matchesViewMode) : [];
-            const isToday = valid && dateKey === formatDateKey(new Date());
+            const isToday = valid && dateKey === todayKey;
             return (
               <button
                 key={idx}
@@ -454,7 +462,7 @@ export function WorkItemsPlanner() {
             {agendaDates.map((dateKey) => {
               const dayEvts = agendaByDate.get(dateKey) ?? [];
               const d = new Date(`${dateKey}T00:00:00`);
-              const isToday = dateKey === formatDateKey(new Date());
+              const isToday = dateKey === todayKey;
               return (
                 <div key={dateKey}>
                   <button

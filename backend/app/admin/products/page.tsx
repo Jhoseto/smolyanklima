@@ -6,6 +6,7 @@ import { HelpRow, SectionTitle, HelpCard, Card, Button, Input, Select, Table, Th
 import { Plus, Search, FilterX, CheckCircle, XCircle, Tag, Trash2, Edit, Filter, ChevronDown, MessageCircle } from "lucide-react";
 import { ShareToChatModal } from "../chat/ShareToChatModal";
 import { ProductQuickViewButton } from "../ProductQuickView";
+import { useDebounce } from "@/lib/hooks/useDebounce";
 
 export const dynamic = "force-dynamic";
 
@@ -76,9 +77,11 @@ export default function AdminProductsPage() {
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
+  const debouncedQ = useDebounce(q, 350);
+
   const qs = useMemo(() => {
     const sp = new URLSearchParams();
-    if (q.trim()) sp.set("q", q.trim());
+    if (debouncedQ.trim()) sp.set("q", debouncedQ.trim());
     if (condition) sp.set("condition", condition);
     if (status) sp.set("status", status);
     if (featured) sp.set("featured", featured);
@@ -99,7 +102,7 @@ export default function AdminProductsPage() {
     sp.set("perPage", "20");
     return sp.toString();
   }, [
-    q,
+    debouncedQ,
     condition,
     status,
     featured,

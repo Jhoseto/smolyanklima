@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { logAdminActivity } from "@/lib/admin/audit";
+import { adminDb } from "@/lib/admin/db";
 import {
   buildUploadFolderPath,
   formatCloudinaryUploadError,
@@ -19,6 +20,12 @@ export async function OPTIONS(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  try {
+    await adminDb();
+  } catch {
+    return withCors(req, NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
+  }
+
   if (!isCloudinaryConfigured()) {
     return withCors(
       req,

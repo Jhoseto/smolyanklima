@@ -13,6 +13,7 @@ export default function NewProductPage() {
   const router = useRouter();
   const [brands, setBrands] = useState<Brand[]>([]);
   const [types, setTypes] = useState<ProductType[]>([]);
+  const [canEditPrice, setCanEditPrice] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -26,14 +27,17 @@ export default function NewProductPage() {
 
   useEffect(() => {
     (async () => {
-      const [bRes, tRes] = await Promise.all([
+      const [bRes, tRes, wRes] = await Promise.all([
         fetch("/api/admin/meta/brands", { credentials: "include" }),
         fetch("/api/admin/meta/product-types", { credentials: "include" }),
+        fetch("/api/admin/whoami", { credentials: "include" }),
       ]);
       const b = await bRes.json();
       const t = await tRes.json();
+      const w = await wRes.json();
       setBrands(b.data ?? []);
       setTypes(t.data ?? []);
+      setCanEditPrice(((w.data?.admin?.role) ?? "master_admin") !== "office_staff");
       setForm((prev) => ({
         ...prev,
         brandId: (b.data?.[0]?.id as string) ?? "",
@@ -97,7 +101,7 @@ export default function NewProductPage() {
       )}
 
       <Card className="p-4 md:p-6">
-        <ProductFormFields brands={brands} types={types} form={form} setForm={setForm} />
+        <ProductFormFields brands={brands} types={types} form={form} setForm={setForm} canEditPrice={canEditPrice} />
       </Card>
 
       {/* Desktop save button */}

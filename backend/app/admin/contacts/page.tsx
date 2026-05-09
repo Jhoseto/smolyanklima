@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { HelpRow, HelpCard, Card, Input, Select, Textarea, Button, Table, Th, Td } from "../ui";
-import { ChevronDown, ChevronUp, Search, UserPlus, Users, Activity, FileText, Phone, Mail, MapPin, Sparkles, X, CheckCircle2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Search, UserPlus, Users, Activity, FileText, Phone, Mail, MapPin, Sparkles, X, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
 import { ProductQuickViewButton } from "../ProductQuickView";
+import { useDebounce } from "@/lib/hooks/useDebounce";
 
 type ContactRow = {
   id: string;
@@ -114,13 +115,19 @@ export default function AdminContactsPage() {
   const [showMerge, setShowMerge] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [mobileView, setMobileView] = useState<"list" | "detail">("list");
+  const [contactsPage, setContactsPage] = useState(1);
+  const [contactsTotal, setContactsTotal] = useState(0);
+  const CONTACTS_PER_PAGE = 50;
+
+  const debouncedQ = useDebounce(q, 350);
 
   const qs = useMemo(() => {
     const sp = new URLSearchParams();
-    if (q.trim()) sp.set("q", q.trim());
-    sp.set("perPage", "200");
+    if (debouncedQ.trim()) sp.set("q", debouncedQ.trim());
+    sp.set("perPage", String(CONTACTS_PER_PAGE));
+    sp.set("page", String(contactsPage));
     return sp.toString();
-  }, [q]);
+  }, [debouncedQ, contactsPage]);
 
   async function loadList() {
     setLoading(true);
@@ -131,6 +138,7 @@ export default function AdminContactsPage() {
       if (!res.ok) throw new Error(json.error || "Грешка");
       const rows = (json.data ?? []) as ContactRow[];
       setItems(rows);
+      setContactsTotal(json.meta?.total ?? rows.length);
       if (!selected && rows[0]?.id) setSelected(rows[0].id);
     } catch (e: any) {
       setError(String(e?.message ?? e));
@@ -152,6 +160,9 @@ export default function AdminContactsPage() {
       setError(String(e?.message ?? e));
     }
   }
+
+  // Reset to page 1 when search changes
+  useEffect(() => { setContactsPage(1); }, [debouncedQ]);
 
   useEffect(() => {
     void loadList();
@@ -434,7 +445,7 @@ export default function AdminContactsPage() {
 
           <CollapsiblePanel
             title="Списък контакти"
-            subtitle={loading ? "Зареждане..." : `Общо контакти: ${items.length}`}
+            subtitle={loading ? "Зареждане..." : `Общо: ${contactsTotal}`}
             icon={<Users className="w-4 h-4" />}
             open={showList}
             onToggle={() => setShowList((v) => !v)}
@@ -479,6 +490,30 @@ export default function AdminContactsPage() {
               ))}
               {!loading && items.length === 0 ? <div className="text-sm text-slate-500 p-4 text-center">Няма намерени контакти.</div> : null}
             </div>
+            {/* Pagination */}
+            {contactsTotal > CONTACTS_PER_PAGE && (
+              <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                <span className="text-[11px] text-slate-400">
+                  {(contactsPage - 1) * CONTACTS_PER_PAGE + 1}–{Math.min(contactsPage * CONTACTS_PER_PAGE, contactsTotal)} от {contactsTotal}
+                </span>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setContactsPage(p => Math.max(1, p - 1))}
+                    disabled={contactsPage === 1}
+                    className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setContactsPage(p => p + 1)}
+                    disabled={contactsPage * CONTACTS_PER_PAGE >= contactsTotal}
+                    className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
           </CollapsiblePanel>
         </div>
 

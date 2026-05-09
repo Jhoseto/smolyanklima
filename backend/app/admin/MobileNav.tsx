@@ -5,38 +5,32 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logoutAction } from "@/app/login/actions";
 import {
-  LayoutDashboard,
-  Package,
-  MessageSquare,
-  Users,
-  MoreHorizontal,
-  X,
-  FileText,
-  Star,
-  History,
-  Activity,
-  Settings,
-  LogOut,
-  Headphones,
+  LayoutDashboard, Package, MessageSquare, Users, MoreHorizontal, X,
+  FileText, Star, History, Activity, Settings, LogOut, Headphones,
+  CalendarClock, ShieldCheck,
 } from "lucide-react";
+import type { AdminRole } from "@/lib/admin/db";
 
-const primaryLinks = [
-  { href: "/admin", label: "Табло", icon: LayoutDashboard, exact: true },
-  { href: "/admin/products", label: "Продукти", icon: Package, exact: false },
-  { href: "/admin/chat", label: "Чат", icon: Headphones, exact: false },
-  { href: "/admin/inquiries", label: "Запитвания", icon: MessageSquare, exact: false },
-  { href: "/admin/contacts", label: "Контакти", icon: Users, exact: false },
-];
+export function MobileNav({ role }: { role: AdminRole }) {
+  const primaryLinks = [
+    { href: "/admin", label: "Табло", icon: LayoutDashboard, exact: true },
+    { href: "/admin/operations", label: "Задачи", icon: CalendarClock, exact: false },
+    { href: "/admin/chat", label: "Чат", icon: Headphones, exact: false },
+    { href: "/admin/inquiries", label: "Запитвания", icon: MessageSquare, exact: false },
+    { href: "/admin/contacts", label: "Контакти", icon: Users, exact: false },
+  ];
 
-const moreLinks = [
-  { href: "/admin/articles", label: "Статии", icon: FileText },
-  { href: "/admin/ratings", label: "Оценки", icon: Star },
-  { href: "/admin/history", label: "История продажби", icon: History },
-  { href: "/admin/activity", label: "Активност", icon: Activity },
-  { href: "/admin/settings", label: "Настройки", icon: Settings },
-];
-
-export function MobileNav() {
+  const moreLinks = [
+    { href: "/admin/products", label: "Продукти", icon: Package },
+    { href: "/admin/articles", label: "Статии", icon: FileText },
+    ...(role === "master_admin" ? [
+      { href: "/admin/ratings", label: "Оценки", icon: Star },
+      { href: "/admin/history", label: "История продажби", icon: History },
+      { href: "/admin/activity", label: "Активност", icon: Activity },
+      { href: "/admin/staff", label: "Персонал", icon: ShieldCheck },
+      { href: "/admin/settings", label: "Настройки", icon: Settings },
+    ] : []),
+  ];
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -117,8 +111,8 @@ export function MobileNav() {
         <div className="h-safe-area-inset-bottom" />
       </div>
 
-      {/* Fixed bottom navigation bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-xl border-t border-slate-200 shadow-[0_-2px_16px_rgba(15,23,42,0.06)]">
+      {/* Fixed bottom navigation bar — solid bg for performance on older phones */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-slate-200 shadow-[0_-2px_16px_rgba(15,23,42,0.06)]">
         <div className="flex items-stretch justify-around px-1 pt-1 pb-1">
           {primaryLinks.map((link) => {
             const Icon = link.icon;

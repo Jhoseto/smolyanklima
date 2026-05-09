@@ -4,9 +4,11 @@ import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminDb } from "@/lib/admin/db";
 
 const QuerySchema = z.object({
-  status: z.string().optional(), // new|in_progress|done|spam|...
-  source: z.string().optional(), // contact|product|wizard|quick_view|ai
+  status: z.string().optional(),
+  source: z.string().optional(),
   q: z.string().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  perPage: z.coerce.number().int().min(1).max(200).default(50),
 });
 
 export async function OPTIONS(req: NextRequest) {
@@ -23,6 +25,7 @@ export async function GET(req: NextRequest) {
     .from("inquiries")
     .select(
       "id,source,customer_name,customer_phone,customer_email,message,product_id,service_type,status,priority,assigned_to,admin_notes,created_at,updated_at",
+      { count: "exact" },
     );
 
   if (parsed.data.status) query = query.eq("status", parsed.data.status);
@@ -43,8 +46,22 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const { data, error } = await query.order("created_at", { ascending: false });
+  const { page, perPage } = parsed.data;
+  const from = (page - 1) * perPage;
+  const to = from + perPage - 1;
+
+  const { data, error, count } = await query
+    .order("created_at", { ascending: false })
+    .range(from, to)
+    .returns<typeof data>();
+
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
-  return withCors(req, NextResponse.json({ data: data ?? [] }));
+  return withCors(
+    req,
+    NextResponse.json({
+      data: data ?? [],
+      meta: { page, perPage, total: count ?? 0 },
+    }),
+  );
 }
 

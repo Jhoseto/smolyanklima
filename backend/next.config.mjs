@@ -10,6 +10,12 @@ const nextConfig = {
   turbopack: {
     root: __dirname,
   },
+  experimental: {
+    // Tree-shake lucide-react barrel imports at build time — smaller JS for admin
+    optimizePackageImports: ["lucide-react"],
+  },
+  // Compress responses
+  compress: true,
   async rewrites() {
     // Serve the Vite SPA (built into /public) from the same origin in production.
     // Keep backend routes working normally.

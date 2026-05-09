@@ -40,13 +40,20 @@ export async function loginAction(formData: FormData) {
 
   const { data: adminRow, error: adminErr } = await supabase
     .from("admin_users")
-    .select("id,is_active")
+    .select("id,is_active,role")
     .eq("id", user.id)
     .maybeSingle();
 
-  // If admin_users is missing/inactive, block access early (prevents confusing RLS 403 later).
+  // If admin_users is missing/inactive, block access early.
   if (adminErr || !adminRow || !adminRow.is_active) {
     redirect(`/login?reason=not_admin&next=${encodeURIComponent(parsed.data.next || "/admin")}`);
+  }
+
+  // service_staff goes directly to their task view
+  if (!parsed.data.next || parsed.data.next === "/admin") {
+    if (adminRow.role === "service_staff") {
+      redirect("/admin/service");
+    }
   }
 
   redirect(parsed.data.next || "/admin");

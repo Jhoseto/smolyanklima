@@ -1,12 +1,6 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { Star, Zap, Snowflake, Repeat, Check, ChevronRight } from 'lucide-react';
-
-// ─── Размери на картата ──────────────────────────────────────────────────────
-const CARD_W = 252;  // px — ширина
-const CARD_H = 572;  // px — фиксирана височина (всички карти равни)
-const CARD_GAP = 20; // px — разстояние между картите
 
 const products = [
   {
@@ -139,48 +133,51 @@ const products = [
 
 type Product = (typeof products)[number];
 
-function ProductCard({ product }: { product: Product }) {
+function ProductCard({ product, index }: { product: Product; index: number }) {
   return (
-    <div
-      className={`bg-white rounded-[1.75rem] overflow-hidden shadow-sm hover:shadow-xl transition-shadow duration-300 border ${product.cardBorder} flex flex-col group shrink-0`}
-      style={{ width: CARD_W, height: CARD_H }}
+    <motion.div
+      initial={{ opacity: 0, y: 24 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ delay: index * 0.07 }}
+      className={`bg-white rounded-[1.75rem] overflow-hidden shadow-sm hover:shadow-xl transition-shadow duration-300 border ${product.cardBorder} flex flex-col group`}
     >
-      {/* Снимка — фиксирана */}
-      <div className={`relative shrink-0 overflow-hidden ${product.imgBg ?? 'bg-gray-50'}`} style={{ height: 172 }}>
+      {/* Снимка */}
+      <div className={`relative shrink-0 overflow-hidden ${product.imgBg ?? 'bg-gray-50'}`} style={{ height: 110 }}>
         <img
           src={product.image}
           alt={product.model}
-          className="w-full h-full object-contain p-3 transition-transform duration-700 group-hover:scale-105"
+          className="w-full h-full object-contain p-2 transition-transform duration-700 group-hover:scale-105"
           draggable={false}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
-        <div className="absolute top-3 left-3 right-3 flex justify-between items-start">
+        <div className="absolute top-2.5 left-2.5 right-2.5 flex justify-between items-start">
           {product.badge ? (
-            <span className={`px-3 py-1 rounded-full text-[10px] font-bold ${product.badge.bg} ${product.badge.textCol}`}>
+            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${product.badge.bg} ${product.badge.textCol}`}>
               {product.badge.text}
             </span>
           ) : <div />}
-          <span className="bg-green-500/90 text-white text-[9px] font-black tracking-wider px-2.5 py-1 rounded-full">
+          <span className="bg-green-500/90 text-white text-[9px] font-black tracking-wider px-2 py-0.5 rounded-full">
             {product.energyClass}
           </span>
         </div>
       </div>
 
-      {/* Съдържание — расте и запълва */}
-      <div className="flex flex-col flex-1 min-h-0 p-4">
+      {/* Съдържание */}
+      <div className="flex flex-col flex-1 min-h-0 p-3">
         {/* Марка + модел + тип */}
-        <div className="mb-3">
+        <div className="mb-2">
           <p className="text-[10px] font-bold text-[#00B4D8] uppercase tracking-wider mb-0.5">{product.brand}</p>
           <Link to={`/product/${product.id}`} className="block group/title">
-            <h3 className="text-base font-bold text-gray-900 leading-tight mb-0.5 group-hover/title:text-[#FF4D00] transition-colors line-clamp-1">
+            <h3 className="text-sm font-bold text-gray-900 leading-tight mb-0.5 group-hover/title:text-[#FF4D00] transition-colors line-clamp-1">
               {product.model}
             </h3>
           </Link>
-          <p className="text-xs text-gray-400">{product.type}</p>
+          <p className="text-[10px] text-gray-400">{product.type}</p>
         </div>
 
         {/* Спецификации */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mb-2">
           {product.specs.map((spec, i) => (
             <div key={i} className="flex items-center gap-1 text-[11px] font-medium text-gray-600">
               {spec.icon}
@@ -189,10 +186,10 @@ function ProductCard({ product }: { product: Product }) {
           ))}
         </div>
 
-        {/* Extras — 3 реда, всяка карта заема еднакво място */}
-        <div className="flex flex-col gap-1 mb-3" style={{ minHeight: 72 }}>
+        {/* Extras — хоризонтални */}
+        <div className="flex flex-wrap gap-1 mb-2">
           {product.extras.slice(0, 3).map((extra, i) => (
-            <div key={i} className="flex items-center gap-1.5 bg-gray-50 border border-gray-100 rounded-full px-2.5 py-1 text-[10px] font-medium text-gray-600 w-fit">
+            <div key={i} className="flex items-center gap-1 bg-gray-50 border border-gray-100 rounded-full px-2 py-0.5 text-[10px] font-medium text-gray-600">
               <Check className="w-2.5 h-2.5 text-green-500 shrink-0" strokeWidth={3} />
               <span className="truncate">{extra}</span>
             </div>
@@ -200,31 +197,31 @@ function ProductCard({ product }: { product: Product }) {
         </div>
 
         {/* Рейтинг */}
-        <div className="flex items-center gap-1 mb-3">
+        <div className="flex items-center gap-1 mb-2">
           <div className="flex text-yellow-400">
             {[...Array(5)].map((_, i) => (
-              <Star key={i} className={`w-3.5 h-3.5 ${i < Math.floor(product.rating) ? 'fill-current' : 'fill-gray-200 text-gray-200'}`} />
+              <Star key={i} className={`w-3 h-3 ${i < Math.floor(product.rating) ? 'fill-current' : 'fill-gray-200 text-gray-200'}`} />
             ))}
           </div>
           <span className="text-xs font-semibold text-gray-700 ml-0.5">{product.rating}</span>
           <span className="text-[10px] text-gray-400">({product.reviews})</span>
         </div>
 
-        {/* Цена + CTA — прибити към дъното */}
-        <div className="mt-auto pt-3 border-t border-gray-100">
-          <div className="flex items-center justify-between mb-2.5">
+        {/* Цена + CTA */}
+        <div className="mt-auto pt-2 border-t border-gray-100">
+          <div className="flex items-center justify-between mb-2">
             <div>
-              <span className="text-2xl font-extrabold text-gray-900">€{product.price}</span>
+              <span className="text-xl font-extrabold text-gray-900">€{product.price}</span>
               <p className="text-[10px] text-gray-400 leading-tight">с монтаж €{product.priceWithMount}</p>
             </div>
           </div>
           <a
             href="#contact"
-            className="flex items-center justify-center w-full py-2 rounded-full bg-[#EBF5FF] text-[#00B4D8] hover:bg-[#00B4D8] hover:text-white transition-colors text-xs font-bold shadow-sm"
+            className="flex items-center justify-center w-full py-1.5 rounded-full bg-[#EBF5FF] text-[#00B4D8] hover:bg-[#00B4D8] hover:text-white transition-colors text-xs font-bold shadow-sm"
           >
             Направи запитване
           </a>
-          <div className="text-center mt-2">
+          <div className="text-center mt-1.5">
             <Link to={`/product/${product.id}`} className="inline-flex items-center text-[10px] font-semibold text-gray-400 hover:text-[#FF4D00] transition-colors">
               Виж характеристики
               <ChevronRight className="w-3 h-3 ml-0.5" />
@@ -232,105 +229,14 @@ function ProductCard({ product }: { product: Product }) {
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
-// ─── Основен компонент ────────────────────────────────────────────────────────
 export const ProductsSection = () => {
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const trackRef    = useRef<HTMLDivElement>(null);
-  const copyWidthRef = useRef(0);
-  const rafRef       = useRef<number | null>(null);
-
-  const draggingRef    = useRef(false);
-  const dragMovedRef   = useRef(false);
-  const lastPointerXRef = useRef(0);
-
-  const [reduceMotion, setReduceMotion] = useState(false);
-
-  // Ширината на един цикъл: N карти × (ширина + gap)
-  // Flex gap важи МЕЖДУ всички siblings, т.е. card[i+1].x = card[i].x + CARD_W + CARD_GAP
-  // => offset между copy A[0] и copy B[0] = products.length * (CARD_W + CARD_GAP)
-  const measureCopy = useCallback(() => {
-    copyWidthRef.current = products.length * (CARD_W + CARD_GAP);
-  }, []);
-
-  useLayoutEffect(() => { measureCopy(); }, [measureCopy]);
-
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    setReduceMotion(mq.matches);
-    const fn = () => setReduceMotion(mq.matches);
-    mq.addEventListener('change', fn);
-    return () => mq.removeEventListener('change', fn);
-  }, []);
-
-  useEffect(() => {
-    const ro = new ResizeObserver(measureCopy);
-    if (trackRef.current) ro.observe(trackRef.current);
-    return () => ro.disconnect();
-  }, [measureCopy]);
-
-  // rAF автоматичен скрол
-  useEffect(() => {
-    const vp = viewportRef.current;
-    if (!vp) return;
-
-    const tick = () => {
-      if (!draggingRef.current && !reduceMotion && document.visibilityState === 'visible') {
-        const w = copyWidthRef.current;
-        vp.scrollLeft += 0.5;
-        if (w > 0 && vp.scrollLeft >= w) vp.scrollLeft -= w;
-      }
-      rafRef.current = requestAnimationFrame(tick);
-    };
-
-    rafRef.current = requestAnimationFrame(tick);
-    return () => { if (rafRef.current !== null) cancelAnimationFrame(rafRef.current); };
-  }, [reduceMotion]);
-
-  // Wrap при ръчно плъзгане
-  const wrapScroll = useCallback(() => {
-    const vp = viewportRef.current;
-    const w  = copyWidthRef.current;
-    if (!vp || w <= 0) return;
-    while (vp.scrollLeft >= w) vp.scrollLeft -= w;
-    while (vp.scrollLeft < 0)  vp.scrollLeft += w;
-  }, []);
-
-  const onPointerDown = (e: React.PointerEvent) => {
-    if (e.button !== 0) return;
-    draggingRef.current    = true;
-    dragMovedRef.current   = false;
-    lastPointerXRef.current = e.clientX;
-    e.currentTarget.setPointerCapture(e.pointerId);
-  };
-
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (!draggingRef.current) return;
-    const dx = e.clientX - lastPointerXRef.current;
-    lastPointerXRef.current = e.clientX;
-    if (Math.abs(dx) > 2) dragMovedRef.current = true;
-    const vp = viewportRef.current;
-    if (vp) { vp.scrollLeft -= dx; wrapScroll(); }
-  };
-
-  const onPointerUp = (e: React.PointerEvent) => {
-    draggingRef.current = false;
-    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
-    wrapScroll();
-    setTimeout(() => { dragMovedRef.current = false; }, 80);
-  };
-
-  const onClickCapture = (e: React.MouseEvent) => {
-    if (dragMovedRef.current) { e.preventDefault(); e.stopPropagation(); }
-  };
-
   return (
-    <section id="products" className="py-12 bg-gray-50">
-      {/* Заглавие — центрирано */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-8">
+    <section id="products" className="py-8 bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-5">
         <div className="text-center">
           <motion.h2
             initial={{ opacity: 0, y: 20 }}
@@ -354,47 +260,18 @@ export const ProductsSection = () => {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.2 }}
-            className="mt-4 text-sm md:text-base text-gray-700 font-medium mx-auto leading-relaxed whitespace-nowrap"
+            className="mt-4 text-sm md:text-base text-gray-700 font-medium mx-auto leading-relaxed"
           >
             Внимателно подбрани модели с най-добро съотношение качество, ефективност и цена
           </motion.p>
         </div>
-
       </div>
 
-      {/* ── Carousel ── */}
-      <div className="px-6 sm:px-12 md:px-20 lg:px-28">
-        {/* Viewport за скрол — mask-image прави fade от двете страни */}
-        <div
-          ref={viewportRef}
-          role="region"
-          aria-roledescription="carousel"
-          aria-label="Топ продукти"
-          className="overflow-x-auto overflow-y-visible cursor-grab active:cursor-grabbing select-none [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden touch-pan-x"
-          style={{
-            maskImage:
-              'linear-gradient(to right, transparent 0%, black 18%, black 82%, transparent 100%)',
-            WebkitMaskImage:
-              'linear-gradient(to right, transparent 0%, black 18%, black 82%, transparent 100%)',
-          }}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
-          onLostPointerCapture={onPointerUp}
-          onClickCapture={onClickCapture}
-        >
-          {/* Лента — 4 копия на картите за безкраен скрол */}
-          <div
-            ref={trackRef}
-            className="flex w-max items-start"
-            style={{ gap: CARD_GAP }}
-          >
-            {products.map((p) => <ProductCard key={`a-${p.id}`} product={p} />)}
-            {products.map((p) => <ProductCard key={`b-${p.id}`} product={p} aria-hidden={true as unknown as undefined} />)}
-            {products.map((p) => <ProductCard key={`c-${p.id}`} product={p} aria-hidden={true as unknown as undefined} />)}
-            {products.map((p) => <ProductCard key={`d-${p.id}`} product={p} aria-hidden={true as unknown as undefined} />)}
-          </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {products.map((p, i) => (
+            <ProductCard key={p.id} product={p} index={i} />
+          ))}
         </div>
       </div>
     </section>

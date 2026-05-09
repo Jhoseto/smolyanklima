@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { Button, Card, Input, Select, SectionTitle, Table, Td, Th } from "../ui";
+import { useDebounce } from "@/lib/hooks/useDebounce";
 
 type ActivityRow = {
   id: string;
@@ -25,16 +26,18 @@ export default function AdminActivityPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const debouncedQ = useDebounce(q, 350);
+
   const qs = useMemo(() => {
     const sp = new URLSearchParams();
-    if (q.trim()) sp.set("q", q.trim());
+    if (debouncedQ.trim()) sp.set("q", debouncedQ.trim());
     if (entityType) sp.set("entityType", entityType);
     if (from) sp.set("from", from);
     if (to) sp.set("to", to);
     sp.set("page", String(page));
     sp.set("perPage", "30");
     return sp.toString();
-  }, [q, entityType, from, to, page]);
+  }, [debouncedQ, entityType, from, to, page]);
 
   async function load() {
     setLoading(true);

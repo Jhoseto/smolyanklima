@@ -49,9 +49,28 @@ type CannedResponse = { id: string; shortcut: string; content: string };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// Reuse a single AudioContext — creating one per notification is wasteful
+// and breaks on older browsers that suspend new contexts until user gesture.
+let _audioCtx: AudioContext | null = null;
+
+function getAudioCtx(): AudioContext | null {
+  try {
+    // Support older Safari/Chrome with webkit prefix
+    const Ctor = (typeof AudioContext !== "undefined"
+      ? AudioContext
+      : (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext) ?? null;
+    if (!Ctor) return null;
+    if (!_audioCtx || _audioCtx.state === "closed") _audioCtx = new Ctor();
+    return _audioCtx;
+  } catch { return null; }
+}
+
 function playAdminSound() {
   try {
-    const ctx = new AudioContext();
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    // Resume suspended context (required after user gesture on most browsers)
+    if (ctx.state === "suspended") void ctx.resume();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain); gain.connect(ctx.destination);

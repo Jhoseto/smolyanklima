@@ -2,6 +2,27 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { getEnv } from "@/lib/env";
 
+/**
+ * On Windows in development, Node.js cannot verify Supabase's SSL certificate
+ * because it doesn't use the Windows CA store.  Instead of disabling TLS
+ * globally (NODE_TLS_REJECT_UNAUTHORIZED=0), we scope the bypass to just the
+ * fetch layer via an undici Agent — production is completely unaffected.
+ */
+function patchDevTls() {
+  if (process.env.NODE_ENV !== "development") return;
+  try {
+    // undici is bundled with Node.js 18+ — no extra dependency needed
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Agent, setGlobalDispatcher } = require("undici") as typeof import("undici");
+    setGlobalDispatcher(new Agent({ connect: { rejectUnauthorized: false } }));
+  } catch {
+    // undici not available — fall back silently
+  }
+}
+
+// Apply once at module load (dev only)
+patchDevTls();
+
 export async function createSupabaseServerClient() {
   const env = getEnv();
   const cookieStore = await cookies();
@@ -16,7 +37,7 @@ export async function createSupabaseServerClient() {
             cookieStore.set(name, value, options),
           );
         } catch {
-          // Server Components can’t set cookies; ignore.
+          // Server Components can't set cookies; ignore.
         }
       },
     },
@@ -36,4 +57,3 @@ export function createSupabaseServiceRoleClient() {
     },
   });
 }
-

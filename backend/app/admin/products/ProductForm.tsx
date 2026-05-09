@@ -292,9 +292,11 @@ type Props = {
   form: AdminProductForm;
   setForm: Dispatch<SetStateAction<AdminProductForm>>;
   cloudinaryKind?: "product" | "accessory";
+  /** office_staff cannot edit prices */
+  canEditPrice?: boolean;
 };
 
-export function ProductFormFields({ brands, types, form, setForm, cloudinaryKind = "product" }: Props) {
+export function ProductFormFields({ brands, types, form, setForm, cloudinaryKind = "product", canEditPrice = true }: Props) {
   const [aiBusy, setAiBusy] = useState(false);
   const [aiDialog, setAiDialog] = useState<"missing_name" | "replace_description" | "error" | null>(null);
   const [aiError, setAiError] = useState("");
@@ -475,11 +477,33 @@ export function ProductFormFields({ brands, types, form, setForm, cloudinaryKind
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <label className="block">
             <FieldTitle label="Цена (EUR)" info="Цена на уреда (без монтаж), в евро." />
-            <Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} />
+            <div className="relative">
+              <Input
+                type="number"
+                value={form.price}
+                onChange={(e) => canEditPrice && setForm({ ...form, price: Number(e.target.value) })}
+                disabled={!canEditPrice}
+                className={!canEditPrice ? "opacity-60 cursor-not-allowed bg-slate-50" : ""}
+              />
+              {!canEditPrice && (
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-semibold">🔒 само Admin</span>
+              )}
+            </div>
           </label>
           <label className="block">
             <FieldTitle label="Цена с монтаж" info="Цена с включен стандартен монтаж (по избор). Ако е празно, системата може да изчислява ориентировъчно." />
-            <Input value={form.priceWithMount} onChange={(e) => setForm({ ...form, priceWithMount: e.target.value })} placeholder="по избор" />
+            <div className="relative">
+              <Input
+                value={form.priceWithMount}
+                onChange={(e) => canEditPrice && setForm({ ...form, priceWithMount: e.target.value })}
+                placeholder="по избор"
+                disabled={!canEditPrice}
+                className={!canEditPrice ? "opacity-60 cursor-not-allowed bg-slate-50" : ""}
+              />
+              {!canEditPrice && (
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-semibold">🔒</span>
+              )}
+            </div>
           </label>
         </div>
 

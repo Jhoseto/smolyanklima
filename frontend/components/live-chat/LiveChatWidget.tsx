@@ -24,7 +24,7 @@ export type ProductCardData = {
   brand_name?: string | null;
 };
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 const SESSION_KEY = "smolyan-klima-live-chat-v1";
 const TYPING_THROTTLE_MS = 3_000;
 
