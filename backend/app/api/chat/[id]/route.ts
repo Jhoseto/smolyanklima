@@ -2,6 +2,7 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
+import { notifyAdminsLiveChat } from "@/lib/admin-web-push";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -79,6 +80,15 @@ export async function POST(req: NextRequest, { params }: Params) {
       ...(chat.status === "waiting" ? { status: "waiting" } : {}),
     })
     .eq("id", id);
+
+  const preview =
+    parsed.data.content.length > 140 ? `${parsed.data.content.slice(0, 137)}…` : parsed.data.content;
+  void notifyAdminsLiveChat({
+    title: "Ново съобщение — жива връзка",
+    body: `${chat.visitor_name ?? "Посетител"}: ${preview}`,
+    url: "/admin/chat",
+    tag: `live-chat-${id}`,
+  }).catch(() => {});
 
   return withCors(req, NextResponse.json({ message: msg }));
 }

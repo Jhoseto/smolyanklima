@@ -6,10 +6,11 @@ import { InfoDot } from "./ui";
 import { MobileNav } from "./MobileNav";
 import { SplashScreen } from "./SplashScreen";
 import { ChatNavBadge } from "./chat/ChatNavBadge";
+import { AdminPushBanner } from "./AdminPushBanner";
 import {
   LayoutDashboard, Package, Users, FileText, Star,
   History, Activity, Settings, LogOut,
-  ShieldCheck, Wrench, CalendarClock, FolderOpen,
+  ShieldCheck, Wrench, CalendarClock, FolderOpen, MessageSquare,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -55,6 +56,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                 <NavLink href="/admin" label="Табло" icon={<LayoutDashboard className="w-4 h-4" />} />
                 <NavLink href="/admin/contacts" label="Контакти" icon={<Users className="w-4 h-4" />} />
                 <ChatNavBadge />
+                <NavLink href="/admin/inquiries" label="Запитвания" icon={<MessageSquare className="w-4 h-4" />} />
                 <NavLink href="/admin/products" label="Продукти" icon={<Package className="w-4 h-4" />} />
                 <NavLink href="/admin/articles" label="Статии" icon={<FileText className="w-4 h-4" />} />
 
@@ -95,6 +97,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
         {/* Main content */}
         <main className="flex-1 min-h-0 w-full min-w-0 overflow-x-hidden overflow-y-auto p-3 md:p-4 pb-24 md:pb-4">
+          <AdminPushBanner />
           {children}
         </main>
 

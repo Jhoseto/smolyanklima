@@ -2,6 +2,7 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
+import { notifyAdminsLiveChat } from "@/lib/admin-web-push";
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflight(req);
@@ -150,6 +151,13 @@ export async function POST(req: NextRequest) {
         });
       }
 
+      void notifyAdminsLiveChat({
+        title: "Нова жива връзка",
+        body: `${newChat.visitor_name} изчаква консултант`,
+        url: "/admin/chat",
+        tag: `live-chat-${newChat.id}`,
+      }).catch(() => {});
+
       return withCors(req, NextResponse.json({
         chatId: newChat.id,
         sessionToken: newChat.session_token,
@@ -195,6 +203,13 @@ export async function POST(req: NextRequest) {
       content: `— Прехвърлен от AI асистент. Контекст от разговора (${ai_context.length} съобщения) —`,
     });
   }
+
+  void notifyAdminsLiveChat({
+    title: "Нова жива връзка",
+    body: `${chat.visitor_name} изчаква консултант`,
+    url: "/admin/chat",
+    tag: `live-chat-${chat.id}`,
+  }).catch(() => {});
 
   return withCors(req, NextResponse.json({
     chatId: chat.id,

@@ -1,7 +1,7 @@
 {
   "name": "SmolyanKlima Admin",
   "short_name": "SK Admin",
-  "description": "Административен панел — продукти, запитвания, контакти, календар",
+  "description": "Административен панел за служители — отделно от клиентския сайт",
   "start_url": "/admin",
   "scope": "/admin",
   "display": "standalone",

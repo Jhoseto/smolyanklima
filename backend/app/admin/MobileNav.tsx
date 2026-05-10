@@ -7,7 +7,7 @@ import { logoutAction } from "@/app/login/actions";
 import {
   LayoutDashboard, Package, Users, MoreHorizontal, X,
   FileText, Star, History, Activity, Settings, LogOut, Headphones,
-  ShieldCheck, Wrench,
+  ShieldCheck, Wrench, FolderOpen, MessageSquare,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/admin/db";
 
@@ -15,27 +15,38 @@ export function MobileNav({ role }: { role: AdminRole }) {
   const primaryLinks = role === "service_staff"
     ? [
         { href: "/admin/service/tasks", label: "Задачи", icon: Wrench, exact: false },
-        { href: "/admin/service/documents", label: "Документи", icon: FileText, exact: false },
+        { href: "/admin/service/documents", label: "Документи", icon: FolderOpen, exact: false },
       ]
-    : [
-        { href: "/admin", label: "Табло", icon: LayoutDashboard, exact: true },
-        { href: "/admin/contacts", label: "Контакти", icon: Users, exact: false },
-        { href: "/admin/chat", label: "Чат", icon: Headphones, exact: false },
-        { href: "/admin/service/tasks", label: "Сервиз", icon: Wrench, exact: false },
-      ];
+    : role === "office_staff"
+      ? [
+          { href: "/admin", label: "Табло", icon: LayoutDashboard, exact: true },
+          { href: "/admin/contacts", label: "Контакти", icon: Users, exact: false },
+          { href: "/admin/chat", label: "Чат", icon: Headphones, exact: false },
+          { href: "/admin/inquiries", label: "Запитвания", icon: MessageSquare, exact: false },
+        ]
+      : [
+          { href: "/admin", label: "Табло", icon: LayoutDashboard, exact: true },
+          { href: "/admin/contacts", label: "Контакти", icon: Users, exact: false },
+          { href: "/admin/chat", label: "Чат", icon: Headphones, exact: false },
+          { href: "/admin/service", label: "Сервиз", icon: Wrench, exact: false },
+        ];
 
   const moreLinks = role === "service_staff"
-    ? []
+    ? [{ href: "/admin/service/documents", label: "Документи", icon: FolderOpen }]
     : [
         { href: "/admin/products", label: "Продукти", icon: Package },
         { href: "/admin/articles", label: "Статии", icon: FileText },
-        ...(role === "master_admin" ? [
-          { href: "/admin/ratings", label: "Оценки", icon: Star },
-          { href: "/admin/history", label: "История продажби", icon: History },
-          { href: "/admin/activity", label: "Активност", icon: Activity },
-          { href: "/admin/staff", label: "Персонал", icon: ShieldCheck },
-          { href: "/admin/settings", label: "Настройки", icon: Settings },
-        ] : []),
+        ...(role === "master_admin"
+          ? [
+              { href: "/admin/inquiries", label: "Запитвания", icon: MessageSquare },
+              { href: "/admin/service/documents", label: "Документи", icon: FolderOpen },
+              { href: "/admin/ratings", label: "Оценки", icon: Star },
+              { href: "/admin/history", label: "История продажби", icon: History },
+              { href: "/admin/activity", label: "Активност", icon: Activity },
+              { href: "/admin/staff", label: "Персонал", icon: ShieldCheck },
+              { href: "/admin/settings", label: "Настройки", icon: Settings },
+            ]
+          : []),
       ];
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);

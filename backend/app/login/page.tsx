@@ -1,4 +1,5 @@
 import { loginAction } from "./actions";
+import { LoginPWAInstall } from "./LoginPWAInstall";
 
 export const metadata = {
   title: "Вход — администрация | Смолян Клима",
@@ -39,6 +40,8 @@ export default async function LoginPage({
             </p>
           </div>
         </div>
+
+        <LoginPWAInstall />
 
         <h1 className="login-title">Вход в системата</h1>
         <p className="login-sub">Въведете телефонния си номер или имейл и паролата си.</p>
