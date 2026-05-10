@@ -96,7 +96,7 @@ class HallucinationGuard {
         this.violations.push({
           type: 'price_mismatch',
           field: 'price',
-          claimed: `${price} lv`,
+          claimed: `${price} €`,
           actual: 'No matching product found',
           severity: 'error',
         });

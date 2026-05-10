@@ -12,10 +12,10 @@ const AREA_TO_KW: Record<string, number> = {
 
 // ── Budget → EUR max price ─────────────────────────────────────────────────────
 const BUDGET_MAX_EUR: Record<string, number> = {
-  budget:  461,   // до ~900 лв.
-  mid:     718,   // 900–1400 лв.
-  comfort: 1128,  // 1400–2200 лв.
-  premium: 9999,  // над 2200 лв.
+  budget:  461,   // до ~€460
+  mid:     718,   // до ~€720
+  comfort: 1128,  // до ~€1130
+  premium: 9999,  // без горна граница
 };
 
 // ── Installation cost calculation (in EUR) ─────────────────────────────────────

@@ -45,7 +45,7 @@ export function ShareToChatModal({ product, onClose }: Props) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          content: `Препоръчан продукт: ${product.name}${product.price_from ? ` — от ${product.price_from.toLocaleString("bg-BG")} лв.` : ""}`,
+          content: `Препоръчан продукт: ${product.name}${product.price_from ? ` — от €${product.price_from.toLocaleString("bg-BG")}` : ""}`,
           metadata: {
             type: "product_card",
             product: {
@@ -93,7 +93,7 @@ export function ShareToChatModal({ product, onClose }: Props) {
           <div>
             {product.brand_name && <p className="text-[10px] font-bold text-sky-600 uppercase">{product.brand_name}</p>}
             <p className="text-sm font-bold text-slate-900">{product.name}</p>
-            {product.price_from && <p className="text-sm font-bold text-orange-500">{product.price_from.toLocaleString("bg-BG")} лв.</p>}
+            {product.price_from && <p className="text-sm font-bold text-orange-500">€{product.price_from.toLocaleString("bg-BG")}</p>}
           </div>
         </div>
 

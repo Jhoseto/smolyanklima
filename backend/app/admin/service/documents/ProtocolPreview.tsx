@@ -208,7 +208,7 @@ export function ProtocolPreview({
                     <div>
                       <span className="text-xs text-slate-600">Платена сума:</span>
                       <span className="block border-b border-black border-dotted mt-0.5 pb-0.5 font-semibold">
-                        {row.paid_amount != null ? `${Number(row.paid_amount).toFixed(2)} лв.` : "—"}
+                        {row.paid_amount != null ? `€${Number(row.paid_amount).toFixed(2)}` : "—"}
                       </span>
                     </div>
                     {(row.client_phone || row.client_email) && (

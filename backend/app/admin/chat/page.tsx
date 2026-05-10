@@ -647,7 +647,7 @@ function AdminChatBubble({ msg, grouped }: { msg: ChatMsg & { metadata?: { type?
           <div className="px-3 py-2">
             {p.brand_name && <p className="text-[10px] font-semibold text-sky-600 uppercase">{p.brand_name}</p>}
             <p className="text-xs font-bold text-slate-900">{p.name}</p>
-            {p.price_from && <p className="text-xs font-bold text-orange-500 mt-0.5">{p.price_from.toLocaleString("bg-BG")} лв.</p>}
+            {p.price_from && <p className="text-xs font-bold text-orange-500 mt-0.5">€{p.price_from.toLocaleString("bg-BG")}</p>}
           </div>
         </a>
         {isAdmin && <div className="w-7 h-7 rounded-full bg-gradient-to-br from-sky-500 to-sky-700 flex items-center justify-center shrink-0 self-end mb-1"><Headphones className="w-3.5 h-3.5 text-white" /></div>}

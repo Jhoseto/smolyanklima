@@ -638,7 +638,7 @@ function ProductCardMessage({ product, onNavigate, isAdmin }: { product: Product
           {product.brand_name && <p className="text-[10px] font-semibold text-[#00B4D8] uppercase tracking-wide">{product.brand_name}</p>}
           <p className="text-sm font-bold text-slate-900 leading-tight mt-0.5">{product.name}</p>
           {product.price_from && (
-            <p className="text-sm font-bold text-[#FF4D00] mt-1">{product.price_from.toLocaleString("bg-BG")} лв.</p>
+            <p className="text-sm font-bold text-[#FF4D00] mt-1">€{product.price_from.toLocaleString("bg-BG")}</p>
           )}
           <div className="flex items-center gap-1 mt-2 text-[11px] text-[#00B4D8] font-medium">
             <ExternalLink className="w-3 h-3" /> Виж детайли

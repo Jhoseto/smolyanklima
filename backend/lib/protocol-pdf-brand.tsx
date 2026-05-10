@@ -6,8 +6,8 @@ import { View, Text, Svg, Path, Circle, Defs, LinearGradient, Stop } from "@reac
 
 export function ProtocolPdfBrandMark() {
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-      <Svg width={22} height={27} viewBox="0 5 73 90">
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+      <Svg width={28} height={34} viewBox="0 5 73 90">
         <Defs>
           <LinearGradient id="pdfSkOrange" x1="0%" y1="0%" x2="100%" y2="100%">
             <Stop offset="0%" stopColor="#FF4D00" />
@@ -32,10 +32,10 @@ export function ProtocolPdfBrandMark() {
         <Path d="M 37.4 53 A 13 13 0 0 0 62.6 53 Z" fill="url(#pdfSkBlue)" />
       </Svg>
       <View style={{ flexDirection: "row", alignItems: "baseline" }}>
-        <Text style={{ fontFamily: "NotoSans", fontSize: 10.5, fontWeight: "bold", color: "#FF4D00" }}>
+        <Text style={{ fontFamily: "NotoSans", fontSize: 12.5, fontWeight: "bold", color: "#FF4D00" }}>
           СМОЛЯН
         </Text>
-        <Text style={{ fontFamily: "NotoSans", fontSize: 10.5, fontWeight: "bold", color: "#0077B6" }}>
+        <Text style={{ fontFamily: "NotoSans", fontSize: 12.5, fontWeight: "bold", color: "#0077B6" }}>
           КЛИМА
         </Text>
       </View>

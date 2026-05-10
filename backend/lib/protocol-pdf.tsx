@@ -38,25 +38,32 @@ const C = {
 
 const FONT = "NotoSans";
 
+/** По-плътно запълване на A4 (една страница): по-малки полета + по-големи шрифтове/редове. */
+const PAGE_PAD_H = 14;
+const PAGE_PAD_TOP = 8;
+const PAGE_PAD_BOTTOM = 44;
+
 const s = StyleSheet.create({
   page: {
     fontFamily: FONT,
-    fontSize: 6.8,
-    paddingTop: 22,
-    paddingBottom: 52,
-    paddingHorizontal: 26,
+    fontSize: 8,
+    paddingTop: PAGE_PAD_TOP,
+    paddingBottom: PAGE_PAD_BOTTOM,
+    paddingHorizontal: PAGE_PAD_H,
     color: C.ink,
-    lineHeight: 1.15,
+    lineHeight: 1.14,
+    flexDirection: "column",
+    height: "100%",
   },
 
   // ── Хедър като бланка: лого зона | вертикална линия | заглавие ─────────────
   headerOuter: {
     flexDirection: "row",
     alignItems: "stretch",
-    marginBottom: 8,
+    marginBottom: 10,
     borderBottomWidth: W.rule,
     borderBottomColor: C.line,
-    paddingBottom: 6,
+    paddingBottom: 8,
   },
   headerLeftBlock: {
     flexDirection: "row",
@@ -68,9 +75,9 @@ const s = StyleSheet.create({
   headerVRule: {
     width: W.rule,
     backgroundColor: C.line,
-    marginHorizontal: 4,
+    marginHorizontal: 5,
     alignSelf: "stretch",
-    minHeight: 36,
+    minHeight: 44,
   },
   headerRightBlock: {
     flex: 1,
@@ -78,10 +85,10 @@ const s = StyleSheet.create({
     alignItems: "flex-end",
   },
   docTitle: {
-    fontSize: 9.2,
+    fontSize: 11.5,
     fontWeight: "bold",
     textAlign: "right",
-    marginBottom: 2,
+    marginBottom: 3,
   },
   docNoRow: {
     flexDirection: "row",
@@ -89,60 +96,60 @@ const s = StyleSheet.create({
     alignItems: "baseline",
     marginBottom: 2,
   },
-  docNoLabel: { fontSize: 7.6 },
+  docNoLabel: { fontSize: 9 },
   docDateRow: {
     flexDirection: "row",
     justifyContent: "flex-end",
     alignItems: "center",
     gap: 4,
   },
-  docDateLabel: { fontSize: 7 },
+  docDateLabel: { fontSize: 8.4 },
   docDateLine: {
     borderBottomWidth: W.thin,
     borderBottomColor: C.dots,
-    minWidth: 120,
-    fontSize: 7,
-    paddingBottom: 1,
+    minWidth: 132,
+    fontSize: 8.4,
+    paddingBottom: 2,
     textAlign: "center",
   },
 
   // ── Полета клиент (редове с подчертаване) ───────────────────────────────────
   fieldsBlock: {
-    marginBottom: 5,
+    marginBottom: 6,
   },
   underlineRow: {
     flexDirection: "row",
     alignItems: "flex-end",
-    marginBottom: 3,
+    marginBottom: 4,
   },
   ulLabel: {
-    fontSize: 7,
-    width: 108,
-    paddingRight: 4,
+    fontSize: 8.3,
+    width: 118,
+    paddingRight: 5,
   },
   ulLine: {
     flex: 1,
     borderBottomWidth: W.thin,
     borderBottomColor: C.dots,
-    fontSize: 7,
-    paddingBottom: 1,
-    minHeight: 11,
+    fontSize: 8.3,
+    paddingBottom: 2,
+    minHeight: 14,
   },
-  ulTinyLabel: { fontSize: 7, marginLeft: 6, marginRight: 3 },
+  ulTinyLabel: { fontSize: 8.3, marginLeft: 8, marginRight: 4 },
   ulTinyBox: {
-    width: 36,
+    width: 42,
     borderBottomWidth: W.thin,
     borderBottomColor: C.dots,
-    fontSize: 7,
-    paddingBottom: 1,
-    minHeight: 11,
+    fontSize: 8.3,
+    paddingBottom: 2,
+    minHeight: 14,
     textAlign: "center",
   },
 
   twoColTop: {
     flexDirection: "row",
-    gap: 10,
-    marginBottom: 4,
+    gap: 12,
+    marginBottom: 6,
   },
   colLeft:  { flex: 1.15 },
   colRight: { flex: 0.85 },
@@ -150,53 +157,56 @@ const s = StyleSheet.create({
   paidRow: {
     flexDirection: "row",
     alignItems: "flex-end",
-    marginBottom: 4,
+    marginBottom: 5,
   },
-  paidLbl: { fontSize: 7, width: 78 },
+  paidLbl: { fontSize: 8.3, width: 86 },
   paidLine: {
     flex: 1,
     borderBottomWidth: W.thin,
     borderBottomColor: C.dots,
-    fontSize: 7.5,
+    fontSize: 9,
     fontWeight: "bold",
-    paddingBottom: 1,
-    minHeight: 11,
+    paddingBottom: 2,
+    minHeight: 14,
+    textAlign: "center",
   },
 
-  mountHead: { fontSize: 7, marginBottom: 2 },
-  mountRows: { gap: 3 },
-  mountRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  mountCell: { flexDirection: "row", alignItems: "center", gap: 3 },
+  mountHead: { fontSize: 8.3, marginBottom: 3 },
+  mountRows: { gap: 4 },
+  mountRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  mountCell: { flexDirection: "row", alignItems: "center", gap: 4 },
   chk: {
-    width: 7,
-    height: 7,
+    width: 8.5,
+    height: 8.5,
     borderWidth: W.thin,
     borderColor: C.line,
     justifyContent: "center",
     alignItems: "center",
   },
   chkOn: {
-    width: 7,
-    height: 7,
+    width: 8.5,
+    height: 8.5,
     borderWidth: W.thin,
     borderColor: C.line,
     backgroundColor: C.ink,
     justifyContent: "center",
     alignItems: "center",
   },
-  chkMark: { fontSize: 5.5, color: "#fff", marginTop: -0.5 },
-  mountTxt: { fontSize: 6.8 },
+  chkMark: { fontSize: 6.2, color: "#fff", marginTop: -0.5 },
+  mountTxt: { fontSize: 8 },
 
   // ── Голяма таблица материали ────────────────────────────────────────────────
   matOuter: {
     flexDirection: "row",
     borderWidth: W.thin,
     borderColor: C.line,
-    marginBottom: 4,
+    marginBottom: 6,
+    flexGrow: 1,
   },
-  matHalf: { flex: 1 },
+  matHalf: { flex: 1, flexDirection: "column" },
   matHalfR: {
     flex: 1,
+    flexDirection: "column",
     borderLeftWidth: W.thin,
     borderLeftColor: C.line,
   },
@@ -205,86 +215,111 @@ const s = StyleSheet.create({
     alignItems: "stretch",
     borderBottomWidth: W.hairline,
     borderBottomColor: C.line,
-    minHeight: 13,
+    flexGrow: 1,
+    minHeight: 17,
   },
   matRowLast: {
     flexDirection: "row",
     alignItems: "stretch",
-    minHeight: 13,
+    flexGrow: 1,
+    minHeight: 17,
   },
   matDesc: {
     flex: 1,
-    paddingLeft: 4,
-    paddingRight: 3,
-    paddingVertical: 2,
+    paddingLeft: 5,
+    paddingRight: 4,
+    paddingVertical: 3,
     justifyContent: "center",
-    fontSize: 6.6,
+    fontSize: 8,
   },
-  matQty: {
-    width: 26,
+  matQtyCell: {
+    width: 32,
     borderLeftWidth: W.hairline,
     borderLeftColor: C.line,
     justifyContent: "center",
     alignItems: "center",
-    fontSize: 6.8,
-    paddingVertical: 2,
+    paddingVertical: 3,
+    alignSelf: "stretch",
+  },
+  matQtyText: {
+    fontSize: 8.2,
+    textAlign: "center",
+    width: "100%",
   },
 
   // ── Кабелни канали (като на бланката) ───────────────────────────────────────
   cableWrap: {
     borderWidth: W.thin,
     borderColor: C.line,
-    paddingHorizontal: 5,
-    paddingVertical: 4,
-    marginBottom: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 6,
+    marginBottom: 6,
     gap: 4,
   },
-  cableRow: {
+  /** Без flexWrap — иначе @react-pdf/renderer подрежда клетките криво и цифрите се припокриват с етикетите. */
+  cableGridRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "flex-end",
-    gap: 10,
-    rowGap: 6,
+    alignItems: "flex-start",
+    gap: 5,
+    marginBottom: 4,
   },
-  cablePair: { flexDirection: "row", alignItems: "flex-end", gap: 3 },
-  cableLbl: { fontSize: 6.8, maxWidth: 118 },
-  cableBox: {
-    minWidth: 22,
+  cableCell: {
+    flex: 1,
+    flexDirection: "column",
+    minWidth: 0,
+  },
+  cableCellSingle: {
+    width: "38%",
+    maxWidth: 160,
+    flexDirection: "column",
+  },
+  cableLblCol: {
+    fontSize: 8,
+    marginBottom: 3,
+    width: "100%",
+  },
+  cableBoxWrap: {
+    width: "100%",
     borderBottomWidth: W.thin,
     borderBottomColor: C.dots,
-    fontSize: 6.8,
-    textAlign: "center",
     paddingBottom: 1,
-    minHeight: 10,
+    minHeight: 12,
+    justifyContent: "flex-end",
+    alignItems: "center",
+  },
+  cableBoxText: {
+    fontSize: 8,
+    textAlign: "center",
+    width: "100%",
   },
 
-  notesHead: { fontSize: 7, marginBottom: 3 },
+  notesHead: { fontSize: 8.4, marginBottom: 4 },
   notesBox: {
     borderWidth: W.thin,
     borderColor: C.line,
-    minHeight: 38,
-    padding: 5,
-    marginBottom: 6,
+    minHeight: 52,
+    padding: 7,
+    marginBottom: 8,
   },
-  notesLineText: { fontSize: 7, marginBottom: 5 },
+  notesLineText: { fontSize: 8.3, marginBottom: 6 },
   notesDots: {
     borderBottomWidth: W.hairline,
     borderBottomColor: C.line,
-    marginBottom: 5,
-    minHeight: 9,
+    marginBottom: 6,
+    minHeight: 11,
   },
 
   sigWrap: {
     flexDirection: "row",
-    gap: 14,
-    marginTop: 4,
+    gap: 18,
+    marginTop: 6,
   },
   sigCol: { flex: 1 },
-  sigCap: { fontSize: 7, marginBottom: 4 },
+  sigCap: { fontSize: 8.3, marginBottom: 5 },
   sigArea: {
     borderBottomWidth: W.rule,
     borderBottomColor: C.line,
-    minHeight: 32,
+    minHeight: 42,
     position: "relative",
     justifyContent: "flex-end",
   },
@@ -293,22 +328,22 @@ const s = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: 30,
+    height: 38,
     objectFit: "contain",
     objectPosition: "center bottom",
   },
 
   footerFixed: {
     position: "absolute",
-    bottom: 18,
-    left: 26,
-    right: 26,
+    bottom: 12,
+    left: PAGE_PAD_H,
+    right: PAGE_PAD_H,
     borderTopWidth: W.hairline,
     borderTopColor: C.line,
-    paddingTop: 5,
+    paddingTop: 6,
   },
   footerTxt: {
-    fontSize: 6.2,
+    fontSize: 7.2,
     color: C.muted,
     textAlign: "center",
     lineHeight: 1.35,
@@ -362,7 +397,6 @@ export function ProtocolPDF({ data }: { data: ProtocolData }) {
   const acc = data.accessories as Partial<AccessoriesEntry>;
   const dateStr = fmtDate(data.date);
 
-  const cableFirstRowKeys = ["cable_channels_m"] as const;
   const cableSecondRowKeys = ["outer_corner", "inner_corner", "angle_out", "connector"] as const;
   const cableThirdRowKeys = ["inner_cap", "outer_cap", "end_cap", "holder"] as const;
 
@@ -415,7 +449,7 @@ export function ProtocolPDF({ data }: { data: ProtocolData }) {
             <View style={s.paidRow}>
               <Text style={s.paidLbl}>Платена сума:</Text>
               <Text style={s.paidLine}>
-                {data.paid_amount != null ? `${data.paid_amount.toFixed(2)} лв.` : ""}
+                {data.paid_amount != null ? `€${data.paid_amount.toFixed(2)}` : ""}
               </Text>
             </View>
             <Text style={s.mountHead}>Начин на монтаж:</Text>
@@ -449,7 +483,9 @@ export function ProtocolPDF({ data }: { data: ProtocolData }) {
                   <Text style={s.matDesc}>
                     {mat.name}/{mat.unit}
                   </Text>
-                  <Text style={s.matQty}>{qtyCell(qtyMap[mat.id])}</Text>
+                  <View style={s.matQtyCell}>
+                    <Text style={s.matQtyText}>{qtyCell(qtyMap[mat.id])}</Text>
+                  </View>
                 </View>
               );
             })}
@@ -463,7 +499,9 @@ export function ProtocolPDF({ data }: { data: ProtocolData }) {
                   <Text style={s.matDesc}>
                     {mat.name}/{mat.unit}
                   </Text>
-                  <Text style={s.matQty}>{qtyCell(qtyMap[mat.id])}</Text>
+                  <View style={s.matQtyCell}>
+                    <Text style={s.matQtyText}>{qtyCell(qtyMap[mat.id])}</Text>
+                  </View>
                 </View>
               );
             })}
@@ -471,31 +509,33 @@ export function ProtocolPDF({ data }: { data: ProtocolData }) {
         </View>
 
         <View style={s.cableWrap}>
-          <View style={s.cableRow}>
-            {cableFirstRowKeys.map(k => (
-              <View key={k} style={s.cablePair}>
-                <Text style={s.cableLbl}>{ACCESSORIES_LABELS[k]}</Text>
-                <Text style={s.cableBox}>
-                  {k === "cable_channels_m"
-                    ? (acc.cable_channels_m ? String(acc.cable_channels_m) : "")
-                    : ""}
+          <View style={s.cableGridRow}>
+            <View style={s.cableCellSingle}>
+              <Text style={s.cableLblCol}>{ACCESSORIES_LABELS.cable_channels_m}</Text>
+              <View style={s.cableBoxWrap}>
+                <Text style={s.cableBoxText}>
+                  {acc.cable_channels_m ? String(acc.cable_channels_m) : ""}
                 </Text>
               </View>
-            ))}
+            </View>
           </View>
-          <View style={s.cableRow}>
+          <View style={s.cableGridRow}>
             {cableSecondRowKeys.map(k => (
-              <View key={k} style={s.cablePair}>
-                <Text style={s.cableLbl}>{ACCESSORIES_LABELS[k]}</Text>
-                <Text style={s.cableBox}>{acc[k] ? String(acc[k]) : ""}</Text>
+              <View key={k} style={s.cableCell}>
+                <Text style={s.cableLblCol}>{ACCESSORIES_LABELS[k]}</Text>
+                <View style={s.cableBoxWrap}>
+                  <Text style={s.cableBoxText}>{acc[k] ? String(acc[k]) : ""}</Text>
+                </View>
               </View>
             ))}
           </View>
-          <View style={s.cableRow}>
+          <View style={s.cableGridRow}>
             {cableThirdRowKeys.map(k => (
-              <View key={k} style={s.cablePair}>
-                <Text style={s.cableLbl}>{ACCESSORIES_LABELS[k]}</Text>
-                <Text style={s.cableBox}>{acc[k] ? String(acc[k]) : ""}</Text>
+              <View key={k} style={s.cableCell}>
+                <Text style={s.cableLblCol}>{ACCESSORIES_LABELS[k]}</Text>
+                <View style={s.cableBoxWrap}>
+                  <Text style={s.cableBoxText}>{acc[k] ? String(acc[k]) : ""}</Text>
+                </View>
               </View>
             ))}
           </View>

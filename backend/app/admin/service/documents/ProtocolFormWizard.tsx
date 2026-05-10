@@ -272,7 +272,7 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
                   className="w-full text-base border-b-2 border-slate-300 focus:border-blue-500 outline-none py-2 bg-transparent"
                 />
               </Field>
-              <Field label="Платена сума (лв.)">
+              <Field label="Платена сума (€)">
                 <input
                   type="number" value={form.paid_amount} placeholder="0.00" min="0" step="0.01"
                   onChange={e => update("paid_amount", e.target.value)}
