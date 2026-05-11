@@ -11,8 +11,8 @@
     </linearGradient>
   </defs>
   <rect width="200" height="200" rx="36" fill="white"/>
-  <g transform="translate(35,11) scale(1.778)">
-    <circle cx="12" cy="12" r="5" stroke="url(#og)" stroke-width="3" fill="none"/>
+  <!-- Само „C“, център (40, 50); мащаб 176/71 за полета в 200×200 -->
+  <g transform="translate(100,100) scale(2.47887324) translate(-40,-50)">
     <path d="M70 15.4A40 40 0 0 0 10.1 47L28.2 47A22 22 0 0 1 61 30.9Z" fill="url(#og)"/>
     <path d="M10.1 53A40 40 0 0 0 70 84.6L61 69.1A22 22 0 0 1 28.2 53Z" fill="url(#ob)"/>
     <path d="M62.6 47A13 13 0 0 0 37.4 47Z" fill="url(#og)"/>

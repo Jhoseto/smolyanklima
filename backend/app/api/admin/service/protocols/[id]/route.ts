@@ -41,7 +41,7 @@ export async function GET(
   try { session = await adminSession(); }
   catch { return withCors(req, NextResponse.json({ error: "Неоторизиран достъп" }, { status: 401 })); }
 
-  try { requireRole(session, "master_admin", "service_staff"); }
+  try { requireRole(session, "master_admin", "office_staff", "service_staff"); }
   catch { return withCors(req, NextResponse.json({ error: "Забранен достъп" }, { status: 403 })); }
 
   const { id } = await params;
@@ -68,12 +68,13 @@ export async function PUT(
   try { session = await adminSession(); }
   catch { return withCors(req, NextResponse.json({ error: "Неоторизиран достъп" }, { status: 401 })); }
 
-  try { requireRole(session, "master_admin", "service_staff"); }
+  try { requireRole(session, "master_admin", "office_staff", "service_staff"); }
   catch { return withCors(req, NextResponse.json({ error: "Забранен достъп" }, { status: 403 })); }
 
   const { id } = await params;
 
-  // Провери ownership за service_staff
+  // Сервизни служители записват само протоколи, създадени от тях (магьосникът ползва PUT при автозапазване).
+  // Редакция „от списъка“ за чужди протоколи им е недостъпна от UI (няма бутон „Редактирай“ в прегледа).
   if (session.role === "service_staff") {
     const { data: existing } = await session.db
       .from("service_protocols")

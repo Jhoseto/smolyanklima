@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { X, Pencil, Download, Loader2 } from "lucide-react";
+import { X, Pencil, Download, Loader2, Mail } from "lucide-react";
 import { Logo } from "@/app/admin/ui/Logo";
+import type { AdminRole } from "@/lib/admin/db";
 import {
   LEFT_MATERIALS,
   RIGHT_MATERIALS,
@@ -16,6 +17,7 @@ interface Props {
   protocolNumber: string;
   clientLabel: string;
   dateLabel: string;
+  role: AdminRole;
   onClose: () => void;
   onEdit: () => void;
 }
@@ -69,14 +71,30 @@ export function ProtocolPreview({
   protocolNumber,
   clientLabel,
   dateLabel,
+  role,
   onClose,
   onEdit,
 }: Props) {
   const [row, setRow] = useState<ProtocolRow | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [emailTo, setEmailTo] = useState("");
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [emailFeedback, setEmailFeedback] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const canEditProtocol = role === "master_admin" || role === "office_staff";
 
   const pdfUrl = `/api/admin/service/protocols/${protocolId}/pdf`;
+
+  useEffect(() => {
+    setEmailTo("");
+    setEmailFeedback(null);
+  }, [protocolId]);
+
+  useEffect(() => {
+    const em = row?.client_email?.trim();
+    if (em) setEmailTo(em);
+  }, [row?.client_email]);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,6 +129,39 @@ export function ProtocolPreview({
 
   const mountSet = useMemo(() => new Set(row?.mount_types ?? []), [row?.mount_types]);
 
+  async function sendProtocolEmail() {
+    const trimmed = emailTo.trim();
+    if (!trimmed) {
+      setEmailFeedback({ ok: false, text: "Въведете имейл адрес." });
+      return;
+    }
+    setEmailBusy(true);
+    setEmailFeedback(null);
+    try {
+      const res = await fetch(`/api/admin/service/protocols/${protocolId}/email`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: trimmed }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { error?: string; skipped?: boolean };
+      if (!res.ok) throw new Error(json.error ?? "Грешка при изпращане");
+      const skipped = Boolean(json.skipped);
+      setEmailFeedback({
+        ok: true,
+        text: skipped ? "Имейл услугата не е конфигурирана — изпращането е пропуснато." : "Протоколът е изпратен на имейла.",
+      });
+      if (!skipped) setRow(prev => (prev ? { ...prev, status: "sent" } : null));
+    } catch (e) {
+      setEmailFeedback({
+        ok: false,
+        text: e instanceof Error ? e.message : "Грешка при изпращане",
+      });
+    } finally {
+      setEmailBusy(false);
+    }
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex flex-col bg-black/45 backdrop-blur-[2px]"
@@ -120,37 +171,74 @@ export function ProtocolPreview({
     >
       <div className="flex flex-1 flex-col bg-slate-100 w-full h-full md:max-w-3xl md:mx-auto md:my-3 md:rounded-2xl md:shadow-2xl md:max-h-[calc(100vh-1.5rem)] overflow-hidden border border-slate-200 md:border-0">
         {/* Лента */}
-        <div className="flex items-center gap-2 px-3 py-3 sm:px-4 border-b border-slate-200 bg-white shrink-0 safe-top">
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 rounded-xl text-slate-600 hover:bg-slate-100 active:bg-slate-200"
-            aria-label="Затвори"
-          >
-            <X className="w-5 h-5" />
-          </button>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-slate-900 truncate">{protocolNumber}</p>
-            <p className="text-xs text-slate-500 truncate">
-              {clientLabel || "—"} · {dateLabel}
-            </p>
+        <div className="border-b border-slate-200 bg-white shrink-0 safe-top">
+          <div className="flex flex-wrap items-center gap-2 px-3 py-3 sm:px-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 rounded-xl text-slate-600 hover:bg-slate-100 active:bg-slate-200"
+              aria-label="Затвори"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="flex-1 min-w-0 basis-[min(100%,180px)]">
+              <p className="text-sm font-bold text-slate-900 truncate">{protocolNumber}</p>
+              <p className="text-xs text-slate-500 truncate">
+                {clientLabel || "—"} · {dateLabel}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => window.open(pdfUrl, "_blank")}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900 shrink-0"
+            >
+              <Download className="w-4 h-4" />
+              PDF
+            </button>
+            {canEditProtocol ? (
+              <button
+                type="button"
+                onClick={onEdit}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shrink-0"
+              >
+                <Pencil className="w-4 h-4" />
+                Редактирай
+              </button>
+            ) : null}
           </div>
-          <button
-            type="button"
-            onClick={() => window.open(pdfUrl, "_blank")}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900 shrink-0"
-          >
-            <Download className="w-4 h-4" />
-            PDF
-          </button>
-          <button
-            type="button"
-            onClick={onEdit}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shrink-0"
-          >
-            <Pencil className="w-4 h-4" />
-            Редактирай
-          </button>
+          {!loading && !loadErr && row ? (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 px-3 pb-3 sm:px-4 sm:pb-3 pt-0 border-t border-slate-100">
+              <label className="sr-only" htmlFor={`proto-email-${protocolId}`}>
+                Имейл за изпращане на протокола
+              </label>
+              <input
+                id={`proto-email-${protocolId}`}
+                type="email"
+                autoComplete="email"
+                placeholder="Имейл на получателя"
+                value={emailTo}
+                onChange={e => { setEmailTo(e.target.value); setEmailFeedback(null); }}
+                className="flex-1 min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-sky-400"
+              />
+              <button
+                type="button"
+                disabled={emailBusy}
+                onClick={() => void sendProtocolEmail()}
+                className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-60 shrink-0"
+              >
+                {emailBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                Изпрати имейл
+              </button>
+              {emailFeedback ? (
+                <p
+                  className={`text-xs font-medium sm:ml-1 ${emailFeedback.ok ? "text-emerald-700" : "text-red-600"}`}
+                  role="status"
+                >
+                  {emailFeedback.text}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         {/* Преглед като формуляр */}

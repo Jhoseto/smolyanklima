@@ -36,6 +36,9 @@ export function MobileNav({ role }: { role: AdminRole }) {
     : [
         { href: "/admin/products", label: "Продукти", icon: Package },
         { href: "/admin/articles", label: "Статии", icon: FileText },
+        ...(role === "office_staff"
+          ? [{ href: "/admin/service/documents", label: "Документи", icon: FolderOpen }]
+          : []),
         ...(role === "master_admin"
           ? [
               { href: "/admin/inquiries", label: "Запитвания", icon: MessageSquare },

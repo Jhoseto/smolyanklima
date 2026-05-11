@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { ProtocolFormWizard } from "./ProtocolFormWizard";
 import { ProtocolPreview } from "./ProtocolPreview";
+import type { AdminRole } from "@/lib/admin/db";
 
 type ProtocolStatus = "draft" | "signed" | "sent";
 
@@ -28,10 +29,10 @@ const STATUS_CONFIG: Record<ProtocolStatus, { label: string; icon: React.Compone
 };
 
 interface Props {
-  role?: string;
+  role: AdminRole;
 }
 
-export function DocumentsClient({}: Props) {
+export function DocumentsClient({ role }: Props) {
   const [protocols, setProtocols]     = useState<Protocol[]>([]);
   const [total, setTotal]             = useState(0);
   const [page, setPage]               = useState(1);
@@ -96,6 +97,7 @@ export function DocumentsClient({}: Props) {
         protocolNumber={preview.protocol_number}
         clientLabel={[preview.client_name, preview.ac_model].filter(Boolean).join(" · ") || "—"}
         dateLabel={formatDate(preview.date)}
+        role={role}
         onClose={() => setPreview(null)}
         onEdit={() => openEdit(preview.id)}
       />

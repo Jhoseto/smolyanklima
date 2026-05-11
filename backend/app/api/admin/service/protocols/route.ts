@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
   try { session = await adminSession(); }
   catch { return withCors(req, NextResponse.json({ error: "Неоторизиран достъп" }, { status: 401 })); }
 
-  try { requireRole(session, "master_admin", "service_staff"); }
+  try { requireRole(session, "master_admin", "office_staff", "service_staff"); }
   catch { return withCors(req, NextResponse.json({ error: "Забранен достъп" }, { status: 403 })); }
 
   const params = Object.fromEntries(req.nextUrl.searchParams.entries());
@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
     .order("created_at", { ascending: false })
     .range(offset, offset + perPage - 1);
 
-  // service_staff вижда само своите
+  // service_staff вижда само своите; офис и master — всички
   if (session.role === "service_staff") {
     query = query.eq("created_by", session.userId);
   }
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
   try { session = await adminSession(); }
   catch { return withCors(req, NextResponse.json({ error: "Неоторизиран достъп" }, { status: 401 })); }
 
-  try { requireRole(session, "master_admin", "service_staff"); }
+  try { requireRole(session, "master_admin", "office_staff", "service_staff"); }
   catch { return withCors(req, NextResponse.json({ error: "Забранен достъп" }, { status: 403 })); }
 
   const json = await req.json().catch(() => null);

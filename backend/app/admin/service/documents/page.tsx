@@ -13,9 +13,5 @@ export default async function ServiceDocumentsPage() {
     redirect("/login");
   }
 
-  if (session.role === "office_staff") {
-    redirect("/admin");
-  }
-
   return <DocumentsClient role={session.role} />;
 }
