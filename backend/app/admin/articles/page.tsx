@@ -18,7 +18,7 @@ export default async function AdminArticlesPage() {
         <h1 className="text-lg md:text-xl font-bold text-slate-900 leading-tight">
           <SectionTitle title="Статии" hint="Управление на блог съдържание, SEO и публикуване." />
         </h1>
-        <Link href="/admin/articles/new" className="inline-flex items-center gap-2 bg-sky-600 text-white px-3 py-2 rounded-xl font-semibold hover:bg-sky-700 active:bg-sky-800 transition-colors shadow-sm text-sm">
+        <Link href="/admin/articles/new" className="inline-flex items-center gap-2 bg-brand-blue-500 text-white px-3 py-2 rounded-xl font-semibold hover:bg-brand-blue-700 active:bg-brand-blue-700 transition-colors shadow-sm text-sm">
           <Plus className="w-4 h-4" />
           <span className="hidden sm:inline">Нова статия</span>
           <span className="sm:hidden">Нова</span>
@@ -53,7 +53,7 @@ export default async function AdminArticlesPage() {
                 <Td><span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${a.is_published ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>{a.is_published ? "Да" : "Не"}</span></Td>
                 <Td><span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${a.is_featured ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"}`}>{a.is_featured ? "Да" : "Не"}</span></Td>
                 <Td>
-                  <Link href={`/admin/articles/${a.id}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:border-sky-300 hover:bg-sky-50 text-slate-700 hover:text-sky-700 rounded-lg text-xs font-bold transition-colors shadow-sm">
+                  <Link href={`/admin/articles/${a.id}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:border-brand-blue-300 hover:bg-brand-blue-50 text-slate-700 hover:text-brand-blue-700 rounded-lg text-xs font-bold transition-colors shadow-sm">
                     <Edit className="w-3.5 h-3.5" /> Редакция
                   </Link>
                 </Td>
@@ -86,7 +86,7 @@ export default async function AdminArticlesPage() {
               </div>
             </div>
             <div className="border-t border-slate-100">
-              <Link href={`/admin/articles/${a.id}`} className="flex items-center justify-center gap-2 py-3 text-sm font-semibold text-sky-700 hover:bg-sky-50 active:bg-sky-100 transition-colors">
+              <Link href={`/admin/articles/${a.id}`} className="flex items-center justify-center gap-2 py-3 text-sm font-semibold text-brand-blue-700 hover:bg-brand-blue-50 active:bg-brand-blue-100 transition-colors">
                 <Edit className="w-4 h-4" /> Редакция
               </Link>
             </div>

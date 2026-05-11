@@ -3,6 +3,11 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
+import { PUBLIC_CATALOG_STOCK_STATUSES } from "@/lib/catalog/publicProductVisibility";
+
+function isProductPublicLookupUuid(s: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s.trim());
+}
 import { allowPublicPost, getClientIdFromRequest } from "@/lib/rate-limit";
 
 const BodySchema = z
@@ -27,6 +32,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
   }
 
   const { slug } = await ctx.params;
+  const key = String(slug ?? "").trim();
   const json = await req.json().catch(() => null);
   const parsed = BodySchema.safeParse(json);
   if (!parsed.success) {
@@ -34,12 +40,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
   }
 
   const supabase = createSupabaseServiceRoleClient();
-  const { data: p, error: pErr } = await supabase
+  let q = supabase
     .from("products")
     .select("id")
-    .eq("slug", slug)
-    .eq("is_active", true)
-    .maybeSingle();
+    .in("stock_status", PUBLIC_CATALOG_STOCK_STATUSES as unknown as string[]);
+  q = isProductPublicLookupUuid(key) ? q.eq("id", key) : q.eq("slug", key);
+  const { data: p, error: pErr } = await q.maybeSingle();
   if (pErr) return withCors(req, NextResponse.json({ error: pErr.message }, { status: 500 }));
   if (!p) return withCors(req, NextResponse.json({ error: "Not found" }, { status: 404 }));
 

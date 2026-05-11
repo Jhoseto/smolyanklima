@@ -18,7 +18,7 @@ type ChatStatus = "waiting" | "active" | "closed";
 export type ProductCardData = {
   id: string;
   name: string;
-  slug: string;
+  slug?: string | null;
   image_url?: string | null;
   price_from?: number | null;
   brand_name?: string | null;
@@ -73,8 +73,8 @@ export interface LiveChatWidgetProps {
   aiContext?: Array<{ role: "user" | "assistant"; content: string }>;
   onClose?: () => void;
   initialName?: string;
-  /** Called when a product card is clicked — navigate without closing chat */
-  onNavigate?: (slug: string) => void;
+  /** Called when a product card is clicked — navigate without closing chat (product id) */
+  onNavigate?: (productId: string) => void;
   /** Unread message count callback for parent (floating badge) */
   onUnreadChange?: (count: number) => void;
 }
@@ -551,7 +551,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 
 // ─── Message list with grouping ───────────────────────────────────────────────
 
-function MessageList({ messages, onNavigate }: { messages: ChatMsg[]; onNavigate?: (slug: string) => void }) {
+function MessageList({ messages, onNavigate }: { messages: ChatMsg[]; onNavigate?: (productId: string) => void }) {
   return (
     <>
       {messages.map((msg, i) => {
@@ -567,7 +567,7 @@ function MessageList({ messages, onNavigate }: { messages: ChatMsg[]; onNavigate
 
 // ─── Chat Bubble ──────────────────────────────────────────────────────────────
 
-function ChatBubble({ msg, showAvatar, onNavigate }: { msg: ChatMsg; showAvatar: boolean; onNavigate?: (slug: string) => void }) {
+function ChatBubble({ msg, showAvatar, onNavigate }: { msg: ChatMsg; showAvatar: boolean; onNavigate?: (productId: string) => void }) {
   if (msg.sender_role === "system") {
     const isSeparator = msg.content.startsWith("—") || msg.content.startsWith("-");
     if (isSeparator) {
@@ -617,7 +617,7 @@ function ChatBubble({ msg, showAvatar, onNavigate }: { msg: ChatMsg; showAvatar:
 
 // ─── Product Card in chat ─────────────────────────────────────────────────────
 
-function ProductCardMessage({ product, onNavigate, isAdmin }: { product: ProductCardData; onNavigate?: (slug: string) => void; isAdmin: boolean }) {
+function ProductCardMessage({ product, onNavigate, isAdmin }: { product: ProductCardData; onNavigate?: (productId: string) => void; isAdmin: boolean }) {
   return (
     <div className={`flex gap-2 ${isAdmin ? "justify-start" : "justify-end"} mt-2`}>
       {isAdmin && (
@@ -626,7 +626,7 @@ function ProductCardMessage({ product, onNavigate, isAdmin }: { product: Product
         </div>
       )}
       <button
-        onClick={() => onNavigate?.(product.slug)}
+        onClick={() => onNavigate?.(product.id)}
         className="max-w-[85%] bg-white border border-slate-200 rounded-2xl rounded-bl-sm overflow-hidden shadow-sm hover:shadow-md hover:border-[#00B4D8]/40 transition-all text-left group"
       >
         {product.image_url && (

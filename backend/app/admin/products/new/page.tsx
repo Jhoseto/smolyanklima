@@ -8,12 +8,15 @@ import { Save } from "lucide-react";
 
 type Brand = { id: string; name: string };
 type ProductType = { id: string; name: string };
+type SupplierRow = { id: string; full_name: string };
 
 export default function NewProductPage() {
   const router = useRouter();
   const [brands, setBrands] = useState<Brand[]>([]);
   const [types, setTypes] = useState<ProductType[]>([]);
+  const [suppliers, setSuppliers] = useState<SupplierRow[]>([]);
   const [canEditPrice, setCanEditPrice] = useState(true);
+  const [canEditStockLocation, setCanEditStockLocation] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -27,17 +30,28 @@ export default function NewProductPage() {
 
   useEffect(() => {
     (async () => {
-      const [bRes, tRes, wRes] = await Promise.all([
+      const [bRes, tRes, wRes, sRes] = await Promise.all([
         fetch("/api/admin/meta/brands", { credentials: "include" }),
         fetch("/api/admin/meta/product-types", { credentials: "include" }),
         fetch("/api/admin/whoami", { credentials: "include" }),
+        fetch("/api/admin/contacts?kind=supplier&perPage=200", { credentials: "include" }),
       ]);
       const b = await bRes.json();
       const t = await tRes.json();
       const w = await wRes.json();
+      const s = await sRes.json();
       setBrands(b.data ?? []);
       setTypes(t.data ?? []);
-      setCanEditPrice(((w.data?.admin?.role) ?? "master_admin") !== "office_staff");
+      setSuppliers(
+        (s.data ?? []).map((row: { id: string; full_name: string }) => ({
+          id: row.id,
+          full_name: row.full_name,
+        })),
+      );
+      const role = (w.data?.admin?.role as string) ?? "master_admin";
+      /* Първоначални цени при създаване: офис или главен; промяна в списък/редакция — само главен. */
+      setCanEditPrice(role === "master_admin" || role === "office_staff");
+      setCanEditStockLocation(role === "master_admin" || role === "office_staff");
       setForm((prev) => ({
         ...prev,
         brandId: (b.data?.[0]?.id as string) ?? "",
@@ -91,7 +105,7 @@ export default function NewProductPage() {
       </div>
 
       <HelpCard>
-        <HelpRow items={["Slug се ползва за URL и Cloudinary папка", "Маркирай състояние: Нови/Втора употреба", "Пази поне една главна снимка"]} />
+        <HelpRow items={["Цена (EUR) = без монтаж; цена с монтаж = отделно поле", "Доставчици се въвеждат в Контакти като тип „доставчик“", "Slug е по избор (публично се ползва и product id)"]} />
       </HelpCard>
 
       {error && (
@@ -101,7 +115,16 @@ export default function NewProductPage() {
       )}
 
       <Card className="p-4 md:p-6">
-        <ProductFormFields brands={brands} types={types} form={form} setForm={setForm} canEditPrice={canEditPrice} />
+        <ProductFormFields
+          brands={brands}
+          types={types}
+          suppliers={suppliers}
+          form={form}
+          setForm={setForm}
+          canEditPrice={canEditPrice}
+          canEditStockLocation={canEditStockLocation}
+          canEditProductRegion={canEditStockLocation}
+        />
       </Card>
 
       {/* Desktop save button */}

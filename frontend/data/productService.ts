@@ -38,9 +38,16 @@ function resolveBorderAndBg(brand: string): { cardBorder: string; imgBg: string 
 // BADGE LOGIC
 // ──────────────────────────────────────
 
-function resolveBadge(product: { slug: string; price: number; energyCool?: string; features: string[] }): ProductBadge | undefined {
+function resolveBadge(product: {
+  slug?: string | null;
+  name?: string;
+  price: number;
+  energyCool?: string;
+  features: string[];
+}): ProductBadge | undefined {
   const features = product.features ?? [];
-  if (product.slug.includes('perfera') || product.slug.includes('ln25')) {
+  const key = `${(product.slug ?? "").toLowerCase()} ${(product.name ?? "").toLowerCase()}`;
+  if (key.includes("perfera") || key.includes("ln25")) {
     return { text: 'Bestseller', bg: 'bg-yellow-100', textCol: 'text-yellow-700' };
   }
   if (product.energyCool === 'A+++') {
@@ -186,7 +193,7 @@ function mapApiToCatalogProduct(raw: ApiProduct): CatalogProduct {
     rating,
     reviews,
 
-    badge: resolveBadge({ slug: raw.slug, price: Number(raw.price), energyCool, features }),
+    badge: resolveBadge({ slug: raw.slug, name: raw.name, price: Number(raw.price), energyCool, features }),
     inStock: true,
 
     features,

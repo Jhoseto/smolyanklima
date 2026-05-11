@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { withCloudinaryWebOptimization } from "@/lib/services/cloudinaryService";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
+import { PUBLIC_CATALOG_STOCK_STATUSES } from "@/lib/catalog/publicProductVisibility";
 
 const QuerySchema = z.object({
   q: z.string().optional(),
@@ -85,7 +86,7 @@ export async function GET(req: NextRequest) {
       const { data: fb, error: fbErr } = await supabase
         .from("products")
         .select("id")
-        .eq("is_active", true)
+        .in("stock_status", PUBLIC_CATALOG_STOCK_STATUSES as unknown as string[])
         .or(`name.ilike.%${term}%,description.ilike.%${term}%`);
       if (fbErr) return withCors(req, NextResponse.json({ error: fbErr.message }, { status: 500 }));
       ids = (fb ?? []).map((r: { id: string }) => r.id);
@@ -113,7 +114,11 @@ export async function GET(req: NextRequest) {
       } else {
         const { data: types } = await supabase.from("product_types").select("id").in("name", typeNames);
         const typeIds = (types ?? []).map((t: { id: string }) => t.id);
-        const { data: prows } = await supabase.from("products").select("id").eq("is_active", true).in("type_id", typeIds);
+        const { data: prows } = await supabase
+          .from("products")
+          .select("id")
+          .in("stock_status", PUBLIC_CATALOG_STOCK_STATUSES as unknown as string[])
+          .in("type_id", typeIds);
         mergeProductIds((prows ?? []).map((p: { id: string }) => p.id));
       }
     }
@@ -126,7 +131,11 @@ export async function GET(req: NextRequest) {
     if (brandIds.length === 0) {
       mergeProductIds([]);
     } else {
-      const { data: prows } = await supabase.from("products").select("id").eq("is_active", true).in("brand_id", brandIds);
+      const { data: prows } = await supabase
+        .from("products")
+        .select("id")
+        .in("stock_status", PUBLIC_CATALOG_STOCK_STATUSES as unknown as string[])
+        .in("brand_id", brandIds);
       mergeProductIds((prows ?? []).map((p: { id: string }) => p.id));
     }
   }
@@ -169,21 +178,21 @@ export async function GET(req: NextRequest) {
   const buildQuery = (includeCondition: boolean) => {
     const selectCols = includeCondition
       ? `
-      id, slug, name, description, price, price_with_mount, old_price, product_condition,
-      is_active, is_featured, stock_status, stock_quantity, rating, reviews_count,
+      id, slug, name, description, price, price_with_mount, product_condition,
+      is_featured, stock_status, stock_quantity, rating, reviews_count,
       meta_title, meta_description,
       brand_id, type_id
     `
       : `
-      id, slug, name, description, price, price_with_mount, old_price,
-      is_active, is_featured, stock_status, stock_quantity, rating, reviews_count,
+      id, slug, name, description, price, price_with_mount,
+      is_featured, stock_status, stock_quantity, rating, reviews_count,
       meta_title, meta_description,
       brand_id, type_id
     `;
     let query = (supabase
       .from("products") as any)
       .select(selectCols, { count: "exact" })
-      .eq("is_active", true);
+      .in("stock_status", PUBLIC_CATALOG_STOCK_STATUSES as unknown as string[]);
     if (idRestriction !== null && idRestriction !== "empty") query = query.in("id", idRestriction);
     if (typeof min === "number") query = query.gte("price", min);
     if (typeof max === "number") query = query.lte("price", max);

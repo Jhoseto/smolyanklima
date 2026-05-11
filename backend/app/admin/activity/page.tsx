@@ -140,7 +140,7 @@ export default function AdminActivityPage() {
               <span className="text-[10px] text-slate-400 font-medium shrink-0">{new Date(row.created_at).toLocaleDateString("bg-BG")}</span>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              {row.entity_type && <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-sky-50 text-sky-700">{row.entity_type}</span>}
+              {row.entity_type && <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-brand-blue-50 text-brand-blue-700">{row.entity_type}</span>}
               {row.admin_users?.name && <span className="text-xs text-slate-600 font-medium">{row.admin_users.name}</span>}
             </div>
             {row.details && Object.keys(row.details).length > 0 && (

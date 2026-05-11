@@ -1,8 +1,19 @@
 "use client";
 
-import { useState, type ChangeEvent, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useState, type ChangeEvent, type Dispatch, type SetStateAction } from "react";
+import Link from "next/link";
 import { Input, Select, Textarea, Button } from "../ui";
-import { AlertCircle, CheckCircle2, ChevronDown, Sparkles, Wand2, Upload, Plus, Trash2, X } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, Sparkles, Wand2, Upload, Plus, Trash2, X, ExternalLink } from "lucide-react";
+import { useDebounce } from "@/lib/hooks/useDebounce";
+import { normalizeProductStockLocation, type ProductStockLocation } from "@/lib/admin/productStockLocation";
+import { normalizeProductRegion, type ProductRegion } from "@/lib/admin/productRegion";
+
+type SerialMatch = {
+  id: string;
+  name: string;
+  slug: string | null;
+  field: "indoor" | "outdoor" | "both";
+};
 
 export type SpecsForm = {
   coverage_m2: string;
@@ -29,10 +40,18 @@ export type AdminProductForm = {
   description: string;
   price: number;
   priceWithMount: string;
-  oldPrice: string;
-  isActive: boolean;
+  indoorUnitSerial: string;
+  outdoorUnitSerial: string;
+  supplierId: string;
+  purchasedAt: string;
+  supplierInvoiceNumber: string;
+  purchasePrice: string;
   isFeatured: boolean;
   stockStatus: "in_stock" | "out_of_stock" | "on_order";
+  /** Витрина (магазин) или склад — вътрешно, не е публичният stock_status. */
+  stockLocation: ProductStockLocation;
+  /** EUROPE / JAPAN в БД: europe / japan */
+  productRegion: ProductRegion;
   stockQuantity: number;
   specs: SpecsForm;
   images: ImageRow[];
@@ -64,10 +83,16 @@ export function emptyProductForm(): AdminProductForm {
     description: "",
     price: 0,
     priceWithMount: "",
-    oldPrice: "",
-    isActive: true,
+    indoorUnitSerial: "",
+    outdoorUnitSerial: "",
+    supplierId: "",
+    purchasedAt: "",
+    supplierInvoiceNumber: "",
+    purchasePrice: "",
     isFeatured: false,
     stockStatus: "in_stock",
+    stockLocation: "warehouse",
+    productRegion: "europe",
     stockQuantity: 0,
     specs: emptySpecsForm(),
     images: [],
@@ -144,8 +169,10 @@ function specsPayload(specs: SpecsForm) {
 
 export function buildPostBody(form: AdminProductForm) {
   const pwm = strNum(form.priceWithMount);
+  const pp = strNum(form.purchasePrice);
+  const slug = form.slug.trim();
   return {
-    slug: form.slug.trim(),
+    ...(slug.length >= 2 ? { slug } : {}),
     name: form.name.trim(),
     brandId: form.brandId,
     typeId: form.typeId,
@@ -153,9 +180,16 @@ export function buildPostBody(form: AdminProductForm) {
     description: form.description.trim() || undefined,
     price: Number(form.price),
     priceWithMount: pwm ?? undefined,
-    isActive: form.isActive,
+    indoorUnitSerial: form.indoorUnitSerial.trim() || null,
+    outdoorUnitSerial: form.outdoorUnitSerial.trim() || null,
+    supplierId: form.supplierId.trim() || null,
+    purchasedAt: form.purchasedAt.trim() || null,
+    supplierInvoiceNumber: form.supplierInvoiceNumber.trim() || null,
+    purchasePrice: pp ?? null,
     isFeatured: form.isFeatured,
     stockStatus: form.stockStatus,
+    stockLocation: form.stockLocation,
+    productRegion: form.productRegion,
     stockQuantity: form.stockQuantity,
     specs: specsPayload(form.specs),
     images: form.images
@@ -171,8 +205,10 @@ export function buildPostBody(form: AdminProductForm) {
 
 export function buildPutBody(form: AdminProductForm) {
   const pwm = strNum(form.priceWithMount);
+  const pp = strNum(form.purchasePrice);
+  const slug = form.slug.trim();
   return {
-    slug: form.slug.trim(),
+    slug: slug.length >= 2 ? slug : null,
     name: form.name.trim(),
     brandId: form.brandId,
     typeId: form.typeId,
@@ -180,9 +216,16 @@ export function buildPutBody(form: AdminProductForm) {
     description: form.description.trim() || null,
     price: Number(form.price),
     priceWithMount: pwm,
-    isActive: form.isActive,
+    indoorUnitSerial: form.indoorUnitSerial.trim() || null,
+    outdoorUnitSerial: form.outdoorUnitSerial.trim() || null,
+    supplierId: form.supplierId.trim() || null,
+    purchasedAt: form.purchasedAt.trim() || null,
+    supplierInvoiceNumber: form.supplierInvoiceNumber.trim() || null,
+    purchasePrice: pp,
     isFeatured: form.isFeatured,
     stockStatus: form.stockStatus,
+    stockLocation: form.stockLocation,
+    productRegion: form.productRegion,
     stockQuantity: form.stockQuantity,
     specs: specsPayload(form.specs),
     images: form.images
@@ -197,7 +240,7 @@ export function buildPutBody(form: AdminProductForm) {
 }
 
 export function mapLoadedProductToForm(p: {
-  slug: string;
+  slug?: string | null;
   name: string;
   brand_id: string;
   type_id: string;
@@ -205,18 +248,30 @@ export function mapLoadedProductToForm(p: {
   description?: string | null;
   price: number;
   price_with_mount?: number | null;
-  old_price?: number | null;
-  is_active: boolean;
+  indoor_unit_serial?: string | null;
+  outdoor_unit_serial?: string | null;
+  supplier_id?: string | null;
+  purchased_at?: string | null;
+  supplier_invoice_number?: string | null;
+  purchase_price?: number | null;
   is_featured: boolean;
   stock_status?: string;
+  stock_location?: string | null;
+  product_region?: string | null;
   stock_quantity?: number;
   product_specs?: Record<string, unknown> | null;
   product_images?: Array<{ url: string; sort_order: number; is_main: boolean }>;
 }): AdminProductForm {
   const sp = p.product_specs;
   const n = (v: unknown) => (v != null && v !== "" ? String(v) : "");
+  const d = (v: unknown) => {
+    if (v == null || v === "") return "";
+    const s = String(v);
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+    return s;
+  };
   return {
-    slug: p.slug,
+    slug: p.slug ?? "",
     name: p.name,
     brandId: p.brand_id,
     typeId: p.type_id,
@@ -224,11 +279,17 @@ export function mapLoadedProductToForm(p: {
     description: p.description ?? "",
     price: Number(p.price),
     priceWithMount: p.price_with_mount != null ? String(p.price_with_mount) : "",
-    oldPrice: p.old_price != null ? String(p.old_price) : "",
-    isActive: Boolean(p.is_active),
+    indoorUnitSerial: p.indoor_unit_serial ?? "",
+    outdoorUnitSerial: p.outdoor_unit_serial ?? "",
+    supplierId: p.supplier_id ?? "",
+    purchasedAt: d(p.purchased_at),
+    supplierInvoiceNumber: p.supplier_invoice_number ?? "",
+    purchasePrice: p.purchase_price != null ? String(p.purchase_price) : "",
     isFeatured: Boolean(p.is_featured),
     stockStatus:
       p.stock_status === "out_of_stock" || p.stock_status === "on_order" ? p.stock_status : "in_stock",
+    stockLocation: normalizeProductStockLocation(p.stock_location),
+    productRegion: normalizeProductRegion(p.product_region),
     stockQuantity: Number(p.stock_quantity ?? 0),
     specs: {
       coverage_m2: n(sp?.coverage_m2),
@@ -286,21 +347,111 @@ function CollapsibleSection({
   );
 }
 
+function SerialDuplicateNotice({ matches, label }: { matches: SerialMatch[]; label: "вътрешно" | "външно" }) {
+  if (matches.length === 0) return null;
+  return (
+    <div className="mt-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-2 text-[12px] leading-snug text-amber-900">
+      <div className="flex items-start gap-1.5 font-bold">
+        <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+        <span>Същият сериен номер вече е въведен при друг продукт.</span>
+      </div>
+      <ul className="mt-1 space-y-0.5 pl-5 list-disc">
+        {matches.map((m) => (
+          <li key={m.id}>
+            <Link
+              href={`/admin/products/${m.id}`}
+              target="_blank"
+              rel="noopener"
+              className="text-amber-900 underline hover:text-amber-950"
+              title="Отвори другия продукт в нов раздел"
+            >
+              {m.name}
+            </Link>
+            <span className="text-amber-700"> · </span>
+            <span className="text-[11px] uppercase tracking-wide text-amber-700">
+              {m.field === "both" ? "вътр. + външ." : m.field === "indoor" ? "вътрешно" : "външно"} тяло
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-1 text-[11px] text-amber-700">
+        Проверете дали серийният номер на {label} тяло е правилно копиран от табелката, или коригирайте дубликата.
+      </div>
+    </div>
+  );
+}
+
 type Props = {
   brands: { id: string; name: string }[];
   types: { id: string; name: string }[];
+  /** Доставчици от Контакти (contact_kind = supplier) */
+  suppliers?: { id: string; full_name: string }[];
   form: AdminProductForm;
   setForm: Dispatch<SetStateAction<AdminProductForm>>;
   cloudinaryKind?: "product" | "accessory";
   /** office_staff cannot edit prices */
   canEditPrice?: boolean;
+  /** Само master_admin и office_staff могат да сменят магазин/склад. */
+  canEditStockLocation?: boolean;
+  /** master_admin и office_staff — поле „Страна“. */
+  canEditProductRegion?: boolean;
+  /** ID на текущия продукт при редакция — изключва се при duplicate-check. */
+  currentProductId?: string;
 };
 
-export function ProductFormFields({ brands, types, form, setForm, cloudinaryKind = "product", canEditPrice = true }: Props) {
+export function ProductFormFields({
+  brands,
+  types,
+  suppliers = [],
+  form,
+  setForm,
+  cloudinaryKind = "product",
+  canEditPrice = true,
+  canEditStockLocation = false,
+  canEditProductRegion = false,
+  currentProductId,
+}: Props) {
   const [aiBusy, setAiBusy] = useState(false);
   const [aiDialog, setAiDialog] = useState<"missing_name" | "replace_description" | "error" | null>(null);
   const [aiError, setAiError] = useState("");
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
+  const [indoorDup, setIndoorDup] = useState<SerialMatch[]>([]);
+  const [outdoorDup, setOutdoorDup] = useState<SerialMatch[]>([]);
+  const debouncedIndoor = useDebounce(form.indoorUnitSerial.trim(), 350);
+  const debouncedOutdoor = useDebounce(form.outdoorUnitSerial.trim(), 350);
+
+  useEffect(() => {
+    if (!debouncedIndoor) {
+      setIndoorDup([]);
+      return;
+    }
+    const ctrl = new AbortController();
+    const url = new URL("/api/admin/products/check-serial", window.location.origin);
+    url.searchParams.set("serial", debouncedIndoor);
+    if (currentProductId) url.searchParams.set("excludeId", currentProductId);
+    fetch(url.toString(), { credentials: "include", signal: ctrl.signal })
+      .then((r) => (r.ok ? r.json() : Promise.resolve({ data: [] })))
+      .then((j: { data?: SerialMatch[] }) => setIndoorDup(j.data ?? []))
+      .catch(() => undefined);
+    return () => ctrl.abort();
+  }, [debouncedIndoor, currentProductId]);
+
+  useEffect(() => {
+    if (!debouncedOutdoor) {
+      setOutdoorDup([]);
+      return;
+    }
+    const ctrl = new AbortController();
+    const url = new URL("/api/admin/products/check-serial", window.location.origin);
+    url.searchParams.set("serial", debouncedOutdoor);
+    if (currentProductId) url.searchParams.set("excludeId", currentProductId);
+    fetch(url.toString(), { credentials: "include", signal: ctrl.signal })
+      .then((r) => (r.ok ? r.json() : Promise.resolve({ data: [] })))
+      .then((j: { data?: SerialMatch[] }) => setOutdoorDup(j.data ?? []))
+      .catch(() => undefined);
+    return () => ctrl.abort();
+  }, [debouncedOutdoor, currentProductId]);
+
   const setSpec = (k: keyof SpecsForm, v: string | boolean) =>
     setForm((f) => ({ ...f, specs: { ...f.specs, [k]: v } }));
 
@@ -372,9 +523,10 @@ export function ProductFormFields({ brands, types, form, setForm, cloudinaryKind
   async function onUploadFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const slug = form.slug.trim();
-    if (slug.length < 2) {
-      setUploadNotice("Попълнете slug (мин. 2 знака). Под него в Cloudinary се създава отделна папка за снимките на този продукт.");
+    const folderKey =
+      form.slug.trim().length >= 2 ? form.slug.trim() : slugifyBg(form.name || "") || "product";
+    if (folderKey.length < 2) {
+      setUploadNotice("За качване са нужни мин. 2 знака slug или име, от което да се генерира папка.");
       e.target.value = "";
       return;
     }
@@ -386,7 +538,7 @@ export function ProductFormFields({ brands, types, form, setForm, cloudinaryKind
     const fd = new FormData();
     fd.append("file", file);
     fd.append("kind", cloudinaryKind);
-    fd.append("slug", slug);
+    fd.append("slug", folderKey);
     const res = await fetch("/api/admin/uploads/image", { method: "POST", credentials: "include", body: fd });
     const json = await res.json();
     if (!res.ok) {
@@ -415,15 +567,15 @@ export function ProductFormFields({ brands, types, form, setForm, cloudinaryKind
       <div className="grid gap-4">
         <label className="block">
           <div className="flex items-center justify-between gap-3 mb-1">
-            <div className="text-xs font-bold text-slate-700 uppercase tracking-wide">Slug</div>
+            <div className="text-xs font-bold text-slate-700 uppercase tracking-wide">Slug (по избор)</div>
             <Button type="button" variant="secondary" size="sm" onClick={generateSlugFromName} title="Генерирай slug от името" className="!py-1 !px-2.5 !text-xs gap-1.5">
               <Wand2 className="w-3.5 h-3.5" /> Генерирай
             </Button>
           </div>
           <div className="text-[11px] text-slate-500 mb-1.5">
-            Технически идентификатор за URL и папка със снимки. Пример: <code className="bg-slate-100 px-1 py-0.5 rounded">daikin-perfera-ftxm25r</code>.
+            Не е задължителен. Публичната страница работи и с ID. Ползва се за папка при качване на снимки, ако е поне 2 знака.
           </div>
-          <Input value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} placeholder="napr. daikin-perfera-ftxm25r" />
+          <Input value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} placeholder="по избор — латиница" />
         </label>
 
         <label className="block">
@@ -491,7 +643,7 @@ export function ProductFormFields({ brands, types, form, setForm, cloudinaryKind
             </div>
           </label>
           <label className="block">
-            <FieldTitle label="Цена с монтаж" info="Цена с включен стандартен монтаж (по избор). Ако е празно, системата може да изчислява ориентировъчно." />
+            <FieldTitle label="Цена с монтаж (EUR)" info="Продажна цена с включен стандартен монтаж. Полето „Цена (EUR)“ е без монтаж." />
             <div className="relative">
               <Input
                 value={form.priceWithMount}
@@ -507,9 +659,82 @@ export function ProductFormFields({ brands, types, form, setForm, cloudinaryKind
           </label>
         </div>
 
+        <CollapsibleSection title="Серийни номера и доставчик" badge="вътрешен запис, не се показва публично">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label className="block">
+              <FieldTitle label="Серия вътрешно тяло" info="Уникален сериен номер от табелката на вътрешното тяло. Системата проверява за дублирани с други продукти." />
+              <Input
+                value={form.indoorUnitSerial}
+                onChange={(e) => setForm({ ...form, indoorUnitSerial: e.target.value })}
+                placeholder="напр. T000532"
+                className={indoorDup.length > 0 ? "border-amber-400 focus:ring-amber-400" : ""}
+              />
+              <SerialDuplicateNotice matches={indoorDup} label="вътрешно" />
+            </label>
+            <label className="block">
+              <FieldTitle label="Серия външно тяло" info="Уникален сериен номер от табелката на външното тяло. Системата проверява за дублирани с други продукти." />
+              <Input
+                value={form.outdoorUnitSerial}
+                onChange={(e) => setForm({ ...form, outdoorUnitSerial: e.target.value })}
+                placeholder="напр. T001024"
+                className={outdoorDup.length > 0 ? "border-amber-400 focus:ring-amber-400" : ""}
+              />
+              <SerialDuplicateNotice matches={outdoorDup} label="външно" />
+            </label>
+            <label className="block md:col-span-2">
+              <div className="flex items-center justify-between gap-2">
+                <FieldTitle label="Доставчик" info="Избира се от контакти с тип „доставчик“. Ако нужният липсва — създайте го в Контакти." />
+                <Link
+                  href="/admin/contacts?kind=supplier"
+                  target="_blank"
+                  rel="noopener"
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-blue-700 hover:text-brand-blue-900"
+                  title="Отвори списък с доставчици"
+                >
+                  Управление на доставчици <ExternalLink className="w-3 h-3" />
+                </Link>
+              </div>
+              <Select value={form.supplierId} onChange={(e) => setForm({ ...form, supplierId: e.target.value })}>
+                <option value="">— няма избран доставчик —</option>
+                {suppliers.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.full_name}
+                  </option>
+                ))}
+              </Select>
+              {suppliers.length === 0 && (
+                <div className="mt-1.5 text-[11px] font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                  Все още няма създадени доставчици. Отворете „Контакти“ и създайте контакт с тип „доставчик“.
+                </div>
+              )}
+            </label>
+            <label className="block">
+              <FieldTitle label="Закупено на" info="Дата на покупка от доставчик (YYYY-MM-DD)." />
+              <Input type="date" value={form.purchasedAt} onChange={(e) => setForm({ ...form, purchasedAt: e.target.value })} />
+            </label>
+            <label className="block">
+              <FieldTitle label="Фактура № (доставчик)" info="Номер на фактура от доставчика." />
+              <Input value={form.supplierInvoiceNumber} onChange={(e) => setForm({ ...form, supplierInvoiceNumber: e.target.value })} placeholder="напр. 0000123456" />
+            </label>
+            <label className="block md:col-span-2">
+              <FieldTitle label="Закупна цена (EUR)" info="Цена, на която сте взели уреда от доставчик (не е продажната цена). Само главен администратор." />
+              <Input
+                value={form.purchasePrice}
+                onChange={(e) => canEditPrice && setForm({ ...form, purchasePrice: e.target.value })}
+                placeholder="по избор"
+                disabled={!canEditPrice}
+                className={!canEditPrice ? "opacity-60 cursor-not-allowed bg-slate-50" : ""}
+              />
+              {!canEditPrice && (
+                <div className="text-[11px] text-slate-500 mt-1">🔒 Редакция: само главен администратор.</div>
+              )}
+            </label>
+          </div>
+        </CollapsibleSection>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <label className="block">
-            <FieldTitle label="Наличност" info="Статус на наличност: в наличност / изчерпан / по поръчка." />
+            <FieldTitle label="Каталог (статус)" info="Видимост в онлайн каталог: в наличност / изчерпан / по поръчка." />
             <Select value={form.stockStatus} onChange={(e) => setForm({ ...form, stockStatus: e.target.value as AdminProductForm["stockStatus"] })}>
               <option value="in_stock">В наличност</option>
               <option value="out_of_stock">Изчерпан</option>
@@ -520,15 +745,44 @@ export function ProductFormFields({ brands, types, form, setForm, cloudinaryKind
             <FieldTitle label="Количество (бр.)" info="Брой налични бройки (по избор). Полезно за вътрешен контрол." />
             <Input type="number" min={0} value={form.stockQuantity} onChange={(e) => setForm({ ...form, stockQuantity: Math.max(0, Number(e.target.value)) })} />
           </label>
+          <label className="block md:col-span-2">
+            <FieldTitle
+              label="Местоположение"
+              info="Физически: в магазина (витрина) или в склада. Показва се в колоната „Наличност“ в списъка с продукти."
+            />
+            <Select
+              value={form.stockLocation}
+              disabled={!canEditStockLocation}
+              onChange={(e) => setForm({ ...form, stockLocation: e.target.value as ProductStockLocation })}
+              className={!canEditStockLocation ? "opacity-65 cursor-not-allowed bg-slate-50" : ""}
+            >
+              <option value="showroom">В магазин</option>
+              <option value="warehouse">В склада</option>
+            </Select>
+            {!canEditStockLocation && (
+              <div className="text-[11px] text-slate-500 mt-1">Промяна на магазин/склад: главен администратор или офис служител.</div>
+            )}
+          </label>
+          <label className="block md:col-span-2">
+            <FieldTitle label="Страна (произход)" info="EUROPE или JAPAN — пазар/произход на модела." />
+            <Select
+              value={form.productRegion}
+              disabled={!canEditProductRegion}
+              onChange={(e) => setForm({ ...form, productRegion: e.target.value as ProductRegion })}
+              className={!canEditProductRegion ? "opacity-65 cursor-not-allowed bg-slate-50" : ""}
+            >
+              <option value="europe">EUROPE</option>
+              <option value="japan">JAPAN</option>
+            </Select>
+            {!canEditProductRegion && (
+              <div className="text-[11px] text-slate-500 mt-1">Промяна: главен администратор или офис служител.</div>
+            )}
+          </label>
         </div>
 
         <div className="flex flex-wrap gap-3 mt-2">
           <label className="flex items-center gap-2.5 cursor-pointer">
-            <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
-            <span className="text-sm font-semibold text-slate-700">Активен <span className="text-slate-400 font-normal">(показва се в каталога)</span></span>
-          </label>
-          <label className="flex items-center gap-2.5 cursor-pointer">
-            <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500" checked={form.isFeatured} onChange={(e) => setForm({ ...form, isFeatured: e.target.checked })} />
+            <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-brand-blue-500 focus:ring-brand-blue-500" checked={form.isFeatured} onChange={(e) => setForm({ ...form, isFeatured: e.target.checked })} />
             <span className="text-sm font-semibold text-slate-700">Избран <span className="text-slate-400 font-normal">(за витрина/подчертаване)</span></span>
           </label>
         </div>
@@ -557,7 +811,7 @@ export function ProductFormFields({ brands, types, form, setForm, cloudinaryKind
             <Input value={form.specs.refrigerant} onChange={(e) => setSpec("refrigerant", e.target.value)} list="refrigerant-options" placeholder="R-32" />
           </label>
           <label className="flex items-center gap-2.5 cursor-pointer md:mt-7">
-            <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500" checked={form.specs.wifi} onChange={(e) => setSpec("wifi", e.target.checked)} />
+            <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-brand-blue-500 focus:ring-brand-blue-500" checked={form.specs.wifi} onChange={(e) => setSpec("wifi", e.target.checked)} />
             <span className="text-sm font-semibold text-slate-700">WiFi <span className="text-slate-400 font-normal">(вграден модул/управление)</span></span>
           </label>
           <label className="block">
@@ -592,7 +846,7 @@ export function ProductFormFields({ brands, types, form, setForm, cloudinaryKind
           <FieldTitle label="Качи файл (изисква попълнен slug)" info="Качва снимка в Cloudinary в папка по slug. Първата снимка по подразбиране става главна." />
           <div className="relative">
             <input type="file" accept="image/*" onChange={onUploadFile} disabled={form.images.length >= MAX_PRODUCT_IMAGES} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed" />
-            <div className={`flex items-center justify-center gap-2 w-full px-4 py-3 border-2 border-dashed rounded-xl text-sm font-semibold transition-colors ${form.images.length >= MAX_PRODUCT_IMAGES ? "border-slate-200 bg-slate-50 text-slate-400" : "border-sky-200 bg-sky-50 text-sky-600 hover:bg-sky-100 hover:border-sky-300"}`}>
+            <div className={`flex items-center justify-center gap-2 w-full px-4 py-3 border-2 border-dashed rounded-xl text-sm font-semibold transition-colors ${form.images.length >= MAX_PRODUCT_IMAGES ? "border-slate-200 bg-slate-50 text-slate-400" : "border-brand-blue-200 bg-brand-blue-50 text-brand-blue-600 hover:bg-brand-blue-100 hover:border-brand-blue-300"}`}>
               <Upload className="w-4 h-4" />
               {form.images.length >= MAX_PRODUCT_IMAGES ? "Достигнат лимит от снимки" : "Кликни или пусни файл тук"}
             </div>
@@ -614,7 +868,7 @@ export function ProductFormFields({ brands, types, form, setForm, cloudinaryKind
                 className="flex-1"
               />
               <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700 whitespace-nowrap">
-                <input type="radio" name="mainimg" className="w-4 h-4 text-sky-600 focus:ring-sky-500 border-slate-300" checked={im.is_main} onChange={() => {
+                <input type="radio" name="mainimg" className="w-4 h-4 text-brand-blue-500 focus:ring-brand-blue-500 border-slate-300" checked={im.is_main} onChange={() => {
                   setForm({
                     ...form,
                     images: form.images.map((row, i) => ({ ...row, is_main: i === idx })),
@@ -660,11 +914,11 @@ export function ProductFormFields({ brands, types, form, setForm, cloudinaryKind
                 <X className="h-4 w-4" />
               </button>
               <div className="flex items-center gap-3 pr-10">
-                <div className={`flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-lg ${aiDialog === "error" ? "bg-red-600 shadow-red-600/25" : "bg-sky-600 shadow-sky-600/25"}`}>
+                <div className={`flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-lg ${aiDialog === "error" ? "bg-red-600 shadow-red-600/25" : "bg-brand-blue-500"}`}>
                   {aiDialog === "error" ? <AlertCircle className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
                 </div>
                 <div>
-                  <div className="text-xs font-bold uppercase tracking-[0.24em] text-sky-700">Gemini продуктова чернова</div>
+                  <div className="text-xs font-bold uppercase tracking-[0.24em] text-brand-blue-700">Gemini продуктова чернова</div>
                   <div className="mt-1 text-2xl font-black leading-tight text-slate-950">
                     {aiDialog === "missing_name" ? "Нужно е име на продукта" : aiDialog === "replace_description" ? "Да заменя описанието?" : "AI заявката не успя"}
                   </div>
@@ -686,7 +940,7 @@ export function ProductFormFields({ brands, types, form, setForm, cloudinaryKind
                       {form.description}
                     </div>
                   </div>
-                  <div className="rounded-2xl border border-sky-100 bg-sky-50/70 p-4 text-sm font-semibold leading-6 text-slate-900">
+                  <div className="rounded-2xl border border-brand-blue-100 bg-brand-blue-50/70 p-4 text-sm font-semibold leading-6 text-slate-900">
                     AI черновата ще замени това описание и ще допълни празните спецификации, когато Gemini има достатъчно информация.
                   </div>
                 </div>
@@ -703,7 +957,7 @@ export function ProductFormFields({ brands, types, form, setForm, cloudinaryKind
                 {aiDialog === "missing_name" || aiDialog === "error" ? "Разбрах" : "Отказ"}
               </Button>
               {aiDialog === "replace_description" && (
-                <Button onClick={() => void generateAiDraft()} disabled={aiBusy} className="justify-center gap-2 shadow-lg shadow-sky-600/20">
+                <Button onClick={() => void generateAiDraft()} disabled={aiBusy} className="justify-center gap-2 shadow-lg">
                   <CheckCircle2 className="h-4 w-4" />
                   {aiBusy ? "Генериране..." : "Замени с AI чернова"}
                 </Button>
@@ -720,8 +974,8 @@ export function ProductFormFields({ brands, types, form, setForm, cloudinaryKind
         >
           <div className="w-full md:max-w-lg overflow-hidden rounded-t-3xl md:rounded-3xl border border-white/70 bg-white shadow-[0_-8px_40px_rgba(15,23,42,0.25)]" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-center pt-3 pb-1 md:hidden"><div className="w-10 h-1 rounded-full bg-slate-200" /></div>
-            <div className="border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#ffffff_42%,#f8fafc_100%)] px-6 py-5">
-              <div className="text-xs font-bold uppercase tracking-[0.24em] text-sky-700">Качване на снимка</div>
+            <div className="border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#e6f9fd_0,#ffffff_42%,#fff3ed_100%)] px-6 py-5">
+              <div className="text-xs font-bold uppercase tracking-[0.24em] text-brand-blue-700">Качване на снимка</div>
               <div className="mt-1 text-2xl font-black leading-tight text-slate-950">Нужно е действие</div>
             </div>
             <div className="p-6">

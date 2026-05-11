@@ -1,11 +1,14 @@
 import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
-import { adminDb } from "@/lib/admin/db";
+import { adminDb, adminSession } from "@/lib/admin/db";
+import { canEditProductStockLocation, normalizeProductStockLocation } from "@/lib/admin/productStockLocation";
+import { canEditProductRegion, normalizeProductRegion } from "@/lib/admin/productRegion";
+import { isPostgrestMissingColumn } from "@/lib/admin/pgMissingColumn";
 import { getEnv } from "@/lib/env";
 import { withCloudinaryWebOptimization } from "@/lib/services/cloudinaryService";
 import { logAdminActivity } from "@/lib/admin/audit";
-import { formatSupabaseError, mapProductDbError, mergedOldPriceInvalid } from "@/lib/admin/productDbErrors";
+import { formatSupabaseError, mapProductDbError } from "@/lib/admin/productDbErrors";
 import { replaceProductImages, upsertProductSpecs, type ImageInput, type SpecsInput } from "@/lib/admin/syncProductChildren";
 
 const SpecsSchema = z.object({
@@ -29,31 +32,49 @@ const ImageSchema = z.object({
 });
 const MAX_IMAGES = 4;
 
+const ADMIN_PRODUCT_DETAIL_SELECT_WITH_LOCATION =
+  "id,slug,name,brand_id,type_id,product_condition,description,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,stock_status,stock_location,stock_quantity,sold_quantity,product_region";
+const ADMIN_PRODUCT_DETAIL_SELECT_BASE =
+  "id,slug,name,brand_id,type_id,product_condition,description,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,stock_status,stock_quantity,sold_quantity,product_region";
+const ADMIN_PRODUCT_DETAIL_SELECT_NO_REGION =
+  "id,slug,name,brand_id,type_id,product_condition,description,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,stock_status,stock_location,stock_quantity,sold_quantity";
+const ADMIN_PRODUCT_DETAIL_SELECT_NO_REGION_NO_LOC =
+  "id,slug,name,brand_id,type_id,product_condition,description,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,stock_status,stock_quantity,sold_quantity";
+
 const UpdateSchema = z
   .object({
-    slug: z.string().min(2).max(120).optional(),
-    name: z.string().min(2).max(200).optional(),
-    brandId: z.string().uuid().optional(),
-    typeId: z.string().uuid().optional(),
-    productCondition: z.enum(["new", "used"]).optional(),
-    description: z.string().max(5000).optional().nullable(),
-    price: z.number().nonnegative().optional(),
-    priceWithMount: z.number().nonnegative().optional().nullable(),
-    oldPrice: z.number().nonnegative().optional().nullable(),
-    isActive: z.boolean().optional(),
-    isFeatured: z.boolean().optional(),
-    stockStatus: z.enum(["in_stock", "out_of_stock", "on_order"]).optional(),
-    stockQuantity: z.number().int().nonnegative().optional(),
-    soldQuantity: z.number().int().nonnegative().optional(),
-    specs: SpecsSchema.optional(),
-    images: z.array(ImageSchema).max(MAX_IMAGES).optional(),
-  })
+  slug: z.string().max(120).nullable().optional(),
+  name: z.string().min(2).max(200).optional(),
+  brandId: z.string().uuid().optional(),
+  typeId: z.string().uuid().optional(),
+  productCondition: z.enum(["new", "used"]).optional(),
+  description: z.string().max(5000).optional().nullable(),
+  price: z.number().nonnegative().optional(),
+  priceWithMount: z.number().nonnegative().optional().nullable(),
+  indoorUnitSerial: z.string().max(200).optional().nullable(),
+  outdoorUnitSerial: z.string().max(200).optional().nullable(),
+  supplierId: z.string().uuid().optional().nullable(),
+  purchasedAt: z.string().max(32).optional().nullable(),
+  supplierInvoiceNumber: z.string().max(120).optional().nullable(),
+  purchasePrice: z.number().nonnegative().optional().nullable(),
+  isFeatured: z.boolean().optional(),
+  stockStatus: z.enum(["in_stock", "out_of_stock", "on_order"]).optional(),
+  stockLocation: z.enum(["showroom", "warehouse"]).optional(),
+  productRegion: z.enum(["europe", "japan"]).optional(),
+  stockQuantity: z.number().int().nonnegative().optional(),
+  soldQuantity: z.number().int().nonnegative().optional(),
+  specs: SpecsSchema.optional(),
+  images: z.array(ImageSchema).max(MAX_IMAGES).optional(),
+})
   .superRefine((data, ctx) => {
-    if (data.price !== undefined && data.oldPrice != null && data.oldPrice < data.price) {
+    if (data.slug === undefined || data.slug === null) return;
+    const t = data.slug.trim();
+    if (t === "") return;
+    if (t.length < 2) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Старата цена трябва да е ≥ текущата цена или да е празна.",
-        path: ["oldPrice"],
+        message: "Slug: минимум 2 знака или оставете празно.",
+        path: ["slug"],
       });
     }
   });
@@ -65,13 +86,20 @@ export async function OPTIONS(req: NextRequest) {
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   const supabase = await adminDb();
-  const { data: row, error } = await supabase
+  let { data: row, error } = await supabase
     .from("products")
-    .select(
-      "id,slug,name,brand_id,type_id,product_condition,description,price,price_with_mount,old_price,is_active,is_featured,stock_status,stock_quantity,sold_quantity",
-    )
+    .select(ADMIN_PRODUCT_DETAIL_SELECT_WITH_LOCATION)
     .eq("id", id)
     .maybeSingle();
+  if (error && isPostgrestMissingColumn(error, "stock_location")) {
+    ({ data: row, error } = await supabase.from("products").select(ADMIN_PRODUCT_DETAIL_SELECT_BASE).eq("id", id).maybeSingle());
+  }
+  if (error && isPostgrestMissingColumn(error, "product_region")) {
+    ({ data: row, error } = await supabase.from("products").select(ADMIN_PRODUCT_DETAIL_SELECT_NO_REGION).eq("id", id).maybeSingle());
+  }
+  if (error && isPostgrestMissingColumn(error, "stock_location")) {
+    ({ data: row, error } = await supabase.from("products").select(ADMIN_PRODUCT_DETAIL_SELECT_NO_REGION_NO_LOC).eq("id", id).maybeSingle());
+  }
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   if (!row) return withCors(req, NextResponse.json({ error: "Not found" }, { status: 404 }));
 
@@ -92,6 +120,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     NextResponse.json({
       data: {
         ...row,
+        stock_location: normalizeProductStockLocation((row as { stock_location?: unknown }).stock_location),
+        product_region: normalizeProductRegion((row as { product_region?: unknown }).product_region),
         brands: brandRes.data ?? null,
         product_types: typeRes.data ?? null,
         product_specs: specsRes.data ?? null,
@@ -120,40 +150,55 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     return withCors(req, NextResponse.json({ error: detail }, { status: 400 }));
   }
 
-  const supabase = await adminDb();
+  const session = await adminSession();
+  const supabase = session.db;
   const patch: Record<string, unknown> = {};
-  if (parsed.data.slug !== undefined) patch.slug = parsed.data.slug;
+  if (parsed.data.slug !== undefined) {
+    const s = parsed.data.slug;
+    patch.slug = s === null || String(s).trim() === "" ? null : String(s).trim();
+  }
   if (parsed.data.name !== undefined) patch.name = parsed.data.name;
   if (parsed.data.brandId !== undefined) patch.brand_id = parsed.data.brandId;
   if (parsed.data.typeId !== undefined) patch.type_id = parsed.data.typeId;
   if (parsed.data.productCondition !== undefined) patch.product_condition = parsed.data.productCondition;
   if (parsed.data.description !== undefined) patch.description = parsed.data.description;
-  if (parsed.data.price !== undefined) patch.price = parsed.data.price;
-  if (parsed.data.priceWithMount !== undefined) patch.price_with_mount = parsed.data.priceWithMount;
-  if (parsed.data.oldPrice !== undefined) patch.old_price = parsed.data.oldPrice;
-  if (parsed.data.isActive !== undefined) patch.is_active = parsed.data.isActive;
+  const isMaster = session.role === "master_admin";
+  if (parsed.data.price !== undefined && isMaster) patch.price = parsed.data.price;
+  if (parsed.data.priceWithMount !== undefined && isMaster) patch.price_with_mount = parsed.data.priceWithMount;
+  if (parsed.data.indoorUnitSerial !== undefined) patch.indoor_unit_serial = parsed.data.indoorUnitSerial?.trim() || null;
+  if (parsed.data.outdoorUnitSerial !== undefined) patch.outdoor_unit_serial = parsed.data.outdoorUnitSerial?.trim() || null;
+  if (parsed.data.supplierId !== undefined) patch.supplier_id = parsed.data.supplierId;
+  if (parsed.data.purchasedAt !== undefined) patch.purchased_at = parsed.data.purchasedAt?.trim() || null;
+  if (parsed.data.supplierInvoiceNumber !== undefined)
+    patch.supplier_invoice_number = parsed.data.supplierInvoiceNumber?.trim() || null;
+  if (parsed.data.purchasePrice !== undefined && isMaster) patch.purchase_price = parsed.data.purchasePrice;
   if (parsed.data.isFeatured !== undefined) patch.is_featured = parsed.data.isFeatured;
   if (parsed.data.stockStatus !== undefined) patch.stock_status = parsed.data.stockStatus;
+  if (parsed.data.stockLocation !== undefined) {
+    if (canEditProductStockLocation(session.role)) {
+      patch.stock_location = normalizeProductStockLocation(parsed.data.stockLocation);
+    }
+  }
+  if (parsed.data.productRegion !== undefined) {
+    if (canEditProductRegion(session.role)) {
+      patch.product_region = normalizeProductRegion(parsed.data.productRegion);
+    }
+  }
   if (parsed.data.stockQuantity !== undefined) patch.stock_quantity = parsed.data.stockQuantity;
   if (parsed.data.soldQuantity !== undefined) patch.sold_quantity = parsed.data.soldQuantity;
 
   if (Object.keys(patch).length > 0) {
-    if (patch.price !== undefined || patch.old_price !== undefined) {
-      const invalid = await mergedOldPriceInvalid(supabase, id, {
-        price: patch.price as number | undefined,
-        old_price: patch.old_price as number | null | undefined,
-      });
-      if (invalid) {
-        return withCors(
-          req,
-          NextResponse.json(
-            { error: "Старата цена трябва да е ≥ текущата цена или оставете полето за стара цена празно." },
-            { status: 400 },
-          ),
-        );
-      }
+    let { data, error } = await supabase.from("products").update(patch).eq("id", id).select("id,slug").maybeSingle();
+    if (error && isPostgrestMissingColumn(error, "stock_location") && "stock_location" in patch) {
+      const { stock_location: _omit, ...patchRest } = patch;
+      ({ data, error } = await supabase.from("products").update(patchRest).eq("id", id).select("id,slug").maybeSingle());
+      delete patch.stock_location;
     }
-    const { data, error } = await supabase.from("products").update(patch).eq("id", id).select("id,slug").maybeSingle();
+    if (error && isPostgrestMissingColumn(error, "product_region") && "product_region" in patch) {
+      const { product_region: _omitR, ...patchRest2 } = patch;
+      ({ data, error } = await supabase.from("products").update(patchRest2).eq("id", id).select("id,slug").maybeSingle());
+      delete patch.product_region;
+    }
     if (error) {
       console.error("[admin/products][PUT] products.update failed", { id, patch, ...formatSupabaseError(error) });
       const mapped = mapProductDbError(error.message);

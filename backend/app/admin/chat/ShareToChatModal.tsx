@@ -91,7 +91,7 @@ export function ShareToChatModal({ product, onClose }: Props) {
             </div>
           )}
           <div>
-            {product.brand_name && <p className="text-[10px] font-bold text-sky-600 uppercase">{product.brand_name}</p>}
+            {product.brand_name && <p className="text-[10px] font-bold text-brand-blue-500 uppercase">{product.brand_name}</p>}
             <p className="text-sm font-bold text-slate-900">{product.name}</p>
             {product.price_from && <p className="text-sm font-bold text-orange-500">€{product.price_from.toLocaleString("bg-BG")}</p>}
           </div>
@@ -121,7 +121,7 @@ export function ShareToChatModal({ product, onClose }: Props) {
               const isSending = sending === chat.id;
               return (
                 <div key={chat.id} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 transition-colors">
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-sky-400 to-sky-600 flex items-center justify-center shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-brand-blue-400 to-brand-blue-500 flex items-center justify-center shrink-0">
                     <User className="w-4 h-4 text-white" />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -136,7 +136,7 @@ export function ShareToChatModal({ product, onClose }: Props) {
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
                       isSent
                         ? "bg-emerald-50 border border-emerald-200 text-emerald-700 cursor-default"
-                        : "bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50"
+                        : "bg-brand-blue-500 text-white hover:bg-brand-blue-700 disabled:opacity-50"
                     }`}
                   >
                     {isSending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> :

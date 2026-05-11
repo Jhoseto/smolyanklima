@@ -37,7 +37,7 @@ export function ProductAutocomplete({ value, onChange, placeholder = "Въвед
     setLoading(true);
     try {
       const res = await fetch(
-        `/api/admin/products?q=${encodeURIComponent(q)}&perPage=10&status=active`,
+        `/api/admin/products?q=${encodeURIComponent(q)}&perPage=10`,
         { credentials: "include" }
       );
       if (!res.ok) return;

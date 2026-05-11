@@ -15,7 +15,7 @@ function Badge({ label, colorClass }: { label: string; colorClass: string }) {
 
 function statusLabel(status: string) {
   if (status === "new") return { label: "Ново", colorClass: "bg-orange-100 border-orange-200 text-orange-800" };
-  if (status === "in_progress") return { label: "В работа", colorClass: "bg-sky-100 border-sky-200 text-sky-800" };
+  if (status === "in_progress") return { label: "В работа", colorClass: "bg-brand-blue-100 border-brand-blue-200 text-brand-blue-700" };
   if (status === "done") return { label: "Приключено", colorClass: "bg-green-100 border-green-200 text-green-800" };
   if (status === "spam") return { label: "Спам", colorClass: "bg-red-100 border-red-200 text-red-800" };
   return { label: status || "—", colorClass: "bg-slate-100 border-slate-200 text-slate-600" };
@@ -314,7 +314,7 @@ export function InquiriesClient() {
                   return (
                     <tr key={i.id} className="hover:bg-slate-50 transition-colors">
                       <Td className="font-bold text-slate-900">
-                        <button type="button" onClick={() => setSelectedInquiry(i)} className="rounded text-left font-bold text-slate-900 underline-offset-4 transition-colors hover:text-sky-700 hover:underline">{i.customer_name}</button>
+                        <button type="button" onClick={() => setSelectedInquiry(i)} className="rounded text-left font-bold text-slate-900 underline-offset-4 transition-colors hover:text-brand-blue-700 hover:underline">{i.customer_name}</button>
                       </Td>
                       <Td>
                         <div className="font-medium text-slate-700">{i.customer_phone}</div>
@@ -326,11 +326,11 @@ export function InquiriesClient() {
                       <Td className="text-xs text-slate-500 font-medium">{new Date(i.created_at).toLocaleString()}</Td>
                       <Td>
                         <div className="flex flex-wrap gap-1.5 items-center">
-                          <Button variant="secondary" size="sm" onClick={() => setSelectedInquiry(i)} className="gap-1.5 !py-1 !px-2.5 !text-xs border-sky-200 bg-sky-50 text-sky-700">Детайли</Button>
-                          <Button variant="secondary" size="sm" onClick={() => setNotesForId(i.id)} className={`gap-1 !py-1 !px-2.5 !text-xs ${i.admin_notes ? "border-sky-300 bg-sky-50 text-sky-700" : ""}`}>
+                          <Button variant="secondary" size="sm" onClick={() => setSelectedInquiry(i)} className="gap-1.5 !py-1 !px-2.5 !text-xs border-brand-blue-200 bg-brand-blue-50 text-brand-blue-700">Детайли</Button>
+                          <Button variant="secondary" size="sm" onClick={() => setNotesForId(i.id)} className={`gap-1 !py-1 !px-2.5 !text-xs ${i.admin_notes ? "border-brand-blue-300 bg-brand-blue-50 text-brand-blue-700" : ""}`}>
                             <StickyNote className="w-3.5 h-3.5" />{i.admin_notes ? " ●" : ""}
                           </Button>
-                          <Button variant="secondary" size="sm" onClick={() => quickUpdate(i.id, { status: "in_progress" })} className="!py-1 !px-2.5 !text-xs"><PlayCircle className="w-3.5 h-3.5 text-sky-500" /></Button>
+                          <Button variant="secondary" size="sm" onClick={() => quickUpdate(i.id, { status: "in_progress" })} className="!py-1 !px-2.5 !text-xs"><PlayCircle className="w-3.5 h-3.5 text-brand-blue-500" /></Button>
                           <Button variant="secondary" size="sm" disabled={actionBusy === `contact:${i.id}`} onClick={() => void createContactFromInquiry(i)} className="!py-1 !px-2.5 !text-xs">Контакт</Button>
                           <Button variant="secondary" size="sm" disabled={actionBusy === `work:${i.id}`} onClick={() => void createInspectionFromInquiry(i)} className="!py-1 !px-2.5 !text-xs">Оглед</Button>
                           <Button variant="secondary" size="sm" disabled={actionBusy === `ai:${i.id}`} onClick={() => void generateAiReply(i)} className="!py-1 !px-2.5 !text-xs">AI</Button>
@@ -358,7 +358,7 @@ export function InquiriesClient() {
                     <div className="flex items-start justify-between gap-3 mb-2">
                       <div className="min-w-0">
                         <div className="font-bold text-slate-900 text-sm leading-snug">{i.customer_name}</div>
-                        <a href={`tel:${i.customer_phone}`} className="text-xs text-sky-600 font-medium mt-0.5 block" onClick={e => e.stopPropagation()}>{i.customer_phone}</a>
+                        <a href={`tel:${i.customer_phone}`} className="text-xs text-brand-blue-500 font-medium mt-0.5 block" onClick={e => e.stopPropagation()}>{i.customer_phone}</a>
                       </div>
                       <div className="text-right shrink-0">
                         <Badge label={s.label} colorClass={s.colorClass} />
@@ -372,7 +372,7 @@ export function InquiriesClient() {
                     </div>
                   </button>
                   <div className="flex border-t border-slate-100 divide-x divide-slate-100">
-                    <button type="button" onClick={() => quickUpdate(i.id, { status: "in_progress" })} className="flex-1 py-3 flex items-center justify-center gap-1 text-xs font-semibold text-sky-700 hover:bg-sky-50 active:bg-sky-100 transition-colors">
+                    <button type="button" onClick={() => quickUpdate(i.id, { status: "in_progress" })} className="flex-1 py-3 flex items-center justify-center gap-1 text-xs font-semibold text-brand-blue-700 hover:bg-brand-blue-50 active:bg-brand-blue-100 transition-colors">
                       <PlayCircle className="w-4 h-4" /> В работа
                     </button>
                     <button type="button" onClick={() => quickUpdate(i.id, { status: "done" })} className="flex-1 py-3 flex items-center justify-center gap-1 text-xs font-semibold text-green-700 hover:bg-green-50 active:bg-green-100 transition-colors">
@@ -415,11 +415,11 @@ export function InquiriesClient() {
             <div className="relative border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#ffffff_42%,#f8fafc_100%)] px-6 py-5">
               <button type="button" onClick={() => setSelectedInquiry(null)} className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white/80 text-slate-500 shadow-sm hover:bg-white hover:text-slate-900"><X className="h-4 w-4" /></button>
               <div className="flex items-center gap-3 pr-10">
-                <div className={`flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-lg ${selectedInquiry.source === "wizard" ? "bg-violet-600 shadow-violet-600/25" : "bg-sky-600 shadow-sky-600/25"}`}>
+                <div className={`flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-lg ${selectedInquiry.source === "wizard" ? "bg-violet-600 shadow-violet-600/25" : "bg-brand-blue-500 shadow-brand-blue-500/25"}`}>
                   <MessageSquare className="h-5 w-5" />
                 </div>
                 <div>
-                  <div className={`text-xs font-bold uppercase tracking-[0.24em] ${selectedInquiry.source === "wizard" ? "text-violet-700" : "text-sky-700"}`}>
+                  <div className={`text-xs font-bold uppercase tracking-[0.24em] ${selectedInquiry.source === "wizard" ? "text-violet-700" : "text-brand-blue-700"}`}>
                     {selectedInquiry.source === "wizard" ? "Анкетно запитване" : "Клиентско запитване"}
                   </div>
                   <div className="mt-1 text-2xl font-black leading-tight text-slate-950">{selectedInquiry.customer_name}</div>
@@ -456,10 +456,10 @@ export function InquiriesClient() {
                   </div>
                 </div>
                 <Button variant="secondary" className="w-full justify-center gap-2" onClick={() => setNotesForId(selectedInquiry.id)}><StickyNote className="h-4 w-4" /> Бележки</Button>
-                <Button variant="secondary" className="w-full justify-center gap-2" onClick={() => void quickUpdate(selectedInquiry.id, { status: "in_progress" })}><PlayCircle className="h-4 w-4 text-sky-500" /> Маркирай в работа</Button>
+                <Button variant="secondary" className="w-full justify-center gap-2" onClick={() => void quickUpdate(selectedInquiry.id, { status: "in_progress" })}><PlayCircle className="h-4 w-4 text-brand-blue-500" /> Маркирай в работа</Button>
                 <Button variant="secondary" className="w-full justify-center" disabled={actionBusy === `contact:${selectedInquiry.id}`} onClick={() => void createContactFromInquiry(selectedInquiry)}>Създай контакт</Button>
                 <Button variant="secondary" className="w-full justify-center" disabled={actionBusy === `work:${selectedInquiry.id}`} onClick={() => void createInspectionFromInquiry(selectedInquiry)}>Създай оглед</Button>
-                <Button variant="secondary" className="w-full justify-center gap-2" disabled={actionBusy === `ai:${selectedInquiry.id}`} onClick={() => void generateAiReply(selectedInquiry)}><Sparkles className="h-4 w-4 text-sky-500" /> AI чернова</Button>
+                <Button variant="secondary" className="w-full justify-center gap-2" disabled={actionBusy === `ai:${selectedInquiry.id}`} onClick={() => void generateAiReply(selectedInquiry)}><Sparkles className="h-4 w-4 text-brand-blue-500" /> AI чернова</Button>
                 <Button variant="primary" className="w-full justify-center gap-2" onClick={() => void quickUpdate(selectedInquiry.id, { status: "done" })}><CheckCircle className="h-4 w-4" /> Приключи</Button>
                 <Button variant="danger" className="w-full justify-center gap-2" onClick={() => void quickUpdate(selectedInquiry.id, { status: "spam" })}><ShieldAlert className="h-4 w-4" /> Спам</Button>
               </div>
@@ -474,9 +474,9 @@ export function InquiriesClient() {
             <div className="relative border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#ffffff_42%,#f8fafc_100%)] px-6 py-5">
               <button type="button" onClick={() => setAiReplyDraft(null)} className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white/80 text-slate-500 shadow-sm hover:bg-white hover:text-slate-900"><X className="h-4 w-4" /></button>
               <div className="flex items-center gap-3 pr-10">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-600 text-white shadow-lg shadow-sky-600/25"><Sparkles className="h-5 w-5" /></div>
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-blue-500 text-white shadow-lg shadow-brand-blue-500/25"><Sparkles className="h-5 w-5" /></div>
                 <div>
-                  <div className="text-xs font-bold uppercase tracking-[0.24em] text-sky-700">Gemini отговор</div>
+                  <div className="text-xs font-bold uppercase tracking-[0.24em] text-brand-blue-700">Gemini отговор</div>
                   <div className="mt-1 text-2xl font-black leading-tight text-slate-950">AI чернова</div>
                   <div className="mt-1 text-sm font-medium text-slate-500">{aiReplyDraft.customerName}</div>
                 </div>
@@ -493,8 +493,8 @@ export function InquiriesClient() {
                 </div>
               )}
               {aiReplyDraft.internalNote && (
-                <div className="rounded-2xl border border-sky-100 bg-sky-50/70 p-4">
-                  <div className="mb-2 text-xs font-bold uppercase tracking-wide text-sky-700">Вътрешна бележка</div>
+                <div className="rounded-2xl border border-brand-blue-100 bg-brand-blue-50/70 p-4">
+                  <div className="mb-2 text-xs font-bold uppercase tracking-wide text-brand-blue-700">Вътрешна бележка</div>
                   <div className="whitespace-pre-wrap text-sm font-semibold leading-6 text-slate-900">{aiReplyDraft.internalNote}</div>
                 </div>
               )}
@@ -505,7 +505,7 @@ export function InquiriesClient() {
             </div>
             <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50 px-6 py-4 sm:flex-row sm:justify-end">
               <Button variant="secondary" onClick={() => setAiReplyDraft(null)} className="justify-center">Затвори</Button>
-              <Button onClick={() => void saveAiReplyDraft()} className="justify-center gap-2 shadow-lg shadow-sky-600/20"><CheckCircle2 className="h-4 w-4" />Запиши в бележките</Button>
+              <Button onClick={() => void saveAiReplyDraft()} className="justify-center gap-2 shadow-lg shadow-brand-blue-500/20"><CheckCircle2 className="h-4 w-4" />Запиши в бележките</Button>
             </div>
           </div>
         </div>

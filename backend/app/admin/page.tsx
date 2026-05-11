@@ -1,4 +1,5 @@
 import { adminSession } from "@/lib/admin/db";
+import { PUBLIC_CATALOG_STOCK_STATUSES } from "@/lib/catalog/publicProductVisibility";
 import { EmailOutboxDrain } from "./EmailOutboxDrain";
 import { SectionTitle, Card } from "./ui";
 import { DashboardPanel } from "./DashboardPanel";
@@ -49,7 +50,7 @@ export default async function AdminDashboardPage() {
     supabase
       .from("products")
       .select("id", { count: "exact", head: true })
-      .eq("is_active", true)
+      .in("stock_status", PUBLIC_CATALOG_STOCK_STATUSES as unknown as string[])
       .lte("stock_quantity", lowStockThreshold),
     supabase
       .from("inquiries")
@@ -75,7 +76,7 @@ export default async function AdminDashboardPage() {
     supabase
       .from("products")
       .select("id,name,stock_quantity,stock_status")
-      .eq("is_active", true)
+      .in("stock_status", PUBLIC_CATALOG_STOCK_STATUSES as unknown as string[])
       .lte("stock_quantity", lowStockThreshold)
       .order("stock_quantity", { ascending: true })
       .order("name", { ascending: true })

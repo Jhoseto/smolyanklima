@@ -19,7 +19,7 @@ export function ServiceHub() {
         href="/admin/service/tasks"
         className="flex items-center gap-4 p-4 rounded-2xl bg-white border border-slate-200 shadow-sm active:bg-slate-50 transition-colors no-underline text-inherit"
       >
-        <div className="w-12 h-12 rounded-xl bg-sky-100 text-sky-600 flex items-center justify-center shrink-0">
+        <div className="w-12 h-12 rounded-xl bg-brand-blue-100 text-brand-blue-500 flex items-center justify-center shrink-0">
           <CalendarClock className="w-6 h-6" />
         </div>
         <div className="flex-1 min-w-0">

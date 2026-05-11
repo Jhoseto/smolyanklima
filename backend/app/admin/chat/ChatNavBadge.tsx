@@ -34,12 +34,12 @@ export function ChatNavBadge() {
       href="/admin/chat"
       className={`flex items-center justify-between px-2.5 py-2 rounded-lg font-semibold no-underline transition-colors text-xs border focus:outline-none focus:ring-2 focus:ring-slate-200 ${
         active
-          ? "bg-sky-50 text-sky-700 border-sky-200"
+          ? "bg-brand-blue-50 text-brand-blue-700 border-brand-blue-200"
           : "text-slate-600 bg-transparent border-transparent hover:bg-slate-50 hover:text-slate-900"
       }`}
     >
       <span className="flex items-center gap-2">
-        <span className={active ? "text-sky-500" : "text-slate-400"}>
+        <span className={active ? "text-brand-blue-500" : "text-slate-400"}>
           <Headphones className="w-4 h-4" />
         </span>
         Чат на живо

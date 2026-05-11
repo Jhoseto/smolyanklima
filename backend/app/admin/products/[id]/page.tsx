@@ -14,6 +14,7 @@ import { Save, Trash2 } from "lucide-react";
 
 type Brand = { id: string; name: string };
 type ProductType = { id: string; name: string };
+type SupplierRow = { id: string; full_name: string };
 
 export default function EditProductPage() {
   const params = useParams<{ id: string }>();
@@ -22,7 +23,9 @@ export default function EditProductPage() {
 
   const [brands, setBrands] = useState<Brand[]>([]);
   const [types, setTypes] = useState<ProductType[]>([]);
+  const [suppliers, setSuppliers] = useState<SupplierRow[]>([]);
   const [canEditPrice, setCanEditPrice] = useState(true);
+  const [canEditStockLocation, setCanEditStockLocation] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
@@ -39,19 +42,29 @@ export default function EditProductPage() {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const [bRes, tRes, pRes, wRes] = await Promise.all([
+      const [bRes, tRes, pRes, wRes, sRes] = await Promise.all([
         fetch("/api/admin/meta/brands", { credentials: "include" }),
         fetch("/api/admin/meta/product-types", { credentials: "include" }),
         fetch(`/api/admin/products/${id}`, { credentials: "include" }),
         fetch("/api/admin/whoami", { credentials: "include" }),
+        fetch("/api/admin/contacts?kind=supplier&perPage=200", { credentials: "include" }),
       ]);
       const b = await bRes.json();
       const t = await tRes.json();
       const p = await pRes.json();
       const w = await wRes.json();
+      const s = await sRes.json();
       setBrands(b.data ?? []);
       setTypes(t.data ?? []);
-      setCanEditPrice(((w.data?.admin?.role) ?? "master_admin") !== "office_staff");
+      setSuppliers(
+        (s.data ?? []).map((row: { id: string; full_name: string }) => ({
+          id: row.id,
+          full_name: row.full_name,
+        })),
+      );
+      const role = (w.data?.admin?.role as string) ?? "master_admin";
+      setCanEditPrice(role === "master_admin");
+      setCanEditStockLocation(role === "master_admin" || role === "office_staff");
       if (!pRes.ok) throw new Error(p.error || "Failed to load product");
       setForm(mapLoadedProductToForm(p.data));
     })()
@@ -117,7 +130,7 @@ export default function EditProductPage() {
       </div>
 
       <HelpCard>
-        <HelpRow items={["Запис запазва всички промени в картата", "Изтрий премахва продукта и свързаните му публични данни", "Провери stock и active преди запазване"]} />
+        <HelpRow items={["Запис запазва всички промени в картата", "Изтрий премахва продукта и свързаните му публични данни", "Магазин/склад и каталог-статус са отделни полета"]} />
       </HelpCard>
 
       {error && (
@@ -127,7 +140,17 @@ export default function EditProductPage() {
       )}
 
       <Card className="p-4 md:p-6">
-        <ProductFormFields brands={brands} types={types} form={form} setForm={setForm} canEditPrice={canEditPrice} />
+        <ProductFormFields
+          brands={brands}
+          types={types}
+          suppliers={suppliers}
+          form={form}
+          setForm={setForm}
+          canEditPrice={canEditPrice}
+          canEditStockLocation={canEditStockLocation}
+          canEditProductRegion={canEditStockLocation}
+          currentProductId={id}
+        />
       </Card>
 
       {/* Desktop action row */}

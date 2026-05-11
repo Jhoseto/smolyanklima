@@ -391,7 +391,7 @@ function AdminChatClient() {
               const labels: Record<string, string> = { "": "Всички", waiting: "Изчакват", active: "Активни", closed: "Затворени" };
               return (
                 <button key={s} onClick={() => setFilter(s)}
-                  className={`flex-1 py-1 rounded-lg text-[11px] font-bold transition-colors ${filter === s ? "bg-sky-600 text-white" : "text-slate-500 hover:bg-slate-100"}`}>
+                  className={`flex-1 py-1 rounded-lg text-[11px] font-bold transition-colors ${filter === s ? "bg-brand-blue-500 text-white" : "text-slate-500 hover:bg-slate-100"}`}>
                   {labels[s]}
                   {s === "waiting" && waitingCount > 0 && (
                     <span className="ml-1 inline-flex items-center justify-center w-4 h-4 rounded-full bg-orange-500 text-white text-[9px] font-black">{waitingCount}</span>
@@ -432,7 +432,7 @@ function AdminChatClient() {
                     onClick={() => setMobilePane("list")}>
                     <ChevronRight className="w-4 h-4 rotate-180" />
                   </button>
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-sky-400 to-sky-600 flex items-center justify-center shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-brand-blue-400 to-brand-blue-500 flex items-center justify-center shrink-0">
                     <User className="w-4 h-4 text-white" />
                   </div>
                   <div className="min-w-0">
@@ -474,7 +474,7 @@ function AdminChatClient() {
                 {detail.chat.visitor_phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{detail.chat.visitor_phone}</span>}
                 {detail.chat.visitor_page_url && (
                   <a href={detail.chat.visitor_page_url} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-sky-600 hover:underline truncate max-w-[200px]">
+                    className="flex items-center gap-1 text-brand-blue-500 hover:underline truncate max-w-[200px]">
                     <Globe className="w-3 h-3 shrink-0" />
                     {detail.chat.visitor_page_url.replace(/^https?:\/\/[^/]+/, "")}
                     <ExternalLink className="w-2.5 h-2.5 shrink-0" />
@@ -540,7 +540,7 @@ function AdminChatClient() {
                   className="flex-1 text-xs text-slate-700 bg-transparent resize-none focus:outline-none placeholder:text-slate-400 leading-relaxed min-h-[36px] max-h-[80px]"
                   rows={2} />
                 <button onClick={handleSaveNotes} disabled={savingNotes}
-                  className="shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-white border border-slate-200 text-slate-600 hover:bg-sky-50 hover:border-sky-200 hover:text-sky-700 transition-colors disabled:opacity-50">
+                  className="shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-white border border-slate-200 text-slate-600 hover:bg-brand-blue-50 hover:border-brand-blue-200 hover:text-brand-blue-700 transition-colors disabled:opacity-50">
                   {savingNotes ? <Loader2 className="w-3 h-3 animate-spin" /> : "Запази"}
                 </button>
               </div>
@@ -550,7 +550,7 @@ function AdminChatClient() {
                 <div className="shrink-0 px-3 py-2 bg-white border-t border-slate-100 flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
                   {cannedResponses.map((cr) => (
                     <button key={cr.id} onClick={() => handleSend(cr.content)}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-sky-50 border border-sky-200 text-sky-700 hover:bg-sky-100 transition-colors max-w-[250px] truncate"
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-brand-blue-50 border border-brand-blue-200 text-brand-blue-700 hover:bg-brand-blue-100 transition-colors max-w-[250px] truncate"
                       title={cr.content}>
                       <Zap className="w-3 h-3 shrink-0" />{cr.shortcut}
                     </button>
@@ -561,10 +561,10 @@ function AdminChatClient() {
               {/* Input */}
               {detail.chat.status !== "closed" && (
                 <div className="shrink-0 px-3 pt-2 pb-3 border-t border-slate-100 bg-white">
-                  <div className="flex gap-2 items-center bg-slate-50 rounded-2xl px-3 py-1 border border-slate-200 focus-within:border-sky-400 focus-within:ring-2 focus-within:ring-sky-200 transition">
+                  <div className="flex gap-2 items-center bg-slate-50 rounded-2xl px-3 py-1 border border-slate-200 focus-within:border-brand-blue-400 focus-within:ring-2 focus-within:ring-brand-blue-200 transition">
                     {cannedResponses.length > 0 && (
                       <button onClick={() => setShowCanned(v => !v)} title="Готови отговори"
-                        className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors shrink-0 ${showCanned ? "text-sky-600 bg-sky-100" : "text-slate-400 hover:text-sky-600 hover:bg-sky-50"}`}>
+                        className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors shrink-0 ${showCanned ? "text-brand-blue-500 bg-brand-blue-100" : "text-slate-400 hover:text-brand-blue-500 hover:bg-brand-blue-50"}`}>
                         <Zap className="w-4 h-4" />
                       </button>
                     )}
@@ -575,7 +575,7 @@ function AdminChatClient() {
                       className="flex-1 bg-transparent text-sm py-2.5 text-slate-900 placeholder:text-slate-400 focus:outline-none min-w-0"
                       disabled={sending} />
                     <button onClick={() => handleSend()} disabled={!inputValue.trim() || sending}
-                      className="w-9 h-9 rounded-xl flex items-center justify-center bg-sky-600 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-sky-700 transition-colors shrink-0">
+                      className="w-9 h-9 rounded-xl flex items-center justify-center bg-brand-blue-500 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-brand-blue-700 transition-colors shrink-0">
                       {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" strokeWidth={2} />}
                     </button>
                   </div>
@@ -599,9 +599,9 @@ function ChatRow({ chat, selected, onClick }: { chat: LiveChat; selected: boolea
   const time = chat.last_message_at ?? chat.created_at;
   return (
     <button onClick={onClick}
-      className={`w-full text-left flex items-center gap-3 px-3 py-3 border-b border-slate-50 hover:bg-slate-50 transition-colors ${selected ? "bg-sky-50 border-l-2 border-l-sky-500" : ""}`}>
-      <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${selected ? "bg-sky-100" : "bg-slate-100"}`}>
-        <User className={`w-4 h-4 ${selected ? "text-sky-600" : "text-slate-500"}`} />
+      className={`w-full text-left flex items-center gap-3 px-3 py-3 border-b border-slate-50 hover:bg-slate-50 transition-colors ${selected ? "bg-brand-blue-50 border-l-2 border-l-brand-blue-500" : ""}`}>
+      <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${selected ? "bg-brand-blue-100" : "bg-slate-100"}`}>
+        <User className={`w-4 h-4 ${selected ? "text-brand-blue-500" : "text-slate-500"}`} />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-1">
@@ -630,7 +630,7 @@ function AdminChatBubble({ msg, grouped }: { msg: ChatMsg & { metadata?: { type?
       </div>
     );
     return (
-      <div className="mx-auto max-w-[90%] bg-sky-50 border border-sky-100 rounded-2xl px-4 py-2.5 text-xs text-sky-700 text-center my-1.5">{msg.content}</div>
+      <div className="mx-auto max-w-[90%] bg-brand-blue-50 border border-brand-blue-100 rounded-2xl px-4 py-2.5 text-xs text-brand-blue-700 text-center my-1.5">{msg.content}</div>
     );
   }
 
@@ -642,15 +642,15 @@ function AdminChatBubble({ msg, grouped }: { msg: ChatMsg & { metadata?: { type?
       <div className={`flex gap-2 ${isAdmin ? "justify-end" : "justify-start"} ${grouped ? "mt-0.5" : "mt-2"}`}>
         {!isAdmin && <div className="w-7 h-7 rounded-full bg-gradient-to-br from-slate-300 to-slate-400 flex items-center justify-center shrink-0 self-end mb-1"><User className="w-3.5 h-3.5 text-white" /></div>}
         <a href={`/product/${p.slug}`} target="_blank" rel="noopener noreferrer"
-          className="max-w-[75%] bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:border-sky-200 transition-all">
+          className="max-w-[75%] bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:border-brand-blue-200 transition-all">
           {p.image_url && <div className="w-full h-24 bg-slate-50"><img src={p.image_url} alt={p.name} className="w-full h-full object-contain p-2" /></div>}
           <div className="px-3 py-2">
-            {p.brand_name && <p className="text-[10px] font-semibold text-sky-600 uppercase">{p.brand_name}</p>}
+            {p.brand_name && <p className="text-[10px] font-semibold text-brand-blue-500 uppercase">{p.brand_name}</p>}
             <p className="text-xs font-bold text-slate-900">{p.name}</p>
             {p.price_from && <p className="text-xs font-bold text-orange-500 mt-0.5">€{p.price_from.toLocaleString("bg-BG")}</p>}
           </div>
         </a>
-        {isAdmin && <div className="w-7 h-7 rounded-full bg-gradient-to-br from-sky-500 to-sky-700 flex items-center justify-center shrink-0 self-end mb-1"><Headphones className="w-3.5 h-3.5 text-white" /></div>}
+        {isAdmin && <div className="w-7 h-7 rounded-full bg-gradient-to-br from-brand-blue-500 to-brand-blue-700 flex items-center justify-center shrink-0 self-end mb-1"><Headphones className="w-3.5 h-3.5 text-white" /></div>}
       </div>
     );
   }
@@ -666,17 +666,17 @@ function AdminChatBubble({ msg, grouped }: { msg: ChatMsg & { metadata?: { type?
       )}
       <div className={`max-w-[75%] flex flex-col gap-0.5 ${isAdmin ? "items-end" : "items-start"}`}>
         <div className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed break-words whitespace-pre-wrap shadow-sm ${
-          isAdmin ? "bg-gradient-to-br from-sky-500 to-sky-700 text-white rounded-br-sm" : "bg-white border border-slate-200 text-slate-800 rounded-bl-sm"
+          isAdmin ? "bg-gradient-to-br from-brand-blue-500 to-brand-blue-700 text-white rounded-br-sm" : "bg-white border border-slate-200 text-slate-800 rounded-bl-sm"
         }`}>{msg.content}</div>
         {!grouped && (
           <div className={`flex items-center gap-1 text-[10px] text-slate-400 px-1 ${isAdmin ? "flex-row-reverse" : ""}`}>
             <span>{time}</span>
-            {isAdmin && <CheckCheck className="w-3 h-3 text-sky-400" />}
+            {isAdmin && <CheckCheck className="w-3 h-3 text-brand-blue-400" />}
           </div>
         )}
       </div>
       {isAdmin && (
-        <div className={`w-7 h-7 rounded-full bg-gradient-to-br from-sky-500 to-sky-700 flex items-center justify-center shrink-0 self-end mb-1 ${grouped ? "opacity-0" : ""}`}>
+        <div className={`w-7 h-7 rounded-full bg-gradient-to-br from-brand-blue-500 to-brand-blue-700 flex items-center justify-center shrink-0 self-end mb-1 ${grouped ? "opacity-0" : ""}`}>
           <Headphones className="w-3.5 h-3.5 text-white" />
         </div>
       )}
@@ -696,7 +696,7 @@ function StatusDot({ status }: { status: ChatStatus }) {
 }
 
 function ActionButton({ onClick, color, icon, label }: { onClick: () => void; color: "sky" | "red"; icon: React.ReactNode; label: string }) {
-  const cls = color === "sky" ? "bg-sky-50 border-sky-200 text-sky-700 hover:bg-sky-100" : "bg-red-50 border-red-200 text-red-700 hover:bg-red-100";
+  const cls = color === "sky" ? "bg-brand-blue-50 border-brand-blue-200 text-brand-blue-700 hover:bg-brand-blue-100" : "bg-red-50 border-red-200 text-red-700 hover:bg-red-100";
   return (
     <button onClick={onClick} className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${cls}`}>
       {icon}{label}
@@ -707,8 +707,8 @@ function ActionButton({ onClick, color, icon, label }: { onClick: () => void; co
 function EmptyState() {
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center p-8">
-      <div className="w-16 h-16 rounded-full bg-sky-50 border-2 border-sky-100 flex items-center justify-center">
-        <MessageCircle className="w-7 h-7 text-sky-300" />
+      <div className="w-16 h-16 rounded-full bg-brand-blue-50 border-2 border-brand-blue-100 flex items-center justify-center">
+        <MessageCircle className="w-7 h-7 text-brand-blue-300" />
       </div>
       <div>
         <p className="text-sm font-bold text-slate-700 mb-1">Изберете разговор</p>

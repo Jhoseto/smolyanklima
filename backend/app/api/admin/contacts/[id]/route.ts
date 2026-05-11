@@ -3,13 +3,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminDb } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
+import {
+  ContactPhoneInputSchema,
+  loadContactPhones,
+  replaceContactPhones,
+} from "@/lib/admin/contactPhones";
 
 const UpdateSchema = z.object({
   fullName: z.string().min(2).max(200).optional(),
   phone: z.string().min(3).max(80).optional(),
+  // Замества целия списък с допълнителни телефони, ако е подаден.
+  // ВАЖНО: undefined = „не пипай телефоните“; [] = „изтрий всички допълнителни“.
+  additionalPhones: z.array(ContactPhoneInputSchema).max(20).optional(),
   email: z.string().email().max(200).optional().nullable(),
   address: z.string().max(500).optional().nullable(),
   notes: z.string().max(4000).optional().nullable(),
+  contactKind: z.enum(["client", "supplier"]).optional(),
   customerStatus: z.enum(["new", "active", "vip", "lost"]).optional(),
   nextFollowUpAt: z.string().optional().nullable(),
   lastContactedAt: z.string().optional().nullable(),
@@ -27,6 +36,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
   if (cErr) return withCors(req, NextResponse.json({ error: cErr.message }, { status: 500 }));
   if (!contact) return withCors(req, NextResponse.json({ error: "Контактът не е намерен" }, { status: 404 }));
+
+  // Зареждаме всички телефони (основен + допълнителни) — UI ги показва в детайла.
+  const phones = await loadContactPhones(supabase, id).catch(() => []);
 
   const phoneRaw = String((contact as any).phone ?? "").trim();
   const emailRaw = String((contact as any).email ?? "").trim().toLowerCase();
@@ -158,7 +170,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     return db - da;
   });
 
-  return withCors(req, NextResponse.json({ data: { contact, history } }));
+  return withCors(req, NextResponse.json({ data: { contact, phones, history } }));
 }
 
 export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -173,6 +185,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   if (parsed.data.email !== undefined) patch.email = parsed.data.email?.trim() || null;
   if (parsed.data.address !== undefined) patch.address = parsed.data.address?.trim() || null;
   if (parsed.data.notes !== undefined) patch.notes = parsed.data.notes?.trim() || null;
+  if (parsed.data.contactKind !== undefined) patch.contact_kind = parsed.data.contactKind;
   if (parsed.data.customerStatus !== undefined) patch.customer_status = parsed.data.customerStatus;
   if (parsed.data.nextFollowUpAt !== undefined) patch.next_follow_up_at = parsed.data.nextFollowUpAt || null;
   if (parsed.data.lastContactedAt !== undefined) patch.last_contacted_at = parsed.data.lastContactedAt || null;
@@ -181,6 +194,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   let { data, error } = await supabase.from("contacts").update(patch).eq("id", id).select("*").maybeSingle();
   if (error && isMissingFollowupColumns(error.message)) {
     const {
+      contact_kind: _contactKind,
       customer_status: _customerStatus,
       next_follow_up_at: _nextFollowUpAt,
       last_contacted_at: _lastContactedAt,
@@ -193,18 +207,85 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   if (!data) return withCors(req, NextResponse.json({ error: "Контактът не е намерен" }, { status: 404 }));
 
+  // Ако клиентът е изпратил additionalPhones (включително празен масив),
+  // правим пълен replace на телефоните. Когато полето отсъства — не пипаме.
+  if (parsed.data.additionalPhones !== undefined) {
+    const primaryPhone =
+      (patch.phone as string | undefined) ?? String((data as any).phone ?? "");
+    const phonesRes = await replaceContactPhones(
+      supabase,
+      id,
+      primaryPhone,
+      parsed.data.additionalPhones,
+    );
+    if (phonesRes.error) {
+      console.warn("[contacts.update] failed to update contact_phones:", phonesRes.error);
+    }
+  } else if (parsed.data.phone !== undefined) {
+    // Ако сменят основния телефон, синхронизираме primary записа в contact_phones,
+    // като оставяме съществуващите допълнителни на мира.
+    await syncPrimaryPhone(supabase, id, parsed.data.phone);
+  }
+
   await logAdminActivity({
     action: "contact.update",
     entityType: "contact",
     entityId: id,
-    details: { changedFields: Object.keys(patch) },
+    details: {
+      changedFields: Object.keys(patch),
+      ...(parsed.data.additionalPhones !== undefined
+        ? { additional_phones_count: parsed.data.additionalPhones.length }
+        : {}),
+    },
   });
 
   return withCors(req, NextResponse.json({ data }));
 }
 
+/**
+ * Когато основният телефон се смени, искаме записът с is_primary=true в
+ * contact_phones да бъде в синхрон. Допълнителните остават на мира.
+ */
+async function syncPrimaryPhone(
+  supabase: Awaited<ReturnType<typeof adminDb>>,
+  contactId: string,
+  newPrimary: string,
+): Promise<void> {
+  const phone = newPrimary.trim();
+  if (phone.length < 3) return;
+
+  const { data: existing, error: fetchErr } = await supabase
+    .from("contact_phones")
+    .select("id,phone,label,is_primary")
+    .eq("contact_id", contactId)
+    .eq("is_primary", true)
+    .maybeSingle();
+  if (fetchErr) {
+    if (
+      fetchErr.message.includes("contact_phones") &&
+      (fetchErr.message.includes("does not exist") || fetchErr.message.includes("schema cache"))
+    ) {
+      return;
+    }
+    console.warn("[contacts.syncPrimaryPhone] fetch failed:", fetchErr.message);
+    return;
+  }
+
+  if (existing) {
+    await supabase
+      .from("contact_phones")
+      .update({ phone })
+      .eq("id", existing.id);
+  } else {
+    await supabase
+      .from("contact_phones")
+      .insert({ contact_id: contactId, phone, label: "Основен", is_primary: true, sort_order: 0 });
+  }
+}
+
 function isMissingFollowupColumns(message: string) {
   return (
+    message.includes("contact_kind") ||
     message.includes("customer_status") ||
     message.includes("next_follow_up_at") ||
     message.includes("last_contacted_at") ||

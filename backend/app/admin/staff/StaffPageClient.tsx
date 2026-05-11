@@ -28,7 +28,7 @@ const ROLE_LABELS: Record<AdminRole, string> = {
 
 const ROLE_COLORS: Record<AdminRole, string> = {
   master_admin: "bg-purple-100 text-purple-700 border-purple-200",
-  office_staff: "bg-sky-100 text-sky-700 border-sky-200",
+  office_staff: "bg-brand-blue-100 text-brand-blue-700 border-brand-blue-200",
   service_staff: "bg-amber-100 text-amber-700 border-amber-200",
 };
 
@@ -197,7 +197,7 @@ export function StaffPageClient({ currentUserId }: { currentUserId: string }) {
         {[
           { label: "Общо", value: counts.total, color: "text-slate-700" },
           { label: "Активни", value: counts.active, color: "text-emerald-600" },
-          { label: "Офис", value: counts.office, color: "text-sky-600" },
+          { label: "Офис", value: counts.office, color: "text-brand-blue-500" },
           { label: "Сервизни", value: counts.service, color: "text-amber-600" },
         ].map(s => (
           <div key={s.label} className="bg-white border border-slate-200 rounded-xl p-3 text-center">

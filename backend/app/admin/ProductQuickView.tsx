@@ -53,7 +53,7 @@ export function ProductQuickViewButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={`text-left font-bold text-slate-900 underline-offset-4 transition-colors hover:text-sky-700 hover:underline focus:outline-none focus:ring-2 focus:ring-sky-200 rounded ${className}`}
+        className={`text-left font-bold text-slate-900 underline-offset-4 transition-colors hover:text-brand-blue-700 hover:underline focus:outline-none focus:ring-2 focus:ring-brand-blue-200 rounded ${className}`}
         title="Бърз преглед на продукта"
       >
         {productName}
@@ -153,7 +153,7 @@ function ProductQuickViewModal({ productId, onClose }: { productId: string; onCl
                     />
                   ) : (
                     <div className="flex h-full w-full flex-col items-center justify-center rounded-2xl bg-[radial-gradient(circle_at_top,#e0f2fe_0,#f8fafc_52%,#eef2ff_100%)] p-8 text-center">
-                      <div className="mb-3 rounded-2xl bg-white/80 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-sky-700 shadow-sm">
+                      <div className="mb-3 rounded-2xl bg-white/80 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-brand-blue-700 shadow-sm">
                         Smolyan Klima
                       </div>
                       <div className="text-2xl font-black leading-tight text-slate-900">{product.name}</div>

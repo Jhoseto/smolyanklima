@@ -275,7 +275,7 @@ export default function EditArticlePage() {
                   }}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
                 />
-                <div className="flex items-center justify-center gap-2 w-full px-4 py-2 border-2 border-dashed border-sky-200 bg-sky-50 text-sky-600 hover:bg-sky-100 hover:border-sky-300 rounded-lg text-sm font-semibold transition-colors">
+                <div className="flex items-center justify-center gap-2 w-full px-4 py-2 border-2 border-dashed border-brand-blue-200 bg-brand-blue-50 text-brand-blue-500 hover:bg-brand-blue-100 hover:border-brand-blue-300 rounded-lg text-sm font-semibold transition-colors">
                   <Upload className="w-4 h-4" />
                   {uploading ? "Качване..." : "Кликни или пусни файл тук"}
                 </div>
@@ -345,11 +345,11 @@ export default function EditArticlePage() {
 
           <div className="flex flex-wrap gap-3 pt-3 border-t border-slate-200">
             <label className="flex items-center gap-2.5 cursor-pointer">
-              <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500" checked={form.isPublished} onChange={(e) => setForm({ ...form, isPublished: e.target.checked })} />
+              <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-brand-blue-500 focus:ring-brand-blue-500" checked={form.isPublished} onChange={(e) => setForm({ ...form, isPublished: e.target.checked })} />
               <span className="text-sm font-semibold text-slate-700">Публикувана</span>
             </label>
             <label className="flex items-center gap-2.5 cursor-pointer">
-              <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500" checked={form.isFeatured} onChange={(e) => setForm({ ...form, isFeatured: e.target.checked })} />
+              <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-brand-blue-500 focus:ring-brand-blue-500" checked={form.isFeatured} onChange={(e) => setForm({ ...form, isFeatured: e.target.checked })} />
               <span className="text-sm font-semibold text-slate-700">Избрана</span>
             </label>
           </div>

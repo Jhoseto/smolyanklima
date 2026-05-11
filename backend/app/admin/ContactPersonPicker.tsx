@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -249,7 +249,7 @@ export function ContactPersonPicker({
               <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Контакти</span>
               <button
                 type="button"
-                className="text-[11px] font-semibold text-sky-700 hover:underline"
+                className="text-[11px] font-semibold text-brand-blue-700 hover:underline"
                 onClick={openNewModal}
               >
                 + Нов контакт
@@ -269,7 +269,7 @@ export function ContactPersonPicker({
                   <li key={c.id}>
                     <button
                       type="button"
-                      className="w-full text-left px-3 py-2 text-xs hover:bg-sky-50 border-b border-slate-50 last:border-0"
+                      className="w-full text-left px-3 py-2 text-xs hover:bg-brand-blue-50 border-b border-slate-50 last:border-0"
                       onClick={() => applyContact(c)}
                     >
                       <div className="font-semibold text-slate-900 truncate">{c.full_name ?? "—"}</div>
@@ -291,7 +291,7 @@ export function ContactPersonPicker({
       <label
         className={
           planner
-            ? "grid gap-2 rounded-xl border-2 border-sky-500 bg-gradient-to-b from-sky-50 to-white p-3 shadow-md ring-2 ring-sky-200/60"
+            ? "grid gap-2 rounded-xl border-2 border-brand-blue-500 bg-gradient-to-b from-brand-blue-50 to-white p-3 shadow-md ring-2 ring-brand-blue-200/60"
             : "grid gap-1.5"
         }
         htmlFor={inputId}
@@ -299,14 +299,14 @@ export function ContactPersonPicker({
         <span
           className={
             planner
-              ? "flex flex-wrap items-center justify-between gap-2 text-xs font-extrabold uppercase tracking-wide text-sky-950"
+              ? "flex flex-wrap items-center justify-between gap-2 text-xs font-extrabold uppercase tracking-wide text-brand-blue-900"
               : "flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600"
           }
         >
           <span className="flex flex-wrap items-center gap-2">
             {planner ? "Контакт от CRM" : "Контактно лице"}
             {contactId ? (
-              <span className="rounded-full bg-sky-100 text-sky-800 border border-sky-200 px-2 py-0.5 text-[10px] font-bold normal-case">
+              <span className="rounded-full bg-brand-blue-100 text-brand-blue-700 border border-brand-blue-200 px-2 py-0.5 text-[10px] font-bold normal-case">
                 избран
               </span>
             ) : planner ? (
@@ -316,7 +316,7 @@ export function ContactPersonPicker({
             ) : null}
           </span>
           {planner && (
-            <span className="max-w-[min(100%,18rem)] text-[10px] font-semibold normal-case leading-tight text-sky-800/90">
+            <span className="max-w-[min(100%,18rem)] text-[10px] font-semibold normal-case leading-tight text-brand-blue-700/90">
               ▼ списък · + нов · пишете за търсене
             </span>
           )}
@@ -325,7 +325,7 @@ export function ContactPersonPicker({
           ref={wrapRef}
           className={
             planner
-              ? "relative flex gap-0 overflow-hidden rounded-lg border border-sky-200 bg-white shadow-inner"
+              ? "relative flex gap-0 overflow-hidden rounded-lg border border-brand-blue-200 bg-white shadow-inner"
               : "relative flex gap-0"
           }
         >
@@ -354,7 +354,7 @@ export function ContactPersonPicker({
             type="button"
             className={
               planner
-                ? "absolute right-[2.35rem] top-1/2 z-[2] flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-md border border-sky-200 bg-sky-100 text-sky-800 hover:bg-sky-200"
+                ? "absolute right-[2.35rem] top-1/2 z-[2] flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-md border border-brand-blue-200 bg-brand-blue-100 text-brand-blue-700 hover:bg-brand-blue-200"
                 : "absolute right-[2.25rem] top-1/2 z-[2] -translate-y-1/2 rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
             }
             title="Списък контакти"

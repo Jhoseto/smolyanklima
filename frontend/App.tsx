@@ -192,7 +192,7 @@ function App() {
           <LiveChatWidget
             aiContext={liveChat.context}
             onClose={() => { setLiveChat({ open: false }); setLiveUnread(0); }}
-            onNavigate={(slug) => navigate(`/product/${slug}`)}
+            onNavigate={(productId) => navigate(`/product/${productId}`)}
             onUnreadChange={setLiveUnread}
           />
         </div>

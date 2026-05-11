@@ -6,7 +6,7 @@ import { logAdminActivity } from "@/lib/admin/audit";
 
 const BodySchema = z.object({
   ids: z.array(z.string().uuid()).min(1).max(200),
-  action: z.enum(["activate", "deactivate", "set_new", "set_used", "delete"]),
+  action: z.enum(["set_new", "set_used", "delete"]),
 });
 
 export async function OPTIONS(req: NextRequest) {
@@ -32,8 +32,6 @@ export async function POST(req: NextRequest) {
   }
 
   const patch: Record<string, unknown> = {};
-  if (action === "activate") patch.is_active = true;
-  if (action === "deactivate") patch.is_active = false;
   if (action === "set_new") patch.product_condition = "new";
   if (action === "set_used") patch.product_condition = "used";
   const { error } = await supabase.from("products").update(patch).in("id", ids);

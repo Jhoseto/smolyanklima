@@ -82,19 +82,19 @@ export function LoginPWAInstall() {
         <button
           type="button"
           onClick={promptInstall}
-          className="login-pwa-install-btn w-full flex items-center gap-3 px-4 py-3 rounded-2xl border border-sky-200 bg-gradient-to-r from-sky-50 to-white text-left shadow-sm hover:border-sky-300 transition-colors"
+          className="login-pwa-install-btn w-full flex items-center gap-3 px-4 py-3 rounded-2xl border border-brand-blue-200 bg-gradient-to-r from-brand-blue-50 to-white text-left shadow-sm hover:border-brand-blue-300 transition-colors"
         >
-          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-sky-500 to-sky-600 flex items-center justify-center shrink-0">
+          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-blue-500 to-brand-blue-700 flex items-center justify-center shrink-0">
             <Smartphone className="w-5 h-5 text-white" strokeWidth={1.75} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-bold text-sky-600 uppercase tracking-widest leading-none mb-0.5">
+            <p className="text-[10px] font-bold text-brand-blue-700 uppercase tracking-widest leading-none mb-0.5">
               Админ приложение
             </p>
             <p className="text-sm font-bold text-slate-900 leading-tight">Инсталирай за по-бърз достъп</p>
             <p className="text-[11px] text-slate-500 mt-0.5">Отделно от публичния сайт · само за служители</p>
           </div>
-          <Download className="w-4 h-4 text-sky-600 shrink-0" />
+          <Download className="w-4 h-4 text-brand-blue-700 shrink-0" />
         </button>
       )}
 
@@ -171,7 +171,7 @@ export function LoginPWAInstall() {
               <button
                 type="button"
                 onClick={() => setIosGuide(false)}
-                className="w-full py-3 rounded-2xl bg-sky-600 text-white font-semibold text-sm hover:bg-sky-700"
+                className="w-full py-3 rounded-2xl bg-brand-blue-500 text-white font-semibold text-sm hover:bg-brand-blue-700"
               >
                 Разбрах
               </button>

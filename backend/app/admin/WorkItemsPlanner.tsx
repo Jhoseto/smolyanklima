@@ -398,14 +398,14 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
             <button
               type="button"
               onClick={() => setDisplayMode("agenda")}
-              className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold transition-colors ${displayMode === "agenda" ? "bg-sky-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+              className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold transition-colors ${displayMode === "agenda" ? "bg-brand-blue-500 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
             >
               <List className="w-3.5 h-3.5" /> Списък
             </button>
             <button
               type="button"
               onClick={() => setDisplayMode("calendar")}
-              className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold transition-colors ${displayMode === "calendar" ? "bg-sky-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+              className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold transition-colors ${displayMode === "calendar" ? "bg-brand-blue-500 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
             >
               <CalendarDays className="w-3.5 h-3.5" /> Кал.
             </button>
@@ -433,7 +433,7 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
             onClick={() => setViewMode(m.id as typeof viewMode)}
             className={`rounded-full px-2 py-0.5 text-[10px] font-bold border transition-colors ${
               viewMode === m.id
-                ? "border-sky-500 bg-sky-50 text-sky-700"
+                ? "border-brand-blue-500 bg-brand-blue-50 text-brand-blue-700"
                 : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
             }`}
           >
@@ -494,15 +494,15 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
                 className={`min-h-[52px] md:min-h-[64px] border rounded-md p-1 md:p-1.5 text-left transition-colors ${
                   valid
                     ? isToday
-                      ? "border-sky-400 bg-sky-50 hover:border-sky-500 cursor-pointer"
-                      : "border-slate-200 bg-white hover:border-sky-300 cursor-pointer"
+                      ? "border-brand-blue-400 bg-brand-blue-50 hover:border-brand-blue-500 cursor-pointer"
+                      : "border-slate-200 bg-white hover:border-brand-blue-300 cursor-pointer"
                     : "border-transparent bg-slate-50 cursor-default"
                 }`}
                 disabled={!valid}
               >
                 {valid && (
                   <>
-                    <div className={`text-[11px] font-bold mb-0.5 tabular-nums ${isToday ? "text-sky-700" : "text-slate-700"}`}>{d.getDate()}</div>
+                    <div className={`text-[11px] font-bold mb-0.5 tabular-nums ${isToday ? "text-brand-blue-700" : "text-slate-700"}`}>{d.getDate()}</div>
                     <div className="grid gap-0.5">
                       {dayItems.slice(0, 2).map((item) => (
                         <div
@@ -524,7 +524,7 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
         </div>
 
         <div className="flex flex-wrap gap-2 mt-2 text-[10px] font-medium text-slate-500">
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-sky-500 shrink-0" /> Продажби</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-brand-blue-500 shrink-0" /> Продажби</span>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 shrink-0" /> Добавени</span>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500 shrink-0" /> Премахнати</span>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-500 shrink-0" /> Услуги</span>
@@ -548,7 +548,7 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
                     onClick={() => openDay(dateKey)}
                     className="w-full text-left"
                   >
-                    <div className={`text-xs font-bold mb-1.5 px-1 ${isToday ? "text-sky-700" : "text-slate-500"}`}>
+                    <div className={`text-xs font-bold mb-1.5 px-1 ${isToday ? "text-brand-blue-700" : "text-slate-500"}`}>
                       {d.toLocaleDateString("bg-BG", { weekday: "long", day: "numeric", month: "long" })}
                       {isToday && " · Днес"}
                     </div>
@@ -559,7 +559,7 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
                         key={item.id}
                         type="button"
                         onClick={() => openDay(dateKey)}
-                        className="w-full text-left bg-white rounded-xl border border-slate-200 px-3 py-3 flex items-start gap-3 hover:border-sky-200 active:bg-slate-50 transition-colors shadow-sm"
+                        className="w-full text-left bg-white rounded-xl border border-slate-200 px-3 py-3 flex items-start gap-3 hover:border-brand-blue-200 active:bg-slate-50 transition-colors shadow-sm"
                       >
                         <div className="w-1 self-stretch rounded-full shrink-0" style={{ backgroundColor: eventColor(item) }} />
                         <div className="min-w-0 flex-1">
@@ -864,7 +864,7 @@ function statusLabel(status: WorkItem["status"]): string {
 function statusPillClass(status: WorkItem["status"]): string {
   const base = "rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap border";
   if (status === "done") return `${base} bg-green-100 border-green-200 text-green-800`;
-  if (status === "in_progress") return `${base} bg-sky-100 border-sky-200 text-sky-800`;
+  if (status === "in_progress") return `${base} bg-brand-blue-100 border-brand-blue-200 text-brand-blue-700`;
   if (status === "cancelled") return `${base} bg-red-100 border-red-200 text-red-800`;
   return `${base} bg-amber-100 border-amber-200 text-amber-800`;
 }
@@ -872,7 +872,7 @@ function statusPillClass(status: WorkItem["status"]): string {
 function eventColor(item: WorkItem): string {
   if (item.event_code === "item_added") return "#10b981"; // green-500
   if (item.event_code === "item_removed") return "#f97316"; // orange-500
-  if (item.event_code === "sale") return "#0ea5e9"; // sky-500
+  if (item.event_code === "sale") return "#0ea5e9"; // brand-blue-500
   if (
     item.event_code === "service_installation" ||
     item.event_code === "service_inspection" ||

@@ -218,7 +218,7 @@ export function ProtocolPreview({
                 placeholder="Имейл на получателя"
                 value={emailTo}
                 onChange={e => { setEmailTo(e.target.value); setEmailFeedback(null); }}
-                className="flex-1 min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-sky-400"
+                className="flex-1 min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-brand-blue-400"
               />
               <button
                 type="button"

@@ -2,28 +2,36 @@ import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { optimizeImageRowUrls } from "@/lib/services/cloudinaryService";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
+import { PUBLIC_CATALOG_STOCK_STATUSES } from "@/lib/catalog/publicProductVisibility";
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflight(req);
 }
 
+function isProductPublicLookupUuid(s: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s.trim());
+}
+
 export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: string }> }) {
   const { slug } = await ctx.params;
+  const key = String(slug ?? "").trim();
   // Use service role for public reads (server-side only) to avoid RLS embed issues.
   const supabase = createSupabaseServiceRoleClient();
 
   const SELECT_WITH_CONDITION =
-    "id,slug,name,description,price,price_with_mount,old_price,product_condition,is_active,is_featured,stock_status,stock_quantity,rating,reviews_count,meta_title,meta_description,brand_id,type_id";
+    "id,slug,name,description,price,price_with_mount,product_condition,is_featured,stock_status,stock_quantity,rating,reviews_count,meta_title,meta_description,brand_id,type_id";
   const SELECT_BASE =
-    "id,slug,name,description,price,price_with_mount,old_price,is_active,is_featured,stock_status,stock_quantity,rating,reviews_count,meta_title,meta_description,brand_id,type_id";
+    "id,slug,name,description,price,price_with_mount,is_featured,stock_status,stock_quantity,rating,reviews_count,meta_title,meta_description,brand_id,type_id";
 
   const loadProduct = async (includeCondition: boolean) => {
     const selectCols: string = includeCondition ? SELECT_WITH_CONDITION : SELECT_BASE;
-    return (supabase.from("products") as any)
+    const q = (supabase.from("products") as any)
       .select(selectCols)
-      .eq("slug", slug)
-      .eq("is_active", true)
-      .maybeSingle();
+      .in("stock_status", PUBLIC_CATALOG_STOCK_STATUSES as unknown as string[]);
+    if (isProductPublicLookupUuid(key)) {
+      return q.eq("id", key).maybeSingle();
+    }
+    return q.eq("slug", key).maybeSingle();
   };
 
   let { data: p, error: pErr } = await loadProduct(true);
@@ -70,9 +78,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
     description: p.description,
     price: p.price,
     price_with_mount: p.price_with_mount,
-    old_price: p.old_price,
     product_condition: (p as any).product_condition ?? "new",
-    is_active: p.is_active,
     is_featured: p.is_featured,
     stock_status: p.stock_status,
     stock_quantity: p.stock_quantity,

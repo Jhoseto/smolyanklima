@@ -31,7 +31,7 @@ type WorkRow = {
 function statusPillClass(status: WorkRow["status"]): string {
   const base = "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap border";
   if (status === "done") return `${base} bg-green-100 border-green-200 text-green-800`;
-  if (status === "in_progress") return `${base} bg-sky-100 border-sky-200 text-sky-800`;
+  if (status === "in_progress") return `${base} bg-brand-blue-100 border-brand-blue-200 text-brand-blue-700`;
   if (status === "cancelled") return `${base} bg-red-100 border-red-200 text-red-800`;
   return `${base} bg-amber-100 border-amber-200 text-amber-800`;
 }
@@ -165,7 +165,7 @@ export default function AdminHistoryPage() {
                 <div>
                   <div className="font-bold text-slate-900 text-sm">{row.customer_name || "Неизвестен клиент"}</div>
                   {row.customer_phone && (
-                    <a href={`tel:${row.customer_phone}`} className="text-xs text-sky-600 font-medium mt-0.5 block">
+                    <a href={`tel:${row.customer_phone}`} className="text-xs text-brand-blue-500 font-medium mt-0.5 block">
                       {row.customer_phone}
                     </a>
                   )}

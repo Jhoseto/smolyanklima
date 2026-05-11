@@ -34,7 +34,7 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
 };
 
 const STATUS_COLORS: Record<TaskStatus, string> = {
-  planned: "bg-sky-100 text-sky-700 border-sky-200",
+  planned: "bg-brand-blue-100 text-brand-blue-700 border-brand-blue-200",
   in_progress: "bg-amber-100 text-amber-700 border-amber-200",
   done: "bg-emerald-100 text-emerald-700 border-emerald-200",
   cancelled: "bg-slate-100 text-slate-500 border-slate-200",
@@ -47,7 +47,7 @@ const PRIORITY_DOT: Record<string, string> = {
 };
 
 const EVENT_ICON: Partial<Record<string, React.ReactNode>> = {
-  service_installation: <Wrench className="w-4 h-4 text-sky-500" />,
+  service_installation: <Wrench className="w-4 h-4 text-brand-blue-500" />,
   service_inspection: <ClipboardList className="w-4 h-4 text-purple-500" />,
   service_repair: <Wrench className="w-4 h-4 text-orange-500" />,
   service_maintenance: <Wrench className="w-4 h-4 text-teal-500" />,
@@ -164,7 +164,7 @@ export function ServiceDashboard({ userId, userName, role }: { userId: string; u
       {/* Quick stats */}
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-white border border-slate-200 rounded-xl p-3 text-center">
-          <p className="text-2xl font-bold text-sky-600">{todayCount}</p>
+          <p className="text-2xl font-bold text-brand-blue-500">{todayCount}</p>
           <p className="text-[11px] text-slate-500 mt-0.5">За днес</p>
         </div>
         <div className="bg-white border border-slate-200 rounded-xl p-3 text-center">
@@ -191,7 +191,7 @@ export function ServiceDashboard({ userId, userName, role }: { userId: string; u
             <div className="flex items-center gap-2">
               <div className="h-px flex-1 bg-slate-200" />
               <span className={`text-xs font-bold px-3 py-1 rounded-full ${
-                group.label === "Днес" ? "bg-sky-100 text-sky-700" :
+                group.label === "Днес" ? "bg-brand-blue-100 text-brand-blue-700" :
                 group.label === "Утре" ? "bg-amber-100 text-amber-700" :
                 "bg-slate-100 text-slate-500"
               }`}>{group.label} · {group.items.length}</span>
@@ -236,7 +236,7 @@ export function ServiceDashboard({ userId, userName, role }: { userId: string; u
                           <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
                           <a href={`https://maps.google.com/?q=${encodeURIComponent(task.customer_address)}`}
                             target="_blank" rel="noreferrer"
-                            className="text-sky-600 underline underline-offset-2 truncate">
+                            className="text-brand-blue-500 underline underline-offset-2 truncate">
                             {task.customer_address}
                           </a>
                         </div>
@@ -244,7 +244,7 @@ export function ServiceDashboard({ userId, userName, role }: { userId: string; u
                       {task.customer_phone && (
                         <div className="flex items-center gap-1.5 text-xs text-slate-600">
                           <Phone className="w-3 h-3 text-slate-400 shrink-0" />
-                          <a href={`tel:${task.customer_phone}`} className="text-sky-600 font-semibold">{task.customer_phone}</a>
+                          <a href={`tel:${task.customer_phone}`} className="text-brand-blue-500 font-semibold">{task.customer_phone}</a>
                         </div>
                       )}
                     </div>
@@ -265,7 +265,7 @@ export function ServiceDashboard({ userId, userName, role }: { userId: string; u
                         disabled={updatingId === task.id}
                         className={`w-full text-xs font-bold py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors ${
                           task.status === "planned"
-                            ? "bg-sky-50 text-sky-700 hover:bg-sky-100 border border-sky-200"
+                            ? "bg-brand-blue-50 text-brand-blue-700 hover:bg-brand-blue-100 border border-brand-blue-200"
                             : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200"
                         } disabled:opacity-50`}
                       >

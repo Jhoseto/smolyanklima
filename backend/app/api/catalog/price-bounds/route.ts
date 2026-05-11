@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
+import { PUBLIC_CATALOG_STOCK_STATUSES } from "@/lib/catalog/publicProductVisibility";
 import { z } from "zod";
 
 const QuerySchema = z.object({
@@ -21,13 +22,21 @@ export async function GET(req: NextRequest) {
   const run = (withCondition: boolean) =>
     Promise.all([
       (withCondition && cond
-        ? supabase.from("products").select("price").eq("is_active", true).eq("product_condition", cond)
-        : supabase.from("products").select("price").eq("is_active", true))
+        ? supabase
+            .from("products")
+            .select("price")
+            .in("stock_status", PUBLIC_CATALOG_STOCK_STATUSES as unknown as string[])
+            .eq("product_condition", cond)
+        : supabase.from("products").select("price").in("stock_status", PUBLIC_CATALOG_STOCK_STATUSES as unknown as string[]))
         .order("price", { ascending: true })
         .limit(1),
       (withCondition && cond
-        ? supabase.from("products").select("price").eq("is_active", true).eq("product_condition", cond)
-        : supabase.from("products").select("price").eq("is_active", true))
+        ? supabase
+            .from("products")
+            .select("price")
+            .in("stock_status", PUBLIC_CATALOG_STOCK_STATUSES as unknown as string[])
+            .eq("product_condition", cond)
+        : supabase.from("products").select("price").in("stock_status", PUBLIC_CATALOG_STOCK_STATUSES as unknown as string[]))
         .order("price", { ascending: false })
         .limit(1),
     ]);

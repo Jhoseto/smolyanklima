@@ -3,10 +3,19 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { HelpRow, SectionTitle, HelpCard, Card, Button, Input, Select, Table, Th, Td, Textarea, InfoDot } from "../ui";
-import { Plus, Search, FilterX, CheckCircle, XCircle, Tag, Trash2, Edit, Filter, ChevronDown, MessageCircle } from "lucide-react";
+import { Plus, Search, FilterX, CheckCircle, Tag, Trash2, Edit, Filter, ChevronDown, MessageCircle } from "lucide-react";
 import { ShareToChatModal } from "../chat/ShareToChatModal";
 import { ProductQuickViewButton } from "../ProductQuickView";
 import { useDebounce } from "@/lib/hooks/useDebounce";
+import {
+  normalizeProductStockLocation,
+  productStockLocationLabel,
+  type ProductStockLocation,
+} from "@/lib/admin/productStockLocation";
+import {
+  productRegionLabel,
+  type ProductRegion,
+} from "@/lib/admin/productRegion";
 
 export const dynamic = "force-dynamic";
 
@@ -15,19 +24,47 @@ type ProductRow = {
   slug: string;
   name: string;
   price: number;
-  is_active: boolean;
+  purchase_price?: number | null;
   is_featured: boolean;
-  stock_status: "in_stock" | "out_of_stock" | "on_order";
+  stock_status: "in_stock" | "out_of_stock" | "on_order" | string;
+  stock_location?: ProductStockLocation | string | null;
   stock_quantity: number;
   sold_quantity: number;
   product_condition: "new" | "used";
+  supplier_id?: string | null;
+  indoor_unit_serial?: string | null;
+  outdoor_unit_serial?: string | null;
+  supplier_invoice_number?: string | null;
+  product_region?: ProductRegion | string | null;
   brands?: { name?: string } | null;
   product_types?: { name?: string } | null;
 };
 
 type OptionRow = { id: string; name: string };
 type ContactChoice = { id: string; full_name: string; phone: string; email?: string | null; address?: string | null };
-type SortField = "created_at" | "name" | "price" | "stock_quantity" | "sold_quantity" | "is_active" | "is_featured";
+type SortField = "created_at" | "name" | "price" | "stock_status" | "is_featured";
+
+function productStockLocationBadgeClass(loc: unknown) {
+  const n = normalizeProductStockLocation(loc);
+  if (n === "showroom") return "bg-violet-100 text-violet-900";
+  return "bg-slate-100 text-slate-800";
+}
+
+function canRecordSale(p: ProductRow) {
+  return p.stock_status !== "out_of_stock";
+}
+
+function fmtEuro(n: number | null | undefined) {
+  if (n == null || !Number.isFinite(Number(n))) return "—";
+  return `€${Number(n).toLocaleString()}`;
+}
+
+function truncCell(s: string | null | undefined, max = 16) {
+  const t = (s ?? "").trim();
+  if (!t) return "—";
+  if (t.length <= max) return t;
+  return `${t.slice(0, max)}…`;
+}
 type SortDir = "asc" | "desc";
 
 export default function AdminProductsPage() {
@@ -38,17 +75,14 @@ export default function AdminProductsPage() {
   const [shareProduct, setShareProduct] = useState<ProductRow | null>(null);
   const [q, setQ] = useState("");
   const [condition, setCondition] = useState<"" | "new" | "used">("");
-  const [status, setStatus] = useState<"" | "active" | "inactive">("");
   const [featured, setFeatured] = useState<"" | "featured" | "regular">("");
   const [stockStatus, setStockStatus] = useState<"" | "in_stock" | "out_of_stock" | "on_order">("");
+  const [stockLocationFilter, setStockLocationFilter] = useState<"" | ProductStockLocation>("");
+  const [productRegionFilter, setProductRegionFilter] = useState<"" | ProductRegion>("");
   const [brandId, setBrandId] = useState("");
   const [typeId, setTypeId] = useState("");
   const [priceMin, setPriceMin] = useState("");
   const [priceMax, setPriceMax] = useState("");
-  const [stockMin, setStockMin] = useState("");
-  const [stockMax, setStockMax] = useState("");
-  const [soldMin, setSoldMin] = useState("");
-  const [soldMax, setSoldMax] = useState("");
   const [createdFrom, setCreatedFrom] = useState("");
   const [createdTo, setCreatedTo] = useState("");
   const [sortBy, setSortBy] = useState<SortField>("created_at");
@@ -73,27 +107,36 @@ export default function AdminProductsPage() {
   const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
   const [priceDraft, setPriceDraft] = useState("");
   const [priceBusy, setPriceBusy] = useState(false);
+  const [editingPurchaseId, setEditingPurchaseId] = useState<string | null>(null);
+  const [purchaseDraft, setPurchaseDraft] = useState("");
+  const [purchaseBusy, setPurchaseBusy] = useState(false);
   const [saleSuccess, setSaleSuccess] = useState<{ productName: string; customerName: string; amount: number } | null>(null);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [locationBusyId, setLocationBusyId] = useState<string | null>(null);
+  const [suppliersById, setSuppliersById] = useState<Record<string, string>>({});
 
   const debouncedQ = useDebounce(q, 350);
+  /*
+   * UI винаги показва клетките като кликабилни (бърза инлайн редакция).
+   * Authorization се прави **изцяло на сървъра** в `PUT /api/admin/products/[id]`:
+   *   - `price`, `priceWithMount`, `purchasePrice` → само `master_admin`;
+   *   - `stockLocation`, `productRegion` → `master_admin` + `office_staff`.
+   * При липса на права API връща грешка и UI я показва в червената лента горе.
+   */
 
   const qs = useMemo(() => {
     const sp = new URLSearchParams();
     if (debouncedQ.trim()) sp.set("q", debouncedQ.trim());
     if (condition) sp.set("condition", condition);
-    if (status) sp.set("status", status);
     if (featured) sp.set("featured", featured);
     if (stockStatus) sp.set("stockStatus", stockStatus);
+    if (stockLocationFilter) sp.set("stockLocation", stockLocationFilter);
+    if (productRegionFilter) sp.set("productRegion", productRegionFilter);
     if (brandId) sp.set("brandId", brandId);
     if (typeId) sp.set("typeId", typeId);
     if (priceMin.trim()) sp.set("priceMin", priceMin.trim());
     if (priceMax.trim()) sp.set("priceMax", priceMax.trim());
-    if (stockMin.trim()) sp.set("stockMin", stockMin.trim());
-    if (stockMax.trim()) sp.set("stockMax", stockMax.trim());
-    if (soldMin.trim()) sp.set("soldMin", soldMin.trim());
-    if (soldMax.trim()) sp.set("soldMax", soldMax.trim());
     if (createdFrom) sp.set("createdFrom", createdFrom);
     if (createdTo) sp.set("createdTo", createdTo);
     sp.set("sortBy", sortBy);
@@ -104,17 +147,14 @@ export default function AdminProductsPage() {
   }, [
     debouncedQ,
     condition,
-    status,
     featured,
     stockStatus,
+    stockLocationFilter,
+    productRegionFilter,
     brandId,
     typeId,
     priceMin,
     priceMax,
-    stockMin,
-    stockMax,
-    soldMin,
-    soldMax,
     createdFrom,
     createdTo,
     sortBy,
@@ -124,16 +164,35 @@ export default function AdminProductsPage() {
 
   async function loadMeta() {
     try {
-      const [bRes, tRes] = await Promise.all([
+      const [bRes, tRes, sRes] = await Promise.all([
         fetch("/api/admin/meta/brands", { credentials: "include" }),
         fetch("/api/admin/meta/product-types", { credentials: "include" }),
+        fetch("/api/admin/contacts?kind=supplier&perPage=500", { credentials: "include" }),
       ]);
-      const [bJson, tJson] = await Promise.all([bRes.json(), tRes.json()]);
-      if (bRes.ok) setBrands((bJson.data ?? []) as OptionRow[]);
-      if (tRes.ok) setTypes((tJson.data ?? []) as OptionRow[]);
+      const [bJson, tJson, sJson] = await Promise.all([
+        bRes.json().catch(() => ({})),
+        tRes.json().catch(() => ({})),
+        sRes.json().catch(() => ({})),
+      ]);
+      if (bRes.ok) setBrands(((bJson as { data?: OptionRow[] }).data ?? []) as OptionRow[]);
+      if (tRes.ok) setTypes(((tJson as { data?: OptionRow[] }).data ?? []) as OptionRow[]);
+      if (sRes.ok) {
+        const rows = ((sJson as { data?: { id: string; full_name: string }[] }).data ?? []) as {
+          id: string;
+          full_name: string;
+        }[];
+        const m: Record<string, string> = {};
+        for (const r of rows) m[r.id] = r.full_name;
+        setSuppliersById(m);
+      }
     } catch {
       // non-blocking for products table
     }
+  }
+
+  function supplierLabel(id: string | null | undefined) {
+    if (!id) return "—";
+    return suppliersById[id] ?? "—";
   }
 
   async function load() {
@@ -165,17 +224,14 @@ export default function AdminProductsPage() {
   function resetFilters() {
     setQ("");
     setCondition("");
-    setStatus("");
     setFeatured("");
     setStockStatus("");
+    setStockLocationFilter("");
+    setProductRegionFilter("");
     setBrandId("");
     setTypeId("");
     setPriceMin("");
     setPriceMax("");
-    setStockMin("");
-    setStockMax("");
-    setSoldMin("");
-    setSoldMax("");
     setCreatedFrom("");
     setCreatedTo("");
     setSortBy("created_at");
@@ -183,7 +239,7 @@ export default function AdminProductsPage() {
     setPage(1);
   }
 
-  async function bulk(action: "activate" | "deactivate" | "set_new" | "set_used" | "delete") {
+  async function bulk(action: "set_new" | "set_used" | "delete") {
     if (selected.length === 0) return;
     if (action === "delete" && !confirmBulkDelete) {
       setConfirmBulkDelete(true);
@@ -250,10 +306,10 @@ export default function AdminProductsPage() {
     p: ProductRow,
     customer: { id?: string; name: string; phone: string; address: string; email?: string; notes: string },
   ) {
-    if (p.stock_quantity <= 0) return false;
-    const nextQty = Math.max(0, p.stock_quantity - 1);
+    if (!canRecordSale(p)) return false;
+    const nextQty = 0;
     const nextSold = Math.max(0, Number(p.sold_quantity ?? 0) + 1);
-    const shouldHideFromCatalog = nextQty === 0;
+    const shouldHideFromCatalog = true;
     const res = await fetch(`/api/admin/products/${p.id}`, {
       method: "PUT",
       credentials: "include",
@@ -262,7 +318,6 @@ export default function AdminProductsPage() {
         stockQuantity: nextQty,
         soldQuantity: nextSold,
         stockStatus: shouldHideFromCatalog ? "out_of_stock" : p.stock_status,
-        isActive: shouldHideFromCatalog ? false : p.is_active,
       }),
     });
     const json = await res.json().catch(() => ({}));
@@ -278,7 +333,6 @@ export default function AdminProductsPage() {
               stock_quantity: nextQty,
               sold_quantity: nextSold,
               stock_status: shouldHideFromCatalog ? "out_of_stock" : x.stock_status,
-              is_active: shouldHideFromCatalog ? false : x.is_active,
             }
           : x,
       ),
@@ -343,9 +397,87 @@ export default function AdminProductsPage() {
     }
   }
 
+  function toggleStockLocation(p: ProductRow) {
+    const cur = normalizeProductStockLocation(p.stock_location);
+    const next: ProductStockLocation = cur === "showroom" ? "warehouse" : "showroom";
+    void patchStockLocation(p.id, next);
+  }
+
+  async function patchStockLocation(productId: string, next: ProductStockLocation) {
+    setError(null);
+    setLocationBusyId(productId);
+    try {
+      const res = await fetch(`/api/admin/products/${productId}`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stockLocation: next }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((json as any).error || "Грешка при смяна на място");
+      const norm = normalizeProductStockLocation(next);
+      setItems((prev) => prev.map((x) => (x.id === productId ? { ...x, stock_location: norm } : x)));
+    } catch (e: any) {
+      setError(String(e?.message ?? e));
+    } finally {
+      setLocationBusyId(null);
+    }
+  }
+
+  function startPurchaseEdit(p: ProductRow) {
+    setEditingPurchaseId(p.id);
+    const pp = p.purchase_price;
+    setPurchaseDraft(pp == null || !Number.isFinite(Number(pp)) ? "" : String(Number(pp)));
+  }
+
+  async function savePurchasePrice(p: ProductRow) {
+    const raw = purchaseDraft.trim().replace(",", ".");
+    let nextPurchase: number | null;
+    if (raw === "") nextPurchase = null;
+    else {
+      const n = Number(raw);
+      if (!Number.isFinite(n) || n < 0) {
+        setError("Въведете валидна закупна цена или оставете празно.");
+        return;
+      }
+      nextPurchase = n;
+    }
+    setPurchaseBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/products/${p.id}`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ purchasePrice: nextPurchase }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((json as any).error || "Грешка при закупна цена");
+      setItems((prev) => prev.map((x) => (x.id === p.id ? { ...x, purchase_price: nextPurchase } : x)));
+      setEditingPurchaseId(null);
+      setPurchaseDraft("");
+    } catch (e: any) {
+      setError(String(e?.message ?? e));
+    } finally {
+      setPurchaseBusy(false);
+    }
+  }
+
   const pages = Math.max(1, Math.ceil(meta.total / meta.perPage));
 
-  const activeFiltersCount = [condition, status, featured, stockStatus, brandId, typeId, priceMin, priceMax, stockMin, stockMax, soldMin, soldMax, createdFrom, createdTo].filter(Boolean).length;
+  const activeFiltersCount = [
+    condition,
+    featured,
+    stockStatus,
+    stockLocationFilter,
+    productRegionFilter,
+    brandId,
+    typeId,
+    priceMin,
+    priceMax,
+    createdFrom,
+    createdTo,
+  ].filter(Boolean).length;
 
   return (
     <div className="w-full space-y-3">
@@ -353,11 +485,11 @@ export default function AdminProductsPage() {
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div>
           <h1 className="text-lg md:text-xl font-bold text-slate-900 mb-0.5 leading-tight">
-            <SectionTitle title="Продукти" hint="Пълен контрол: филтри, наличности, продажби и масови действия." />
+            <SectionTitle title="Продукти" hint="Всеки ред е отделен артикул (серийни номера в картата). Филтри, продажба и масови действия." />
           </h1>
           <p className="text-xs text-slate-500 hidden md:block">Професионално управление с филтри и масови действия</p>
         </div>
-        <Link href="/admin/products/new" className="inline-flex items-center gap-2 bg-sky-600 text-white px-3 py-2 md:px-4 rounded-xl font-semibold hover:bg-sky-700 active:bg-sky-800 transition-colors shadow-sm text-sm">
+        <Link href="/admin/products/new" className="inline-flex items-center gap-2 bg-brand-orange-500 text-white px-3 py-2 md:px-4 rounded-xl font-semibold hover:bg-brand-orange-600 active:bg-brand-orange-700 transition-colors shadow-sm text-sm">
           <Plus className="w-4 h-4" />
           <span className="hidden sm:inline">Нов продукт</span>
           <span className="sm:hidden">Нов</span>
@@ -365,7 +497,7 @@ export default function AdminProductsPage() {
       </div>
 
       <HelpCard className="hidden md:block">
-        <HelpRow items={["Търси и филтрирай по всички полета", "Бутон Продаден намалява наличността с 1", "При 0 бройки продуктът се скрива от каталога"]} />
+        <HelpRow items={["Закупна и продажна цена в списъка: само главен администратор (офис може в картата при нов продукт)", "Доставчикът е контакт от тип „доставчик“; серийни номера и фактура — в картата", "„Място“: един клик по етикета сменя магазин ↔ склад (главен админ и офис)"]} />
       </HelpCard>
 
       {/* Mobile: search + filter toggle row */}
@@ -375,11 +507,11 @@ export default function AdminProductsPage() {
         </div>
         <button
           onClick={() => setFiltersOpen((o) => !o)}
-          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border font-semibold text-sm shrink-0 transition-colors ${filtersOpen ? "bg-sky-50 border-sky-200 text-sky-700" : "bg-white border-slate-200 text-slate-700"}`}
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border font-semibold text-sm shrink-0 transition-colors ${filtersOpen ? "bg-brand-blue-50 border-brand-blue-200 text-brand-blue-700" : "bg-white border-slate-200 text-slate-700"}`}
         >
           <Filter className="w-4 h-4" />
           {activeFiltersCount > 0 && (
-            <span className="bg-sky-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{activeFiltersCount}</span>
+            <span className="bg-brand-blue-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{activeFiltersCount}</span>
           )}
           <ChevronDown className={`w-3.5 h-3.5 transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
         </button>
@@ -394,27 +526,32 @@ export default function AdminProductsPage() {
             <option value="new">Нови</option>
             <option value="used">Втора употреба</option>
           </Select>
-          <Select value={status} onChange={(e) => { setPage(1); setStatus(e.target.value as any); }}>
-            <option value="">Всички статуси</option>
-            <option value="active">Активни</option>
-            <option value="inactive">Неактивни</option>
-          </Select>
           <Select value={featured} onChange={(e) => { setPage(1); setFeatured(e.target.value as any); }}>
             <option value="">Featured: всички</option>
             <option value="featured">Само избрани</option>
             <option value="regular">Само нормални</option>
           </Select>
           <Select value={stockStatus} onChange={(e) => { setPage(1); setStockStatus(e.target.value as any); }}>
-            <option value="">Наличност: всички</option>
+            <option value="">Каталог: всички</option>
             <option value="in_stock">В наличност</option>
             <option value="out_of_stock">Изчерпан</option>
             <option value="on_order">По поръчка</option>
+          </Select>
+          <Select value={stockLocationFilter} onChange={(e) => { setPage(1); setStockLocationFilter(e.target.value as "" | ProductStockLocation); }}>
+            <option value="">Място: всички</option>
+            <option value="showroom">В магазин</option>
+            <option value="warehouse">В склада</option>
+          </Select>
+          <Select value={productRegionFilter} onChange={(e) => { setPage(1); setProductRegionFilter(e.target.value as "" | ProductRegion); }}>
+            <option value="">Страна: всички</option>
+            <option value="europe">EUROPE</option>
+            <option value="japan">JAPAN</option>
           </Select>
           <Button variant="secondary" onClick={load} className="gap-2">
             <Search className="w-4 h-4" /> Обнови
           </Button>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-2 md:gap-3 mb-2 md:mb-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 mb-2 md:mb-3">
           <Select value={brandId} onChange={(e) => { setPage(1); setBrandId(e.target.value); }}>
             <option value="">Марка: всички</option>
             {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
@@ -425,21 +562,15 @@ export default function AdminProductsPage() {
           </Select>
           <Input value={priceMin} onChange={(e) => { setPage(1); setPriceMin(e.target.value); }} placeholder="Цена от" type="number" min={0} />
           <Input value={priceMax} onChange={(e) => { setPage(1); setPriceMax(e.target.value); }} placeholder="Цена до" type="number" min={0} />
-          <Input value={stockMin} onChange={(e) => { setPage(1); setStockMin(e.target.value); }} placeholder="Налични от" type="number" min={0} />
-          <Input value={stockMax} onChange={(e) => { setPage(1); setStockMax(e.target.value); }} placeholder="Налични до" type="number" min={0} />
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-2 md:gap-3">
-          <Input value={soldMin} onChange={(e) => { setPage(1); setSoldMin(e.target.value); }} placeholder="Продадени от" type="number" min={0} />
-          <Input value={soldMax} onChange={(e) => { setPage(1); setSoldMax(e.target.value); }} placeholder="Продадени до" type="number" min={0} />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3">
           <Input value={createdFrom} onChange={(e) => { setPage(1); setCreatedFrom(e.target.value); }} type="date" />
           <Input value={createdTo} onChange={(e) => { setPage(1); setCreatedTo(e.target.value); }} type="date" />
           <Select value={sortBy} onChange={(e) => { setPage(1); setSortBy(e.target.value as SortField); }}>
             <option value="created_at">Сортиране: дата</option>
             <option value="name">Сортиране: име</option>
             <option value="price">Сортиране: цена</option>
-            <option value="stock_quantity">Сортиране: налични</option>
-            <option value="sold_quantity">Сортиране: продадени</option>
-            <option value="is_active">Сортиране: активност</option>
+            <option value="stock_status">Сортиране: наличност</option>
             <option value="is_featured">Сортиране: избрани</option>
           </Select>
           <div className="flex gap-2">
@@ -456,15 +587,9 @@ export default function AdminProductsPage() {
 
       {/* Bulk actions — desktop always, mobile only when items selected */}
       {(selected.length > 0) && (
-        <div className="md:hidden bg-sky-50 border border-sky-200 rounded-xl px-3 py-2.5 flex items-center justify-between gap-2 flex-wrap">
-          <span className="text-xs font-bold text-sky-800">{selected.length} избрани</span>
+        <div className="md:hidden bg-brand-blue-50 border border-brand-blue-200 rounded-xl px-3 py-2.5 flex items-center justify-between gap-2 flex-wrap">
+          <span className="text-xs font-bold text-brand-blue-700">{selected.length} избрани</span>
           <div className="flex gap-1.5 flex-wrap">
-            <Button variant="secondary" size="sm" onClick={() => bulk("activate")} className="gap-1 !py-1.5">
-              <CheckCircle className="w-3.5 h-3.5 text-green-600" /> Активирай
-            </Button>
-            <Button variant="secondary" size="sm" onClick={() => bulk("deactivate")} className="gap-1 !py-1.5">
-              <XCircle className="w-3.5 h-3.5 text-slate-400" /> Деакт.
-            </Button>
             <Button variant="danger" size="sm" onClick={() => bulk("delete")} className="gap-1 !py-1.5">
               <Trash2 className="w-3.5 h-3.5" /> Изтрий
             </Button>
@@ -476,17 +601,11 @@ export default function AdminProductsPage() {
         <span className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-700 mr-2">
           Масови действия <InfoDot text="Прилагат се само върху избраните редове." />
         </span>
-        <Button variant="secondary" size="sm" onClick={() => bulk("activate")} disabled={selected.length === 0} className="gap-1.5">
-          <CheckCircle className="w-3.5 h-3.5 text-green-600" /> Активирай
-        </Button>
-        <Button variant="secondary" size="sm" onClick={() => bulk("deactivate")} disabled={selected.length === 0} className="gap-1.5">
-          <XCircle className="w-3.5 h-3.5 text-slate-400" /> Деактивирай
-        </Button>
         <Button variant="secondary" size="sm" onClick={() => bulk("set_new")} disabled={selected.length === 0} className="gap-1.5">
-          <Tag className="w-3.5 h-3.5 text-sky-500" /> Маркирай Нови
+          <Tag className="w-3.5 h-3.5 text-brand-blue-500" /> Маркирай Нови
         </Button>
         <Button variant="secondary" size="sm" onClick={() => bulk("set_used")} disabled={selected.length === 0} className="gap-1.5">
-          <Tag className="w-3.5 h-3.5 text-amber-500" /> Маркирай Втора употреба
+          <Tag className="w-3.5 h-3.5 text-brand-orange-500" /> Маркирай Втора употреба
         </Button>
         <Button variant="danger" size="sm" onClick={() => bulk("delete")} disabled={selected.length === 0} className="gap-1.5">
           <Trash2 className="w-3.5 h-3.5" /> Изтрий
@@ -496,14 +615,14 @@ export default function AdminProductsPage() {
       {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm font-medium">{error}</div>}
 
       {/* Desktop table */}
-      <div className="hidden md:block">
-        <Table>
+      <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200">
+        <Table className="min-w-[1100px]">
           <thead>
             <tr>
               <Th className="w-10">
                 <input
                   type="checkbox"
-                  className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                  className="rounded border-slate-300 text-brand-blue-500 focus:ring-brand-blue-500"
                   checked={items.length > 0 && selected.length === items.length}
                   onChange={(e) => setSelected(e.target.checked ? items.map((x) => x.id) : [])}
                 />
@@ -512,10 +631,14 @@ export default function AdminProductsPage() {
               <Th>Марка</Th>
               <Th>Състояние</Th>
               <Th>Тип</Th>
-              <Th>Цена</Th>
-              <Th>Налични</Th>
-              <Th>Продадени</Th>
-              <Th>Статус</Th>
+              <Th>Доставчик</Th>
+              <Th>Закупна</Th>
+              <Th>Продажна</Th>
+              <Th>Сер. вътр.</Th>
+              <Th>Сер. външ.</Th>
+              <Th>Фактура доставчик</Th>
+              <Th>Страна</Th>
+              <Th>Място</Th>
               <Th></Th>
             </tr>
           </thead>
@@ -525,7 +648,7 @@ export default function AdminProductsPage() {
                 <Td>
                   <input
                     type="checkbox"
-                    className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                    className="rounded border-slate-300 text-brand-blue-500 focus:ring-brand-blue-500"
                     checked={selected.includes(p.id)}
                     onChange={(e) => setSelected((prev) => e.target.checked ? [...prev, p.id] : prev.filter((x) => x !== p.id))}
                   />
@@ -535,47 +658,127 @@ export default function AdminProductsPage() {
                 </Td>
                 <Td>{p.brands?.name ?? "—"}</Td>
                 <Td>
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${p.product_condition === "used" ? "bg-amber-100 text-amber-800" : "bg-sky-100 text-sky-800"}`}>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${p.product_condition === "used" ? "bg-brand-orange-100 text-brand-orange-700" : "bg-brand-blue-100 text-brand-blue-700"}`}>
                     {p.product_condition === "used" ? "Втора употреба" : "Нови"}
                   </span>
                 </Td>
                 <Td>{p.product_types?.name ?? "—"}</Td>
-                <Td className="font-semibold">
-                  {editingPriceId === p.id ? (
-                    <div className="flex items-center gap-2">
-                      <Input type="number" min={0} value={priceDraft} onChange={(e) => setPriceDraft(e.target.value)} className="max-w-[120px]" autoFocus />
-                      <Button size="sm" onClick={() => void savePrice(p)} disabled={priceBusy}>Запази</Button>
-                      <Button variant="secondary" size="sm" onClick={() => { setEditingPriceId(null); setPriceDraft(""); }} disabled={priceBusy}>Отказ</Button>
+                <Td className="max-w-[9rem]">
+                  <span className="block truncate text-sm text-slate-800" title={supplierLabel(p.supplier_id)}>
+                    {supplierLabel(p.supplier_id)}
+                  </span>
+                </Td>
+                <Td className="whitespace-nowrap text-sm">
+                  {editingPurchaseId === p.id ? (
+                    <div className="flex flex-col gap-1 min-w-[7rem]">
+                      <Input
+                        type="number"
+                        min={0}
+                        value={purchaseDraft}
+                        onChange={(e) => setPurchaseDraft(e.target.value)}
+                        className="!text-xs !py-1"
+                        autoFocus
+                        placeholder="—"
+                      />
+                      <div className="flex gap-1">
+                        <Button size="sm" className="!py-0.5 !px-2 !text-[11px]" onClick={() => void savePurchasePrice(p)} disabled={purchaseBusy}>
+                          OK
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="!py-0.5 !px-2 !text-[11px]"
+                          onClick={() => {
+                            setEditingPurchaseId(null);
+                            setPurchaseDraft("");
+                          }}
+                          disabled={purchaseBusy}
+                        >
+                          ✕
+                        </Button>
+                      </div>
                     </div>
                   ) : (
-                    <button type="button" onClick={() => startPriceEdit(p)} className="rounded-md px-2 py-1 text-left font-semibold text-slate-900 hover:bg-sky-50 hover:text-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-200" title="Кликни за редакция на цена">
-                      €{Number(p.price).toLocaleString()}
+                    <button
+                      type="button"
+                      onClick={() => startPurchaseEdit(p)}
+                      className="rounded-md px-2 py-1 text-left font-semibold text-slate-900 bg-brand-orange-50/60 hover:bg-brand-orange-100 hover:text-brand-orange-700 focus:outline-none focus:ring-2 focus:ring-brand-orange-300 cursor-pointer transition"
+                      title="Клик за редакция на закупна цена"
+                    >
+                      {fmtEuro(p.purchase_price)}
                     </button>
                   )}
                 </Td>
-                <Td>
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${p.stock_quantity > 0 ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
-                    {Number(p.stock_quantity ?? 0)}
+                <Td className="whitespace-nowrap text-sm font-semibold">
+                  {editingPriceId === p.id ? (
+                    <div className="flex flex-col gap-1 min-w-[7rem]">
+                      <Input type="number" min={0} value={priceDraft} onChange={(e) => setPriceDraft(e.target.value)} className="!text-xs !py-1" autoFocus />
+                      <div className="flex gap-1">
+                        <Button size="sm" className="!py-0.5 !px-2 !text-[11px]" onClick={() => void savePrice(p)} disabled={priceBusy}>
+                          OK
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="!py-0.5 !px-2 !text-[11px]"
+                          onClick={() => {
+                            setEditingPriceId(null);
+                            setPriceDraft("");
+                          }}
+                          disabled={priceBusy}
+                        >
+                          ✕
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => startPriceEdit(p)}
+                      className="rounded-md px-2 py-1 text-left text-slate-900 bg-brand-blue-50/60 hover:bg-brand-blue-100 hover:text-brand-blue-700 focus:outline-none focus:ring-2 focus:ring-brand-blue-300 cursor-pointer transition"
+                      title="Клик за редакция на продажна цена"
+                    >
+                      {fmtEuro(p.price)}
+                    </button>
+                  )}
+                </Td>
+                <Td className="max-w-[5.5rem] text-xs font-mono text-slate-700" title={(p.indoor_unit_serial ?? "").trim() || undefined}>
+                  {truncCell(p.indoor_unit_serial, 14)}
+                </Td>
+                <Td className="max-w-[5.5rem] text-xs font-mono text-slate-700" title={(p.outdoor_unit_serial ?? "").trim() || undefined}>
+                  {truncCell(p.outdoor_unit_serial, 14)}
+                </Td>
+                <Td className="max-w-[6rem] text-xs text-slate-700" title={(p.supplier_invoice_number ?? "").trim() || undefined}>
+                  {truncCell(p.supplier_invoice_number, 14)}
+                </Td>
+                <Td className="min-w-[6.5rem]">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold tracking-wide text-slate-700 bg-slate-100">
+                    {productRegionLabel(p.product_region)}
                   </span>
                 </Td>
-                <Td>{Number(p.sold_quantity ?? 0)}</Td>
-                <Td>
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${p.is_active ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>
-                    {p.is_active ? "Активен" : "Неактивен"}
-                  </span>
+                <Td className="min-w-[132px]">
+                  <button
+                    type="button"
+                    disabled={locationBusyId === p.id}
+                    onClick={() => toggleStockLocation(p)}
+                    title="Клик за смяна: магазин ↔ склад"
+                    className={`inline-flex w-fit max-w-full items-center px-2.5 py-1 rounded-md text-xs font-semibold border border-slate-200/80 shadow-sm cursor-pointer transition hover:opacity-90 hover:ring-2 hover:ring-brand-blue-300/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue-500 disabled:cursor-wait disabled:opacity-60 ${productStockLocationBadgeClass(p.stock_location)}`}
+                  >
+                    {locationBusyId === p.id ? "Запис…" : productStockLocationLabel(p.stock_location)}
+                  </button>
                 </Td>
                 <Td>
                   <div className="flex items-center gap-2">
-                    <Button variant="secondary" size="sm" onClick={() => { setSaleFor(p); setSaleForm({ contactId: "", customerName: "", customerPhone: "", customerAddress: "", customerEmail: "", notes: "" }); setContactQuery(""); setContactResults([]); }} disabled={p.stock_quantity <= 0} className="!py-1 !px-2 !text-xs font-bold">
+                    <Button variant="secondary" size="sm" onClick={() => { setSaleFor(p); setSaleForm({ contactId: "", customerName: "", customerPhone: "", customerAddress: "", customerEmail: "", notes: "" }); setContactQuery(""); setContactResults([]); }} disabled={!canRecordSale(p)} className="!py-1 !px-2 !text-xs font-bold">
                       Продажба
                     </Button>
-                    <Link href={`/admin/products/${p.id}`} className="inline-flex items-center gap-1.5 px-2 py-1 bg-sky-50 text-sky-700 hover:bg-sky-100 rounded-lg text-xs font-bold transition-colors">
+                    <Link href={`/admin/products/${p.id}`} className="inline-flex items-center gap-1.5 px-2 py-1 bg-brand-blue-50 text-brand-blue-700 hover:bg-brand-blue-100 rounded-lg text-xs font-bold transition-colors">
                       <Edit className="w-3.5 h-3.5" /> Редакция
                     </Link>
                     <button
                       onClick={() => setShareProduct(p)}
                       title="Сподели в чат"
-                      className="inline-flex items-center gap-1 px-2 py-1 bg-orange-50 text-orange-600 hover:bg-orange-100 rounded-lg text-xs font-bold transition-colors"
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-brand-orange-50 text-brand-orange-600 hover:bg-brand-orange-100 rounded-lg text-xs font-bold transition-colors"
                     >
                       <MessageCircle className="w-3.5 h-3.5" />
                     </button>
@@ -584,7 +787,7 @@ export default function AdminProductsPage() {
               </tr>
             ))}
             {!loading && items.length === 0 && (
-              <tr><Td colSpan={10} className="text-center py-8 text-slate-500">Няма намерени продукти.</Td></tr>
+              <tr><Td colSpan={15} className="text-center py-8 text-slate-500">Няма намерени продукти.</Td></tr>
             )}
           </tbody>
         </Table>
@@ -604,7 +807,7 @@ export default function AdminProductsPage() {
               <div className="flex items-start gap-3">
                 <input
                   type="checkbox"
-                  className="mt-1 rounded border-slate-300 text-sky-600 focus:ring-sky-500 w-4 h-4 shrink-0"
+                  className="mt-1 rounded border-slate-300 text-brand-blue-500 focus:ring-brand-blue-500 w-4 h-4 shrink-0"
                   checked={selected.includes(p.id)}
                   onChange={(e) => setSelected((prev) => e.target.checked ? [...prev, p.id] : prev.filter((x) => x !== p.id))}
                 />
@@ -613,14 +816,15 @@ export default function AdminProductsPage() {
                     <ProductQuickViewButton productId={p.id} productName={p.name} />
                   </div>
                   <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${p.product_condition === "used" ? "bg-amber-100 text-amber-800" : "bg-sky-100 text-sky-800"}`}>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${p.product_condition === "used" ? "bg-brand-orange-100 text-brand-orange-700" : "bg-brand-blue-100 text-brand-blue-700"}`}>
                       {p.product_condition === "used" ? "Втора употр." : "Нов"}
                     </span>
                     {p.brands?.name && <span className="text-xs text-slate-500">{p.brands.name}</span>}
                     {p.product_types?.name && <span className="text-xs text-slate-400">{p.product_types.name}</span>}
                   </div>
                 </div>
-                <div className="text-right shrink-0">
+                <div className="text-right shrink-0 space-y-1.5 min-w-[6.5rem]">
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Продажна</div>
                   {editingPriceId === p.id ? (
                     <div className="flex flex-col gap-1.5 items-end">
                       <Input type="number" min={0} value={priceDraft} onChange={(e) => setPriceDraft(e.target.value)} className="w-24 text-right" autoFocus />
@@ -630,36 +834,78 @@ export default function AdminProductsPage() {
                       </div>
                     </div>
                   ) : (
-                    <button type="button" onClick={() => startPriceEdit(p)} className="text-lg font-black text-slate-900 rounded-lg px-2 py-1 hover:bg-sky-50 hover:text-sky-700 focus:outline-none active:bg-sky-50 transition-colors">
-                      €{Number(p.price).toLocaleString()}
+                    <button
+                      type="button"
+                      onClick={() => startPriceEdit(p)}
+                      className="text-lg font-black text-slate-900 rounded-lg px-2 py-1 bg-brand-blue-50/60 hover:bg-brand-blue-100 hover:text-brand-blue-700 focus:outline-none active:bg-brand-blue-100 transition-colors cursor-pointer"
+                    >
+                      {fmtEuro(p.price)}
                     </button>
                   )}
-                  <div className="flex items-center gap-1.5 justify-end mt-1">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold ${p.stock_quantity > 0 ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
-                      {Number(p.stock_quantity ?? 0)} бр.
-                    </span>
-                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${p.is_active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
-                      {p.is_active ? "✓" : "–"}
-                    </span>
-                  </div>
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 pt-0.5">Закупна</div>
+                  {editingPurchaseId === p.id ? (
+                    <div className="flex flex-col gap-1 items-end">
+                      <Input type="number" min={0} value={purchaseDraft} onChange={(e) => setPurchaseDraft(e.target.value)} className="w-24 text-right !text-sm" placeholder="—" />
+                      <div className="flex gap-1">
+                        <Button size="sm" onClick={() => void savePurchasePrice(p)} disabled={purchaseBusy} className="!py-1 !px-2 !text-xs">OK</Button>
+                        <Button variant="secondary" size="sm" onClick={() => { setEditingPurchaseId(null); setPurchaseDraft(""); }} disabled={purchaseBusy} className="!py-1 !px-2 !text-xs">✕</Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => startPurchaseEdit(p)} className="text-sm font-bold text-slate-800 rounded-lg px-2 py-0.5 bg-brand-orange-50/60 hover:bg-brand-orange-100 cursor-pointer transition">
+                      {fmtEuro(p.purchase_price)}
+                    </button>
+                  )}
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 pt-0.5">Страна</div>
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-bold text-slate-700 bg-slate-100">
+                    {productRegionLabel(p.product_region)}
+                  </span>
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 pt-0.5">Място</div>
+                  <button
+                    type="button"
+                    disabled={locationBusyId === p.id}
+                    onClick={() => toggleStockLocation(p)}
+                    title="Клик: магазин ↔ склад"
+                    className={`w-full inline-flex items-center justify-center px-2 py-1 rounded-md text-[11px] font-semibold border border-slate-200/80 cursor-pointer transition hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue-500 disabled:cursor-wait disabled:opacity-60 ${productStockLocationBadgeClass(p.stock_location)}`}
+                  >
+                    {locationBusyId === p.id ? "Запис…" : productStockLocationLabel(p.stock_location)}
+                  </button>
                 </div>
+              </div>
+              <div className="mt-3 grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-[11px] border-t border-slate-100 pt-2 text-slate-600">
+                <span className="text-slate-400 shrink-0">Доставчик</span>
+                <span className="font-medium text-slate-800 truncate" title={supplierLabel(p.supplier_id)}>
+                  {supplierLabel(p.supplier_id)}
+                </span>
+                <span className="text-slate-400">Сер. вътр.</span>
+                <span className="font-mono text-slate-800 break-all" title={(p.indoor_unit_serial ?? "").trim() || undefined}>
+                  {truncCell(p.indoor_unit_serial, 40)}
+                </span>
+                <span className="text-slate-400">Сер. външ.</span>
+                <span className="font-mono text-slate-800 break-all" title={(p.outdoor_unit_serial ?? "").trim() || undefined}>
+                  {truncCell(p.outdoor_unit_serial, 40)}
+                </span>
+                <span className="text-slate-400">Фактура</span>
+                <span className="text-slate-800 break-all" title={(p.supplier_invoice_number ?? "").trim() || undefined}>
+                  {truncCell(p.supplier_invoice_number, 48)}
+                </span>
               </div>
             </div>
             <div className="flex border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => { setSaleFor(p); setSaleForm({ contactId: "", customerName: "", customerPhone: "", customerAddress: "", customerEmail: "", notes: "" }); setContactQuery(""); setContactResults([]); }}
-                disabled={p.stock_quantity <= 0}
+                disabled={!canRecordSale(p)}
                 className="flex-1 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 active:bg-slate-100 transition-colors disabled:opacity-40 border-r border-slate-100"
               >
                 Продажба
               </button>
-              <Link href={`/admin/products/${p.id}`} className="flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-semibold text-sky-700 hover:bg-sky-50 active:bg-sky-100 transition-colors">
+              <Link href={`/admin/products/${p.id}`} className="flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-semibold text-brand-blue-700 hover:bg-brand-blue-50 active:bg-brand-blue-100 transition-colors">
                 <Edit className="w-4 h-4" /> Редакция
               </Link>
               <button
                 onClick={() => setShareProduct(p)}
-                className="flex items-center justify-center gap-1.5 px-4 py-3 text-sm font-semibold text-orange-600 hover:bg-orange-50 active:bg-orange-100 transition-colors"
+                className="flex items-center justify-center gap-1.5 px-4 py-3 text-sm font-semibold text-brand-orange-600 hover:bg-brand-orange-50 active:bg-brand-orange-100 transition-colors"
                 title="Сподели в чат"
               >
                 <MessageCircle className="w-4 h-4" />
@@ -688,11 +934,11 @@ export default function AdminProductsPage() {
             className="w-full max-w-3xl max-h-[calc(100vh-2rem)] overflow-hidden rounded-3xl border border-white/70 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#ffffff_42%,#f8fafc_100%)] px-6 py-5">
-              <div className="text-xs font-bold uppercase tracking-[0.24em] text-sky-700">Запис на продажба</div>
+            <div className="border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#e6f9fd_0,#ffffff_42%,#fff3ed_100%)] px-6 py-5">
+              <div className="text-xs font-bold uppercase tracking-[0.24em] text-brand-blue-700">Запис на продажба</div>
               <div className="mt-1 text-2xl font-black leading-tight text-slate-950">{saleFor.name}</div>
               <div className="mt-1 text-sm font-medium text-slate-500">
-                Създава продажба в календара, намалява наличността и връзва контакт към сделката.
+                Създава продажба в календара, маркира този артикул като продаден (скрива се от каталога) и връзва контакт към сделката.
               </div>
             </div>
 
@@ -816,7 +1062,7 @@ export default function AdminProductsPage() {
                 <div className="mt-1 text-2xl font-black text-slate-900">€{saleSuccess.amount.toLocaleString()}</div>
               </div>
               <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-semibold leading-6 text-emerald-900">
-                Наличността е намалена, продажбата е добавена в историята на продажбите и в календара.
+                Артикулът е маркиран като продаден, продажбата е в историята и в календара.
               </div>
             </div>
             <div className="flex justify-end border-t border-slate-100 bg-slate-50 px-6 py-4">

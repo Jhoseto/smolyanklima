@@ -72,7 +72,7 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
   done: "Изпълнено", cancelled: "Отказано",
 };
 const STATUS_PILL: Record<TaskStatus, string> = {
-  planned:     "bg-sky-50 text-sky-700 border-sky-200",
+  planned:     "bg-brand-blue-50 text-brand-blue-700 border-brand-blue-200",
   in_progress: "bg-amber-50 text-amber-700 border-amber-200",
   done:        "bg-emerald-50 text-emerald-700 border-emerald-200",
   cancelled:   "bg-slate-100 text-slate-500 border-slate-200",
@@ -81,7 +81,7 @@ const PRIORITY_DOT: Record<string, string> = {
   low: "bg-slate-300", medium: "bg-amber-400", high: "bg-red-500",
 };
 const EVENT_ICON: Partial<Record<string, React.ReactNode>> = {
-  service_installation: <Wrench className="w-5 h-5 text-sky-500" />,
+  service_installation: <Wrench className="w-5 h-5 text-brand-blue-500" />,
   service_inspection:   <ClipboardList className="w-5 h-5 text-purple-500" />,
   service_repair:       <Wrench className="w-5 h-5 text-orange-500" />,
   service_maintenance:  <Wrench className="w-5 h-5 text-teal-500" />,
@@ -97,7 +97,7 @@ const NEXT_LABEL: Partial<Record<TaskStatus, string>> = {
   in_progress: "Маркирай като изпълнено",
 };
 const NEXT_BTN: Partial<Record<TaskStatus, string>> = {
-  planned:     "bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white shadow-md shadow-sky-200",
+  planned:     "bg-brand-blue-500 hover:bg-brand-blue-700 active:bg-brand-blue-700 text-white shadow-md shadow-brand-blue-200",
   in_progress: "bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white shadow-md shadow-emerald-200",
 };
 
@@ -179,10 +179,10 @@ function TaskCard({
           )}
           {task.customer_phone && (
             <a href={`tel:${task.customer_phone}`} className="flex items-center gap-2.5" onClick={e => e.stopPropagation()}>
-              <div className={`rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-center shrink-0 ${compact ? "w-7 h-7" : "w-8 h-8"}`}>
-                <Phone className={`text-sky-500 ${compact ? "w-3.5 h-3.5" : "w-4 h-4"}`} />
+              <div className={`rounded-xl bg-brand-blue-50 border border-brand-blue-100 flex items-center justify-center shrink-0 ${compact ? "w-7 h-7" : "w-8 h-8"}`}>
+                <Phone className={`text-brand-blue-500 ${compact ? "w-3.5 h-3.5" : "w-4 h-4"}`} />
               </div>
-              <span className={`font-bold text-sky-600 ${compact ? "text-sm" : "text-base"}`}>{task.customer_phone}</span>
+              <span className={`font-bold text-brand-blue-500 ${compact ? "text-sm" : "text-base"}`}>{task.customer_phone}</span>
             </a>
           )}
           {task.customer_address && (
@@ -448,8 +448,8 @@ export function ServiceTasksClient({
                         key={di}
                         onClick={() => setSelectedKey(k)}
                         className={`relative flex flex-col items-center justify-center h-10 rounded-xl text-sm font-semibold transition-all ${
-                          isSelected ? "bg-sky-600 text-white shadow-md" :
-                          isToday    ? "bg-sky-50 text-sky-700 font-bold" :
+                          isSelected ? "bg-brand-blue-500 text-white shadow-md" :
+                          isToday    ? "bg-brand-blue-50 text-brand-blue-700 font-bold" :
                                        "text-slate-700 hover:bg-slate-100"
                         }`}
                       >
@@ -470,7 +470,7 @@ export function ServiceTasksClient({
               <span className="text-xs text-slate-400">
                 {Object.values(byDay).flat().length} задачи месеца
               </span>
-              <button onClick={goToday} className="text-xs font-bold text-sky-600 hover:text-sky-800">
+              <button onClick={goToday} className="text-xs font-bold text-brand-blue-500 hover:text-brand-blue-700">
                 Към днес →
               </button>
             </div>
@@ -524,12 +524,12 @@ export function ServiceTasksClient({
                     key={k}
                     onClick={() => setSelectedKey(k)}
                     className={`flex flex-col items-center justify-center rounded-2xl min-w-[44px] h-16 px-2 transition-all select-none ${
-                      isSel    ? "bg-sky-600 text-white shadow-lg shadow-sky-200" :
-                      isToday  ? "bg-sky-50 text-sky-700" :
+                      isSel    ? "bg-brand-blue-500 text-white shadow-lg shadow-brand-blue-200" :
+                      isToday  ? "bg-brand-blue-50 text-brand-blue-700" :
                                  "bg-white text-slate-600 border border-slate-100"
                     }`}
                   >
-                    <span className={`text-[10px] font-semibold ${isSel ? "text-sky-100" : "text-slate-400"}`}>
+                    <span className={`text-[10px] font-semibold ${isSel ? "text-brand-blue-100" : "text-slate-400"}`}>
                       {BG_WEEKDAY_SHORT[day.getDay()]}
                     </span>
                     <span className="text-base font-black leading-tight tabular-nums">{day.getDate()}</span>
@@ -553,7 +553,7 @@ export function ServiceTasksClient({
           <div className="flex items-center justify-between px-4 pb-2">
             <span className="text-[11px] text-slate-400 font-medium">{weekLabel}</span>
             {selectedKey !== todayKey && (
-              <button onClick={goToday} className="text-[11px] font-bold text-sky-600">→ Към днес</button>
+              <button onClick={goToday} className="text-[11px] font-bold text-brand-blue-500">→ Към днес</button>
             )}
           </div>
         </div>
