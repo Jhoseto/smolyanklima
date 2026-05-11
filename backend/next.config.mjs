@@ -36,7 +36,7 @@ const nextConfig = {
     return [
       {
         source:
-          "/:path((?!api/|admin/|login$|_next/|assets/|images/|favicon\\.ico|manifest\\.webmanifest|manifest\\.json|icon\\.svg$).*)",
+          "/:path((?!api/|admin/|login$|_next/|assets/|images/|favicon\\.ico|manifest\\.webmanifest|manifest\\.json|icon\\.svg|icon-192\\.png|icon-512\\.png|apple-touch-icon\\.png).*)",
         destination: "/index.html",
       },
     ];
