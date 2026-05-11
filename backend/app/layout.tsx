@@ -14,15 +14,15 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "SmolyanKlima Admin",
-    template: "%s — Смолян Клима",
+    default: "СК Админ Панел",
+    template: "%s — СК Админ Панел",
   },
   description: "Административен панел — продукти, запитвания, контакти, календар",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Смолян Клима",
+    title: "СК Админ Панел",
   },
   icons: {
     icon: [

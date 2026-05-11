@@ -1,6 +1,6 @@
 {
-  "name": "SmolyanKlima Admin",
-  "short_name": "Смолян Клима",
+  "name": "СК Админ Панел",
+  "short_name": "СК Админ Панел",
   "description": "Административен панел за служители — отделно от клиентския сайт",
   "start_url": "/admin",
   "scope": "/admin",
