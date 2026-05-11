@@ -62,6 +62,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
                 {/* Сервиз section */}
                 <div className="mt-2 mb-1 px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Сервиз</div>
+                {role === "office_staff" && (
+                  <NavLink href="/admin/service" label="Модули сервиз" icon={<Wrench className="w-4 h-4" />} />
+                )}
                 <NavLink href="/admin/service/tasks" label="Задачи" icon={<CalendarClock className="w-4 h-4" />} />
                 <NavLink href="/admin/service/documents" label="Документи" icon={<FolderOpen className="w-4 h-4" />} />
 
@@ -97,7 +100,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
         {/* Main content */}
         <main className="flex-1 min-h-0 w-full min-w-0 overflow-x-hidden overflow-y-auto p-3 md:p-4 pb-24 md:pb-4">
-          <AdminPushBanner />
+          <AdminPushBanner role={role} />
           {children}
         </main>
 

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
-import { adminDb } from "@/lib/admin/db";
+import { adminSession, requireRole } from "@/lib/admin/db";
 
 const QuerySchema = z.object({
   q: z.string().optional(),
@@ -18,12 +18,24 @@ export async function OPTIONS(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
+  let session;
+  try {
+    session = await adminSession();
+  } catch {
+    return withCors(req, NextResponse.json({ error: "Неоторизиран достъп" }, { status: 401 }));
+  }
+  try {
+    requireRole(session, "master_admin");
+  } catch {
+    return withCors(req, NextResponse.json({ error: "Нямате достъп до одит лога." }, { status: 403 }));
+  }
+
   const params = Object.fromEntries(req.nextUrl.searchParams.entries());
   const parsed = QuerySchema.safeParse(params);
   if (!parsed.success) return withCors(req, NextResponse.json({ error: "Невалидни параметри" }, { status: 400 }));
 
   const { q, entityType, userId, from, to, page, perPage } = parsed.data;
-  const supabase = await adminDb();
+  const supabase = session.db;
   let query = supabase
     .from("activity_logs")
     .select("id,user_id,action,entity_type,entity_id,details,created_at,admin_users:user_id(email,name)", { count: "exact" });

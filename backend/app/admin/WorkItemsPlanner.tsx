@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Card, Button, Select, Input, Textarea } from "./ui";
+import { ContactPersonPicker } from "./ContactPersonPicker";
 import { CalendarDays, List } from "lucide-react";
 
 type EventCode =
@@ -16,6 +17,7 @@ type EventCode =
 type WorkItem = {
   id: string;
   type: "sale" | "service" | "stock_in" | "stock_out" | "task";
+  contact_id?: string | null;
   event_code?: EventCode | null;
   status: "planned" | "in_progress" | "done" | "cancelled";
   priority: "low" | "medium" | "high";
@@ -37,6 +39,8 @@ type WorkForm = {
   dueDate: string;
   priority: WorkItem["priority"];
   status: WorkItem["status"];
+  /** CRM контакт (UUID), празно ако е свободен текст */
+  contactId: string;
   customerName: string;
   customerPhone: string;
   customerAddress: string;
@@ -80,6 +84,7 @@ function createDefaultForm(date = ""): WorkForm {
     dueDate: date,
     priority: "medium",
     status: "planned",
+    contactId: "",
     customerName: "",
     customerPhone: "",
     customerAddress: "",
@@ -88,6 +93,52 @@ function createDefaultForm(date = ""): WorkForm {
     unitPrice: "",
     totalAmount: "",
   };
+}
+
+function ReadonlyMini({
+  label,
+  value,
+  className = "",
+}: {
+  label: string;
+  value: string;
+  className?: string;
+}) {
+  const text = value?.trim() ? value : "—";
+  return (
+    <div className={className}>
+      <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</div>
+      <div className="mt-0.5 break-words text-sm font-semibold text-slate-900">{text}</div>
+    </div>
+  );
+}
+
+/** След избор на CRM: телефон, адрес, брой и суми само за преглед (без отделни input полета). */
+function ContactDerivedSummary({ form }: { form: WorkForm }) {
+  const has = Boolean(form.contactId?.trim());
+  if (!has) {
+    return (
+      <div className="col-span-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
+        <div className="text-xs font-bold text-amber-950">Няма избран CRM контакт</div>
+        <p className="mt-1 text-[11px] leading-relaxed text-amber-900/95">
+          След избор от полето по-горе тук автоматично се показват <strong>телефон</strong>, <strong>адрес</strong>, <strong>брой</strong> и{" "}
+          <strong>суми</strong> към събитието (само за преглед). За смяна на контакт изчистете името и изберете друг.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="col-span-full grid grid-cols-1 gap-2 rounded-xl border border-slate-200 bg-slate-100/90 p-3 md:grid-cols-3">
+      <div className="col-span-full text-[10px] font-bold uppercase tracking-wide text-slate-500">
+        От контакт и събитието <span className="font-semibold normal-case text-slate-600">(само преглед)</span>
+      </div>
+      <ReadonlyMini label="Телефон" value={form.customerPhone} />
+      <ReadonlyMini label="Адрес" value={form.customerAddress} className="md:col-span-2" />
+      <ReadonlyMini label="Брой" value={form.quantity} />
+      <ReadonlyMini label="Единична цена" value={form.unitPrice.trim() ? form.unitPrice : "—"} />
+      <ReadonlyMini label="Обща сума" value={form.totalAmount.trim() ? form.totalAmount : "—"} />
+    </div>
+  );
 }
 
 export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
@@ -207,6 +258,11 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
 
   async function createFromForm(localForm: WorkForm) {
     if (!localForm.title.trim() || !localForm.dueDate) return false;
+    const cid = localForm.contactId.trim();
+    if (!cid || !isContactUuid(cid)) {
+      setError("Задължително изберете контакт от CRM (полето със синята рамка). Ползвайте ▼ за списък или + за нов контакт.");
+      return false;
+    }
     const res = await fetch("/api/admin/work-items", {
       method: "POST",
       credentials: "include",
@@ -264,6 +320,7 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
       dueDate: String(item.due_date ?? "").slice(0, 10),
       priority: item.priority,
       status: item.status,
+      contactId: item.contact_id ? String(item.contact_id) : "",
       customerName: item.customer_name ?? "",
       customerPhone: item.customer_phone ?? "",
       customerAddress: item.customer_address ?? "",
@@ -276,6 +333,11 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
 
   async function saveEdit(itemId: string) {
     if (!editForm.title.trim() || !editForm.dueDate) return;
+    const ecid = editForm.contactId.trim();
+    if (!ecid || !isContactUuid(ecid)) {
+      setError("За запис е задължителен избран контакт от CRM (синьото поле по-горе).");
+      return;
+    }
     setSavingBusy(true);
     setError(null);
     try {
@@ -382,20 +444,27 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
 
       {/* Quick create form */}
       {creating && !readOnly && (
-        <div className="border border-slate-200 rounded-xl p-3 mb-3 bg-slate-50">
+        <div className="border border-slate-200 rounded-xl p-3 mb-3 bg-slate-50 overflow-visible">
           <div className="text-xs font-bold text-slate-700 mb-2">Бързо добавяне на събитие</div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 overflow-visible">
             <FormField label="Тип събитие"><EventSelect form={form} setForm={setForm} /></FormField>
             <FormField label="Заглавие"><Input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} /></FormField>
             <FormField label="Дата"><Input type="date" value={form.dueDate} onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))} /></FormField>
             <FormField label="Статус"><StatusSelect form={form} setForm={setForm} /></FormField>
             <FormField label="Приоритет"><PrioritySelect form={form} setForm={setForm} /></FormField>
-            <FormField label="Контактно лице"><Input value={form.customerName} onChange={(e) => setForm((f) => ({ ...f, customerName: e.target.value }))} /></FormField>
-            <FormField label="Телефон"><Input value={form.customerPhone} onChange={(e) => setForm((f) => ({ ...f, customerPhone: e.target.value }))} /></FormField>
-            <FormField label="Адрес"><Input value={form.customerAddress} onChange={(e) => setForm((f) => ({ ...f, customerAddress: e.target.value }))} /></FormField>
-            <FormField label="Брой"><Input value={form.quantity} onChange={(e) => setForm((f) => ({ ...f, quantity: e.target.value }))} type="number" min={1} /></FormField>
-            <FormField label="Единична цена"><Input value={form.unitPrice} onChange={(e) => setForm((f) => ({ ...f, unitPrice: e.target.value }))} type="number" min={0} /></FormField>
-            <FormField label="Обща сума"><Input value={form.totalAmount} onChange={(e) => setForm((f) => ({ ...f, totalAmount: e.target.value }))} type="number" min={0} /></FormField>
+            <div className="col-span-full">
+              <ContactPersonPicker
+                variant="planner"
+                instanceId="quick"
+                readOnly={readOnly}
+                customerName={form.customerName}
+                customerPhone={form.customerPhone}
+                customerAddress={form.customerAddress}
+                contactId={form.contactId}
+                onPatch={(patch) => setForm((f) => ({ ...f, ...patch }))}
+              />
+            </div>
+            <ContactDerivedSummary form={form} />
             <FormField label="Бележки" full><Textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={2} className="min-h-[3rem]" /></FormField>
             <div className="col-span-full flex justify-end">
               <Button variant="primary" onClick={() => void createItem()}>Запази събитие</Button>
@@ -591,12 +660,19 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
                           <FormField label="Дата"><Input type="date" value={editForm.dueDate} onChange={(e) => setEditForm((f) => ({ ...f, dueDate: e.target.value }))} /></FormField>
                           <FormField label="Статус"><StatusSelect form={editForm} setForm={setEditForm} /></FormField>
                           <FormField label="Приоритет"><PrioritySelect form={editForm} setForm={setEditForm} /></FormField>
-                          <FormField label="Контактно лице"><Input value={editForm.customerName} onChange={(e) => setEditForm((f) => ({ ...f, customerName: e.target.value }))} /></FormField>
-                          <FormField label="Телефон"><Input value={editForm.customerPhone} onChange={(e) => setEditForm((f) => ({ ...f, customerPhone: e.target.value }))} /></FormField>
-                          <FormField label="Адрес"><Input value={editForm.customerAddress} onChange={(e) => setEditForm((f) => ({ ...f, customerAddress: e.target.value }))} /></FormField>
-                          <FormField label="Брой"><Input type="number" min={1} value={editForm.quantity} onChange={(e) => setEditForm((f) => ({ ...f, quantity: e.target.value }))} /></FormField>
-                          <FormField label="Единична цена"><Input type="number" min={0} value={editForm.unitPrice} onChange={(e) => setEditForm((f) => ({ ...f, unitPrice: e.target.value }))} /></FormField>
-                          <FormField label="Обща сума"><Input type="number" min={0} value={editForm.totalAmount} onChange={(e) => setEditForm((f) => ({ ...f, totalAmount: e.target.value }))} /></FormField>
+                          <div className="col-span-full md:col-span-2">
+                            <ContactPersonPicker
+                              variant="planner"
+                              instanceId="edit"
+                              readOnly={readOnly}
+                              customerName={editForm.customerName}
+                              customerPhone={editForm.customerPhone}
+                              customerAddress={editForm.customerAddress}
+                              contactId={editForm.contactId}
+                              onPatch={(patch) => setEditForm((f) => ({ ...f, ...patch }))}
+                            />
+                          </div>
+                          <ContactDerivedSummary form={editForm} />
                           <FormField label="Бележки" full><Textarea value={editForm.notes} onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))} rows={2} className="min-h-[2.75rem]" /></FormField>
                           <div className="col-span-full flex gap-2 mt-2">
                             <Button variant="primary" onClick={() => void saveEdit(item.id)} disabled={savingBusy}>
@@ -615,22 +691,31 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
               </div>
 
               {!readOnly && (
-              <div className="shrink-0 overflow-hidden bg-slate-50/90 p-3 lg:w-[320px] lg:max-w-[34%] xl:w-[340px]">
+              <div className="shrink-0 overflow-visible bg-slate-50/90 p-3 lg:w-[320px] lg:max-w-[34%] xl:w-[340px]">
                 <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Ново събитие</h3>
                 <div
-                  className="grid grid-cols-1 gap-2 md:grid-cols-2 [&_label]:gap-1 [&_label>span]:text-[10px] [&_label>span]:font-medium [&_label>span]:text-slate-500 [&_input]:!min-h-0 [&_input]:!rounded-md [&_input]:!px-2 [&_input]:!py-1 [&_input]:!text-[11px] [&_select]:!rounded-md [&_select]:!px-2 [&_select]:!py-1 [&_select]:!text-[11px] [&_textarea]:!rounded-md [&_textarea]:!px-2 [&_textarea]:!py-1 [&_textarea]:!text-[11px] [&_textarea]:!min-h-[2.25rem]"
+                  className="grid grid-cols-1 gap-2 md:grid-cols-2 overflow-visible [&_label]:gap-1 [&_label>span]:text-[10px] [&_label>span]:font-medium [&_label>span]:text-slate-500 [&_input]:!min-h-0 [&_input]:!rounded-md [&_input]:!px-2 [&_input]:!py-1 [&_input]:!text-[11px] [&_select]:!rounded-md [&_select]:!px-2 [&_select]:!py-1 [&_select]:!text-[11px] [&_textarea]:!rounded-md [&_textarea]:!px-2 [&_textarea]:!py-1 [&_textarea]:!text-[11px] [&_textarea]:!min-h-[2.25rem]"
                 >
                   <FormField label="Тип събитие"><EventSelect form={addForm} setForm={setAddForm} /></FormField>
                   <FormField label="Заглавие"><Input value={addForm.title} onChange={(e) => setAddForm((f) => ({ ...f, title: e.target.value }))} /></FormField>
                   <FormField label="Дата"><Input type="date" value={addForm.dueDate} onChange={(e) => setAddForm((f) => ({ ...f, dueDate: e.target.value }))} /></FormField>
                   <FormField label="Статус"><StatusSelect form={addForm} setForm={setAddForm} /></FormField>
                   <FormField label="Приоритет"><PrioritySelect form={addForm} setForm={setAddForm} /></FormField>
-                  <FormField label="Контактно лице"><Input value={addForm.customerName} onChange={(e) => setAddForm((f) => ({ ...f, customerName: e.target.value }))} /></FormField>
-                  <FormField label="Телефон"><Input value={addForm.customerPhone} onChange={(e) => setAddForm((f) => ({ ...f, customerPhone: e.target.value }))} /></FormField>
-                  <FormField label="Адрес" full><Input value={addForm.customerAddress} onChange={(e) => setAddForm((f) => ({ ...f, customerAddress: e.target.value }))} /></FormField>
-                  <FormField label="Брой"><Input type="number" min={1} value={addForm.quantity} onChange={(e) => setAddForm((f) => ({ ...f, quantity: e.target.value }))} /></FormField>
-                  <FormField label="Единична цена"><Input type="number" min={0} value={addForm.unitPrice} onChange={(e) => setAddForm((f) => ({ ...f, unitPrice: e.target.value }))} /></FormField>
-                  <FormField label="Обща сума" full><Input type="number" min={0} value={addForm.totalAmount} onChange={(e) => setAddForm((f) => ({ ...f, totalAmount: e.target.value }))} /></FormField>
+                  <div className="col-span-full md:col-span-2">
+                    <ContactPersonPicker
+                      variant="planner"
+                      instanceId="day-add"
+                      readOnly={readOnly}
+                      customerName={addForm.customerName}
+                      customerPhone={addForm.customerPhone}
+                      customerAddress={addForm.customerAddress}
+                      contactId={addForm.contactId}
+                      onPatch={(patch) => setAddForm((f) => ({ ...f, ...patch }))}
+                    />
+                  </div>
+                  <div className="col-span-full md:col-span-2">
+                    <ContactDerivedSummary form={addForm} />
+                  </div>
                   <FormField label="Бележки" full><Textarea value={addForm.notes} onChange={(e) => setAddForm((f) => ({ ...f, notes: e.target.value }))} rows={2} /></FormField>
                   <div className="col-span-full shrink-0 pt-1">
                     <Button variant="primary" size="sm" className="w-full !py-2 !text-xs" type="button" onClick={() => void createItemInDay()} disabled={savingBusy}>
@@ -711,6 +796,10 @@ function PrioritySelect({ form, setForm }: { form: WorkForm; setForm: React.Disp
   );
 }
 
+function isContactUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.trim());
+}
+
 function toPayload(form: WorkForm) {
   return {
     type: form.type,
@@ -719,6 +808,7 @@ function toPayload(form: WorkForm) {
     dueDate: form.dueDate,
     priority: form.priority,
     status: form.status,
+    contactId: form.contactId.trim() || null,
     customerName: form.customerName.trim() || null,
     customerPhone: form.customerPhone.trim() || null,
     customerAddress: form.customerAddress.trim() || null,

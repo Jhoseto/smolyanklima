@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
-import { adminDb } from "@/lib/admin/db";
+import { adminSession, requireRole } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
 
 const UpsertSchema = z.object({
@@ -15,18 +15,42 @@ export async function OPTIONS(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const supabase = await adminDb();
+  let session;
+  try {
+    session = await adminSession();
+  } catch {
+    return withCors(req, NextResponse.json({ error: "Неоторизиран достъп" }, { status: 401 }));
+  }
+  try {
+    requireRole(session, "master_admin");
+  } catch {
+    return withCors(req, NextResponse.json({ error: "Нямате достъп до настройките." }, { status: 403 }));
+  }
+
+  const supabase = session.db;
   const { data, error } = await supabase.from("settings").select("key,value,description,updated_at").order("key", { ascending: true });
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   return withCors(req, NextResponse.json({ data: data ?? [] }));
 }
 
 export async function POST(req: NextRequest) {
+  let session;
+  try {
+    session = await adminSession();
+  } catch {
+    return withCors(req, NextResponse.json({ error: "Неоторизиран достъп" }, { status: 401 }));
+  }
+  try {
+    requireRole(session, "master_admin");
+  } catch {
+    return withCors(req, NextResponse.json({ error: "Нямате достъп до настройките." }, { status: 403 }));
+  }
+
   const json = await req.json().catch(() => null);
   const parsed = UpsertSchema.safeParse(json);
   if (!parsed.success) return withCors(req, NextResponse.json({ error: "Невалидни данни" }, { status: 400 }));
 
-  const supabase = await adminDb();
+  const supabase = session.db;
   const { data, error } = await supabase
     .from("settings")
     .upsert(

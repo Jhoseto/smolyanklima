@@ -14,7 +14,7 @@ export default async function ServiceRootPage() {
   }
 
   if (session.role === "office_staff") {
-    redirect("/admin");
+    return <ServiceHub />;
   }
 
   if (session.role === "service_staff") {

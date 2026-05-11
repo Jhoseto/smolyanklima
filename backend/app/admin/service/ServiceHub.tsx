@@ -4,8 +4,8 @@ import Link from "next/link";
 import { CalendarClock, FolderOpen, ChevronRight } from "lucide-react";
 
 /**
- * Мобилен избор: задачи (календар) или документи (протоколи).
- * Desktop страницата продължава да ползва директни линкове в страничната лента.
+ * Избор между задачи (календар) и документи (протоколи).
+ * Master: основно от мобилното таб „Сервиз“; офис: и от десктоп линк „Модули сервиз“.
  */
 export function ServiceHub() {
   return (

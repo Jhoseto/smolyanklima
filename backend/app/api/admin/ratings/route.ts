@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
-import { adminDb } from "@/lib/admin/db";
+import { adminSession, requireRole } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
 
 const QuerySchema = z.object({
@@ -25,12 +25,24 @@ export async function OPTIONS(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
+  let session;
+  try {
+    session = await adminSession();
+  } catch {
+    return withCors(req, NextResponse.json({ error: "Неоторизиран достъп" }, { status: 401 }));
+  }
+  try {
+    requireRole(session, "master_admin");
+  } catch {
+    return withCors(req, NextResponse.json({ error: "Нямате достъп." }, { status: 403 }));
+  }
+
   const params = Object.fromEntries(req.nextUrl.searchParams.entries());
   const parsed = QuerySchema.safeParse(params);
   if (!parsed.success) return withCors(req, NextResponse.json({ error: "Невалидни параметри" }, { status: 400 }));
 
   const { q, view, product_id, stars, page, perPage } = parsed.data;
-  const supabase = await adminDb();
+  const supabase = session.db;
 
   // ── DETAIL: individual rows for one product ─────────────────────────────
   if (view === "detail" && product_id) {
@@ -113,6 +125,18 @@ export async function GET(req: NextRequest) {
 
 // PATCH /api/admin/ratings?product_id=xxx  — manual adjustments
 export async function PATCH(req: NextRequest) {
+  let session;
+  try {
+    session = await adminSession();
+  } catch {
+    return withCors(req, NextResponse.json({ error: "Неоторизиран достъп" }, { status: 401 }));
+  }
+  try {
+    requireRole(session, "master_admin");
+  } catch {
+    return withCors(req, NextResponse.json({ error: "Нямате достъп." }, { status: 403 }));
+  }
+
   const product_id = req.nextUrl.searchParams.get("product_id");
   if (!product_id) return withCors(req, NextResponse.json({ error: "product_id required" }, { status: 400 }));
 
@@ -121,7 +145,7 @@ export async function PATCH(req: NextRequest) {
   if (!parsed.success) return withCors(req, NextResponse.json({ error: "Невалидни данни" }, { status: 400 }));
 
   const { adjustments } = parsed.data;
-  const supabase = await adminDb();
+  const supabase = session.db;
 
   if (adjustments) {
     for (const [starStr, delta] of Object.entries(adjustments)) {

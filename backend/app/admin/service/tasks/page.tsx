@@ -14,11 +14,6 @@ export default async function ServiceTasksPage() {
     redirect("/login");
   }
 
-  if (session.role === "office_staff") {
-    redirect("/admin");
-  }
-
-  // service_staff → mobile-first task view
   if (session.role === "service_staff") {
     return (
       <ServiceTasksClient
@@ -29,7 +24,7 @@ export default async function ServiceTasksPage() {
     );
   }
 
-  // master_admin → full calendar planner
+  // master_admin + office_staff — оперативен календар (същият компонент като на таблото)
   return (
     <div className="w-full space-y-2">
       <div>

@@ -44,6 +44,14 @@ const nextConfig = {
   async headers() {
     return [
       {
+        source: "/admin",
+        headers: [{ key: "Cache-Control", value: "private, no-cache, no-store, must-revalidate" }],
+      },
+      {
+        source: "/admin/:path*",
+        headers: [{ key: "Cache-Control", value: "private, no-cache, no-store, must-revalidate" }],
+      },
+      {
         source: "/:path*",
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },

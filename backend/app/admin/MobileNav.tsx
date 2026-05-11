@@ -7,7 +7,7 @@ import { logoutAction } from "@/app/login/actions";
 import {
   LayoutDashboard, Package, Users, MoreHorizontal, X,
   FileText, Star, History, Activity, Settings, LogOut, Headphones,
-  ShieldCheck, Wrench, FolderOpen, MessageSquare,
+  ShieldCheck, Wrench, FolderOpen, MessageSquare, CalendarClock,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/admin/db";
 
@@ -38,11 +38,15 @@ export function MobileNav({ role }: { role: AdminRole }) {
         { href: "/admin/products", label: "Продукти", icon: Package },
         { href: "/admin/articles", label: "Статии", icon: FileText },
         ...(role === "office_staff"
-          ? [{ href: "/admin/service/documents", label: "Документи", icon: FolderOpen }]
+          ? [
+              { href: "/admin/service/tasks", label: "Задачи", icon: CalendarClock },
+              { href: "/admin/service/documents", label: "Документи", icon: FolderOpen },
+            ]
           : []),
         ...(role === "master_admin"
           ? [
               { href: "/admin/inquiries", label: "Запитвания", icon: MessageSquare },
+              { href: "/admin/service/tasks", label: "Задачи", icon: CalendarClock },
               { href: "/admin/service/documents", label: "Документи", icon: FolderOpen },
               { href: "/admin/ratings", label: "Оценки", icon: Star },
               { href: "/admin/history", label: "История продажби", icon: History },

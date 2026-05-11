@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Bell, BellOff, Loader2, X } from "lucide-react";
+import type { AdminRole } from "@/lib/admin/db";
 
 const DISMISS_KEY = "admin-push-banner-dismiss";
 
@@ -16,8 +17,13 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 
 /**
  * Пита за разрешение и регистрира Web Push за известия при затворен/фонов админ (жива връзка).
+ * Сервизните акаунти нямат чат в менюто — не показваме банера, за да няма объркващ текст.
  */
-export function AdminPushBanner() {
+export function AdminPushBanner({ role }: { role: AdminRole }) {
+  if (role === "service_staff") {
+    return null;
+  }
+
   const vapidPublic = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim();
   const [state, setState] = useState<"idle" | "ready" | "subscribed" | "denied" | "busy" | "unsupported">("idle");
   const [dismissed, setDismissed] = useState(false);

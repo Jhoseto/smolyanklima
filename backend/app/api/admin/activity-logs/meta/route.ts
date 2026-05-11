@@ -1,13 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
-import { adminDb } from "@/lib/admin/db";
+import { adminSession, requireRole } from "@/lib/admin/db";
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflight(req);
 }
 
 export async function GET(req: NextRequest) {
-  const supabase = await adminDb();
+  let session;
+  try {
+    session = await adminSession();
+  } catch {
+    return withCors(req, NextResponse.json({ error: "Неоторизиран достъп" }, { status: 401 }));
+  }
+  try {
+    requireRole(session, "master_admin");
+  } catch {
+    return withCors(req, NextResponse.json({ error: "Нямате достъп до одит лога." }, { status: 403 }));
+  }
+
+  const supabase = session.db;
 
   const [{ data: users, error: usersErr }, { data: entities, error: entitiesErr }] = await Promise.all([
     supabase.from("admin_users").select("id,name,email").eq("is_active", true).order("name", { ascending: true }),
