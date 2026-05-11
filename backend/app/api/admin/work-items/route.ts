@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
-import { adminDb } from "@/lib/admin/db";
+import { adminDb, adminSession, requireRole } from "@/lib/admin/db";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { logAdminActivity } from "@/lib/admin/audit";
 
@@ -97,11 +97,23 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  let session;
+  try {
+    session = await adminSession();
+  } catch {
+    return withCors(req, NextResponse.json({ error: "Неоторизиран достъп" }, { status: 401 }));
+  }
+  try {
+    requireRole(session, "master_admin", "office_staff");
+  } catch {
+    return withCors(req, NextResponse.json({ error: "Сервизните акаунти могат само да преглеждат календара." }, { status: 403 }));
+  }
+
   const json = await req.json().catch(() => null);
   const parsed = BodySchema.safeParse(json);
   if (!parsed.success) return withCors(req, NextResponse.json({ error: "Невалидни данни" }, { status: 400 }));
 
-  const supabase = await adminDb();
+  const supabase = session.db;
   const anon = await createSupabaseServerClient();
   const {
     data: { user },

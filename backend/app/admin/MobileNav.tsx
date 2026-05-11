@@ -14,6 +14,7 @@ import type { AdminRole } from "@/lib/admin/db";
 export function MobileNav({ role }: { role: AdminRole }) {
   const primaryLinks = role === "service_staff"
     ? [
+        { href: "/admin", label: "Табло", icon: LayoutDashboard, exact: true },
         { href: "/admin/service/tasks", label: "Задачи", icon: Wrench, exact: false },
         { href: "/admin/service/documents", label: "Документи", icon: FolderOpen, exact: false },
       ]

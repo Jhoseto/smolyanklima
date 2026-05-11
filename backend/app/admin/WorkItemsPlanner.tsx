@@ -90,7 +90,7 @@ function createDefaultForm(date = ""): WorkForm {
   };
 }
 
-export function WorkItemsPlanner() {
+export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
   const [items, setItems] = useState<WorkItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [monthOffset, setMonthOffset] = useState(0);
@@ -137,6 +137,13 @@ export function WorkItemsPlanner() {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monthOffset]);
+
+  useEffect(() => {
+    if (!readOnly) return;
+    setCreating(false);
+    setEditingId(null);
+    setConfirmDeleteId(null);
+  }, [readOnly]);
 
   const byDate = useMemo(() => {
     const map = new Map<string, WorkItem[]>();
@@ -344,7 +351,9 @@ export function WorkItemsPlanner() {
           <Button variant="secondary" size="sm" onClick={() => setMonthOffset((x) => x - 1)}>◀</Button>
           <Button variant="secondary" size="sm" onClick={() => setMonthOffset(0)}>Днес</Button>
           <Button variant="secondary" size="sm" onClick={() => setMonthOffset((x) => x + 1)}>▶</Button>
-          <Button variant="primary" size="sm" onClick={() => setCreating((v) => !v)}>+ Събитие</Button>
+          {!readOnly && (
+            <Button variant="primary" size="sm" onClick={() => setCreating((v) => !v)}>+ Събитие</Button>
+          )}
         </div>
       </div>
 
@@ -372,7 +381,7 @@ export function WorkItemsPlanner() {
       </div>
 
       {/* Quick create form */}
-      {creating && (
+      {creating && !readOnly && (
         <div className="border border-slate-200 rounded-xl p-3 mb-3 bg-slate-50">
           <div className="text-xs font-bold text-slate-700 mb-2">Бързо добавяне на събитие</div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
@@ -558,12 +567,16 @@ export function WorkItemsPlanner() {
                         </div>
                         <div className="flex shrink-0 flex-wrap justify-end gap-2">
                           <span className={statusPillClass(item.status)}>{statusLabel(item.status)}</span>
-                          <Button variant="secondary" size="sm" onClick={() => startEdit(item)}>
-                            Редакция
-                          </Button>
-                          <Button variant="danger" size="sm" onClick={() => void removeItem(item.id)}>
-                            Изтрий
-                          </Button>
+                          {!readOnly && (
+                            <>
+                              <Button variant="secondary" size="sm" onClick={() => startEdit(item)}>
+                                Редакция
+                              </Button>
+                              <Button variant="danger" size="sm" onClick={() => void removeItem(item.id)}>
+                                Изтрий
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </div>
                       <div className="mt-3 text-sm text-slate-600">
@@ -571,7 +584,7 @@ export function WorkItemsPlanner() {
                       </div>
                       {item.notes && <div className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">{item.notes}</div>}
 
-                      {editingId === item.id && (
+                      {editingId === item.id && !readOnly && (
                         <div className="mt-4 grid grid-cols-1 gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
                           <FormField label="Тип събитие"><EventSelect form={editForm} setForm={setEditForm} /></FormField>
                           <FormField label="Заглавие"><Input value={editForm.title} onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))} /></FormField>
@@ -601,7 +614,7 @@ export function WorkItemsPlanner() {
                 </div>
               </div>
 
-              {/* Без скрол — компактни полета; фиксирана ширина на широк екран */}
+              {!readOnly && (
               <div className="shrink-0 overflow-hidden bg-slate-50/90 p-3 lg:w-[320px] lg:max-w-[34%] xl:w-[340px]">
                 <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Ново събитие</h3>
                 <div
@@ -626,6 +639,7 @@ export function WorkItemsPlanner() {
                   </div>
                 </div>
               </div>
+              )}
             </div>
           </div>
         </div>

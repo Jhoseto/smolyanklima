@@ -27,6 +27,7 @@ export function DashboardPanel({
   badge,
   items,
   tone = "neutral",
+  readOnly = false,
 }: {
   title: string;
   description: string;
@@ -35,6 +36,8 @@ export function DashboardPanel({
   badge: number;
   items: DashboardPanelItem[];
   tone?: "neutral" | "info" | "warning" | "danger";
+  /** Сервиз: само преглед, без линк към пълните списъци и без бърз преглед на продукт. */
+  readOnly?: boolean;
 }) {
   const [selected, setSelected] = useState<DashboardDetail | null>(null);
   const badgeClass = {
@@ -66,7 +69,7 @@ export function DashboardPanel({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="truncate text-sm font-semibold text-slate-900">
-                      {item.productId ? (
+                      {item.productId && !readOnly ? (
                         <ProductQuickViewButton productId={item.productId} productName={item.title} />
                       ) : (
                         <button
@@ -80,7 +83,7 @@ export function DashboardPanel({
                     </div>
                     {item.meta && <div className="mt-0.5 truncate text-xs text-slate-500">{item.meta}</div>}
                   </div>
-                  {!item.productId && (
+                  {(!item.productId || readOnly) && (
                     <button
                       type="button"
                       onClick={() => setSelected(item.detail)}
@@ -94,9 +97,13 @@ export function DashboardPanel({
             ))
           )}
         </div>
-        <Link href={href} className="mt-3 inline-flex text-xs font-semibold text-sky-700 hover:text-sky-800">
-          Отвори всички →
-        </Link>
+        {readOnly ? (
+          <p className="mt-3 text-xs text-slate-400">Пълният списък е достъпен за офис и администратор.</p>
+        ) : (
+          <Link href={href} className="mt-3 inline-flex text-xs font-semibold text-sky-700 hover:text-sky-800">
+            Отвори всички →
+          </Link>
+        )}
       </Card>
 
       {selected && (

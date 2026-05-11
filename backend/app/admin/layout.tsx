@@ -44,9 +44,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
           <nav className="flex flex-col gap-0.5 flex-1">
             {role === "service_staff" ? (
-              /* service_staff sees ONLY the Сервиз section */
               <>
-                <div className="mt-1 mb-1 px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Сервиз</div>
+                <NavLink href="/admin" label="Табло" icon={<LayoutDashboard className="w-4 h-4" />} />
+                <div className="mt-2 mb-1 px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Сервиз</div>
                 <NavLink href="/admin/service/tasks" label="Задачи" icon={<CalendarClock className="w-4 h-4" />} />
                 <NavLink href="/admin/service/documents" label="Документи" icon={<FolderOpen className="w-4 h-4" />} />
               </>

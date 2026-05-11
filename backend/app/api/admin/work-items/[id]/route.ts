@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
-import { adminDb } from "@/lib/admin/db";
+import { adminSession, requireRole } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
 
 const UpdateSchema = z.object({
@@ -42,6 +42,18 @@ export async function OPTIONS(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  let session;
+  try {
+    session = await adminSession();
+  } catch {
+    return withCors(req, NextResponse.json({ error: "Неоторизиран достъп" }, { status: 401 }));
+  }
+  try {
+    requireRole(session, "master_admin", "office_staff");
+  } catch {
+    return withCors(req, NextResponse.json({ error: "Сервизните акаунти могат само да преглеждат календара." }, { status: 403 }));
+  }
+
   const { id } = await ctx.params;
   const json = await req.json().catch(() => null);
   const parsed = UpdateSchema.safeParse(json);
@@ -70,7 +82,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   if (parsed.data.status === "done") patch.completed_at = new Date().toISOString();
   if (parsed.data.status && parsed.data.status !== "done") patch.completed_at = null;
 
-  const supabase = await adminDb();
+  const supabase = session.db;
   const { data, error } = await supabase.from("work_items").update(patch).eq("id", id).select("*").maybeSingle();
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   if (!data) return withCors(req, NextResponse.json({ error: "Не е намерено" }, { status: 404 }));
@@ -89,8 +101,20 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
 }
 
 export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  let session;
+  try {
+    session = await adminSession();
+  } catch {
+    return withCors(req, NextResponse.json({ error: "Неоторизиран достъп" }, { status: 401 }));
+  }
+  try {
+    requireRole(session, "master_admin", "office_staff");
+  } catch {
+    return withCors(req, NextResponse.json({ error: "Сервизните акаунти могат само да преглеждат календара." }, { status: 403 }));
+  }
+
   const { id } = await ctx.params;
-  const supabase = await adminDb();
+  const supabase = session.db;
   const { error } = await supabase.from("work_items").delete().eq("id", id);
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   await logAdminActivity({

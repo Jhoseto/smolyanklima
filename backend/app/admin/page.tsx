@@ -1,4 +1,4 @@
-import { adminDb } from "@/lib/admin/db";
+import { adminSession } from "@/lib/admin/db";
 import { EmailOutboxDrain } from "./EmailOutboxDrain";
 import { SectionTitle, Card } from "./ui";
 import { DashboardPanel } from "./DashboardPanel";
@@ -7,7 +7,9 @@ import { WorkItemsPlanner } from "./WorkItemsPlanner";
 export const dynamic = "force-dynamic";
 
 export default async function AdminDashboardPage() {
-  const supabase = await adminDb();
+  const session = await adminSession();
+  const supabase = session.db;
+  const readOnlyDashboard = session.role === "service_staff";
   const today = formatDateKey(new Date());
 
   const lowStockSetting = await supabase.from("settings").select("value").eq("key", "inventory.low_stock_threshold").maybeSingle();
@@ -106,12 +108,24 @@ export default async function AdminDashboardPage() {
   return (
     <div className="w-full space-y-3">
       {/* Operations planner — top of dashboard */}
-      <WorkItemsPlanner />
+      <WorkItemsPlanner readOnly={readOnlyDashboard} />
 
       <div>
         <h1 className="text-lg md:text-xl font-bold text-slate-900 mb-0.5 leading-tight">
-          <SectionTitle title="Оперативно табло" hint="Основният работен екран: KPI + бързи действия." />
+          <SectionTitle
+            title="Оперативно табло"
+            hint={
+              readOnlyDashboard
+                ? "Преглед на KPI и календар. Създаване и редакция на събития са достъпни за офис и администратор."
+                : "Основният работен екран: KPI + бързи действия."
+            }
+          />
         </h1>
+        {readOnlyDashboard && (
+          <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+            Преглед само за четене — не можете да добавяте или редактирате събития от календара.
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-2 md:gap-3">
@@ -135,6 +149,7 @@ export default async function AdminDashboardPage() {
           href="/admin/history"
           empty="Няма задачи за днес."
           badge={nWorkToday}
+          readOnly={readOnlyDashboard}
           items={(todaysItems.data ?? []).map((item) => ({
             title: item.title,
             meta: [eventLabel(item.event_code), item.customer_name, item.customer_phone].filter(Boolean).join(" · "),
@@ -159,6 +174,7 @@ export default async function AdminDashboardPage() {
           empty="Няма просрочени задачи."
           badge={nWorkOverdue}
           tone={nWorkOverdue > 0 ? "danger" : "neutral"}
+          readOnly={readOnlyDashboard}
           items={(overdueItems.data ?? []).map((item) => ({
             title: item.title,
             meta: [formatBgDate(item.due_date), item.customer_name, item.customer_phone].filter(Boolean).join(" · "),
@@ -183,6 +199,7 @@ export default async function AdminDashboardPage() {
           empty={`Няма артикули под ${lowStockThreshold} бр.`}
           badge={nLowStock}
           tone={nLowStock > 0 ? "warning" : "neutral"}
+          readOnly={readOnlyDashboard}
           items={(lowStockItems.data ?? []).map((item) => ({
             title: item.name,
             productId: item.id,
@@ -205,6 +222,7 @@ export default async function AdminDashboardPage() {
           empty="Няма нови заявки."
           badge={nInquiries}
           tone={nInquiries > 0 ? "info" : "neutral"}
+          readOnly={readOnlyDashboard}
           items={(latestInquiries.data ?? []).map((item) => ({
             title: item.customer_name,
             meta: [item.customer_phone, serviceTypeLabel(item.service_type), formatBgDateTime(item.created_at)].filter(Boolean).join(" · "),
@@ -229,6 +247,7 @@ export default async function AdminDashboardPage() {
         empty="Няма планирани обаждания за днес."
         badge={(followUpContacts.data ?? []).length}
         tone={(followUpContacts.data ?? []).length > 0 ? "info" : "neutral"}
+        readOnly={readOnlyDashboard}
         items={(followUpContacts.data ?? []).map((contact) => ({
           title: contact.full_name,
           meta: [contact.phone, customerStatusLabel(contact.customer_status), formatBgDate(contact.next_follow_up_at)]
@@ -247,7 +266,7 @@ export default async function AdminDashboardPage() {
         }))}
       />
 
-      {(nOutbox > 0 || nFailedEmails > 0) && (
+      {!readOnlyDashboard && (nOutbox > 0 || nFailedEmails > 0) && (
         <Card className="p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
