@@ -19,6 +19,10 @@ const EnvSchemaBase = z.object({
   AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(1).max(8192).optional(),
   GEMINI_API_KEY: z.string().min(10).optional(),
   GEMINI_MODEL: z.string().min(1).optional(),
+  /** Image generation/editing model — Nano Banana default. По избор може да се
+   *  override-не (напр. на „gemini-3.1-flash-image-preview“ след оctomvri 2026,
+   *  когато 2.5 Flash Image се pensionира). */
+  GEMINI_IMAGE_MODEL: z.string().min(1).optional(),
   GEMINI_TEMPERATURE: z.coerce.number().min(0).max(1).optional(),
   /** Качване на снимки (админ). Препоръка: CLOUDINARY_URL от Cloudinary Console. */
   CLOUDINARY_URL: z.string().min(1).optional(),
@@ -56,6 +60,7 @@ export function getEnv() {
     AI_MAX_OUTPUT_TOKENS: process.env.AI_MAX_OUTPUT_TOKENS,
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,
     GEMINI_MODEL: process.env.GEMINI_MODEL,
+    GEMINI_IMAGE_MODEL: process.env.GEMINI_IMAGE_MODEL,
     GEMINI_TEMPERATURE: process.env.GEMINI_TEMPERATURE,
     CLOUDINARY_URL: emptyToUndefined(process.env.CLOUDINARY_URL),
     CLOUDINARY_CLOUD_NAME: emptyToUndefined(process.env.CLOUDINARY_CLOUD_NAME),

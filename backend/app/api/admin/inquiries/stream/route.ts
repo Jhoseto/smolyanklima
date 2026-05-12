@@ -3,7 +3,13 @@ import { adminDb } from "@/lib/admin/db";
 
 export const dynamic = "force-dynamic";
 
-const POLL_INTERVAL_MS = 2_000;
+/**
+ * Polling за нови inquiries (контактни форми). Тези не са live chat —
+ * клиент попълва форма и не очаква отговор „веднага". Затова 5s е
+ * напълно достатъчно.
+ * Преди беше 2s → 30 заявки/мин. Сега 5s → 12/мин. Икономия ~60%.
+ */
+const POLL_INTERVAL_MS = 5_000;
 
 export async function GET(req: NextRequest) {
   const supabase = await adminDb();

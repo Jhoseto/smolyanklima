@@ -1,14 +1,21 @@
 "use client";
 
-import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import Link from "next/link";
 import { Input, Select, Textarea, Button } from "../ui";
-import { AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, Sparkles, Wand2, X, ExternalLink } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, Sparkles, Wand2, X, ExternalLink, Loader2 } from "lucide-react";
 import { useDebounce } from "@/lib/hooks/useDebounce";
 import { normalizeProductStockLocation, type ProductStockLocation } from "@/lib/admin/productStockLocation";
 import { normalizeProductRegion, type ProductRegion } from "@/lib/admin/productRegion";
 import { LabelScanButton, type LabelExtractResult } from "./LabelScanButton";
-import { ProductPhotoUploader, MAX_PRODUCT_IMAGES as MAX_PHOTO_LIMIT } from "./ProductPhotoUploader";
+import {
+  ProductPhotoUploader,
+  MAX_PRODUCT_IMAGES as MAX_PHOTO_LIMIT,
+  AI_ENHANCE_PRICE_DISPLAY,
+} from "./ProductPhotoUploader";
+import { ImageLightbox } from "./ImageLightbox";
+import { BrandCombobox } from "./BrandCombobox";
+import { enhancePhotoViaAI, fetchImageAsBlob } from "@/lib/photos/enhancePhoto";
 
 type SerialMatch = {
   id: string;
@@ -148,6 +155,130 @@ function slugifyBg(input: string) {
     .replace(/-{2,}/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 120);
+}
+
+/**
+ * Mapping от model-code prefix → canonical brand name. Използва се като
+ * последен fallback, ако AI върна null/непознат brand_hint, но виждаме
+ * валиден model code на етикета.
+ *
+ * Източник: официални naming conventions на производителите. Prefixes
+ * са case-INSENSITIVE.
+ *
+ * Поддръжка: при добавяне на нова марка тук трябва ДА СЕ ДОБАВИ и в
+ * AI промпта (route.ts → product_label_extract) — за да информираме
+ * Gemini за конвенцията.
+ */
+const MODEL_CODE_PREFIX_TO_BRAND: Array<{ prefixes: string[]; brand: string }> = [
+  { prefixes: ["FTXA", "FTXM", "FTKM", "ATXA", "ATXM", "RXA", "RXM", "ARXM", "2MXM", "3MXM", "4MXM", "5MXM"], brand: "Daikin" },
+  { prefixes: ["MSZ-", "MUZ-", "MFZ-", "MUFZ-", "PKA-", "PUMY-", "SLZ-", "MSY-"], brand: "Mitsubishi Electric" },
+  { prefixes: ["SRK-", "SRC-", "SCM-", "FDC-", "FDT-", "SRR-"], brand: "Mitsubishi Heavy" },
+  { prefixes: ["ASYG", "AOYG", "ASYA", "AOYA"], brand: "Fujitsu" },
+  { prefixes: ["RAS-", "RAV-", "MMK-", "MMY-"], brand: "Toshiba" },
+  { prefixes: ["CS-", "CU-", "KIT-"], brand: "Panasonic" },
+  { prefixes: ["GWH"], brand: "Gree" },
+  { prefixes: ["MSAG", "MSAFA", "MSAB"], brand: "Midea" },
+  { prefixes: ["AS-", "AUS-"], brand: "Hisense" },
+];
+
+/**
+ * Намира brand entry, който съответства на AI hint или model code.
+ *
+ * Стратегия (multi-pass):
+ *   1. AI ни е върнал точното име от availableBrands → direct exact match.
+ *   2. Normalize match — lowercase, без punctuation/spaces.
+ *   3. Token-based match — за multi-word марки (напр. „Mitsubishi“ в hint
+ *      vs „Mitsubishi Electric“ в DB, или обратно). При няколко candidate-а
+ *      ползваме model-code prefix за дезамбигуация.
+ *   4. Substring match — hint contains brand name или vice versa.
+ *   5. Fallback по model-code prefix — ако всичко друго е failed.
+ *
+ * @returns brand entry от списъка или null ако нищо не match-ва.
+ */
+function matchBrandFromHint(
+  hint: string | null | undefined,
+  modelCode: string | null | undefined,
+  brands: Array<{ id: string; name: string }>,
+): { id: string; name: string } | null {
+  const normalize = (s: string): string => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+  const tokenize = (s: string): string[] =>
+    s
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((t) => t.length >= 3); // игнорираме къси думи („co“, „ltd“, …)
+
+  const hintRaw = (hint ?? "").trim();
+  const hintNorm = normalize(hintRaw);
+  const hintTokens = hintRaw ? tokenize(hintRaw) : [];
+
+  // 1. Exact match — AI ни е върнал точното име.
+  if (hintRaw) {
+    const exact = brands.find((b) => b.name.trim().toLowerCase() === hintRaw.toLowerCase());
+    if (exact) return exact;
+  }
+
+  // 2. Normalize match (без spaces/punctuation).
+  if (hintNorm) {
+    const norm = brands.find((b) => normalize(b.name) === hintNorm);
+    if (norm) return norm;
+  }
+
+  // 3. Token-based match — за multi-word марки.
+  if (hintTokens.length > 0) {
+    const candidates = brands.filter((b) => {
+      const brandTokens = tokenize(b.name);
+      // Всеки token от hint трябва да присъства в brand-а ИЛИ обратно.
+      const hintMatchesBrand = hintTokens.every((ht) => brandTokens.some((bt) => bt === ht));
+      const brandMatchesHint = brandTokens.every((bt) => hintTokens.some((ht) => ht === bt));
+      return hintMatchesBrand || brandMatchesHint;
+    });
+    if (candidates.length === 1) return candidates[0];
+    // Няколко candidate-а (напр. „Mitsubishi“ → Electric vs Heavy):
+    // дезамбигуирай чрез model-code prefix.
+    if (candidates.length > 1 && modelCode) {
+      const byPrefix = matchBrandByModelPrefix(modelCode, brands);
+      if (byPrefix && candidates.some((c) => c.id === byPrefix.id)) return byPrefix;
+    }
+    // Все още няколко — върни първия (deterministic, по DB order).
+    if (candidates.length > 0) return candidates[0];
+  }
+
+  // 4. Substring match — hint contains brand name (или vice versa).
+  if (hintNorm) {
+    const contains = brands.find((b) => {
+      const bn = normalize(b.name);
+      return bn.length >= 3 && (hintNorm.includes(bn) || bn.includes(hintNorm));
+    });
+    if (contains) return contains;
+  }
+
+  // 5. Fallback — само по model-code prefix.
+  if (modelCode) {
+    const byPrefix = matchBrandByModelPrefix(modelCode, brands);
+    if (byPrefix) return byPrefix;
+  }
+
+  return null;
+}
+
+/** Подсхема на матча — само по model code prefix. */
+function matchBrandByModelPrefix(
+  modelCode: string,
+  brands: Array<{ id: string; name: string }>,
+): { id: string; name: string } | null {
+  const code = modelCode.trim().toUpperCase();
+  if (!code) return null;
+  for (const entry of MODEL_CODE_PREFIX_TO_BRAND) {
+    for (const prefix of entry.prefixes) {
+      if (code.startsWith(prefix.toUpperCase())) {
+        const brand = brands.find(
+          (b) => b.name.trim().toLowerCase() === entry.brand.toLowerCase(),
+        );
+        if (brand) return brand;
+      }
+    }
+  }
+  return null;
 }
 
 function FieldTitle({ label, info, ai }: { label: string; info: string; ai?: boolean }) {
@@ -460,7 +591,7 @@ type Props = {
 };
 
 export function ProductFormFields({
-  brands,
+  brands: brandsProp,
   types,
   suppliers = [],
   form,
@@ -472,6 +603,33 @@ export function ProductFormFields({
   currentProductId,
   onPendingPhotosChange,
 }: Props) {
+  /** Локален overlay за марки, създадени по време на тази сесия чрез
+   *  „+ Създай нова марка“ в BrandCombobox. Parent prop-ът може да не се
+   *  rerender-не веднага (data idва от родителския state), затова пазим
+   *  допълнителния списък локално и merge-ваме двата източника.
+   *
+   *  Reset-ва се при rerender само ако всички новосъздадени марки вече
+   *  присъстват в `brandsProp` (parent се е sync-нал). */
+  const [localBrands, setLocalBrands] = useState<Array<{ id: string; name: string }>>([]);
+
+  /** Финален списък = parent prop ∪ локални нови (без дубликати по id). */
+  const brands = useMemo(() => {
+    const seen = new Set(brandsProp.map((b) => b.id));
+    const extra = localBrands.filter((b) => !seen.has(b.id));
+    if (extra.length === 0) return brandsProp;
+    return [...brandsProp, ...extra].sort((a, b) => a.name.localeCompare(b.name, "bg"));
+  }, [brandsProp, localBrands]);
+
+  // Когато parent-ът дойде с актуалните brands (включително нашите нови),
+  // изчистваме локалния overlay, за да избегнем duplicate-state.
+  useEffect(() => {
+    if (localBrands.length === 0) return;
+    const propIds = new Set(brandsProp.map((b) => b.id));
+    if (localBrands.every((lb) => propIds.has(lb.id))) {
+      setLocalBrands([]);
+    }
+  }, [brandsProp, localBrands]);
+
   const [aiBusy, setAiBusy] = useState(false);
   const [aiDialog, setAiDialog] = useState<"missing_name" | "replace_description" | "error" | null>(null);
   const [aiError, setAiError] = useState("");
@@ -494,7 +652,12 @@ export function ProductFormFields({
    *  „✨ AI“ бадж до тях, за да може складовият техник веднага да види
    *  кои стойности са машинно попълнени и да ги провери преди save. */
   const [aiFilledFields, setAiFilledFields] = useState<Set<string>>(new Set());
-  const [aiToast, setAiToast] = useState<{ kind: "ok" | "warn"; text: string } | null>(null);
+  const [aiToast, setAiToast] = useState<{
+    kind: "ok" | "warn";
+    text: string;
+    /** Допълнителни човекочетими подробности за конкретно попълнените полета. */
+    details?: string[] | null;
+  } | null>(null);
 
   /** Брой снимки, които потребителят е добавил в preview, но ОЩЕ не са
    *  качени в Cloudinary. Save-action-ът проверява тази стойност и
@@ -514,6 +677,16 @@ export function ProductFormFields({
     images: Array<{ url: string; sort_order: number; is_main: boolean }>;
   } | null>(null);
 
+  /** Lightbox state — index на отворената снимка от form.images (или null). */
+  const [imageLightboxIndex, setImageLightboxIndex] = useState<number | null>(null);
+
+  /** AI enhance статус за ВЕЧЕ КАЧЕНИ снимки (key = original Cloudinary URL).
+   *  Позволява да виждаме „processing“ overlay на конкретна снимка докато AI
+   *  работи. След успех заместваме URL-а в form.images и записа се махва. */
+  const [uploadedAiStatus, setUploadedAiStatus] = useState<
+    Record<string, { phase: "processing"; startedAt: number } | { phase: "error"; message: string }>
+  >({});
+
   /** Live preview на количеството за този модел в каталога.
    *  - `otherInStock` = брой ДРУГИ продукти със същата (марка, модел) в наличност.
    *  - `othersTotal`  = брой ВСИЧКИ други продукти със същия модел (вкл. изчерпани).
@@ -524,6 +697,86 @@ export function ProductFormFields({
     nextInStock: number;
   } | null>(null);
   const [modelStockLoading, setModelStockLoading] = useState(false);
+
+  /**
+   * AI enhance на ВЕЧЕ КАЧЕНА снимка (от Cloudinary).
+   *
+   * Flow:
+   *   1. Сваляме оригинала от Cloudinary URL → Blob.
+   *   2. Praщаме към Gemini Nano Banana → нов Blob (PNG).
+   *   3. Качваме новия Blob обратно в Cloudinary (в същата папка).
+   *   4. Заместваме URL-а в form.images.
+   *
+   * Старият Cloudinary файл остава orphaned — отделен cleanup би трябвало да
+   * го изчисти (out of scope тук).
+   */
+  async function enhanceUploadedImage(originalUrl: string) {
+    if (uploadedAiStatus[originalUrl]?.phase === "processing") return;
+
+    setUploadedAiStatus((prev) => ({
+      ...prev,
+      [originalUrl]: { phase: "processing", startedAt: Date.now() },
+    }));
+
+    try {
+      // 1. Сваляме оригинала
+      const origBlob = await fetchImageAsBlob(originalUrl);
+
+      // 2. AI enhance — real-time, ~$0.039
+      const result = await enhancePhotoViaAI(origBlob);
+
+      // 3. Upload в Cloudinary в подходящата папка
+      const brand = brands.find((br) => br.id === form.brandId);
+      const brandSlug = brand ? slugifyBg(brand.name) : null;
+      const productSlug = form.slug || slugifyBg(form.name || "");
+      const folderKey =
+        brandSlug && form.modelCode ? `${brandSlug}-${form.modelCode.trim().toLowerCase()}` : productSlug;
+      const file = new File([result.blob], "enhanced-ai.png", { type: result.mimeType });
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("kind", cloudinaryKind);
+      fd.append("slug", folderKey);
+      const res = await fetch("/api/admin/uploads/image", {
+        method: "POST",
+        credentials: "include",
+        body: fd,
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        data?: { url?: string };
+        error?: string;
+      };
+      if (!res.ok || !json.data?.url) {
+        throw new Error(json.error || `Качването в Cloudinary не успя (HTTP ${res.status}).`);
+      }
+      const newUrl = json.data.url;
+
+      // 4. Заместваме URL-а в form.images (запазваме is_main / sort_order)
+      setForm((f) => ({
+        ...f,
+        images: f.images.map((im) => (im.url === originalUrl ? { ...im, url: newUrl } : im)),
+      }));
+      setUploadedAiStatus((prev) => {
+        const next = { ...prev };
+        delete next[originalUrl];
+        return next;
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setUploadedAiStatus((prev) => ({
+        ...prev,
+        [originalUrl]: { phase: "error", message: msg },
+      }));
+      // auto-clear след 7s
+      setTimeout(() => {
+        setUploadedAiStatus((prev) => {
+          if (prev[originalUrl]?.phase !== "error") return prev;
+          const next = { ...prev };
+          delete next[originalUrl];
+          return next;
+        });
+      }, 7000);
+    }
+  }
 
   function isAiField(key: string) {
     return aiFilledFields.has(key);
@@ -597,22 +850,23 @@ export function ProductFormFields({
         filled.add("outdoorUnitSerial");
       }
 
-      // 2) Марка — само ако празна. Match по име (case-insensitive).
-      if (!next.brandId && lbl.brand_hint) {
-        const hint = String(lbl.brand_hint).trim().toLowerCase();
-        const matched = brands.find((b) => b.name.toLowerCase() === hint)
-          ?? brands.find((b) => b.name.toLowerCase().startsWith(hint))
-          ?? brands.find((b) => hint.startsWith(b.name.toLowerCase()));
+      // 3) Модел — само ако празен. (Извличаме го преди марката, защото го
+      //    използваме за fallback match по prefix.)
+      if (!next.modelCode.trim() && lbl.model_code) {
+        next.modelCode = String(lbl.model_code).trim();
+        filled.add("modelCode");
+      }
+
+      // 2) Марка — само ако празна. Multi-pass match:
+      //    (a) AI връща exact име от availableBrands → direct match по name.
+      //    (b) Token-level match (Mitsubishi → Mitsubishi Electric).
+      //    (c) Fallback по model-code prefix (FTXA → Daikin, SRK → Mitsubishi Heavy).
+      if (!next.brandId) {
+        const matched = matchBrandFromHint(lbl.brand_hint, next.modelCode, brands);
         if (matched) {
           next.brandId = matched.id;
           filled.add("brandId");
         }
-      }
-
-      // 3) Модел — само ако празен.
-      if (!next.modelCode.trim() && lbl.model_code) {
-        next.modelCode = String(lbl.model_code).trim();
-        filled.add("modelCode");
       }
 
       // 4) Хладилен агент — само ако празен.
@@ -675,15 +929,56 @@ export function ProductFormFields({
 
     setAiFilledFields(filled);
 
-    const filledCount = filled.size;
-    const lowConf = confidence === "low" || confidence === "none" || specsConfidence === "low" || specsConfidence === "none";
+    // Кои НОВИ полета бяха попълнени от ТОЗИ конкретен scan? (Изваждаме
+    // предходно попълнените, за да покажем само резултата от сегашния call.)
+    const newlyFilled = new Set<string>();
+    for (const key of filled) {
+      if (!aiFilledFields.has(key)) newlyFilled.add(key);
+    }
+
+    const lowConf =
+      confidence === "low" ||
+      confidence === "none" ||
+      specsConfidence === "low" ||
+      specsConfidence === "none";
+
+    // Изграждаме компактен човекочетим списък на ключовите попълнени
+    // полета — за бърза визуална потвърждение („какво стана преди миг“).
+    const highlights: string[] = [];
+    if (newlyFilled.has("brandId")) {
+      // Brand id-то току-що беше set-нато през matchBrandFromHint. Ползваме
+      // hint-а от етикета, ако е по-кратък/човекочетим; иначе fallback
+      // към името от списъка чрез повторен match по hint.
+      const hintRaw = extract.from_label?.brand_hint?.trim() ?? "";
+      const matchedBrand = matchBrandFromHint(hintRaw, extract.from_label?.model_code ?? "", brands);
+      if (matchedBrand) highlights.push(`марка: ${matchedBrand.name}`);
+      else if (hintRaw) highlights.push(`марка: ${hintRaw}`);
+    }
+    if (newlyFilled.has("modelCode") && extract.from_label?.model_code) {
+      highlights.push(`модел: ${extract.from_label.model_code}`);
+    }
+    if (newlyFilled.has("indoorUnitSerial") && extract.from_label?.indoor_unit_serial) {
+      highlights.push(`сер.вътр.: ${extract.from_label.indoor_unit_serial}`);
+    }
+    if (newlyFilled.has("outdoorUnitSerial") && extract.from_label?.outdoor_unit_serial) {
+      highlights.push(`сер.външ.: ${extract.from_label.outdoor_unit_serial}`);
+    }
+    if (newlyFilled.has("specs.refrigerant") && extract.from_label?.refrigerant) {
+      highlights.push(`газ: ${extract.from_label.refrigerant}`);
+    }
+
     setAiToast({
       kind: lowConf ? "warn" : "ok",
       text: lowConf
-        ? `Попълнени са ${filledCount} полета, но точността е ниска. Прегледай внимателно.`
-        : `Попълнени са ${filledCount} полета автоматично от AI. Прегледай и коригирай при нужда.`,
+        ? `Попълнени са ${newlyFilled.size} нови полета, но точността е ниска. Прегледай ВНИМАТЕЛНО.`
+        : newlyFilled.size === 0
+          ? `Не успях да попълня нови полета. Опитай с по-ясна снимка на етикета.`
+          : `Попълнени са ${newlyFilled.size} нови полета автоматично. Общо AI-попълнени: ${filled.size}.`,
+      details: highlights.length > 0 ? highlights : null,
     });
-    setTimeout(() => setAiToast(null), 6000);
+    // Toast-ът ОСТАВА на екрана докато не го затвори потребителят (или
+    // не направи нов scan, който го замества). Това дава време за
+    // преглед на резултата без натиск.
   }
 
   useEffect(() => {
@@ -1006,12 +1301,14 @@ export function ProductFormFields({
             whichUnit="indoor"
             knownBrand={brands.find((b) => b.id === form.brandId)?.name}
             knownModel={form.modelCode}
+            availableBrands={brands.map((b) => b.name)}
             onExtracted={(r) => mergeLabelExtract(r, "indoor")}
           />
           <LabelScanButton
             whichUnit="outdoor"
             knownBrand={brands.find((b) => b.id === form.brandId)?.name}
             knownModel={form.modelCode}
+            availableBrands={brands.map((b) => b.name)}
             onExtracted={(r) => mergeLabelExtract(r, "outdoor")}
           />
         </div>
@@ -1020,18 +1317,50 @@ export function ProductFormFields({
         </p>
         {aiToast && (
           <div
-            className={`mt-3 rounded-xl border px-3 py-2 text-[12px] font-medium leading-snug flex items-start gap-2 ${
+            className={`mt-3 rounded-xl border-2 px-3.5 py-3 text-[13px] font-semibold leading-snug flex items-start gap-2.5 shadow-sm relative ${
               aiToast.kind === "ok"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                : "border-amber-200 bg-amber-50 text-amber-900"
+                ? "border-emerald-300 bg-emerald-50 text-emerald-900"
+                : "border-amber-300 bg-amber-50 text-amber-900"
             }`}
+            role="status"
+            aria-live="polite"
           >
             {aiToast.kind === "ok" ? (
-              <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-emerald-600" />
+              <CheckCircle2 className="w-5 h-5 mt-0.5 shrink-0 text-emerald-600" />
             ) : (
-              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+              <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0 text-amber-600" />
             )}
-            <span>{aiToast.text}</span>
+            <div className="min-w-0 flex-1 pr-6">
+              <div>{aiToast.text}</div>
+              {aiToast.details && aiToast.details.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {aiToast.details.map((d, i) => (
+                    <span
+                      key={i}
+                      className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-bold ${
+                        aiToast.kind === "ok"
+                          ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                          : "bg-amber-100 text-amber-800 border border-amber-200"
+                      }`}
+                    >
+                      {d}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setAiToast(null)}
+              className={`absolute top-2 right-2 inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
+                aiToast.kind === "ok"
+                  ? "text-emerald-700 hover:bg-emerald-100"
+                  : "text-amber-700 hover:bg-amber-100"
+              }`}
+              title="Скрий съобщението"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
         )}
       </section>
@@ -1042,20 +1371,34 @@ export function ProductFormFields({
           {/* НАЙ-ГОРЕ: Марка + Модел — техническата идентификация. */}
           <div className="grid gap-4 md:grid-cols-12">
             <label className="block md:col-span-5">
-              <FieldTitle label="Марка" info="Производител (Daikin, Mitsubishi и т.н.)." ai={isAiField("brandId")} />
-              <Select
+              <FieldTitle
+                label="Марка"
+                info="Производител (Daikin, Mitsubishi и т.н.). Можеш да избереш от съществуващите ИЛИ да напишеш нова — ще се създаде автоматично."
+                ai={isAiField("brandId")}
+              />
+              <BrandCombobox
+                brands={brands}
                 value={form.brandId}
-                onChange={(e) => {
+                onChange={(brandId) => {
                   clearAiFlag("brandId");
-                  setForm((prev) => syncAutoName({ ...prev, brandId: e.target.value }));
+                  setForm((prev) => syncAutoName({ ...prev, brandId }));
                 }}
-                className={isAiField("brandId") ? "border-emerald-300 bg-emerald-50/40" : ""}
-              >
-                {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-              </Select>
+                onBrandCreated={(newBrand) => {
+                  // Добавяме в локалния overlay, за да се появи веднага в
+                  // dropdown-а и за да го намери `brands.find(...)`.
+                  setLocalBrands((prev) =>
+                    prev.some((b) => b.id === newBrand.id) ? prev : [...prev, newBrand],
+                  );
+                }}
+                aiHighlighted={isAiField("brandId")}
+              />
             </label>
             <label className="block md:col-span-7">
-              <FieldTitle label="Модел" info="Само моделът — кратко техническо обозначение от табелката." ai={isAiField("modelCode")} />
+              <FieldTitle
+                label="Модел"
+                info="Само моделът — кратко техническо обозначение от табелката."
+                ai={isAiField("modelCode")}
+              />
               <Input
                 value={form.modelCode}
                 onChange={(e) => {
@@ -1328,6 +1671,7 @@ export function ProductFormFields({
                 whichUnit="indoor"
                 knownBrand={brands.find((b) => b.id === form.brandId)?.name}
                 knownModel={form.modelCode}
+                availableBrands={brands.map((b) => b.name)}
                 onExtracted={(r) => mergeLabelExtract(r, "indoor")}
               />
             </div>
@@ -1358,6 +1702,7 @@ export function ProductFormFields({
                 whichUnit="outdoor"
                 knownBrand={brands.find((b) => b.id === form.brandId)?.name}
                 knownModel={form.modelCode}
+                availableBrands={brands.map((b) => b.name)}
                 onExtracted={(r) => mergeLabelExtract(r, "outdoor")}
               />
             </div>
@@ -1566,67 +1911,144 @@ export function ProductFormFields({
             : "Попълни „Марка“ и „Модел“ за споделена папка между инстанции. Иначе папката се прави по slug."}
         </p>
 
-        {/* === Вече качени снимки (form.images) === */}
+        {/* === Вече качени снимки (form.images) — малки thumbnail-и === */}
         {form.images.length > 0 && (
           <div className="mb-3">
             <FieldTitle
               label={`Качени снимки (${form.images.length}/${MAX_PRODUCT_IMAGES})`}
-              info="Снимки, които вече са в Cloudinary и ще се запишат към продукта при следващото запазване."
+              info="Снимки, които вече са в Cloudinary. Кликни върху thumbnail за уголемяване; задръж върху него за бутоните „Главна“, „AI подобри“ и „Махни“."
             />
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {form.images.map((im, idx) => (
-                <div
-                  key={`${im.url}-${idx}`}
-                  className={`group relative aspect-square rounded-xl overflow-hidden border-2 bg-white shadow-sm ${
-                    im.is_main ? "border-brand-blue-500 ring-2 ring-brand-blue-200" : "border-slate-200"
-                  }`}
-                >
-                  {im.url ? (
-                    <img src={im.url} alt={`img-${idx}`} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400 text-center p-1">
-                      Празен URL
-                    </div>
-                  )}
 
-                  {im.is_main && (
-                    <div className="absolute top-1 left-1 px-1.5 py-0.5 rounded-md bg-brand-blue-600 text-white text-[10px] font-bold shadow-md">
-                      ГЛАВНА
+            {/* AI enhance info за стари снимки */}
+            {(() => {
+              const busyCount = Object.values(uploadedAiStatus).filter(
+                (v) => v.phase === "processing",
+              ).length;
+              return (
+                <div className="mb-2 rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 to-fuchsia-50/60 px-2.5 py-2 flex items-start gap-2">
+                  <div className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-violet-500 text-white shadow-sm shrink-0">
+                    <Wand2 className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[11px] font-bold text-violet-900 leading-tight">
+                      AI „професионален каталог“ вид за стари снимки
                     </div>
-                  )}
-
-                  <div className="absolute inset-x-0 bottom-0 flex bg-slate-900/70 backdrop-blur-sm p-1 gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                    {!im.is_main && (
-                      <button
-                        type="button"
-                        title="Направи главна"
-                        onClick={() =>
-                          setForm({
-                            ...form,
-                            images: form.images.map((row, i) => ({ ...row, is_main: i === idx })),
-                          })
-                        }
-                        className="flex-1 px-1.5 py-1 rounded-md bg-white/90 text-slate-900 text-[10px] font-bold hover:bg-white"
-                      >
-                        Главна
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      title="Премахни снимката"
-                      onClick={() =>
-                        setForm({
-                          ...form,
-                          images: form.images.filter((_, i) => i !== idx),
-                        })
-                      }
-                      className="flex-1 px-1.5 py-1 rounded-md bg-red-500 text-white text-[10px] font-bold hover:bg-red-600"
-                    >
-                      Махни
-                    </button>
+                    <p className="text-[10.5px] text-violet-800 leading-snug mt-0.5">
+                      Сложи курсора върху снимка и натисни „✨“ — Gemini Nano Banana ще
+                      смени фона на бял със soft shadow и ще нормализира светлината.{" "}
+                      Стандартна снимка ще се замени с подобрена версия в Cloudinary.{" "}
+                      Цена: <strong>~{AI_ENHANCE_PRICE_DISPLAY}/снимка</strong>.
+                      {busyCount > 0 && (
+                        <> Обработват се: <strong>{busyCount}</strong>...</>
+                      )}
+                    </p>
                   </div>
                 </div>
-              ))}
+              );
+            })()}
+
+            <div className="flex flex-wrap gap-1.5">
+              {form.images.map((im, idx) => {
+                const ai = uploadedAiStatus[im.url];
+                const isProcessing = ai?.phase === "processing";
+                const isError = ai?.phase === "error";
+                return (
+                  <div
+                    key={`${im.url}-${idx}`}
+                    className={`group relative w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden border-2 bg-white shadow-sm transition-all ${
+                      isProcessing
+                        ? "border-violet-400 ring-1 ring-violet-200"
+                        : im.is_main
+                          ? "border-brand-blue-500 ring-2 ring-brand-blue-200"
+                          : "border-slate-200"
+                    }`}
+                  >
+                    {im.url ? (
+                      <button
+                        type="button"
+                        onClick={() => setImageLightboxIndex(idx)}
+                        className="w-full h-full block cursor-zoom-in"
+                        title="Кликни за уголемяване"
+                      >
+                        <img src={im.url} alt={`img-${idx}`} className="w-full h-full object-cover" />
+                      </button>
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-[9px] text-slate-400 text-center p-1">
+                        Празен
+                      </div>
+                    )}
+
+                    {im.is_main && (
+                      <div className="absolute top-0.5 left-0.5 px-1 py-0.5 rounded bg-brand-blue-600 text-white text-[8px] font-bold shadow-md pointer-events-none">
+                        ★
+                      </div>
+                    )}
+
+                    {/* AI обработка overlay */}
+                    {isProcessing && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-violet-900/65 text-white pointer-events-none">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <div className="text-[8px] font-bold mt-0.5">AI...</div>
+                      </div>
+                    )}
+                    {isError && !isProcessing && (
+                      <div
+                        className="absolute inset-x-0 bottom-0 bg-red-900/85 text-white text-[8px] font-bold p-0.5 text-center leading-tight pointer-events-none"
+                        title={ai!.phase === "error" ? ai!.message : ""}
+                      >
+                        AI ✕
+                      </div>
+                    )}
+
+                    {/* Hover overlay с компактни action-и */}
+                    {!isProcessing && (
+                      <div className="absolute inset-x-0 bottom-0 flex bg-slate-900/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                        {!im.is_main && (
+                          <button
+                            type="button"
+                            title="Направи главна"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setForm({
+                                ...form,
+                                images: form.images.map((row, i) => ({ ...row, is_main: i === idx })),
+                              });
+                            }}
+                            className="flex-1 py-0.5 text-white text-[9px] font-bold hover:bg-brand-blue-600/80"
+                          >
+                            ★
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          title={`AI подобри (~${AI_ENHANCE_PRICE_DISPLAY})`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void enhanceUploadedImage(im.url);
+                          }}
+                          className="flex-1 py-0.5 text-white text-[9px] font-bold hover:bg-violet-600/80"
+                        >
+                          ✨
+                        </button>
+                        <button
+                          type="button"
+                          title="Премахни снимката"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setForm({
+                              ...form,
+                              images: form.images.filter((_, i) => i !== idx),
+                            });
+                          }}
+                          className="flex-1 py-0.5 text-white text-[9px] font-bold hover:bg-red-600/80"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -1640,6 +2062,7 @@ export function ProductFormFields({
               return b ? slugifyBg(b.name) : null;
             })()
           }
+          brandName={brands.find((br) => br.id === form.brandId)?.name ?? null}
           modelCode={form.modelCode}
           productSlug={form.slug || slugifyBg(form.name || "")}
           cloudinaryKind={cloudinaryKind}
@@ -1655,7 +2078,7 @@ export function ProductFormFields({
               return { ...f, images: [...f.images, ...next] };
             })
           }
-          onPendingChange={(n) => setPendingPhotosCount(n)}
+          onPendingChange={setPendingPhotosCount}
           reusableImages={reusablePhotos?.images ?? null}
           reusableFromName={reusablePhotos?.sourceName ?? null}
           onLinkReusable={
@@ -1663,13 +2086,17 @@ export function ProductFormFields({
               ? () => {
                   setForm((f) => {
                     if (f.images.length > 0) return f; // не презаписваме съществуващи
-                    const linked: ImageRow[] = reusablePhotos.images
-                      .slice(0, MAX_PRODUCT_IMAGES)
-                      .map((im, i) => ({
-                        url: im.url,
-                        sort_order: i,
-                        is_main: im.is_main || i === 0,
-                      }));
+                    const slice = reusablePhotos.images.slice(0, MAX_PRODUCT_IMAGES);
+                    // Определяме главната снимка преди map-а, за да гарантираме
+                    // че точно ЕДНА снимка ще има is_main=true (избягваме бъг,
+                    // в който две снимки стават главни едновременно).
+                    let mainIdx = slice.findIndex((im) => im.is_main);
+                    if (mainIdx < 0) mainIdx = 0;
+                    const linked: ImageRow[] = slice.map((im, i) => ({
+                      url: im.url,
+                      sort_order: i,
+                      is_main: i === mainIdx,
+                    }));
                     return { ...f, images: linked };
                   });
                   setReusablePhotos(null);
@@ -1688,6 +2115,14 @@ export function ProductFormFields({
           </div>
         )}
       </CollapsibleSection>
+
+      {/* Lightbox за уголемяване на качените снимки. */}
+      <ImageLightbox
+        images={form.images.map((im) => im.url).filter(Boolean)}
+        index={imageLightboxIndex}
+        onClose={() => setImageLightboxIndex(null)}
+        onIndexChange={(n) => setImageLightboxIndex(n)}
+      />
 
       {aiDialog && (
         <div

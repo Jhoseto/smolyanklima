@@ -5,7 +5,18 @@ export const dynamic = "force-dynamic";
 
 type Params = { params: Promise<{ id: string }> };
 
-const POLL_MS = 900;
+/**
+ * Polling за отворен конкретен чат. Преди беше 900ms × 2 заявки/tick →
+ * 130 DB заявки/мин на отворен чат. Сега 2.5s × 2 → 48/мин. Икономия
+ * ~63%. Реално UX-ът се запазва: 2.5s забавяне за ново съобщение е
+ * незабележимо за admin работа.
+ *
+ * За още по-бързо UX, паралелно има optimistic UI:
+ *  • Admin пише → се вижда веднага локално
+ *  • Visitor пише → push notification удря телефона веднага
+ *  • SSE синхронизира history-то в фон
+ */
+const POLL_MS = 2_500;
 
 /** GET /api/admin/chat/[id]/stream — SSE for messages in a specific chat */
 export async function GET(req: NextRequest, { params }: Params) {

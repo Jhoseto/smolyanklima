@@ -66,6 +66,10 @@ type Props = {
   /** Hints от вече попълнените полета — повишават точността при втора снимка. */
   knownBrand?: string | null;
   knownModel?: string | null;
+  /** Имената на марките в нашата база — AI ще се опита да върне ТОЧНОТО име
+   *  от този списък, за да направим веднага точен match (вместо да
+   *  правим heuristic mapping от „Mitsubishi“ → „Mitsubishi Electric“). */
+  availableBrands?: string[] | null;
   /** Callback с резултата — родителят прави merge в основния form. */
   onExtracted: (result: LabelExtractResult) => void;
   /** „prominent" = голям бутон за начален flow; „compact" = малък бутон до серията. */
@@ -82,6 +86,7 @@ export function LabelScanButton({
   whichUnit,
   knownBrand,
   knownModel,
+  availableBrands,
   onExtracted,
   variant = "prominent",
   children,
@@ -119,6 +124,7 @@ export function LabelScanButton({
             whichUnit,
             knownBrand: knownBrand || null,
             knownModel: knownModel || null,
+            availableBrands: availableBrands && availableBrands.length > 0 ? availableBrands : null,
           },
         }),
       });

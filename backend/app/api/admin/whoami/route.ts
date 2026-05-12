@@ -1,13 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
-import { adminDb } from "@/lib/admin/db";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+
+/**
+ * GET /api/admin/whoami
+ *
+ * Връща текущия логнат потребител + неговия admin профил (ако има).
+ *
+ * ВАЖНО: Този endpoint НЕ изисква admin роля — той е „discovery“ за UI-а
+ * (страницата иска да знае дали user е master_admin, office_staff, etc.,
+ * за да реши какви бутони да рендерира). Затова ползваме anon server клиент
+ * с cookies — НЕ adminDb(), защото service-role клиент няма user session
+ * и не може да върне реалния user.
+ */
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflight(req);
 }
 
 export async function GET(req: NextRequest) {
-  const supabase = await adminDb();
+  const supabase = await createSupabaseServerClient();
 
   const {
     data: { user },

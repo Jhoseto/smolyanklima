@@ -3,7 +3,17 @@ import { adminDb } from "@/lib/admin/db";
 
 export const dynamic = "force-dynamic";
 
-const POLL_MS = 1_500;
+/**
+ * Polling интервал — балансиран между responsiveness и Supabase-quota.
+ * 5 секунди е напълно достатъчно за инбокс на чакащи чатове, защото
+ * паралелно работят Web Push известията (виж `notifyAdminsLiveChat`)
+ * — те ще ударят телефона при ново съобщение веднага, дори PWA да е
+ * затворен. SSE-то само поддържа списъка fresh когато сме във view-а.
+ *
+ * Преди беше 1.5s → 40 DB заявки/мин/потребител. Сега 5s → 12/мин.
+ * Икономия ~70% на Supabase compute / egress при отворен /admin/chat.
+ */
+const POLL_MS = 5_000;
 /** 5 минути без съобщение от никого → предупреждение */
 const INACTIVITY_WARN_MS = 5 * 60 * 1_000;
 /** 3 минути след предупреждението без отговор → затваряне */

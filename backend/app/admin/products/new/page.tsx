@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ProductFormFields, emptyProductForm, buildPostBody, type AdminProductForm } from "../ProductForm";
-import { HelpRow, SectionTitle, HelpCard, Card, Button } from "../../ui";
+import { SectionTitle, Card, Button } from "../../ui";
 import { Save } from "lucide-react";
 
 type Brand = { id: string; name: string };
@@ -56,10 +56,22 @@ export default function NewProductPage() {
       /* Първоначални цени при създаване: офис или главен; промяна в списък/редакция — само главен. */
       setCanEditPrice(role === "master_admin" || role === "office_staff");
       setCanEditStockLocation(role === "master_admin" || role === "office_staff");
+      // Default type: „Стенни климатици“ — това е най-често продаваният
+      // вид и почти всеки нов запис е стенен климатик. Така спестяваме
+      // едно кликане на потребителя. Ако този тип липсва (rare edge case),
+      // fallback-ваме на първия от списъка.
+      const typesList: Array<{ id: string; name: string }> = t.data ?? [];
+      const wallType =
+        typesList.find((row) => /стен/i.test(row.name)) ??
+        typesList.find((row) => /wall/i.test(row.name)) ??
+        typesList[0];
       setForm((prev) => ({
         ...prev,
-        brandId: (b.data?.[0]?.id as string) ?? "",
-        typeId: (t.data?.[0]?.id as string) ?? "",
+        // Полето „Марка“ е празно по default — потребителят сам избира от
+        // комбобокса или го въвежда нов. (Преди тук се избираше първата
+        // марка автоматично, което създаваше confusion при нов продукт.)
+        brandId: "",
+        typeId: wallType?.id ?? "",
       }));
     })().catch((e) => setError(String(e?.message ?? e)));
   }, []);
@@ -114,14 +126,13 @@ export default function NewProductPage() {
       )}
       
       <div>
-        <h1 className="text-lg md:text-xl font-bold text-slate-900 mb-1 leading-tight">
-          <SectionTitle title="Нов продукт" hint="Създаване на нова продуктова карта за каталога." />
+        <h1 className="text-lg md:text-xl font-bold text-slate-900 leading-tight">
+          <SectionTitle title="Нов продукт" />
         </h1>
+        <p className="mt-1 text-[13px] text-slate-500 leading-snug">
+          Добавяне на нов климатик в каталога — снимки, марка, модел, спецификации.
+        </p>
       </div>
-
-      <HelpCard>
-        <HelpRow items={["Цена (EUR) = без монтаж; цена с монтаж = отделно поле", "Доставчици се въвеждат в Контакти като тип „доставчик“", "Slug е по избор (публично се ползва и product id)"]} />
-      </HelpCard>
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 text-sm font-medium">

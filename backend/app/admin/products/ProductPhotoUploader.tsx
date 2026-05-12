@@ -24,10 +24,16 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { Camera, ImagePlus, Loader2, Trash2, Upload, CheckCircle2, AlertTriangle, Sparkles, Link2 } from "lucide-react";
+import { Camera, ImagePlus, Loader2, Trash2, Upload, CheckCircle2, AlertTriangle, Sparkles, Link2, Wand2, RotateCcw, Search } from "lucide-react";
+import { ImageLightbox } from "./ImageLightbox";
+import { AIPhotoFinder } from "./AIPhotoFinder";
+import { enhancePhotoViaAI } from "@/lib/photos/enhancePhoto";
 
 type Props = {
   brandSlug: string | null | undefined;
+  /** Човекочетимо име на марката (напр. „Daikin“, „Mitsubishi Electric“).
+   *  Ползва се за AI search prompt-а — slug-ът би объркал търсенето. */
+  brandName?: string | null;
   modelCode: string;
   productSlug: string;
   cloudinaryKind: "product" | "accessory";
@@ -47,16 +53,41 @@ type Props = {
 
 type Pending = {
   id: string;
+  /** Оригиналният файл от потребителя — пазим го за undo на AI. */
   file: File;
+  /** Текущ blob URL за preview (може да е оригинала ИЛИ AI версията). */
   previewUrl: string;
+  /** Оригинален blob URL (запазваме за undo / before-after сравнение). */
+  originalUrl: string;
+  /** AI-обработената версия — ползва се при upload, ако има. */
+  enhancedBlob?: Blob;
+  /** AI обработка статус — за UI индикатор. */
+  aiStatus: "idle" | "processing" | "done" | "error";
+  aiError?: string;
+  /** Cloudinary upload статус. */
   status: "ready" | "uploading" | "done" | "error";
   errorMsg?: string;
 };
 
 export const MAX_PRODUCT_IMAGES = 4;
 
+/** Официална цена на AI подобрение (Gemini 2.5 Flash Image / Nano Banana,
+ *  към май 2026 г.): $0.039 за 1024×1024 снимка. Стандартен real-time режим.
+ *
+ *  ВАЖНО: Gemini 2.5 Flash Image се pension-ва на 2 октомври 2026. Тогава
+ *  трябва да мигрираме към `gemini-3.1-flash-image-preview`, който струва
+ *  $0.067 / 1024px (≈ 72 % по-скъпо). Кодът вече поддържа смяна през
+ *  ENV променливата `GEMINI_IMAGE_MODEL`. */
+export const AI_ENHANCE_PRICE_USD = 0.039;
+
+/** Цената за UI-показване — показваме „~$0.03“ (закръглено надолу до 2
+ *  знака), за да изглежда чисто и без излишни decimals. Реалната стойност
+ *  при сметнение остава точна (0.039). */
+export const AI_ENHANCE_PRICE_DISPLAY = "$0.03";
+
 export function ProductPhotoUploader({
   brandSlug,
+  brandName,
   modelCode,
   productSlug,
   cloudinaryKind,
@@ -72,22 +103,70 @@ export function ProductPhotoUploader({
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [globalError, setGlobalError] = useState<string | null>(null);
+  /** AIPhotoFinder modal — отваря се от бутона „🔍 AI от интернет“. */
+  const [aiFinderOpen, setAiFinderOpen] = useState(false);
   const [successNote, setSuccessNote] = useState<string | null>(null);
+  /** Lightbox: index + източник (pending vs reusable) на отворената снимка. */
+  const [lightbox, setLightbox] = useState<{
+    source: "pending" | "reuse";
+    index: number;
+  } | null>(null);
 
-  // Revoke object URLs at unmount, за да не теча в паметта.
+  // Mounted ref — пазим setState на unmount-нат компонент по време на bulk upload.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  // Sync ref към текущия pending — нужен на cleanup (closure bug fix).
+  // Cleanup-ът се изпълнява веднъж при unmount и в момента на изпълнение
+  // вижда последната стойност от ref-а (а НЕ stale snapshot от initial render).
+  const pendingRef = useRef<Pending[]>([]);
+  useEffect(() => {
+    pendingRef.current = pending;
+  }, [pending]);
+
+  // Revoke на всички ОСТАНАЛИ blob URLs при unmount, за да не теча в паметта.
   useEffect(() => {
     return () => {
-      pending.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+      pendingRef.current.forEach((p) => URL.revokeObjectURL(p.previewUrl));
     };
+  }, []);
+
+  // Известяваме родителя за pending count САМО през useEffect (след render),
+  // защото React забранява извикването на parent's setState от inside на child
+  // state-updater callback (това би предизвикало render-phase setState грешка).
+  useEffect(() => {
+    onPendingChange(pending.length);
+  }, [pending.length, onPendingChange]);
+
+  // Защитен reset при unmount: ако компонентът се разкачи с „lingering“
+  // pending count > 0 в parent state-а, save-protection-ът ще остане
+  // активен дори когато реално няма pending снимки. Затова при unmount
+  // експлицитно нулираме count-а в родителя.
+  useEffect(() => {
+    return () => onPendingChange(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Не пускам known onPendingChange в useEffect deps — извикваме го синхронно
-  // вътре в state setters за да избегнем стария-снимков closure problem.
+  // Малък helper за safe setState — игнорира извикване след unmount.
+  // Callback стил, защото generic-ът от setter+value не се извежда коректно
+  // от TS (T → null засилва съкращаване и счупва типа на real setter-а).
+  const safeRun = (fn: () => void) => {
+    if (mountedRef.current) fn();
+  };
 
-  function notifyPending(next: Pending[]) {
-    onPendingChange(next.length);
-  }
+  // Auto-clear на globalError след 7 секунди — да не остава „lingering“ преди
+  // потребителят да забележи. Cleanup на timer-а при нова грешка.
+  useEffect(() => {
+    if (!globalError) return;
+    const t = setTimeout(() => safeRun(() => setGlobalError(null)), 7000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [globalError]);
 
   function openPicker() {
     if (uploading) return;
@@ -114,34 +193,117 @@ export function ProductPhotoUploader({
     }
     const newPending: Pending[] = accepted
       .filter((f) => /^image\//.test(f.type))
-      .map((f) => ({
-        id: `${f.name}-${f.size}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        file: f,
-        previewUrl: URL.createObjectURL(f),
-        status: "ready",
-      }));
-    setPending((prev) => {
-      const next = [...prev, ...newPending];
-      notifyPending(next);
-      return next;
-    });
+      .map((f) => {
+        const blobUrl = URL.createObjectURL(f);
+        return {
+          id: `${f.name}-${f.size}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          file: f,
+          previewUrl: blobUrl,
+          originalUrl: blobUrl, // първоначално оригиналът = preview
+          aiStatus: "idle" as const,
+          status: "ready" as const,
+        };
+      });
+    setPending((prev) => [...prev, ...newPending]);
   }
 
   function removePending(id: string) {
     setPending((prev) => {
       const target = prev.find((p) => p.id === id);
       if (target) URL.revokeObjectURL(target.previewUrl);
-      const next = prev.filter((p) => p.id !== id);
-      notifyPending(next);
-      return next;
+      return prev.filter((p) => p.id !== id);
     });
   }
 
   function clearAllPending() {
-    pending.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+    pending.forEach((p) => {
+      URL.revokeObjectURL(p.previewUrl);
+      if (p.originalUrl !== p.previewUrl) URL.revokeObjectURL(p.originalUrl);
+    });
     setPending([]);
-    notifyPending([]);
     setGlobalError(null);
+  }
+
+  /**
+   * AI „подобри тази снимка“ — real-time Gemini Nano Banana call.
+   * Приема item-а директно (НЕ id), за да не зависи от race с React state
+   * (вътрешният state в closure не се update-ва между sequential await-и).
+   */
+  async function enhanceOne(item: Pending) {
+    if (item.aiStatus === "processing") return;
+
+    safeRun(() =>
+      setPending((prev) =>
+        prev.map((p) =>
+          p.id === item.id ? { ...p, aiStatus: "processing", aiError: undefined } : p,
+        ),
+      ),
+    );
+
+    try {
+      // Ползваме оригиналния File за input (НЕ предишния AI резултат) —
+      // за да не правим AI върху AI (което би деградирало детайлите).
+      const result = await enhancePhotoViaAI(item.file);
+      if (!mountedRef.current) return;
+      const newUrl = URL.createObjectURL(result.blob);
+      safeRun(() =>
+        setPending((prev) =>
+          prev.map((p) => {
+            if (p.id !== item.id) return p;
+            if (p.previewUrl !== p.originalUrl) URL.revokeObjectURL(p.previewUrl);
+            return {
+              ...p,
+              previewUrl: newUrl,
+              enhancedBlob: result.blob,
+              aiStatus: "done",
+              aiError: undefined,
+            };
+          }),
+        ),
+      );
+    } catch (e) {
+      if (!mountedRef.current) return;
+      const msg = e instanceof Error ? e.message : String(e);
+      safeRun(() =>
+        setPending((prev) =>
+          prev.map((p) =>
+            p.id === item.id ? { ...p, aiStatus: "error", aiError: msg } : p,
+          ),
+        ),
+      );
+    }
+  }
+
+  /** Връща оригиналната снимка след AI enhancement (undo). */
+  function revertAi(id: string) {
+    safeRun(() =>
+      setPending((prev) =>
+        prev.map((p) => {
+          if (p.id !== id) return p;
+          if (p.previewUrl !== p.originalUrl) URL.revokeObjectURL(p.previewUrl);
+          return {
+            ...p,
+            previewUrl: p.originalUrl,
+            enhancedBlob: undefined,
+            aiStatus: "idle",
+            aiError: undefined,
+          };
+        }),
+      ),
+    );
+  }
+
+  /** Batch enhance на всички pending snimки (sequential real-time calls). */
+  async function enhanceAll() {
+    // Снимаме targets ПРЕДИ цикъла — pending може да се променя по време на
+    // изпълнението, но ние искаме да enhance-нем оригиналния списък.
+    const targets = pending.filter(
+      (p) => p.aiStatus !== "processing" && p.aiStatus !== "done",
+    );
+    for (const item of targets) {
+      if (!mountedRef.current) return;
+      await enhanceOne(item);
+    }
   }
 
   /**
@@ -182,11 +344,27 @@ export function ProductPhotoUploader({
     let failed = 0;
 
     // Sequential upload — Cloudinary handles parallel зле при HTTP/1.1 origins.
+    // Snapshot-ваме броя за финалния summary преди да изчистим pending.
+    const totalAttempted = pending.length;
     for (const item of pending) {
-      setPending((prev) => prev.map((p) => (p.id === item.id ? { ...p, status: "uploading" } : p)));
+      safeRun(() =>
+        setPending((prev) => prev.map((p) => (p.id === item.id ? { ...p, status: "uploading" } : p))),
+      );
       try {
+        // Ако имаме AI-обработена версия, качваме нея. Иначе — оригинала.
+        // AI-генерираните блобове са PNG (от Nano Banana), затова сменяме
+        // разширението на името, за да остане consistent.
+        let fileForUpload: File | Blob = item.file;
+        if (item.enhancedBlob && item.aiStatus === "done") {
+          const baseName = item.file.name.replace(/\.[^./]+$/, "") || "photo";
+          fileForUpload = new File(
+            [item.enhancedBlob],
+            `${baseName}-ai.png`,
+            { type: item.enhancedBlob.type || "image/png" },
+          );
+        }
         const fd = new FormData();
-        fd.append("file", item.file);
+        fd.append("file", fileForUpload);
         fd.append("kind", cloudinaryKind);
         fd.append("slug", folderKey);
         const res = await fetch("/api/admin/uploads/image", {
@@ -194,39 +372,53 @@ export function ProductPhotoUploader({
           credentials: "include",
           body: fd,
         });
+        if (!mountedRef.current) return; // компонентът е изчезнал — спираме
         const json = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error((json as { error?: string }).error ?? `HTTP ${res.status}`);
         const url = (json as { data?: { url?: string } }).data?.url;
         if (!url) throw new Error("Cloudinary върна празен URL.");
         uploadedUrls.push(url);
-        setPending((prev) => prev.map((p) => (p.id === item.id ? { ...p, status: "done" } : p)));
+        safeRun(() =>
+          setPending((prev) => prev.map((p) => (p.id === item.id ? { ...p, status: "done" } : p))),
+        );
       } catch (e) {
+        if (!mountedRef.current) return;
         failed += 1;
         const msg = e instanceof Error ? e.message : String(e);
-        setPending((prev) => prev.map((p) => (p.id === item.id ? { ...p, status: "error", errorMsg: msg } : p)));
+        safeRun(() =>
+          setPending((prev) =>
+            prev.map((p) => (p.id === item.id ? { ...p, status: "error", errorMsg: msg } : p)),
+          ),
+        );
       }
-      setProgress((p) => (p ? { done: p.done + 1, total: p.total } : null));
+      safeRun(() => setProgress((p) => (p ? { done: p.done + 1, total: p.total } : null)));
     }
 
+    if (!mountedRef.current) return;
     if (uploadedUrls.length > 0) onUploaded(uploadedUrls);
 
     // След успех — изчистваме само успешните pending записи; failed остават
     // за retry от потребителя.
-    setPending((prev) => {
-      const stillFailed = prev.filter((p) => p.status === "error");
-      const removedSuccessful = prev.filter((p) => p.status !== "error");
-      removedSuccessful.forEach((p) => URL.revokeObjectURL(p.previewUrl));
-      notifyPending(stillFailed);
-      return stillFailed;
-    });
+    safeRun(() =>
+      setPending((prev) => {
+        const stillFailed = prev.filter((p) => p.status === "error");
+        const removedSuccessful = prev.filter((p) => p.status !== "error");
+        removedSuccessful.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+        return stillFailed;
+      }),
+    );
 
-    setUploading(false);
-    setTimeout(() => setProgress(null), 1500);
+    safeRun(() => setUploading(false));
+    setTimeout(() => safeRun(() => setProgress(null)), 1500);
     if (failed === 0) {
-      setSuccessNote(`Качени са ${uploadedUrls.length} снимки в Cloudinary.`);
-      setTimeout(() => setSuccessNote(null), 4000);
+      safeRun(() => setSuccessNote(`Качени са ${uploadedUrls.length} снимки в Cloudinary.`));
+      setTimeout(() => safeRun(() => setSuccessNote(null)), 4000);
     } else {
-      setGlobalError(`Качени са ${uploadedUrls.length} от ${pending.length}. ${failed} се провалиха — пробвай отново.`);
+      safeRun(() =>
+        setGlobalError(
+          `Качени са ${uploadedUrls.length} от ${totalAttempted}. ${failed} се провалиха — пробвай отново.`,
+        ),
+      );
     }
   }
 
@@ -256,12 +448,19 @@ export function ProductPhotoUploader({
             </p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {reusableImages!.slice(0, 4).map((img, i) => (
-                <img
+                <button
                   key={i}
-                  src={img.url}
-                  alt={`reuse-${i}`}
-                  className="h-12 w-12 rounded-md object-cover border border-emerald-200 bg-white"
-                />
+                  type="button"
+                  onClick={() => setLightbox({ source: "reuse", index: i })}
+                  className="h-12 w-12 rounded-md overflow-hidden border border-emerald-200 bg-white cursor-zoom-in hover:ring-2 hover:ring-emerald-400 transition-all"
+                  title="Кликни за уголемяване"
+                >
+                  <img
+                    src={img.url}
+                    alt={`reuse-${i}`}
+                    className="h-full w-full object-cover"
+                  />
+                </button>
               ))}
             </div>
             {onLinkReusable && (
@@ -325,13 +524,69 @@ export function ProductPhotoUploader({
         )}
       </button>
 
+      {/* Secondary CTA: AI намира официални снимки в интернет — за случаите,
+          когато климатикът е в кашон и не може да се снима. Активен е САМО
+          ако има марка + модел (иначе AI search не работи). */}
+      {(() => {
+        const aiSearchReady = Boolean(
+          brandName && brandName.trim().length > 1 && modelCode.trim().length > 1,
+        );
+        const showButton = canAddMore;
+        if (!showButton) return null;
+        return (
+          <button
+            type="button"
+            onClick={() => {
+              if (!aiSearchReady) {
+                setGlobalError("Попълни марка и модел горе, преди да търсиш в интернет.");
+                return;
+              }
+              setAiFinderOpen(true);
+            }}
+            className={`group flex items-center gap-3 p-3 rounded-xl border w-full text-left transition-all ${
+              aiSearchReady
+                ? "bg-gradient-to-br from-violet-50 to-fuchsia-50/60 border-violet-200 hover:border-violet-400 hover:shadow-sm active:scale-[0.99]"
+                : "bg-slate-50 border-slate-200 cursor-help"
+            }`}
+            title={
+              aiSearchReady
+                ? `AI ще търси в Google за официални снимки на ${brandName} ${modelCode}`
+                : "Попълни марка + модел горе за да активираш AI търсенето"
+            }
+          >
+            <div
+              className={`inline-flex h-9 w-9 items-center justify-center rounded-lg shadow-sm shrink-0 ${
+                aiSearchReady ? "bg-violet-500 text-white" : "bg-slate-300 text-white"
+              }`}
+            >
+              <Search className="w-4 h-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className={`text-[13px] font-bold leading-tight ${aiSearchReady ? "text-violet-900" : "text-slate-500"}`}>
+                AI намери официални снимки от интернет
+              </div>
+              <p className={`text-[11px] leading-snug mt-0.5 ${aiSearchReady ? "text-violet-800" : "text-slate-400"}`}>
+                {aiSearchReady ? (
+                  <>
+                    Когато не можеш да снимаш. AI търси на{" "}
+                    <strong>официалния сайт на {brandName}</strong>, после на дистрибутори.
+                  </>
+                ) : (
+                  <>Попълни „Марка“ и „Модел“ горе, за да активираш AI търсенето.</>
+                )}
+              </p>
+            </div>
+          </button>
+        );
+      })()}
+
       {/* Preview grid + контроли */}
       {pending.length > 0 && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50/40 p-3 space-y-3">
           <div className="flex items-start sm:items-center justify-between gap-2 flex-wrap">
             <div className="text-[12px] font-semibold text-amber-900 leading-snug">
               <AlertTriangle className="inline w-3.5 h-3.5 mb-0.5 mr-1 text-amber-600" />
-              {pending.length} {pending.length === 1 ? "снимка чака" : "снимки чакат"} качване — не са в Cloudinary все още.
+              {pending.length} {pending.length === 1 ? "снимка чака" : "снимки чакат"} качване в хранилището за снимки.
             </div>
             {!uploading && (
               <button
@@ -344,46 +599,166 @@ export function ProductPhotoUploader({
             )}
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {pending.map((p) => (
+          {/* AI enhance batch + информативен текст с цена */}
+          {(() => {
+            const aiBusy = pending.some((p) => p.aiStatus === "processing");
+            const aiEligible = pending.filter(
+              (p) => p.aiStatus !== "processing" && p.aiStatus !== "done",
+            );
+            const aiDoneCount = pending.filter((p) => p.aiStatus === "done").length;
+            if (pending.length === 0) return null;
+            return (
+              <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 to-fuchsia-50/60 p-2.5 flex items-start gap-2.5">
+                <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500 text-white shadow-sm shrink-0">
+                  <Wand2 className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[12px] font-bold text-violet-900 leading-tight">
+                    AI „професионален каталог“ вид
+                  </div>
+                  <p className="text-[11px] text-violet-800 leading-snug mt-0.5">
+                    Бял фон + soft shadow + балансирано осветление. Запазва
+                    всеки детайл на продукта. Цена: <strong>~{AI_ENHANCE_PRICE_DISPLAY}/снимка</strong>{" "}
+                    (Gemini Nano Banana).
+                    {aiDoneCount > 0 && (
+                      <> Обработени: <strong>{aiDoneCount}/{pending.length}</strong>.</>
+                    )}
+                  </p>
+                  {aiEligible.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => void enhanceAll()}
+                      disabled={aiBusy || uploading}
+                      className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-600 text-white text-[11px] font-bold hover:bg-violet-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {aiBusy ? (
+                        <>
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          AI обработва...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3 h-3" />
+                          Подобри {aiEligible.length === pending.length ? "всички" : `${aiEligible.length} още`} с AI
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
+          <div className="flex flex-wrap gap-1.5">
+            {pending.map((p, idx) => (
               <div
                 key={p.id}
-                className={`relative aspect-square rounded-xl overflow-hidden border-2 ${
-                  p.status === "done"
-                    ? "border-emerald-300"
-                    : p.status === "error"
-                      ? "border-red-300"
-                      : p.status === "uploading"
-                        ? "border-brand-blue-300"
-                        : "border-amber-200"
-                } bg-white shadow-sm group`}
+                className={`group relative w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden border-2 transition-all ${
+                  p.aiStatus === "done"
+                    ? "border-violet-400 ring-1 ring-violet-200"
+                    : p.status === "done"
+                      ? "border-emerald-300"
+                      : p.status === "error"
+                        ? "border-red-300"
+                        : p.status === "uploading"
+                          ? "border-brand-blue-300"
+                          : "border-amber-300"
+                } bg-white shadow-sm`}
               >
-                <img src={p.previewUrl} alt="preview" className="w-full h-full object-cover" />
-                {p.status === "uploading" && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-brand-blue-900/40 text-white">
-                    <Loader2 className="w-6 h-6 animate-spin" />
-                  </div>
-                )}
-                {p.status === "done" && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-emerald-900/30 text-white">
-                    <CheckCircle2 className="w-7 h-7" />
-                  </div>
-                )}
-                {p.status === "error" && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-900/60 text-white p-1.5 text-center">
-                    <AlertTriangle className="w-5 h-5 mb-0.5" />
-                    <div className="text-[9px] font-semibold leading-tight">{p.errorMsg ?? "Грешка"}</div>
-                  </div>
-                )}
-                {!uploading && p.status !== "done" && (
-                  <button
-                    type="button"
-                    onClick={() => removePending(p.id)}
-                    className="absolute top-1 right-1 inline-flex items-center justify-center w-7 h-7 rounded-full bg-red-500 text-white shadow-md hover:bg-red-600 active:scale-90 transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
-                    title="Премахни от preview"
+                <button
+                  type="button"
+                  onClick={() => setLightbox({ source: "pending", index: idx })}
+                  className="w-full h-full block cursor-zoom-in"
+                  title="Кликни за уголемяване"
+                >
+                  <img src={p.previewUrl} alt="preview" className="w-full h-full object-cover" />
+                </button>
+
+                {/* AI-обработена индикация горе вляво */}
+                {p.aiStatus === "done" && (
+                  <div
+                    className="absolute top-0.5 left-0.5 inline-flex items-center justify-center w-4 h-4 rounded-full bg-violet-600 text-white shadow-md pointer-events-none"
+                    title="AI подобрена"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                    <Sparkles className="w-2.5 h-2.5" />
+                  </div>
+                )}
+
+                {/* Status overlay (приоритет: AI processing > upload status > AI error) */}
+                {p.aiStatus === "processing" && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-violet-900/55 text-white pointer-events-none">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <div className="text-[8px] font-bold mt-0.5">AI...</div>
+                  </div>
+                )}
+                {p.aiStatus !== "processing" && p.status === "uploading" && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-brand-blue-900/40 text-white pointer-events-none">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  </div>
+                )}
+                {p.aiStatus !== "processing" && p.status === "done" && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-emerald-900/30 text-white pointer-events-none">
+                    <CheckCircle2 className="w-6 h-6" />
+                  </div>
+                )}
+                {p.aiStatus !== "processing" && p.status === "error" && (
+                  <div
+                    className="absolute inset-0 flex items-center justify-center bg-red-900/65 text-white pointer-events-none"
+                    title={p.errorMsg ?? "Грешка"}
+                  >
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                )}
+                {p.aiStatus === "error" && p.status !== "uploading" && p.status !== "done" && (
+                  <div
+                    className="absolute inset-x-0 bottom-0 bg-red-900/85 text-white text-[8px] font-bold p-0.5 text-center leading-tight pointer-events-none"
+                    title={p.aiError ?? "AI грешка"}
+                  >
+                    AI ✕
+                  </div>
+                )}
+
+                {/* Action бутони — показват се при hover */}
+                {!uploading && p.status !== "done" && p.aiStatus !== "processing" && (
+                  <div className="absolute top-0.5 right-0.5 flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-all">
+                    {/* AI enhance (или undo, ако вече е обработена) */}
+                    {p.aiStatus === "done" ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          revertAi(p.id);
+                        }}
+                        className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-slate-600 text-white shadow-md hover:bg-slate-700 active:scale-90 transition-all"
+                        title="Върни оригинала"
+                      >
+                        <RotateCcw className="w-2.5 h-2.5" />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void enhanceOne(p);
+                        }}
+                        className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-violet-500 text-white shadow-md hover:bg-violet-600 active:scale-90 transition-all"
+                        title={`AI подобри (~${AI_ENHANCE_PRICE_DISPLAY})`}
+                      >
+                        <Sparkles className="w-2.5 h-2.5" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removePending(p.id);
+                      }}
+                      className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white shadow-md hover:bg-red-600 active:scale-90 transition-all"
+                      title="Премахни от preview"
+                    >
+                      <Trash2 className="w-2.5 h-2.5" />
+                    </button>
+                  </div>
                 )}
               </div>
             ))}
@@ -415,7 +790,15 @@ export function ProductPhotoUploader({
       {globalError && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-medium text-red-800 flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-red-600" />
-          <span>{globalError}</span>
+          <span className="flex-1">{globalError}</span>
+          <button
+            type="button"
+            onClick={() => setGlobalError(null)}
+            className="shrink-0 text-red-500 hover:text-red-800 font-bold text-sm leading-none px-1"
+            aria-label="Затвори"
+          >
+            ×
+          </button>
         </div>
       )}
       {successNote && (
@@ -424,6 +807,46 @@ export function ProductPhotoUploader({
           <span>{successNote}</span>
         </div>
       )}
+
+      {/* Lightbox за уголемяване — pending preview ИЛИ reusable снимки.
+          Активният източник се избира от state-а. */}
+      <ImageLightbox
+        images={
+          lightbox?.source === "reuse"
+            ? (reusableImages ?? []).map((im) => im.url)
+            : pending.map((p) => p.previewUrl)
+        }
+        index={lightbox ? lightbox.index : null}
+        onClose={() => setLightbox(null)}
+        onIndexChange={(n) =>
+          setLightbox((prev) => (prev ? { ...prev, index: n } : prev))
+        }
+      />
+
+      {/* AI намиране на снимки от интернет — Modal с Google Search grounding. */}
+      <AIPhotoFinder
+        open={aiFinderOpen}
+        onClose={() => setAiFinderOpen(false)}
+        brand={brandName ?? ""}
+        modelCode={modelCode}
+        unit="both"
+        remainingSlots={remainingAfterPending}
+        onFilesPicked={(files) => {
+          // Добавяме като нови pending записи (ще минат през стандартния
+          // upload flow + optional AI enhance).
+          if (files.length === 0) return;
+          const blobUrls = files.map((f) => URL.createObjectURL(f));
+          const newPending: Pending[] = files.map((f, i) => ({
+            id: `ai-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`,
+            file: f,
+            previewUrl: blobUrls[i],
+            originalUrl: blobUrls[i],
+            aiStatus: "idle" as const,
+            status: "ready" as const,
+          }));
+          safeRun(() => setPending((prev) => [...prev, ...newPending]));
+        }}
+      />
     </div>
   );
 }
