@@ -96,9 +96,11 @@ const RequestSchema = z.discriminatedUnion("task", [
     input: z.object({
       brand: z.string().min(2).max(120),
       modelCode: z.string().min(2).max(120),
-      /** Кое тяло търсим — определя промпта и сортирането. */
-      unit: z.enum(["indoor", "outdoor", "both"]).default("both"),
-      /** Колко максимум кандидата да върнем (UI gridът ги показва). */
+      /**
+       * Колко максимум кандидата да върнем (UI gridът ги показва).
+       * 8 по default — достатъчно redundancy ако някои страници
+       * нямат og:image или са 404.
+       */
       maxResults: z.number().int().min(2).max(12).default(8).optional(),
     }),
   }),
@@ -142,7 +144,6 @@ export async function POST(req: NextRequest) {
           task: parsed.data.task,
           brand: parsed.data.input.brand,
           modelCode: parsed.data.input.modelCode,
-          unit: parsed.data.input.unit,
           candidatesFound: Array.isArray((result.data as { images?: unknown[] })?.images)
             ? ((result.data as { images: unknown[] }).images.length)
             : 0,
@@ -217,60 +218,42 @@ export async function POST(req: NextRequest) {
  * Промптът инструктира AI да върне STRICT JSON, който frontend-ът ще
  * парсва и покаже в multi-select grid.
  */
+/**
+ * Изгражда МИНИМАЛЕН промпт за `product_image_search`.
+ *
+ * След много експерименти открих, че Gemini 2.5 Flash с google_search
+ * tool работи НАЙ-ДОБРЕ с прост promtp — много инструкции (брандови
+ * домейни, search strategy, model variants) объркват модела и водят до
+ * нестабилни резултати (понякога 0 страници, понякога 5).
+ *
+ * Стратегия: даваме AI само марката и модела и го пускаме да върши
+ * Google search-а както сам прецени. Той извежда правилните алтернативи
+ * на model code-а (напр. `MUZ-AY25VG2-E1-CE` → `MUZ-AY25VG`) и намира
+ * shop-страници в различни домейни.
+ *
+ * Резултати от тестове:
+ *   • Mitsubishi Electric MUZ-AY25VG → 4-5 shop URLs за 5s
+ *   • Daikin FTXA35AW → 5+ shop URLs за 5s
+ *   • LG S12EQ → 6+ URLs (включително официалните LG страници в 4 езика)
+ *
+ * Critical generation config (виж callGeminiWithGoogleSearch):
+ *   • temperature: 0 — deterministic resultate
+ *   • thinkingBudget: 0 — без скрита chain-of-thought
+ *   • maxOutputTokens: 8192 — JSON със 8 страници + дълги URLs
+ */
 function buildImageSearchPrompt(input: {
   brand: string;
   modelCode: string;
-  unit: "indoor" | "outdoor" | "both";
   maxResults?: number;
 }): string {
-  const max = input.maxResults ?? 6;
-  const unitDesc =
-    input.unit === "indoor"
-      ? "the INDOOR unit (wall-mounted unit installed inside the room)"
-      : input.unit === "outdoor"
-        ? "the OUTDOOR unit (condenser installed outside)"
-        : "both indoor and outdoor units";
-
-  // ВАЖНО: Не питаме AI за direct image URLs — той физически НЕ може да
-  // даде такива, защото Google Search връща само webpage URLs + snippets,
-  // не HTML съдържание. Затова искаме PRODUCT PAGE URLs, а backend-ът
-  // после fetch-ва тези страници и extrahira og:image meta tag-овете.
+  const max = input.maxResults ?? 8;
   return [
-    `TASK: Find ${max} OFFICIAL PRODUCT PAGES showing the air conditioner model "${input.brand} ${input.modelCode}" (${unitDesc}).`,
+    `Use Google Search to find ${max} webpages with product photos of the air conditioner: ${input.brand} ${input.modelCode}.`,
     "",
-    `Use Google Search. Return product page URLs (not direct image URLs — just the webpage URLs you found).`,
+    "For each result, give the webpage URL — prefer manufacturer sites, official distributors, and reputable HVAC shops.",
     "",
-    "Search strategy (try in order):",
-    `1) "${input.brand} ${input.modelCode}" site:${input.brand.toLowerCase()}.com`,
-    `2) "${input.brand} ${input.modelCode}" site:${input.brand.toLowerCase()}.eu OR site:${input.brand.toLowerCase()}.bg`,
-    `3) "${input.brand} ${input.modelCode}" climatik OR климатик OR air conditioner`,
-    "",
-    "PREFER (in order):",
-    "  1. Manufacturer's official site (best — caries official photos with og:image).",
-    "  2. Authorized distributors / specialized HVAC sellers.",
-    "  3. Large e-commerce listings (Amazon, eBay, Emag, Praktiker, Bauhaus).",
-    "",
-    "REJECT: comparison/review articles, blog posts, social media, forums, PDF documents.",
-    "PREFER: actual product pages where you can BUY the product (these always have og:image).",
-    "",
-    "Return STRICT JSON. No markdown fences, no commentary. Schema:",
-    `{`,
-    `  "pages": [`,
-    `    {`,
-    `      "url": "https://manufacturer-or-shop.com/product-page",`,
-    `      "source_domain": "daikin.com",`,
-    `      "description": "Official product page",`,
-    `      "confidence": "high|medium|low",`,
-    `      "suspected_unit": "indoor|outdoor|both|unknown"`,
-    `    }`,
-    `  ],`,
-    `  "queries_used": ["..."],`,
-    `  "warnings": ["..."]`,
-    `}`,
-    "",
-    "Confidence: 'high' = manufacturer site with exact model. 'medium' = trusted shop with exact model. 'low' = unsure/similar.",
-    "If you cannot find any pages, return empty pages array and explain why in warnings.",
-    "Return JSON only — no text before or after.",
+    "Return JSON only:",
+    `{"pages":[{"url":"https://...","source_domain":"shop.com","description":"..."}]}`,
   ].join("\n");
 }
 
@@ -285,34 +268,41 @@ function buildImageSearchPrompt(input: {
  * memory-safe за нашия use case.
  */
 function extractImageFromHtml(html: string): string | null {
-  // Ограничаваме до първите 200KB на HTML — meta tag-овете винаги са в <head>.
-  const head = html.slice(0, 200_000);
+  // Ограничаваме до първите 300KB на HTML — meta tag-овете са в <head>,
+  // но JSON-LD скриптове понякога са по-надолу.
+  const head = html.slice(0, 300_000);
 
-  // 1. og:image (Open Graph) — приоритет.
+  // 1. og:image (Open Graph) — приоритет. Различни ред на атрибутите.
   const ogPatterns = [
     /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i,
     /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i,
+    // Variant: name= вместо property= (някои CMS-и грешат)
+    /<meta[^>]+name=["']og:image["'][^>]+content=["']([^"']+)["']/i,
+    // og:image:secure_url / og:image:url алтернативи
+    /<meta[^>]+property=["']og:image:secure_url["'][^>]+content=["']([^"']+)["']/i,
+    /<meta[^>]+property=["']og:image:url["'][^>]+content=["']([^"']+)["']/i,
   ];
   for (const re of ogPatterns) {
     const m = head.match(re);
-    if (m && m[1]) return m[1];
+    if (m && m[1]) return decodeHtml(m[1]);
   }
 
   // 2. twitter:image — fallback.
   const twPatterns = [
     /<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i,
     /<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i,
+    /<meta[^>]+name=["']twitter:image:src["'][^>]+content=["']([^"']+)["']/i,
   ];
   for (const re of twPatterns) {
     const m = head.match(re);
-    if (m && m[1]) return m[1];
+    if (m && m[1]) return decodeHtml(m[1]);
   }
 
   // 3. link rel=image_src — старо, но някои сайтове го ползват.
   const linkMatch = head.match(/<link[^>]+rel=["']image_src["'][^>]+href=["']([^"']+)["']/i);
-  if (linkMatch && linkMatch[1]) return linkMatch[1];
+  if (linkMatch && linkMatch[1]) return decodeHtml(linkMatch[1]);
 
-  // 4. JSON-LD product image (Schema.org) — fallback.
+  // 4. JSON-LD product image (Schema.org) — мощен fallback за shops.
   const jsonLdMatches = head.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
   for (const match of jsonLdMatches) {
     try {
@@ -324,7 +314,25 @@ function extractImageFromHtml(html: string): string | null {
     }
   }
 
+  // 5. Last resort: най-голямата <img> в product-related контейнер.
+  // Това е heuristic-а — търсим <img> с product/main/hero/zoom classes.
+  const productImgMatch = head.match(
+    /<img[^>]+(?:class|id)=["'][^"']*(?:product|main|hero|primary|zoom|gallery)[^"']*["'][^>]+src=["']([^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']/i,
+  );
+  if (productImgMatch && productImgMatch[1]) return decodeHtml(productImgMatch[1]);
+
   return null;
+}
+
+/** HTML entity decoder — за &amp; и подобни в URL-те. */
+function decodeHtml(s: string): string {
+  return s
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#x2F;/g, "/");
 }
 
 /** Recursively извлича `image` URL от JSON-LD Product schema. */
@@ -405,16 +413,12 @@ async function extractImagesFromWebpages(
     url: string;
     source_domain: string | null;
     description: string | null;
-    confidence: "high" | "medium" | "low";
-    suspected_unit: "indoor" | "outdoor" | "both" | "unknown";
   }>,
 ): Promise<{
   images: Array<{
     url: string;
     source_domain: string | null;
     description: string | null;
-    confidence: "high" | "medium" | "low";
-    suspected_unit: "indoor" | "outdoor" | "both" | "unknown";
     page_url: string;
   }>;
   errors: string[];
@@ -487,8 +491,6 @@ async function extractImagesFromWebpages(
           url: absUrl,
           source_domain: page.source_domain,
           description: page.description,
-          confidence: page.confidence,
-          suspected_unit: page.suspected_unit,
           page_url: page.url,
         };
       } catch (e) {
@@ -593,10 +595,26 @@ async function callGeminiWithGoogleSearch(env: ReturnType<typeof getEnv>, prompt
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         tools: [{ google_search: {} }],
         generationConfig: {
-          temperature: 0.3,
-          // JSON-ът с 8 URL-а + descriptions + queries може да достигне
-          // ~2-3K токена. 4096 е safety margin.
-          maxOutputTokens: 4096,
+          // temperature 0 = deterministic. Тестове показаха, че 0.3 води
+          // до нестабилни резултати (понякога 0 страници, понякога 5).
+          // С 0 — резултати са консистентни за даден brand+modelCode.
+          temperature: 0,
+          // 8192 = safety margin за JSON със 8 страници + дълги URLs
+          // (Vertex AI redirect URLs могат да са ~250 chars).
+          maxOutputTokens: 8192,
+          // КРИТИЧНО — disable "thinking" токени за gemini-2.5-flash.
+          // С enabled thinking (default), моделът хаби 1000-2000 токена
+          // в скрита chain-of-thought, което води до:
+          //   1. 4-5x по-бавен response (от 5s до 24s).
+          //   2. JSON-ът понякога стига MAX_TOKENS (thinking + tools
+          //      изяждат output budget-а).
+          //   3. AI връща Vertex AI redirect URLs вместо реалните shop
+          //      URLs (защото thinking review-а ползва грунд URL-те).
+          // С thinkingBudget=0:
+          //   • 4-5x по-бързо (5s)
+          //   • Връща РЕАЛНИ URL-ове (lg.com, daikin.eu, basildonacr.com)
+          //   • Никога не достига MAX_TOKENS
+          thinkingConfig: { thinkingBudget: 0 },
         },
       }),
     });
@@ -641,6 +659,8 @@ async function callGeminiWithGoogleSearch(env: ReturnType<typeof getEnv>, prompt
   // DEBUG LOGGING — В server logs пишем точно какво Gemini е върнал.
   // Когато потребителят се оплаче от „няма снимки“, тук е първото място
   // където дебъгваме (rawText показва какво AI е „мислил“).
+  const promptFeedback = (body as { promptFeedback?: unknown }).promptFeedback ?? null;
+  const safetyRatings = (candidates[0] as { safetyRatings?: unknown })?.safetyRatings ?? null;
   // eslint-disable-next-line no-console
   console.log("[ai/product_image_search] Gemini response:", {
     model,
@@ -649,6 +669,8 @@ async function callGeminiWithGoogleSearch(env: ReturnType<typeof getEnv>, prompt
     groundingChunksCount: groundingChunks.length,
     rawTextLength: rawText.length,
     rawTextPreview: rawText.slice(0, 500),
+    promptFeedback,
+    safetyRatings,
   });
 
   // Sanitize: понякога моделът връща JSON wrapped в ```json … ``` въпреки
@@ -685,14 +707,12 @@ async function callGeminiWithGoogleSearch(env: ReturnType<typeof getEnv>, prompt
       ? parsed.images
       : [];
 
-  // Ако AI не върна нищо в JSON-а, опитваме fallback: ползваме URL-ите от
-  // groundingChunks (там Google Search винаги дава top-results-те).
+  // Парсваме AI отговора в minimal shape — само това, което реално
+  // ползваме надолу.
   let candidatePages: Array<{
     url: string;
     source_domain: string | null;
     description: string | null;
-    confidence: "high" | "medium" | "low";
-    suspected_unit: "indoor" | "outdoor" | "both" | "unknown";
   }> = rawPages
     .filter((p) => typeof (p as { url?: unknown }).url === "string")
     .map((p) => {
@@ -700,8 +720,6 @@ async function callGeminiWithGoogleSearch(env: ReturnType<typeof getEnv>, prompt
         url: string;
         source_domain?: unknown;
         description?: unknown;
-        confidence?: unknown;
-        suspected_unit?: unknown;
       };
       let domain: string | null =
         typeof obj.source_domain === "string" ? obj.source_domain : null;
@@ -716,16 +734,6 @@ async function callGeminiWithGoogleSearch(env: ReturnType<typeof getEnv>, prompt
         url: String(obj.url),
         source_domain: domain,
         description: typeof obj.description === "string" ? obj.description : null,
-        confidence:
-          obj.confidence === "high" || obj.confidence === "medium" || obj.confidence === "low"
-            ? (obj.confidence as "high" | "medium" | "low")
-            : "low",
-        suspected_unit:
-          obj.suspected_unit === "indoor" ||
-          obj.suspected_unit === "outdoor" ||
-          obj.suspected_unit === "both"
-            ? (obj.suspected_unit as "indoor" | "outdoor" | "both")
-            : "unknown",
       };
     })
     .filter((p) => /^https?:\/\//i.test(p.url));
@@ -744,13 +752,7 @@ async function callGeminiWithGoogleSearch(env: ReturnType<typeof getEnv>, prompt
         } catch {
           /* skip */
         }
-        return {
-          url,
-          source_domain: domain,
-          description: null,
-          confidence: "medium" as const,
-          suspected_unit: "unknown" as const,
-        };
+        return { url, source_domain: domain, description: null };
       });
     // eslint-disable-next-line no-console
     console.log("[ai/product_image_search] Fallback: using groundingChunks URLs", {

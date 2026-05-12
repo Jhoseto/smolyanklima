@@ -47,7 +47,103 @@ const ALLOWED_MIMES = new Set([
   "image/png",
   "image/webp",
   "image/gif",
+  "image/avif",
 ]);
+
+/**
+ * Generic / unspecified content-types които сме склонни да приемем — НО
+ * само ако URL extension-ът + magic bytes ни потвърдят, че е image.
+ *
+ * Много CDN-и (особено WordPress, Cloudfront, custom file servers)
+ * връщат `application/octet-stream` за бинарни файлове независимо от
+ * extension-а. Това е най-честата причина за „Невалиден тип файл“ грешка
+ * при AI Photo Finder.
+ */
+const GENERIC_MIMES = new Set([
+  "application/octet-stream",
+  "application/binary",
+  "binary/octet-stream",
+  "", // някои сървъри въобще не подават content-type
+]);
+
+/** Извлича image MIME от URL extension. Връща null ако не е image. */
+function mimeFromUrlExtension(rawUrl: string): string | null {
+  try {
+    const path = new URL(rawUrl).pathname.toLowerCase();
+    if (path.endsWith(".jpg") || path.endsWith(".jpeg")) return "image/jpeg";
+    if (path.endsWith(".png")) return "image/png";
+    if (path.endsWith(".webp")) return "image/webp";
+    if (path.endsWith(".gif")) return "image/gif";
+    if (path.endsWith(".avif")) return "image/avif";
+  } catch {
+    /* invalid URL */
+  }
+  return null;
+}
+
+/**
+ * Magic bytes (file signature) детекция за image формати. По-надеждна
+ * от MIME header-а, защото гледа реалните bytes на началото на файла.
+ *
+ * Спецификации:
+ *   JPEG:  FF D8 FF
+ *   PNG:   89 50 4E 47 0D 0A 1A 0A
+ *   GIF:   47 49 46 38 (3 7|3 9) 61
+ *   WebP:  52 49 46 46 ?? ?? ?? ?? 57 45 42 50  (RIFF....WEBP)
+ *   AVIF:  ?? ?? ?? ?? 66 74 79 70 61 76 69 66  (ftypavif at offset 4)
+ */
+function detectImageMimeFromBytes(buf: Uint8Array): string | null {
+  if (buf.length < 12) return null;
+  // JPEG
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
+  // PNG
+  if (
+    buf[0] === 0x89 &&
+    buf[1] === 0x50 &&
+    buf[2] === 0x4e &&
+    buf[3] === 0x47 &&
+    buf[4] === 0x0d &&
+    buf[5] === 0x0a &&
+    buf[6] === 0x1a &&
+    buf[7] === 0x0a
+  )
+    return "image/png";
+  // GIF
+  if (
+    buf[0] === 0x47 &&
+    buf[1] === 0x49 &&
+    buf[2] === 0x46 &&
+    buf[3] === 0x38 &&
+    (buf[4] === 0x37 || buf[4] === 0x39) &&
+    buf[5] === 0x61
+  )
+    return "image/gif";
+  // WebP (RIFF....WEBP)
+  if (
+    buf[0] === 0x52 &&
+    buf[1] === 0x49 &&
+    buf[2] === 0x46 &&
+    buf[3] === 0x46 &&
+    buf[8] === 0x57 &&
+    buf[9] === 0x45 &&
+    buf[10] === 0x42 &&
+    buf[11] === 0x50
+  )
+    return "image/webp";
+  // AVIF (ftypavif at offset 4)
+  if (
+    buf[4] === 0x66 &&
+    buf[5] === 0x74 &&
+    buf[6] === 0x79 &&
+    buf[7] === 0x70 &&
+    buf[8] === 0x61 &&
+    buf[9] === 0x76 &&
+    buf[10] === 0x69 &&
+    buf[11] === 0x66
+  )
+    return "image/avif";
+  return null;
+}
 
 export async function POST(req: NextRequest) {
   // Auth: admin client (за RLS context-а).
@@ -134,9 +230,18 @@ export async function POST(req: NextRequest) {
     /* res.url е винаги валиден URL — никога не би трябвало да хвърли. */
   }
 
-  // 5. Content-Type валидация.
+  // 5. Content-Type валидация — толерантна за generic MIME types.
+  //
+  // Strategy:
+  //   • Ако content-type е image/* → ОК веднага.
+  //   • Ако е generic (application/octet-stream / празен) → продължаваме,
+  //     но ще валидираме по URL extension + magic bytes след download-а.
+  //   • Ако е НЕ-image и НЕ-generic (text/html, application/json и т.н.)
+  //     → отказваме веднага.
   const mimeRaw = (res.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
-  if (!ALLOWED_MIMES.has(mimeRaw)) {
+  const isImageMime = ALLOWED_MIMES.has(mimeRaw);
+  const isGenericMime = GENERIC_MIMES.has(mimeRaw);
+  if (!isImageMime && !isGenericMime) {
     return NextResponse.json(
       { error: `Невалиден тип файл: ${mimeRaw || "неизвестен"}. Очаквам image/*.` },
       { status: 415 },
@@ -173,14 +278,34 @@ export async function POST(req: NextRequest) {
     offset += c.byteLength;
   }
 
+  // 8. Определяме финален MIME — приоритет:
+  //   1) Header MIME (ако е image/*).
+  //   2) Magic bytes detection (най-надеждно, проверява реалните bytes).
+  //   3) URL extension (fallback).
+  let finalMime: string | null = isImageMime ? mimeRaw : null;
+  if (!finalMime) {
+    finalMime = detectImageMimeFromBytes(buffer);
+  }
+  if (!finalMime) {
+    finalMime = mimeFromUrlExtension(res.url || parsedUrl.toString());
+  }
+  if (!finalMime) {
+    return NextResponse.json(
+      {
+        error: `Файлът не е разпознаваем като image (header: ${mimeRaw || "няма"}, magic bytes/extension не съвпадат).`,
+      },
+      { status: 415 },
+    );
+  }
+  // Нормализираме jpg → jpeg за консистентност.
+  if (finalMime === "image/jpg") finalMime = "image/jpeg";
+
   const base64 = Buffer.from(buffer).toString("base64");
-  // Нормализираме jpg → jpeg за консистентност с MIME standard-а.
-  const normalizedMime = mimeRaw === "image/jpg" ? "image/jpeg" : mimeRaw;
 
   return NextResponse.json({
     data: {
       base64,
-      mimeType: normalizedMime,
+      mimeType: finalMime,
       sizeBytes: totalBytes,
     },
   });

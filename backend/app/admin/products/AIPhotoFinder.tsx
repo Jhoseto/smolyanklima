@@ -5,21 +5,19 @@
  * чрез AI web search (Gemini + Google Search grounding).
  *
  * Flow:
- *   1. При open → автоматично пуска търсене с (марка, модел, тяло).
- *   2. Показва grid от 0-8 кандидата с thumbnail + source domain + confidence.
- *   3. Потребителят избира 1-N снимки (checkboxes).
- *   4. „Добави избраните“ → за всяка избрана:
+ *   1. При open → автоматично пуска търсене с (марка, модел).
+ *   2. Backend AI намира 8 webpage URLs → fetch-ва og:image от всяка.
+ *   3. UI показва grid от намерените снимки.
+ *   4. Потребителят избира 1-N снимки (checkboxes).
+ *   5. „Добави избраните“ → за всяка избрана:
  *        a. Сваляме чрез server-side proxy (CORS safety).
  *        b. Конвертираме в File.
  *        c. Подаваме нагоре като pending photo (като ръчно качените).
- *   5. Потребителят след това решава дали да приложи ✨ AI enhance — със
- *      същите бутони като при стандартния flow.
  *
  * Случаи:
  *   • Климатикът е в кашон и НЕ може да се снима физически.
- *   • Старите снимки в Cloudinary са лоши и искаме да ги заменим с
- *     каталожни.
- *   • Бърз start за нови продукти без на ръка да правим скрийншоти.
+ *   • Старите снимки в Cloudinary са лоши.
+ *   • Бърз start за нови продукти без ръчно скрийншот-ване.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -37,8 +35,6 @@ export type AiSearchResult = {
   url: string;
   source_domain: string | null;
   description: string | null;
-  confidence: "high" | "medium" | "low";
-  suspected_unit: "indoor" | "outdoor" | "both" | "unknown";
 };
 
 type Props = {
@@ -46,8 +42,6 @@ type Props = {
   onClose: () => void;
   brand: string;
   modelCode: string;
-  /** Какво тяло преди всичко търсим — UI default selection. */
-  unit?: "indoor" | "outdoor" | "both";
   /** Колко свободни slot-а има (max images - вече добавени). */
   remainingSlots: number;
   /** Callback: за всяко избрано — File готов за добавяне в pending list. */
@@ -61,7 +55,6 @@ export function AIPhotoFinder({
   onClose,
   brand,
   modelCode,
-  unit = "both",
   remainingSlots,
   onFilesPicked,
 }: Props) {
@@ -70,7 +63,6 @@ export function AIPhotoFinder({
   const [results, setResults] = useState<AiSearchResult[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [activeUnit, setActiveUnit] = useState<"indoor" | "outdoor" | "both">(unit);
   /** За всеки URL: дали thumbnail-ът се е зареди успешно (за да скрием broken images). */
   const [imgErrored, setImgErrored] = useState<Set<string>>(new Set());
 
@@ -83,12 +75,12 @@ export function AIPhotoFinder({
       setWarnings([]);
       setSelected(new Set());
       setImgErrored(new Set());
-      setActiveUnit(unit);
     }
-  }, [open, unit]);
+  }, [open]);
 
   /**
-   * Изпълнява AI search с текущата (brand, model, unit) комбинация.
+   * Изпълнява AI search с текущата (brand, modelCode) комбинация.
+   * Backend ще fetch-не webpages + извлече og:image автоматично.
    */
   const runSearch = useCallback(async () => {
     if (!brand.trim() || !modelCode.trim()) {
@@ -112,7 +104,6 @@ export function AIPhotoFinder({
           input: {
             brand: brand.trim(),
             modelCode: modelCode.trim(),
-            unit: activeUnit,
             maxResults: 8,
           },
         }),
@@ -139,7 +130,7 @@ export function AIPhotoFinder({
       setError(msg);
       setPhase("error");
     }
-  }, [brand, modelCode, activeUnit]);
+  }, [brand, modelCode]);
 
   // Auto-search при отваряне.
   useEffect(() => {
@@ -240,11 +231,11 @@ export function AIPhotoFinder({
             </div>
             <div className="min-w-0 flex-1">
               <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
-                AI намиране на официални снимки
+                AI намиране на снимки
               </h2>
               <p className="text-[12px] text-slate-600 leading-snug mt-0.5">
                 <strong>{brand} {modelCode}</strong> — AI намира продуктови страници в Google и извлича
-                официалната hero снимка от всяка (og:image meta tag). Избери кои да добавиш.
+                официалната hero снимка от всяка. Избери кои да добавиш.
               </p>
             </div>
             <button
@@ -258,24 +249,9 @@ export function AIPhotoFinder({
             </button>
           </div>
 
-          {/* Unit toggle + retry */}
-          <div className="mt-3 flex items-center justify-between gap-2 flex-wrap">
-            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-[11px] font-bold">
-              {(["both", "indoor", "outdoor"] as const).map((u) => (
-                <button
-                  key={u}
-                  type="button"
-                  onClick={() => setActiveUnit(u)}
-                  className={`px-2.5 py-1 rounded-md transition-colors ${
-                    activeUnit === u
-                      ? "bg-brand-blue-500 text-white shadow-sm"
-                      : "text-slate-600 hover:bg-slate-50"
-                  }`}
-                >
-                  {u === "both" ? "Двете тела" : u === "indoor" ? "Вътрешно" : "Външно"}
-                </button>
-              ))}
-            </div>
+          {/* Retry button — без unit toggle, потребителят сам ще избере коя
+              снимка (вътрешно/външно) от резултатите. */}
+          <div className="mt-3 flex items-center justify-end">
             <button
               type="button"
               onClick={() => void runSearch()}
@@ -297,10 +273,9 @@ export function AIPhotoFinder({
           {phase === "searching" && (
             <div className="flex flex-col items-center justify-center py-12 text-slate-500">
               <Loader2 className="w-8 h-8 animate-spin mb-3 text-violet-500" />
-              <div className="text-sm font-semibold">AI търси в Google и extrahira снимки...</div>
+              <div className="text-sm font-semibold">AI търси в Google и извлича снимки...</div>
               <div className="text-[12px] mt-1 max-w-md text-center">
-                1) Намира продуктови страници (5-15s) · 2) Fetch-ва og:image от всяка (5-10s).
-                Общо ~15-30 секунди.
+                Намира 8 продуктови страници, после извлича hero снимките. ~10-15 секунди.
               </div>
             </div>
           )}
@@ -329,8 +304,8 @@ export function AIPhotoFinder({
                   <Globe className="w-8 h-8 mb-3 text-slate-300" />
                   <div className="text-sm font-semibold">Няма намерени снимки</div>
                   <div className="text-[12px] mt-1 max-w-md text-center">
-                    AI не намери официални снимки за <strong>{brand} {modelCode}</strong>.
-                    Опитай с друга комбинация „тяло“ или провери дали моделът е правилен.
+                    AI не намери снимки за <strong>{brand} {modelCode}</strong>.
+                    Опитай отново или провери правописа на модела.
                   </div>
                 </div>
               ) : (
@@ -363,39 +338,17 @@ export function AIPhotoFinder({
                           }
                           className="w-full h-full object-contain bg-white"
                         />
-                        {/* Confidence badge горе вляво */}
-                        <div
-                          className={`absolute top-1 left-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
-                            r.confidence === "high"
-                              ? "bg-emerald-500 text-white"
-                              : r.confidence === "medium"
-                                ? "bg-amber-500 text-white"
-                                : "bg-slate-400 text-white"
-                          }`}
-                          title={`Доверие на AI: ${r.confidence}`}
-                        >
-                          {r.confidence}
-                        </div>
                         {/* Selected check */}
                         {isSelected && (
                           <div className="absolute top-1 right-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-brand-blue-500 text-white shadow-md">
                             <CheckCircle2 className="w-4 h-4" />
                           </div>
                         )}
-                        {/* Source + suspected unit footer */}
+                        {/* Source footer */}
                         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-900/85 via-slate-900/70 to-transparent p-1.5 text-white text-left">
                           <div className="text-[10px] font-bold truncate leading-tight">
                             {r.source_domain ?? "—"}
                           </div>
-                          {r.suspected_unit !== "unknown" && (
-                            <div className="text-[9px] opacity-80 leading-tight">
-                              {r.suspected_unit === "indoor"
-                                ? "вътрешно"
-                                : r.suspected_unit === "outdoor"
-                                  ? "външно"
-                                  : "двете"}
-                            </div>
-                          )}
                         </div>
                       </button>
                     );

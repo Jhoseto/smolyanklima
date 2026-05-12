@@ -829,7 +829,6 @@ export function ProductPhotoUploader({
         onClose={() => setAiFinderOpen(false)}
         brand={brandName ?? ""}
         modelCode={modelCode}
-        unit="both"
         remainingSlots={remainingAfterPending}
         onFilesPicked={(files) => {
           // Добавяме като нови pending записи (ще минат през стандартния
