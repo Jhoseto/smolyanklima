@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { Check, ShieldCheck, Star, Volume2, Wifi, Wind, X, Zap } from "lucide-react";
+import { Check, Ruler, ShieldCheck, Star, Volume2, Weight, Wifi, Wind, X, Zap } from "lucide-react";
 
 type ProductQuickViewData = {
   id: string;
@@ -31,6 +31,14 @@ type ProductQuickViewData = {
     seer?: number | string | null;
     scop?: number | string | null;
     warranty_months?: number | string | null;
+    weight_indoor_kg?: number | string | null;
+    weight_outdoor_kg?: number | string | null;
+    dim_indoor_length_mm?: number | string | null;
+    dim_indoor_width_mm?: number | string | null;
+    dim_indoor_height_mm?: number | string | null;
+    dim_outdoor_length_mm?: number | string | null;
+    dim_outdoor_width_mm?: number | string | null;
+    dim_outdoor_height_mm?: number | string | null;
   } | null;
   product_images?: Array<{ url: string; sort_order?: number | null; is_main?: boolean | null }>;
 };
@@ -207,6 +215,35 @@ function ProductQuickViewModal({ productId, onClose }: { productId: string; onCl
                 </div>
               </div>
 
+              {hasDimsOrWeight(specs) && (
+                <div className="mb-5 rounded-2xl bg-gray-50 p-4">
+                  <h3 className="mb-3 text-xs font-black uppercase tracking-wider text-gray-500">Размери и тегло</h3>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {(specs?.weight_indoor_kg != null || hasIndoorDims(specs)) && (
+                      <UnitBlock
+                        title="Вътрешен блок"
+                        accent="text-[#0077B6]"
+                        weight={specs?.weight_indoor_kg}
+                        length={specs?.dim_indoor_length_mm}
+                        width={specs?.dim_indoor_width_mm}
+                        height={specs?.dim_indoor_height_mm}
+                      />
+                    )}
+                    {(specs?.weight_outdoor_kg != null || hasOutdoorDims(specs)) && (
+                      <UnitBlock
+                        title="Външен блок"
+                        accent="text-[#FF4D00]"
+                        weight={specs?.weight_outdoor_kg}
+                        length={specs?.dim_outdoor_length_mm}
+                        width={specs?.dim_outdoor_width_mm}
+                        height={specs?.dim_outdoor_height_mm}
+                      />
+                    )}
+                  </div>
+                  <p className="mt-2 text-right text-[10px] text-gray-400">Размери в формат Д × Ш × В (mm)</p>
+                </div>
+              )}
+
               <div className="mb-5 flex flex-wrap gap-2">
                 {features.map((feature) => (
                   <span key={feature} className="flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
@@ -285,4 +322,75 @@ function stockLabel(value: string | null | undefined) {
   if (value === "out_of_stock") return "Изчерпан";
   if (value === "on_order") return "По поръчка";
   return "В наличност";
+}
+
+type SpecLike = ProductQuickViewData["product_specs"];
+
+function isFilled(v: unknown): boolean {
+  if (v == null) return false;
+  if (typeof v === "string") return v.trim() !== "";
+  if (typeof v === "number") return Number.isFinite(v);
+  return Boolean(v);
+}
+
+function hasIndoorDims(specs: SpecLike): boolean {
+  return isFilled(specs?.dim_indoor_length_mm) || isFilled(specs?.dim_indoor_width_mm) || isFilled(specs?.dim_indoor_height_mm);
+}
+function hasOutdoorDims(specs: SpecLike): boolean {
+  return isFilled(specs?.dim_outdoor_length_mm) || isFilled(specs?.dim_outdoor_width_mm) || isFilled(specs?.dim_outdoor_height_mm);
+}
+function hasDimsOrWeight(specs: SpecLike): boolean {
+  if (isFilled(specs?.weight_indoor_kg) || isFilled(specs?.weight_outdoor_kg)) return true;
+  return hasIndoorDims(specs) || hasOutdoorDims(specs);
+}
+
+function formatKgValue(v: unknown): string {
+  if (!isFilled(v)) return "—";
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isFinite(n)) return "—";
+  const rounded = Math.round(n * 10) / 10;
+  return `${rounded.toLocaleString("bg-BG", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg`;
+}
+
+function dimCell(v: unknown): string {
+  if (!isFilled(v)) return "—";
+  return String(v);
+}
+
+function UnitBlock({
+  title,
+  accent,
+  weight,
+  length,
+  width,
+  height,
+}: {
+  title: string;
+  accent: string;
+  weight?: number | string | null;
+  length?: number | string | null;
+  width?: number | string | null;
+  height?: number | string | null;
+}) {
+  return (
+    <div className="rounded-xl border border-gray-100 bg-white p-3">
+      <div className={`mb-2 text-[10px] font-black uppercase tracking-widest ${accent}`}>{title}</div>
+      {isFilled(weight) && (
+        <div className="mb-1 flex items-center gap-1.5">
+          <Weight className="h-3.5 w-3.5 text-gray-400" />
+          <span className="text-xs text-gray-500">Тегло</span>
+          <span className="ml-auto text-xs font-bold text-gray-800">{formatKgValue(weight)}</span>
+        </div>
+      )}
+      {(isFilled(length) || isFilled(width) || isFilled(height)) && (
+        <div className="flex items-start gap-1.5">
+          <Ruler className="mt-0.5 h-3.5 w-3.5 text-gray-400" />
+          <span className="text-xs text-gray-500">Размери</span>
+          <span className="ml-auto text-right text-xs font-bold text-gray-800">
+            {`${dimCell(length)} × ${dimCell(width)} × ${dimCell(height)} mm`}
+          </span>
+        </div>
+      )}
+    </div>
+  );
 }

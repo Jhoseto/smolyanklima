@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { HelpRow, SectionTitle, HelpCard, Card, Button, Input, Select, Table, Th, Td, Textarea, InfoDot } from "../ui";
-import { Plus, Search, FilterX, CheckCircle, Tag, Trash2, Edit, Filter, ChevronDown, MessageCircle } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { SectionTitle, Card, Button, Input, Select, Table, Th, Td, Textarea } from "../ui";
+import { Plus, FilterX, CheckCircle, Trash2, Edit, Filter, ChevronDown, MessageCircle, PackageCheck, PackageX, Clock4, Star, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { ShareToChatModal } from "../chat/ShareToChatModal";
 import { ProductQuickViewButton } from "../ProductQuickView";
+import { FeaturedSlotModal } from "./FeaturedSlotModal";
 import { useDebounce } from "@/lib/hooks/useDebounce";
 import {
   normalizeProductStockLocation,
@@ -26,6 +27,9 @@ type ProductRow = {
   price: number;
   purchase_price?: number | null;
   is_featured: boolean;
+  is_active?: boolean | null;
+  featured_position?: number | null;
+  featured_badge?: string | null;
   stock_status: "in_stock" | "out_of_stock" | "on_order" | string;
   stock_location?: ProductStockLocation | string | null;
   stock_quantity: number;
@@ -36,13 +40,57 @@ type ProductRow = {
   outdoor_unit_serial?: string | null;
   supplier_invoice_number?: string | null;
   product_region?: ProductRegion | string | null;
+  purchased_at?: string | null;
   brands?: { name?: string } | null;
   product_types?: { name?: string } | null;
 };
 
 type OptionRow = { id: string; name: string };
 type ContactChoice = { id: string; full_name: string; phone: string; email?: string | null; address?: string | null };
-type SortField = "created_at" | "name" | "price" | "stock_status" | "is_featured";
+type SortField = "name" | "price" | "purchase_price" | "product_condition" | "purchased_at";
+type SortDir = "asc" | "desc";
+
+/**
+ * Кликаемо заглавие на колона в таблицата — заменя статичния `<Th>` за
+ * сортируеми колони. При клик върху същата колона обръща посоката
+ * (asc ↔ desc); при клик върху нова колона започва от възходящо.
+ *
+ * Показва стрелка-индикатор:
+ *   • неутрална стрелка (↕) — колоната не е активна за сортиране;
+ *   • ↑ — активно сортиране, възходящ ред;
+ *   • ↓ — активно сортиране, низходящ ред.
+ */
+function SortableTh({
+  label,
+  field,
+  sortBy,
+  sortDir,
+  onSort,
+  className = "",
+}: {
+  label: string;
+  field: SortField;
+  sortBy: SortField;
+  sortDir: SortDir;
+  onSort: (f: SortField) => void;
+  className?: string;
+}) {
+  const isActive = sortBy === field;
+  const ArrowIcon = !isActive ? ArrowUpDown : sortDir === "asc" ? ArrowUp : ArrowDown;
+  return (
+    <Th className={`cursor-pointer select-none hover:bg-slate-100 transition-colors ${className}`}>
+      <button
+        type="button"
+        onClick={() => onSort(field)}
+        className={`w-full text-left inline-flex items-center gap-1.5 ${isActive ? "text-brand-blue-700" : "text-slate-600"}`}
+        title={`Сортирай по „${label}“`}
+      >
+        <span>{label}</span>
+        <ArrowIcon className={`w-3 h-3 ${isActive ? "opacity-100" : "opacity-40"}`} />
+      </button>
+    </Th>
+  );
+}
 
 function productStockLocationBadgeClass(loc: unknown) {
   const n = normalizeProductStockLocation(loc);
@@ -59,13 +107,200 @@ function fmtEuro(n: number | null | undefined) {
   return `€${Number(n).toLocaleString()}`;
 }
 
+// Дата на закупуване от доставчик: в БД е `date` (без час). Показваме я в
+// българския формат ДД.ММ.ГГГГ; при липсваща стойност — тире.
+function fmtPurchaseDate(value: string | null | undefined): string {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}.${mm}.${yyyy}`;
+}
+
+/**
+ * Подсветка на текстов фрагмент, който отговаря на текущия search query.
+ * Регистър-нечувствително. Връща JSX с обвити в <mark> съвпадения.
+ */
+function highlightMatch(text: string | null | undefined, query: string): ReactNode {
+  const value = text ?? "";
+  const q = query.trim();
+  if (!value || !q) return value || "—";
+  const idx = value.toLowerCase().indexOf(q.toLowerCase());
+  if (idx < 0) return value;
+  return (
+    <>
+      {value.slice(0, idx)}
+      <mark className="bg-yellow-100 text-slate-900 rounded px-0.5">{value.slice(idx, idx + q.length)}</mark>
+      {value.slice(idx + q.length)}
+    </>
+  );
+}
+
+/**
+ * Универсално поле за търсене с autocomplete dropdown. Показва до 8
+ * предложения от текущо заредените продукти (`items`), като визуализира
+ * мястото, в което е намерено съвпадението: име, сериен № вътрешен или
+ * външен блок, фактура от доставчик. Клик върху ред заключва филтъра към
+ * това име и затваря менюто. Esc / blur също затварят.
+ */
+function ProductSearchBox({
+  value,
+  onChange,
+  items,
+  placeholder,
+  onPick,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  items: ProductRow[];
+  placeholder?: string;
+  onPick?: (p: ProductRow) => void;
+}) {
+  const [focused, setFocused] = useState(false);
+  const q = value.trim().toLowerCase();
+  const isOpen = focused && q.length >= 1 && items.length > 0;
+
+  // Определя коя поле от продукта „хваща“ търсенето, за да го покажем в
+  // dropdown-а като контекст: „Сериен (вътр): SN-…“ / „Фактура: …“.
+  function describeMatch(p: ProductRow): { label: string; value: string } | null {
+    if (!q) return null;
+    const candidates: Array<{ label: string; value: string | null | undefined }> = [
+      { label: "Сериен (вътр)", value: p.indoor_unit_serial },
+      { label: "Сериен (външ)", value: p.outdoor_unit_serial },
+      { label: "Фактура",       value: p.supplier_invoice_number },
+      { label: "Slug",          value: p.slug },
+    ];
+    for (const c of candidates) {
+      if (c.value && c.value.toLowerCase().includes(q)) return { label: c.label, value: c.value };
+    }
+    return null;
+  }
+
+  return (
+    <div className="relative">
+      <Input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => {
+          // Малко закъснение, за да позволи `mousedown` върху ред в dropdown
+          // да стигне до click handler-а, преди да затворим менюто.
+          window.setTimeout(() => setFocused(false), 150);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            onChange("");
+            setFocused(false);
+          }
+        }}
+        placeholder={placeholder}
+      />
+
+      {isOpen && (
+        <div className="absolute z-30 left-0 right-0 top-full mt-1 max-h-80 overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+          <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 sticky top-0 bg-white">
+            Предложения ({Math.min(items.length, 8)}{items.length > 8 ? ` от ${items.length}` : ""})
+          </div>
+          <ul>
+            {items.slice(0, 8).map((p) => {
+              const match = describeMatch(p);
+              const brandName = p.brands?.name ?? "—";
+              return (
+                <li key={p.id}>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      onPick?.(p);
+                      onChange(p.name);
+                      setFocused(false);
+                    }}
+                    className="w-full text-left px-3 py-2 hover:bg-brand-blue-50 focus:bg-brand-blue-50 focus:outline-none transition-colors"
+                  >
+                    <div className="text-sm font-semibold text-slate-900 leading-snug">
+                      {highlightMatch(p.name, value)}
+                    </div>
+                    <div className="text-[11px] text-slate-500 flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold">{brandName}</span>
+                      {p.product_types?.name && <span>· {p.product_types.name}</span>}
+                      {match && (
+                        <span className="inline-flex items-center gap-1">
+                          · <span className="font-semibold text-slate-600">{match.label}:</span>
+                          <span>{highlightMatch(match.value, value)}</span>
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Малък toggle-чип за бързи филтри. Поддържа 4 визуални тона, за да
+// разграничим неутрален/успех/предупреждение/опасност (състояния на
+// продукт). Логиката е изцяло decorative — селекцията се контролира
+// чрез `active` пропа от родителя.
+type ChipTone = "neutral" | "success" | "warning" | "danger" | "brand";
+function ChipToggle({
+  active,
+  tone = "neutral",
+  onClick,
+  children,
+}: {
+  active: boolean;
+  tone?: ChipTone;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  const palette: Record<ChipTone, { active: string; idle: string }> = {
+    neutral: {
+      active: "bg-slate-900 text-white border-slate-900",
+      idle: "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300",
+    },
+    success: {
+      active: "bg-emerald-600 text-white border-emerald-600",
+      idle: "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100",
+    },
+    warning: {
+      active: "bg-amber-500 text-white border-amber-500",
+      idle: "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100",
+    },
+    danger: {
+      active: "bg-rose-600 text-white border-rose-600",
+      idle: "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100",
+    },
+    brand: {
+      active: "bg-brand-blue-500 text-white border-brand-blue-500",
+      idle: "bg-brand-blue-50 text-brand-blue-700 border-brand-blue-200 hover:bg-brand-blue-100",
+    },
+  };
+  const styles = palette[tone];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors ${
+        active ? styles.active : styles.idle
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
 function truncCell(s: string | null | undefined, max = 16) {
   const t = (s ?? "").trim();
   if (!t) return "—";
   if (t.length <= max) return t;
   return `${t.slice(0, max)}…`;
 }
-type SortDir = "asc" | "desc";
 
 export default function AdminProductsPage() {
   const [items, setItems] = useState<ProductRow[]>([]);
@@ -73,6 +308,7 @@ export default function AdminProductsPage() {
   const [types, setTypes] = useState<OptionRow[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [shareProduct, setShareProduct] = useState<ProductRow | null>(null);
+  const [featuredFor, setFeaturedFor] = useState<ProductRow | null>(null);
   const [q, setQ] = useState("");
   const [condition, setCondition] = useState<"" | "new" | "used">("");
   const [featured, setFeatured] = useState<"" | "featured" | "regular">("");
@@ -81,12 +317,15 @@ export default function AdminProductsPage() {
   const [productRegionFilter, setProductRegionFilter] = useState<"" | ProductRegion>("");
   const [brandId, setBrandId] = useState("");
   const [typeId, setTypeId] = useState("");
+  const [supplierId, setSupplierId] = useState("");
   const [priceMin, setPriceMin] = useState("");
   const [priceMax, setPriceMax] = useState("");
-  const [createdFrom, setCreatedFrom] = useState("");
-  const [createdTo, setCreatedTo] = useState("");
-  const [sortBy, setSortBy] = useState<SortField>("created_at");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [hasSerial, setHasSerial] = useState<"" | "with" | "without">("");
+  const [hasPurchasePrice, setHasPurchasePrice] = useState<"" | "with" | "without">("");
+  const [purchasedFrom, setPurchasedFrom] = useState("");
+  const [purchasedTo, setPurchasedTo] = useState("");
+  const [sortBy, setSortBy] = useState<SortField>("name");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [page, setPage] = useState(1);
   const [meta, setMeta] = useState({ page: 1, perPage: 20, total: 0 });
   const [loading, setLoading] = useState(true);
@@ -135,10 +374,13 @@ export default function AdminProductsPage() {
     if (productRegionFilter) sp.set("productRegion", productRegionFilter);
     if (brandId) sp.set("brandId", brandId);
     if (typeId) sp.set("typeId", typeId);
+    if (supplierId) sp.set("supplierId", supplierId);
     if (priceMin.trim()) sp.set("priceMin", priceMin.trim());
     if (priceMax.trim()) sp.set("priceMax", priceMax.trim());
-    if (createdFrom) sp.set("createdFrom", createdFrom);
-    if (createdTo) sp.set("createdTo", createdTo);
+    if (hasSerial) sp.set("hasSerial", hasSerial);
+    if (hasPurchasePrice) sp.set("hasPurchasePrice", hasPurchasePrice);
+    if (purchasedFrom) sp.set("purchasedFrom", purchasedFrom);
+    if (purchasedTo) sp.set("purchasedTo", purchasedTo);
     sp.set("sortBy", sortBy);
     sp.set("sortDir", sortDir);
     sp.set("page", String(page));
@@ -153,10 +395,13 @@ export default function AdminProductsPage() {
     productRegionFilter,
     brandId,
     typeId,
+    supplierId,
     priceMin,
     priceMax,
-    createdFrom,
-    createdTo,
+    hasSerial,
+    hasPurchasePrice,
+    purchasedFrom,
+    purchasedTo,
     sortBy,
     sortDir,
     page,
@@ -230,18 +475,38 @@ export default function AdminProductsPage() {
     setProductRegionFilter("");
     setBrandId("");
     setTypeId("");
+    setSupplierId("");
     setPriceMin("");
     setPriceMax("");
-    setCreatedFrom("");
-    setCreatedTo("");
-    setSortBy("created_at");
-    setSortDir("desc");
+    setHasSerial("");
+    setHasPurchasePrice("");
+    setPurchasedFrom("");
+    setPurchasedTo("");
+    setSortBy("name");
+    setSortDir("asc");
     setPage(1);
   }
 
-  async function bulk(action: "set_new" | "set_used" | "delete") {
+  // Превключване на сортирането от клик върху заглавие на колона:
+  //   • клик върху същата колона → обръща посоката (asc ↔ desc);
+  //   • клик върху нова колона   → започва възходящо.
+  function handleSort(field: SortField) {
+    setPage(1);
+    if (sortBy === field) {
+      setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(field);
+      setSortDir("asc");
+    }
+  }
+
+  // Масовите действия са нарочно сведени до едно — изтриване. Останалите
+  // операции (промяна на статус, тип, наличност) се правят индивидуално от
+  // карта/редакция, защото всеки климатик е уникален артикул със собствени
+  // серийни номера и не се мисли „на бройки“.
+  async function bulkDelete() {
     if (selected.length === 0) return;
-    if (action === "delete" && !confirmBulkDelete) {
+    if (!confirmBulkDelete) {
       setConfirmBulkDelete(true);
       return;
     }
@@ -249,11 +514,11 @@ export default function AdminProductsPage() {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids: selected, action }),
+      body: JSON.stringify({ action: "delete", ids: selected }),
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setError((json as any).error || "Грешка при масова операция");
+      setError((json as any).error || "Грешка при изтриване");
       return;
     }
     setConfirmBulkDelete(false);
@@ -307,9 +572,14 @@ export default function AdminProductsPage() {
     customer: { id?: string; name: string; phone: string; address: string; email?: string; notes: string },
   ) {
     if (!canRecordSale(p)) return false;
-    const nextQty = 0;
+    // Намаляваме наличността с 1, но не под 0. Старият код караше всички
+    // количества към 0 след една продажба — затова продукти с qty > 1
+    // изчезваха от каталога. Сега „Изчерпан“ се сетва само ако реалната
+    // наличност стигне 0; иначе оставяме съществуващия статус.
+    const currentQty = Math.max(0, Number(p.stock_quantity ?? 0));
+    const nextQty = Math.max(0, currentQty - 1);
     const nextSold = Math.max(0, Number(p.sold_quantity ?? 0) + 1);
-    const shouldHideFromCatalog = true;
+    const shouldHideFromCatalog = nextQty === 0;
     const res = await fetch(`/api/admin/products/${p.id}`, {
       method: "PUT",
       credentials: "include",
@@ -465,19 +735,82 @@ export default function AdminProductsPage() {
 
   const pages = Math.max(1, Math.ceil(meta.total / meta.perPage));
 
-  const activeFiltersCount = [
-    condition,
-    featured,
-    stockStatus,
-    stockLocationFilter,
-    productRegionFilter,
-    brandId,
-    typeId,
-    priceMin,
-    priceMax,
-    createdFrom,
-    createdTo,
-  ].filter(Boolean).length;
+  // Списък с активни филтри — ползва се за брояча и за chip bar-а.
+  type ActiveFilter = { key: string; label: string; onClear: () => void };
+  const supplierName = supplierId ? suppliersById[supplierId] : null;
+  const brandName = brandId ? brands.find((b) => b.id === brandId)?.name : null;
+  const typeName = typeId ? types.find((t) => t.id === typeId)?.name : null;
+
+  const activeFilters: ActiveFilter[] = [];
+  if (condition) {
+    activeFilters.push({
+      key: "condition",
+      label: `Състояние: ${condition === "new" ? "Нови" : "Втора употреба"}`,
+      onClear: () => setCondition(""),
+    });
+  }
+  if (featured) {
+    activeFilters.push({
+      key: "featured",
+      label: featured === "featured" ? "Само топ продукти" : "Само нормални (без топ)",
+      onClear: () => setFeatured(""),
+    });
+  }
+  if (stockStatus) {
+    const label =
+      stockStatus === "in_stock"
+        ? "В наличност"
+        : stockStatus === "on_order"
+          ? "По поръчка"
+          : "Изчерпан";
+    activeFilters.push({ key: "stockStatus", label: `Каталог: ${label}`, onClear: () => setStockStatus("") });
+  }
+  if (stockLocationFilter) {
+    activeFilters.push({
+      key: "stockLocation",
+      label: `Място: ${stockLocationFilter === "showroom" ? "Магазин" : "Склад"}`,
+      onClear: () => setStockLocationFilter(""),
+    });
+  }
+  if (productRegionFilter) {
+    activeFilters.push({
+      key: "region",
+      label: `Страна: ${productRegionFilter === "europe" ? "EUROPE" : "JAPAN"}`,
+      onClear: () => setProductRegionFilter(""),
+    });
+  }
+  if (brandId) activeFilters.push({ key: "brand", label: `Марка: ${brandName ?? "—"}`, onClear: () => setBrandId("") });
+  if (typeId) activeFilters.push({ key: "type", label: `Тип: ${typeName ?? "—"}`, onClear: () => setTypeId("") });
+  if (supplierId) activeFilters.push({ key: "supplier", label: `Доставчик: ${supplierName ?? "—"}`, onClear: () => setSupplierId("") });
+  if (priceMin || priceMax) {
+    activeFilters.push({
+      key: "price",
+      label: `Цена: ${priceMin || "0"} – ${priceMax || "∞"} €`,
+      onClear: () => { setPriceMin(""); setPriceMax(""); },
+    });
+  }
+  if (hasSerial) {
+    activeFilters.push({
+      key: "hasSerial",
+      label: hasSerial === "with" ? "Само със сериен №" : "Само без сериен №",
+      onClear: () => setHasSerial(""),
+    });
+  }
+  if (hasPurchasePrice) {
+    activeFilters.push({
+      key: "hasPurchase",
+      label: hasPurchasePrice === "with" ? "Само със закупна цена" : "Само без закупна цена",
+      onClear: () => setHasPurchasePrice(""),
+    });
+  }
+  if (purchasedFrom || purchasedTo) {
+    activeFilters.push({
+      key: "purchasedRange",
+      label: `Закупени: ${purchasedFrom || "…"} → ${purchasedTo || "…"}`,
+      onClear: () => { setPurchasedFrom(""); setPurchasedTo(""); },
+    });
+  }
+  const activeFiltersCount = activeFilters.length;
 
   return (
     <div className="w-full space-y-3">
@@ -487,7 +820,10 @@ export default function AdminProductsPage() {
           <h1 className="text-lg md:text-xl font-bold text-slate-900 mb-0.5 leading-tight">
             <SectionTitle title="Продукти" hint="Всеки ред е отделен артикул (серийни номера в картата). Филтри, продажба и масови действия." />
           </h1>
-          <p className="text-xs text-slate-500 hidden md:block">Професионално управление с филтри и масови действия</p>
+          <p className="text-xs text-slate-500 hidden md:block">
+            Каталог с уникални артикули — всеки климатик с отделни серийни номера, доставчик и фактура.{" "}
+            Филтри, сортиране с клик върху колоните, инлайн редакция на цени и място, ★ Топ продукти и продажба.
+          </p>
         </div>
         <Link href="/admin/products/new" className="inline-flex items-center gap-2 bg-brand-orange-500 text-white px-3 py-2 md:px-4 rounded-xl font-semibold hover:bg-brand-orange-600 active:bg-brand-orange-700 transition-colors shadow-sm text-sm">
           <Plus className="w-4 h-4" />
@@ -496,14 +832,15 @@ export default function AdminProductsPage() {
         </Link>
       </div>
 
-      <HelpCard className="hidden md:block">
-        <HelpRow items={["Закупна и продажна цена в списъка: само главен администратор (офис може в картата при нов продукт)", "Доставчикът е контакт от тип „доставчик“; серийни номера и фактура — в картата", "„Място“: един клик по етикета сменя магазин ↔ склад (главен админ и офис)"]} />
-      </HelpCard>
-
       {/* Mobile: search + filter toggle row */}
       <div className="flex gap-2 md:hidden">
         <div className="flex-1">
-          <Input value={q} onChange={(e) => { setPage(1); setQ(e.target.value); }} placeholder="Търси по име..." />
+          <ProductSearchBox
+            value={q}
+            onChange={(next) => { setPage(1); setQ(next); }}
+            items={items}
+            placeholder="Търси име, сериен №, фактура…"
+          />
         </div>
         <button
           onClick={() => setFiltersOpen((o) => !o)}
@@ -518,99 +855,212 @@ export default function AdminProductsPage() {
       </div>
 
       {/* Filters card — always visible on desktop, toggleable on mobile */}
-      <Card className={`p-3 md:p-4 ${filtersOpen ? "block" : "hidden"} md:block`}>
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto_auto_auto_auto] gap-2 md:gap-3 mb-2 md:mb-3">
-          <Input value={q} onChange={(e) => { setPage(1); setQ(e.target.value); }} placeholder="Търси по име..." className="hidden md:block" />
-          <Select value={condition} onChange={(e) => { setPage(1); setCondition(e.target.value as any); }}>
-            <option value="">Всички състояния</option>
-            <option value="new">Нови</option>
-            <option value="used">Втора употреба</option>
-          </Select>
-          <Select value={featured} onChange={(e) => { setPage(1); setFeatured(e.target.value as any); }}>
-            <option value="">Featured: всички</option>
-            <option value="featured">Само избрани</option>
-            <option value="regular">Само нормални</option>
-          </Select>
-          <Select value={stockStatus} onChange={(e) => { setPage(1); setStockStatus(e.target.value as any); }}>
-            <option value="">Каталог: всички</option>
-            <option value="in_stock">В наличност</option>
-            <option value="out_of_stock">Изчерпан</option>
-            <option value="on_order">По поръчка</option>
-          </Select>
-          <Select value={stockLocationFilter} onChange={(e) => { setPage(1); setStockLocationFilter(e.target.value as "" | ProductStockLocation); }}>
-            <option value="">Място: всички</option>
-            <option value="showroom">В магазин</option>
-            <option value="warehouse">В склада</option>
-          </Select>
-          <Select value={productRegionFilter} onChange={(e) => { setPage(1); setProductRegionFilter(e.target.value as "" | ProductRegion); }}>
-            <option value="">Страна: всички</option>
-            <option value="europe">EUROPE</option>
-            <option value="japan">JAPAN</option>
-          </Select>
-          <Button variant="secondary" onClick={load} className="gap-2">
-            <Search className="w-4 h-4" /> Обнови
-          </Button>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 mb-2 md:mb-3">
-          <Select value={brandId} onChange={(e) => { setPage(1); setBrandId(e.target.value); }}>
-            <option value="">Марка: всички</option>
-            {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </Select>
-          <Select value={typeId} onChange={(e) => { setPage(1); setTypeId(e.target.value); }}>
-            <option value="">Тип: всички</option>
-            {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </Select>
-          <Input value={priceMin} onChange={(e) => { setPage(1); setPriceMin(e.target.value); }} placeholder="Цена от" type="number" min={0} />
-          <Input value={priceMax} onChange={(e) => { setPage(1); setPriceMax(e.target.value); }} placeholder="Цена до" type="number" min={0} />
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3">
-          <Input value={createdFrom} onChange={(e) => { setPage(1); setCreatedFrom(e.target.value); }} type="date" />
-          <Input value={createdTo} onChange={(e) => { setPage(1); setCreatedTo(e.target.value); }} type="date" />
-          <Select value={sortBy} onChange={(e) => { setPage(1); setSortBy(e.target.value as SortField); }}>
-            <option value="created_at">Сортиране: дата</option>
-            <option value="name">Сортиране: име</option>
-            <option value="price">Сортиране: цена</option>
-            <option value="stock_status">Сортиране: наличност</option>
-            <option value="is_featured">Сортиране: избрани</option>
-          </Select>
-          <div className="flex gap-2">
-            <Select value={sortDir} onChange={(e) => { setPage(1); setSortDir(e.target.value as SortDir); }} className="flex-1">
-              <option value="desc">Низходящо</option>
-              <option value="asc">Възходящо</option>
-            </Select>
-            <Button variant="secondary" onClick={resetFilters} title="Изчисти филтрите" className="px-3">
-              <FilterX className="w-4 h-4 text-slate-500" />
-            </Button>
+      <Card className={`p-3 md:p-4 ${filtersOpen ? "block" : "hidden"} md:block space-y-4`}>
+        {/* Row 1: търсене + общ брояч + reset */}
+        <div className="flex items-center gap-2">
+          <div className="flex-1 hidden md:block">
+            <ProductSearchBox
+              value={q}
+              onChange={(next) => { setPage(1); setQ(next); }}
+              items={items}
+              placeholder="Търси по име, slug, сериен номер (вътрешен/външен) или № на фактура от доставчик…"
+            />
+          </div>
+          <div className="flex items-center gap-2 ml-auto">
+            <span className="text-xs font-semibold text-slate-500">
+              Намерени: <span className="text-slate-900">{meta.total}</span>
+            </span>
+            {activeFiltersCount > 0 && (
+              <Button variant="secondary" size="sm" onClick={resetFilters} title="Изчисти всички филтри" className="gap-1.5">
+                <FilterX className="w-3.5 h-3.5 text-slate-500" /> Изчисти ({activeFiltersCount})
+              </Button>
+            )}
           </div>
         </div>
+
+        {/* Бързи филтри: състояние + наличност в каталога — обединени на
+            един ред с малки prefix-етикети. На малки екрани групите се
+            пренареждат естествено във wrap. */}
+        <div className="space-y-2">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Бързи филтри</div>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mr-0.5">Състояние:</span>
+              <ChipToggle active={!condition} onClick={() => { setPage(1); setCondition(""); }}>Всички</ChipToggle>
+              <ChipToggle active={condition === "new"} onClick={() => { setPage(1); setCondition("new"); }}>Нови</ChipToggle>
+              <ChipToggle active={condition === "used"} onClick={() => { setPage(1); setCondition("used"); }}>Втора употреба</ChipToggle>
+            </div>
+            <span className="hidden md:inline-block h-5 w-px bg-slate-200" aria-hidden />
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mr-0.5">Наличност:</span>
+              <ChipToggle active={!stockStatus} onClick={() => { setPage(1); setStockStatus(""); }}>Всички</ChipToggle>
+              <ChipToggle
+                active={stockStatus === "in_stock"}
+                tone="success"
+                onClick={() => { setPage(1); setStockStatus("in_stock"); }}
+              >
+                <PackageCheck className="w-3 h-3" /> В наличност
+              </ChipToggle>
+              <ChipToggle
+                active={stockStatus === "on_order"}
+                tone="warning"
+                onClick={() => { setPage(1); setStockStatus("on_order"); }}
+              >
+                <Clock4 className="w-3 h-3" /> По поръчка
+              </ChipToggle>
+              <ChipToggle
+                active={stockStatus === "out_of_stock"}
+                tone="danger"
+                onClick={() => { setPage(1); setStockStatus("out_of_stock"); }}
+              >
+                <PackageX className="w-3 h-3" /> Изчерпан
+              </ChipToggle>
+              <span className="hidden md:inline-block h-5 w-px bg-slate-200 mx-0.5" aria-hidden />
+              <ChipToggle
+                active={featured === "featured"}
+                tone="brand"
+                onClick={() => { setPage(1); setFeatured(featured === "featured" ? "" : "featured"); }}
+              >
+                <Star className="w-3 h-3 fill-current" /> Топ продукти
+              </ChipToggle>
+            </div>
+          </div>
+        </div>
+
+        {/* Класификация: марка / тип / доставчик / място / страна */}
+        <div className="space-y-2">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Класификация</div>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 md:gap-3">
+            <Select value={brandId} onChange={(e) => { setPage(1); setBrandId(e.target.value); }}>
+              <option value="">Марка: всички</option>
+              {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </Select>
+            <Select value={typeId} onChange={(e) => { setPage(1); setTypeId(e.target.value); }}>
+              <option value="">Тип: всички</option>
+              {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </Select>
+            <Select value={supplierId} onChange={(e) => { setPage(1); setSupplierId(e.target.value); }}>
+              <option value="">Доставчик: всички</option>
+              {Object.entries(suppliersById)
+                .sort((a, b) => a[1].localeCompare(b[1], "bg"))
+                .map(([id, name]) => (
+                  <option key={id} value={id}>{name}</option>
+                ))}
+            </Select>
+            <Select value={stockLocationFilter} onChange={(e) => { setPage(1); setStockLocationFilter(e.target.value as "" | ProductStockLocation); }}>
+              <option value="">Място: всички</option>
+              <option value="showroom">В магазин</option>
+              <option value="warehouse">В склада</option>
+            </Select>
+            <Select value={productRegionFilter} onChange={(e) => { setPage(1); setProductRegionFilter(e.target.value as "" | ProductRegion); }}>
+              <option value="">Страна: всички</option>
+              <option value="europe">EUROPE</option>
+              <option value="japan">JAPAN</option>
+            </Select>
+          </div>
+        </div>
+
+        {/* Цена, период на закупуване и допълнителни критерии — всичко на
+            един ред (6 колони на десктоп), за да не се разкъсва вертикално
+            и да остава компактно. На таблет се пренарежда в 3, на мобилен
+            в 2 колони. Дата полетата имат „floating label“ — малък етикет
+            горе вляво в самия input, защото HTML5 date input не показва
+            placeholder. */}
+        <div className="space-y-2">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Цена, период на закупуване и критерии</div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 md:gap-3">
+            <Input value={priceMin} onChange={(e) => { setPage(1); setPriceMin(e.target.value); }} placeholder="Цена от (€)" type="number" min={0} />
+            <Input value={priceMax} onChange={(e) => { setPage(1); setPriceMax(e.target.value); }} placeholder="Цена до (€)" type="number" min={0} />
+            <div className="relative">
+              <span className="pointer-events-none absolute top-1 left-3 text-[9px] font-bold uppercase tracking-wide text-slate-500">Закупен от</span>
+              <Input
+                type="date"
+                value={purchasedFrom}
+                onChange={(e) => { setPage(1); setPurchasedFrom(e.target.value); }}
+                max={purchasedTo || undefined}
+                className="!pt-4 !pb-1.5 !text-xs"
+              />
+            </div>
+            <div className="relative">
+              <span className="pointer-events-none absolute top-1 left-3 text-[9px] font-bold uppercase tracking-wide text-slate-500">Закупен до</span>
+              <Input
+                type="date"
+                value={purchasedTo}
+                onChange={(e) => { setPage(1); setPurchasedTo(e.target.value); }}
+                min={purchasedFrom || undefined}
+                className="!pt-4 !pb-1.5 !text-xs"
+              />
+            </div>
+            <Select value={hasSerial} onChange={(e) => { setPage(1); setHasSerial(e.target.value as "" | "with" | "without"); }}>
+              <option value="">Сериен №: всички</option>
+              <option value="with">Само със сериен №</option>
+              <option value="without">Само без сериен №</option>
+            </Select>
+            <Select value={hasPurchasePrice} onChange={(e) => { setPage(1); setHasPurchasePrice(e.target.value as "" | "with" | "without"); }}>
+              <option value="">Закупна цена: всички</option>
+              <option value="with">Само с попълнена</option>
+              <option value="without">Само без попълнена</option>
+            </Select>
+          </div>
+        </div>
+
+        {/*
+         * Бел.: Сортирането НЕ е в този филтър блок преднамерено — то се
+         * управлява чрез кликване върху заглавията на колоните в таблицата
+         * по-долу (стандартен админ UX). Така екранът остава по-чист и
+         * връзката „кликни → сортира тази колона“ е очевидна.
+         */}
+
+        {/* Active filter chips */}
+        {activeFilters.length > 0 && (
+          <div className="pt-1 border-t border-slate-100">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Активни филтри</div>
+            <div className="flex flex-wrap gap-1.5">
+              {activeFilters.map((f) => (
+                <button
+                  key={f.key}
+                  onClick={() => { setPage(1); f.onClear(); }}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-blue-50 text-brand-blue-700 border border-brand-blue-200 hover:bg-brand-blue-100 hover:text-brand-blue-800 transition-colors"
+                  title="Премахни този филтър"
+                >
+                  {f.label}
+                  <span aria-hidden className="text-brand-blue-500">×</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </Card>
 
-      {/* Bulk actions — desktop always, mobile only when items selected */}
-      {(selected.length > 0) && (
-        <div className="md:hidden bg-brand-blue-50 border border-brand-blue-200 rounded-xl px-3 py-2.5 flex items-center justify-between gap-2 flex-wrap">
-          <span className="text-xs font-bold text-brand-blue-700">{selected.length} избрани</span>
+      {/* Bulk actions — само „Изтрий“. Видимо когато има поне един избран ред. */}
+      {selected.length > 0 && (
+        <div className="bg-brand-blue-50 border border-brand-blue-200 rounded-xl px-3 py-2.5 flex items-center justify-between gap-2 flex-wrap">
+          <span className="text-xs md:text-sm font-bold text-brand-blue-700">
+            Избрани: {selected.length}{" "}
+            <span className="font-normal text-brand-blue-600/80 hidden sm:inline">
+              (за останалите промени отвори картата на продукта)
+            </span>
+          </span>
           <div className="flex gap-1.5 flex-wrap">
-            <Button variant="danger" size="sm" onClick={() => bulk("delete")} className="gap-1 !py-1.5">
-              <Trash2 className="w-3.5 h-3.5" /> Изтрий
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setSelected([])}
+              className="!py-1.5"
+            >
+              Откажи избора
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={bulkDelete}
+              className="gap-1 !py-1.5"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Изтрий избраните
             </Button>
           </div>
         </div>
       )}
-
-      <div className="hidden md:flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-700 mr-2">
-          Масови действия <InfoDot text="Прилагат се само върху избраните редове." />
-        </span>
-        <Button variant="secondary" size="sm" onClick={() => bulk("set_new")} disabled={selected.length === 0} className="gap-1.5">
-          <Tag className="w-3.5 h-3.5 text-brand-blue-500" /> Маркирай Нови
-        </Button>
-        <Button variant="secondary" size="sm" onClick={() => bulk("set_used")} disabled={selected.length === 0} className="gap-1.5">
-          <Tag className="w-3.5 h-3.5 text-brand-orange-500" /> Маркирай Втора употреба
-        </Button>
-        <Button variant="danger" size="sm" onClick={() => bulk("delete")} disabled={selected.length === 0} className="gap-1.5">
-          <Trash2 className="w-3.5 h-3.5" /> Изтрий
-        </Button>
-      </div>
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm font-medium">{error}</div>}
 
@@ -627,13 +1077,14 @@ export default function AdminProductsPage() {
                   onChange={(e) => setSelected(e.target.checked ? items.map((x) => x.id) : [])}
                 />
               </Th>
-              <Th>Име</Th>
+              <SortableTh label="Име" field="name" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
               <Th>Марка</Th>
-              <Th>Състояние</Th>
+              <SortableTh label="Състояние" field="product_condition" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
               <Th>Тип</Th>
               <Th>Доставчик</Th>
-              <Th>Закупна</Th>
-              <Th>Продажна</Th>
+              <SortableTh label="Закупна" field="purchase_price" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+              <SortableTh label="Закупен на" field="purchased_at" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+              <SortableTh label="Продажна" field="price" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
               <Th>Сер. вътр.</Th>
               <Th>Сер. външ.</Th>
               <Th>Фактура доставчик</Th>
@@ -709,6 +1160,10 @@ export default function AdminProductsPage() {
                     </button>
                   )}
                 </Td>
+                {/* Дата на закупуване от доставчик — редактира се от формата на продукта. */}
+                <Td className="whitespace-nowrap text-xs text-slate-600">
+                  {fmtPurchaseDate(p.purchased_at)}
+                </Td>
                 <Td className="whitespace-nowrap text-sm font-semibold">
                   {editingPriceId === p.id ? (
                     <div className="flex flex-col gap-1 min-w-[7rem]">
@@ -781,6 +1236,26 @@ export default function AdminProductsPage() {
                       className="inline-flex items-center gap-1 px-2 py-1 bg-brand-orange-50 text-brand-orange-600 hover:bg-brand-orange-100 rounded-lg text-xs font-bold transition-colors"
                     >
                       <MessageCircle className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setFeaturedFor(p)}
+                      title={
+                        p.featured_position
+                          ? `Топ продукти — позиция #${p.featured_position}`
+                          : "Постави в Топ продукти на главната страница"
+                      }
+                      className={`relative inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold transition-colors ${
+                        p.featured_position
+                          ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
+                          : "bg-slate-100 text-slate-500 hover:bg-amber-50 hover:text-amber-600"
+                      }`}
+                    >
+                      <Star
+                        className={`w-3.5 h-3.5 ${p.featured_position ? "fill-current" : ""}`}
+                      />
+                      {p.featured_position && (
+                        <span className="text-[10px] font-black leading-none">#{p.featured_position}</span>
+                      )}
                     </button>
                   </div>
                 </Td>
@@ -856,6 +1331,8 @@ export default function AdminProductsPage() {
                       {fmtEuro(p.purchase_price)}
                     </button>
                   )}
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 pt-0.5">Закупен на</div>
+                  <div className="text-xs font-semibold text-slate-700">{fmtPurchaseDate(p.purchased_at)}</div>
                   <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 pt-0.5">Страна</div>
                   <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-bold text-slate-700 bg-slate-100">
                     {productRegionLabel(p.product_region)}
@@ -905,10 +1382,28 @@ export default function AdminProductsPage() {
               </Link>
               <button
                 onClick={() => setShareProduct(p)}
-                className="flex items-center justify-center gap-1.5 px-4 py-3 text-sm font-semibold text-brand-orange-600 hover:bg-brand-orange-50 active:bg-brand-orange-100 transition-colors"
+                className="flex items-center justify-center gap-1.5 px-4 py-3 text-sm font-semibold text-brand-orange-600 hover:bg-brand-orange-50 active:bg-brand-orange-100 transition-colors border-r border-slate-100"
                 title="Сподели в чат"
               >
                 <MessageCircle className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setFeaturedFor(p)}
+                className={`flex items-center justify-center gap-1.5 px-4 py-3 text-sm font-semibold transition-colors ${
+                  p.featured_position
+                    ? "text-amber-700 bg-amber-50 hover:bg-amber-100"
+                    : "text-slate-500 hover:bg-amber-50 hover:text-amber-600"
+                }`}
+                title={
+                  p.featured_position
+                    ? `Топ продукти — позиция #${p.featured_position}`
+                    : "Постави в Топ продукти"
+                }
+              >
+                <Star className={`w-4 h-4 ${p.featured_position ? "fill-current" : ""}`} />
+                {p.featured_position && (
+                  <span className="text-[11px] font-black leading-none">#{p.featured_position}</span>
+                )}
               </button>
             </div>
           </div>
@@ -1073,13 +1568,34 @@ export default function AdminProductsPage() {
       )}
 
       {confirmBulkDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-md" onClick={() => setConfirmBulkDelete(false)}>
-          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="text-xl font-black text-slate-950">Изтриване на продукти</div>
-            <div className="mt-2 text-sm text-slate-500">Сигурни ли сте, че искате да изтриете {selected.length} избрани продукта?</div>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-md"
+          onClick={() => setConfirmBulkDelete(false)}
+        >
+          <div
+            className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-rose-100"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <div className="shrink-0 w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div className="flex-1">
+                <div className="text-xl font-black text-slate-950">Окончателно изтриване</div>
+                <div className="mt-1 text-sm text-slate-600">
+                  Ще бъдат изтрити <span className="font-bold text-rose-700">{selected.length}</span>{" "}
+                  {selected.length === 1 ? "продукт" : "продукта"}. Това действие <span className="font-bold">не може да бъде отменено</span>.
+                </div>
+                <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
+                  Заедно с продуктите ще се изтрият: снимки, характеристики, оценки и история на запитванията за тях.
+                </div>
+              </div>
+            </div>
             <div className="mt-6 flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setConfirmBulkDelete(false)}>Отказ</Button>
-              <Button variant="danger" onClick={() => void bulk("delete")}>Изтрий</Button>
+              <Button variant="danger" onClick={() => void bulkDelete()} className="gap-1.5">
+                <Trash2 className="w-3.5 h-3.5" /> Изтрий {selected.length}
+              </Button>
             </div>
           </div>
         </div>
@@ -1095,6 +1611,20 @@ export default function AdminProductsPage() {
             brand_name: shareProduct.brands?.name ?? null,
           }}
           onClose={() => setShareProduct(null)}
+        />
+      )}
+
+      {featuredFor && (
+        <FeaturedSlotModal
+          product={{
+            id: featuredFor.id,
+            name: featuredFor.name,
+            brands: featuredFor.brands ?? null,
+            stock_status: featuredFor.stock_status,
+            is_active: featuredFor.is_active ?? null,
+          }}
+          onClose={() => setFeaturedFor(null)}
+          onSaved={() => { void load(); }}
         />
       )}
     </div>

@@ -4,9 +4,13 @@ import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminDb } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
 
+// Единственото масово действие е изтриване. Всички останали характеристики
+// (статус, тип, наличност, нови/втора употреба) се настройват индивидуално
+// от картата на конкретния продукт — всеки климатик е уникален артикул
+// със собствени серийни номера и не се мисли „на бройки“.
 const BodySchema = z.object({
   ids: z.array(z.string().uuid()).min(1).max(200),
-  action: z.enum(["set_new", "set_used", "delete"]),
+  action: z.literal("delete"),
 });
 
 export async function OPTIONS(req: NextRequest) {
@@ -18,28 +22,15 @@ export async function POST(req: NextRequest) {
   const parsed = BodySchema.safeParse(json);
   if (!parsed.success) return withCors(req, NextResponse.json({ error: "Невалидни данни" }, { status: 400 }));
 
-  const { ids, action } = parsed.data;
+  const { ids } = parsed.data;
   const supabase = await adminDb();
-  if (action === "delete") {
-    const { error } = await supabase.from("products").delete().in("id", ids);
-    if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
-    await logAdminActivity({
-      action: "product.bulk.delete",
-      entityType: "product",
-      details: { ids, affected: ids.length },
-    });
-    return withCors(req, NextResponse.json({ ok: true, affected: ids.length }));
-  }
-
-  const patch: Record<string, unknown> = {};
-  if (action === "set_new") patch.product_condition = "new";
-  if (action === "set_used") patch.product_condition = "used";
-  const { error } = await supabase.from("products").update(patch).in("id", ids);
+  const { error } = await supabase.from("products").delete().in("id", ids);
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
+
   await logAdminActivity({
-    action: `product.bulk.${action}`,
+    action: "product.bulk.delete",
     entityType: "product",
-    details: { ids, affected: ids.length, patch },
+    details: { ids, affected: ids.length },
   });
   return withCors(req, NextResponse.json({ ok: true, affected: ids.length }));
 }

@@ -50,11 +50,13 @@ const Accordion = ({ title, children, defaultOpen = true }: AccordionProps) => {
   );
 };
 
+export type BrandOption = { name: string; productCount?: number };
+
 interface FilterSidebarProps {
   showConditionFilters?: boolean;
   selectedConditions?: Array<'new' | 'used'>;
   onConditionToggle?: (condition: 'new' | 'used') => void;
-  brandsOptions?: string[];
+  brandsOptions?: Array<string | BrandOption>;
   selectedBrands: string[];
   onBrandToggle: (brand: string) => void;
   selectedEnergy: string[];
@@ -91,7 +93,11 @@ export const FilterSidebar = ({
   onReset,
   activeFilterCount,
 }: FilterSidebarProps) => {
-  const availableBrands = brandsOptions ?? BRANDS.map((b) => b.name);
+  const rawBrandOptions = brandsOptions ?? BRANDS.map((b) => b.name);
+  const availableBrands: BrandOption[] = rawBrandOptions.map((b) =>
+    typeof b === 'string' ? { name: b } : b,
+  );
+  const brandsAreDynamic = brandsOptions !== undefined;
   return (
     <aside className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sticky top-[120px] max-h-[calc(100vh-140px)] overflow-y-auto">
 
@@ -146,32 +152,54 @@ export const FilterSidebar = ({
 
       {/* Brands */}
       <Accordion title="Марка">
+        {brandsAreDynamic && availableBrands.length === 0 ? (
+          <div className="rounded-lg bg-gray-50 px-3 py-2.5 text-xs font-medium text-gray-500">
+            Няма налични марки за текущия избор.
+          </div>
+        ) : (
         <div className="space-y-2">
-          {availableBrands.map((brandName) => (
-            <label key={brandName} className="flex items-center gap-3 cursor-pointer group">
-              <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
-                selectedBrands.includes(brandName)
-                  ? 'border-[#00B4D8] bg-[#00B4D8]'
-                  : 'border-gray-300 group-hover:border-[#00B4D8]/50'
-              }`}>
-                {selectedBrands.includes(brandName) && (
-                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
+          {availableBrands.map(({ name: brandName, productCount }) => {
+            const isUnavailable = productCount === 0;
+            const isChecked = selectedBrands.includes(brandName);
+            return (
+              <label
+                key={brandName}
+                className={`flex items-center gap-3 group ${isUnavailable && !isChecked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                title={isUnavailable ? 'Няма налични продукти от тази марка в момента' : undefined}
+              >
+                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+                  isChecked
+                    ? 'border-[#00B4D8] bg-[#00B4D8]'
+                    : isUnavailable
+                      ? 'border-gray-200'
+                      : 'border-gray-300 group-hover:border-[#00B4D8]/50'
+                }`}>
+                  {isChecked && (
+                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </div>
+                <input
+                  type="checkbox"
+                  className="sr-only"
+                  checked={isChecked}
+                  disabled={isUnavailable && !isChecked}
+                  onChange={() => onBrandToggle(brandName)}
+                />
+                <span className={`text-sm font-medium transition-colors flex-1 ${isUnavailable ? 'text-gray-400' : 'text-gray-700 group-hover:text-gray-900'}`}>
+                  {brandName}
+                </span>
+                {typeof productCount === 'number' && (
+                  <span className={`text-[11px] font-semibold tabular-nums ${isUnavailable ? 'text-gray-300' : 'text-gray-400'}`}>
+                    {productCount}
+                  </span>
                 )}
-              </div>
-              <input
-                type="checkbox"
-                className="sr-only"
-                checked={selectedBrands.includes(brandName)}
-                onChange={() => onBrandToggle(brandName)}
-              />
-              <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900 transition-colors">
-                {brandName}
-              </span>
-            </label>
-          ))}
+              </label>
+            );
+          })}
         </div>
+        )}
       </Accordion>
 
       {/* Price Range */}

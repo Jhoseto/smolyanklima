@@ -27,6 +27,14 @@ export type SpecsForm = {
   seer: string;
   scop: string;
   warranty_months: string;
+  weight_indoor_kg: string;
+  weight_outdoor_kg: string;
+  dim_indoor_length_mm: string;
+  dim_indoor_width_mm: string;
+  dim_indoor_height_mm: string;
+  dim_outdoor_length_mm: string;
+  dim_outdoor_width_mm: string;
+  dim_outdoor_height_mm: string;
 };
 
 export type ImageRow = { url: string; sort_order: number; is_main: boolean };
@@ -70,6 +78,14 @@ export function emptySpecsForm(): SpecsForm {
     seer: "",
     scop: "",
     warranty_months: "",
+    weight_indoor_kg: "",
+    weight_outdoor_kg: "",
+    dim_indoor_length_mm: "",
+    dim_indoor_width_mm: "",
+    dim_indoor_height_mm: "",
+    dim_outdoor_length_mm: "",
+    dim_outdoor_width_mm: "",
+    dim_outdoor_height_mm: "",
   };
 }
 
@@ -164,6 +180,14 @@ function specsPayload(specs: SpecsForm) {
     seer: strNum(specs.seer),
     scop: strNum(specs.scop),
     warranty_months: strInt(specs.warranty_months),
+    weight_indoor_kg: strNum(specs.weight_indoor_kg),
+    weight_outdoor_kg: strNum(specs.weight_outdoor_kg),
+    dim_indoor_length_mm: strInt(specs.dim_indoor_length_mm),
+    dim_indoor_width_mm: strInt(specs.dim_indoor_width_mm),
+    dim_indoor_height_mm: strInt(specs.dim_indoor_height_mm),
+    dim_outdoor_length_mm: strInt(specs.dim_outdoor_length_mm),
+    dim_outdoor_width_mm: strInt(specs.dim_outdoor_width_mm),
+    dim_outdoor_height_mm: strInt(specs.dim_outdoor_height_mm),
   };
 }
 
@@ -303,6 +327,14 @@ export function mapLoadedProductToForm(p: {
       seer: n(sp?.seer),
       scop: n(sp?.scop),
       warranty_months: sp?.warranty_months != null ? String(sp.warranty_months) : "",
+      weight_indoor_kg: n(sp?.weight_indoor_kg),
+      weight_outdoor_kg: n(sp?.weight_outdoor_kg),
+      dim_indoor_length_mm: sp?.dim_indoor_length_mm != null ? String(sp.dim_indoor_length_mm) : "",
+      dim_indoor_width_mm: sp?.dim_indoor_width_mm != null ? String(sp.dim_indoor_width_mm) : "",
+      dim_indoor_height_mm: sp?.dim_indoor_height_mm != null ? String(sp.dim_indoor_height_mm) : "",
+      dim_outdoor_length_mm: sp?.dim_outdoor_length_mm != null ? String(sp.dim_outdoor_length_mm) : "",
+      dim_outdoor_width_mm: sp?.dim_outdoor_width_mm != null ? String(sp.dim_outdoor_width_mm) : "",
+      dim_outdoor_height_mm: sp?.dim_outdoor_height_mm != null ? String(sp.dim_outdoor_height_mm) : "",
     },
     images: [...(p.product_images ?? [])]
       .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
@@ -415,6 +447,8 @@ export function ProductFormFields({
   const [aiDialog, setAiDialog] = useState<"missing_name" | "replace_description" | "error" | null>(null);
   const [aiError, setAiError] = useState("");
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
+  const [dimsBusy, setDimsBusy] = useState(false);
+  const [dimsNotice, setDimsNotice] = useState<{ kind: "ok" | "warn" | "error"; text: string } | null>(null);
   const [indoorDup, setIndoorDup] = useState<SerialMatch[]>([]);
   const [outdoorDup, setOutdoorDup] = useState<SerialMatch[]>([]);
   const debouncedIndoor = useDebounce(form.indoorUnitSerial.trim(), 350);
@@ -517,6 +551,95 @@ export function ProductFormFields({
       setAiDialog("error");
     } finally {
       setAiBusy(false);
+    }
+  }
+
+  async function requestAiDimensions() {
+    if (!form.name.trim()) {
+      setDimsNotice({ kind: "warn", text: "Първо въведи името на модела, за да може AI да го разпознае." });
+      return;
+    }
+    setDimsBusy(true);
+    setDimsNotice(null);
+    try {
+      const brandName = brands.find((b) => b.id === form.brandId)?.name;
+      const typeName = types.find((t) => t.id === form.typeId)?.name;
+      const coolingPowerKw = strNum(form.specs.cooling_power_kw) ?? undefined;
+      const heatingPowerKw = strNum(form.specs.heating_power_kw) ?? undefined;
+      const res = await fetch("/api/admin/ai", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          task: "product_dimensions",
+          input: {
+            name: form.name.trim(),
+            brandName,
+            typeName,
+            coolingPowerKw,
+            heatingPowerKw,
+          },
+        }),
+      });
+      const json = await res.json().catch(() => ({} as Record<string, unknown>));
+      if (!res.ok) throw new Error(((json as any)?.error as string) || "AI заявката не успя");
+      const d = ((json as any).data ?? {}) as Record<string, unknown>;
+
+      const dimNum = (v: unknown): string => {
+        if (v == null) return "";
+        const n = typeof v === "number" ? v : Number(v);
+        if (!Number.isFinite(n) || n <= 0) return "";
+        return String(Math.round(n));
+      };
+      const weightNum = (v: unknown): string => {
+        if (v == null) return "";
+        const n = typeof v === "number" ? v : Number(v);
+        if (!Number.isFinite(n) || n <= 0) return "";
+        return (Math.round(n * 10) / 10).toString();
+      };
+
+      const next: SpecsForm = {
+        ...form.specs,
+        weight_indoor_kg: weightNum(d.weight_indoor_kg) || form.specs.weight_indoor_kg,
+        weight_outdoor_kg: weightNum(d.weight_outdoor_kg) || form.specs.weight_outdoor_kg,
+        dim_indoor_length_mm: dimNum(d.dim_indoor_length_mm) || form.specs.dim_indoor_length_mm,
+        dim_indoor_width_mm: dimNum(d.dim_indoor_width_mm) || form.specs.dim_indoor_width_mm,
+        dim_indoor_height_mm: dimNum(d.dim_indoor_height_mm) || form.specs.dim_indoor_height_mm,
+        dim_outdoor_length_mm: dimNum(d.dim_outdoor_length_mm) || form.specs.dim_outdoor_length_mm,
+        dim_outdoor_width_mm: dimNum(d.dim_outdoor_width_mm) || form.specs.dim_outdoor_width_mm,
+        dim_outdoor_height_mm: dimNum(d.dim_outdoor_height_mm) || form.specs.dim_outdoor_height_mm,
+      };
+
+      const filled = [
+        next.weight_indoor_kg, next.weight_outdoor_kg,
+        next.dim_indoor_length_mm, next.dim_indoor_width_mm, next.dim_indoor_height_mm,
+        next.dim_outdoor_length_mm, next.dim_outdoor_width_mm, next.dim_outdoor_height_mm,
+      ].filter((v) => v !== "").length;
+
+      setForm((f) => ({ ...f, specs: next }));
+
+      const confidence = String((d as any).confidence ?? "");
+      const source = typeof (d as any).source === "string" ? String((d as any).source).slice(0, 160) : "";
+      if (filled === 0 || confidence === "none") {
+        setDimsNotice({
+          kind: "warn",
+          text: `AI не успя да намери надеждни размери за „${form.name}“. Провери името/марката или попълни ръчно от спецификацията.`,
+        });
+      } else if (confidence === "low") {
+        setDimsNotice({
+          kind: "warn",
+          text: `Попълнени са ${filled}/8 полета, но AI не е напълно сигурен (low confidence). Прегледай стойностите преди запис.${source ? ` Източник: ${source}` : ""}`,
+        });
+      } else {
+        setDimsNotice({
+          kind: "ok",
+          text: `Попълнени са ${filled}/8 полета (${confidence || "ok"} confidence).${source ? ` Източник: ${source}` : ""}`,
+        });
+      }
+    } catch (e: any) {
+      setDimsNotice({ kind: "error", text: `Грешка: ${String(e?.message ?? e)}` });
+    } finally {
+      setDimsBusy(false);
     }
   }
 
@@ -834,6 +957,86 @@ export function ProductFormFields({
             <FieldTitle label="Гаранция (месеци)" info="Гаранционен срок в месеци (по избор). Пример: 36 = 3 години." />
             <Input value={form.specs.warranty_months} onChange={(e) => setSpec("warranty_months", e.target.value)} list="warranty-months-options" placeholder="36" />
           </label>
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Размери и тегло" badge="Информация от спецификацията / етикета на уреда" defaultOpen={false}>
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-4 -mt-1">
+          <p className="text-xs text-slate-500 max-w-xl">
+            Стойностите се показват в детайлната страница на продукта. Теглото е в килограми, размерите — в милиметри. Можеш да попълниш ръчно или да оставиш AI да намери стойностите от каталога на производителя.
+          </p>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => void requestAiDimensions()}
+            disabled={dimsBusy}
+            className="gap-1.5 whitespace-nowrap shrink-0"
+            title="AI намира размерите и теглото от каталога на производителя по името и марката."
+          >
+            <Wand2 className="w-3.5 h-3.5" />
+            {dimsBusy ? "AI търси..." : "AI попълни размери и тегло"}
+          </Button>
+        </div>
+
+        {dimsNotice && (
+          <div
+            className={`mb-4 rounded-xl border px-3 py-2.5 text-[12px] leading-snug font-medium ${
+              dimsNotice.kind === "ok"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                : dimsNotice.kind === "warn"
+                  ? "border-amber-200 bg-amber-50 text-amber-900"
+                  : "border-red-200 bg-red-50 text-red-800"
+            }`}
+          >
+            {dimsNotice.text}
+          </div>
+        )}
+
+        <div className="space-y-5">
+          <div>
+            <div className="text-xs font-bold uppercase tracking-wider text-brand-blue-700 mb-2">Вътрешен блок</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <label className="block">
+                <FieldTitle label="Тегло (kg)" info="Тегло на вътрешния блок в килограми." />
+                <Input value={form.specs.weight_indoor_kg} onChange={(e) => setSpec("weight_indoor_kg", e.target.value)} placeholder="24.0" inputMode="decimal" />
+              </label>
+              <label className="block">
+                <FieldTitle label="Дължина (mm)" info="Дължина на вътрешния блок в милиметри." />
+                <Input value={form.specs.dim_indoor_length_mm} onChange={(e) => setSpec("dim_indoor_length_mm", e.target.value)} placeholder="840" inputMode="numeric" />
+              </label>
+              <label className="block">
+                <FieldTitle label="Ширина (mm)" info="Ширина (дълбочина) на вътрешния блок в милиметри." />
+                <Input value={form.specs.dim_indoor_width_mm} onChange={(e) => setSpec("dim_indoor_width_mm", e.target.value)} placeholder="840" inputMode="numeric" />
+              </label>
+              <label className="block">
+                <FieldTitle label="Височина (mm)" info="Височина на вътрешния блок в милиметри." />
+                <Input value={form.specs.dim_indoor_height_mm} onChange={(e) => setSpec("dim_indoor_height_mm", e.target.value)} placeholder="298" inputMode="numeric" />
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs font-bold uppercase tracking-wider text-brand-orange-700 mb-2">Външен блок</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <label className="block">
+                <FieldTitle label="Тегло (kg)" info="Тегло на външния блок в килограми." />
+                <Input value={form.specs.weight_outdoor_kg} onChange={(e) => setSpec("weight_outdoor_kg", e.target.value)} placeholder="134.0" inputMode="decimal" />
+              </label>
+              <label className="block">
+                <FieldTitle label="Дължина (mm)" info="Дължина на външния блок в милиметри." />
+                <Input value={form.specs.dim_outdoor_length_mm} onChange={(e) => setSpec("dim_outdoor_length_mm", e.target.value)} placeholder="950" inputMode="numeric" />
+              </label>
+              <label className="block">
+                <FieldTitle label="Ширина (mm)" info="Ширина (дълбочина) на външния блок в милиметри." />
+                <Input value={form.specs.dim_outdoor_width_mm} onChange={(e) => setSpec("dim_outdoor_width_mm", e.target.value)} placeholder="330" inputMode="numeric" />
+              </label>
+              <label className="block">
+                <FieldTitle label="Височина (mm)" info="Височина на външния блок в милиметри." />
+                <Input value={form.specs.dim_outdoor_height_mm} onChange={(e) => setSpec("dim_outdoor_height_mm", e.target.value)} placeholder="1350" inputMode="numeric" />
+              </label>
+            </div>
+          </div>
         </div>
       </CollapsibleSection>
 

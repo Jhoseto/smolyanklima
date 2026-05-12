@@ -264,15 +264,33 @@ export async function GET(req: NextRequest) {
   const typeIds = Array.from(new Set(rows.map((r) => r.type_id).filter(Boolean))) as string[];
   const productIds = rows.map((r) => r.id as string);
 
+  const SPECS_LIST_SELECT_WITH_DIMENSIONS =
+    "product_id,coverage_m2,noise_db,cooling_power_kw,heating_power_kw,refrigerant,wifi,energy_class_cool,energy_class_heat,seer,scop,warranty_months,weight_indoor_kg,weight_outdoor_kg,dim_indoor_length_mm,dim_indoor_width_mm,dim_indoor_height_mm,dim_outdoor_length_mm,dim_outdoor_width_mm,dim_outdoor_height_mm";
+  const SPECS_LIST_SELECT_BASE =
+    "product_id,coverage_m2,noise_db,cooling_power_kw,heating_power_kw,refrigerant,wifi,energy_class_cool,energy_class_heat,seer,scop,warranty_months";
+
+  const fetchSpecsForProducts = async () => {
+    if (productIds.length === 0) return { data: [], error: null } as { data: unknown[]; error: { message?: string; code?: string } | null };
+    let res = await supabase
+      .from("product_specs")
+      .select(SPECS_LIST_SELECT_WITH_DIMENSIONS)
+      .in("product_id", productIds);
+    if (
+      res.error &&
+      (String((res.error as any).code ?? "") === "42703" ||
+        /weight_(indoor|outdoor)_kg|dim_(indoor|outdoor)_(length|width|height)_mm/.test(
+          String((res.error as any).message ?? ""),
+        ))
+    ) {
+      res = await supabase.from("product_specs").select(SPECS_LIST_SELECT_BASE).in("product_id", productIds);
+    }
+    return res as { data: unknown[]; error: { message?: string; code?: string } | null };
+  };
+
   const [brandsRes, typesRes, specsRes, imagesRes, pfRes] = await Promise.all([
     brandIds.length > 0 ? supabase.from("brands").select("id,slug,name").in("id", brandIds) : Promise.resolve({ data: [], error: null } as any),
     typeIds.length > 0 ? supabase.from("product_types").select("id,name").in("id", typeIds) : Promise.resolve({ data: [], error: null } as any),
-    productIds.length > 0
-      ? supabase
-          .from("product_specs")
-          .select("product_id,coverage_m2,noise_db,cooling_power_kw,heating_power_kw,refrigerant,wifi,energy_class_cool,energy_class_heat,seer,scop,warranty_months")
-          .in("product_id", productIds)
-      : Promise.resolve({ data: [], error: null } as any),
+    fetchSpecsForProducts(),
     productIds.length > 0 ? supabase.from("product_images").select("product_id,url,sort_order,is_main").in("product_id", productIds) : Promise.resolve({ data: [], error: null } as any),
     productIds.length > 0 ? supabase.from("product_features").select("product_id,feature_id").in("product_id", productIds) : Promise.resolve({ data: [], error: null } as any),
   ]);

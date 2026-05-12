@@ -21,6 +21,14 @@ const SpecsSchema = z.object({
   seer: z.number().nonnegative().nullable().optional(),
   scop: z.number().nonnegative().nullable().optional(),
   warranty_months: z.number().int().nonnegative().nullable().optional(),
+  weight_indoor_kg: z.number().nonnegative().nullable().optional(),
+  weight_outdoor_kg: z.number().nonnegative().nullable().optional(),
+  dim_indoor_length_mm: z.number().int().nonnegative().nullable().optional(),
+  dim_indoor_width_mm: z.number().int().nonnegative().nullable().optional(),
+  dim_indoor_height_mm: z.number().int().nonnegative().nullable().optional(),
+  dim_outdoor_length_mm: z.number().int().nonnegative().nullable().optional(),
+  dim_outdoor_width_mm: z.number().int().nonnegative().nullable().optional(),
+  dim_outdoor_height_mm: z.number().int().nonnegative().nullable().optional(),
 });
 
 const ImageSchema = z.object({
@@ -30,15 +38,17 @@ const ImageSchema = z.object({
 });
 const MAX_IMAGES = 4;
 
-/** Списък: марка/тип + доставка; `stock_location` (0031), `product_region` (0032) — fallback при липсваща колона. */
+/** Списък: марка/тип + доставка; `stock_location` (0031), `product_region` (0032),
+ *  `featured_position`+`featured_badge` (0035) — fallback при липсваща колона. */
+const FEATURED_COLS = ",featured_position,featured_badge";
 const ADMIN_PRODUCT_LIST_SELECT_MIN =
-  "id,slug,name,price,purchase_price,product_condition,is_featured,stock_status,stock_quantity,sold_quantity,created_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,brands:brand_id(name),product_types:type_id(name)";
+  "id,slug,name,price,purchase_price,product_condition,is_featured,is_active,stock_status,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,brands:brand_id(name),product_types:type_id(name)";
 const ADMIN_PRODUCT_LIST_SELECT_WITH_REGION =
-  "id,slug,name,price,purchase_price,product_condition,is_featured,stock_status,stock_quantity,sold_quantity,created_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,product_region,brands:brand_id(name),product_types:type_id(name)";
+  "id,slug,name,price,purchase_price,product_condition,is_featured,is_active,stock_status,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,product_region,brands:brand_id(name),product_types:type_id(name)";
 const ADMIN_PRODUCT_LIST_SELECT_WITH_LOCATION =
-  "id,slug,name,price,purchase_price,product_condition,is_featured,stock_status,stock_location,stock_quantity,sold_quantity,created_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,brands:brand_id(name),product_types:type_id(name)";
+  "id,slug,name,price,purchase_price,product_condition,is_featured,is_active,stock_status,stock_location,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,brands:brand_id(name),product_types:type_id(name)";
 const ADMIN_PRODUCT_LIST_SELECT_FULL =
-  "id,slug,name,price,purchase_price,product_condition,is_featured,stock_status,stock_location,stock_quantity,sold_quantity,created_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,product_region,brands:brand_id(name),product_types:type_id(name)";
+  "id,slug,name,price,purchase_price,product_condition,is_featured,is_active,stock_status,stock_location,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,product_region,brands:brand_id(name),product_types:type_id(name)";
 const QuerySchema = z.object({
   q: z.string().optional(),
   condition: z.enum(["new", "used"]).optional(),
@@ -48,19 +58,30 @@ const QuerySchema = z.object({
   productRegion: z.enum(["europe", "japan"]).optional(),
   brandId: z.string().uuid().optional(),
   typeId: z.string().uuid().optional(),
+  // Доставчик (контакт от тип supplier) — за бърз филтър по доставчик.
+  supplierId: z.string().uuid().optional(),
   priceMin: z.coerce.number().nonnegative().optional(),
   priceMax: z.coerce.number().nonnegative().optional(),
-  stockMin: z.coerce.number().int().nonnegative().optional(),
-  stockMax: z.coerce.number().int().nonnegative().optional(),
-  soldMin: z.coerce.number().int().nonnegative().optional(),
-  soldMax: z.coerce.number().int().nonnegative().optional(),
-  createdFrom: z.string().optional(),
-  createdTo: z.string().optional(),
+  // Всеки климатик е уникален артикул (със собствени серийни номера), затова
+  // не филтрираме „по бройки“. Оставяме само бизнес-критериите: със/без
+  // сериен №, със/без попълнена закупна цена.
+  hasSerial: z.enum(["with", "without"]).optional(),
+  hasPurchasePrice: z.enum(["with", "without"]).optional(),
+  // Филтриране по период на ЗАКУПУВАНЕ (`purchased_at`), а не по дата на
+  // добавяне в БД (`created_at`). Така справките са по бизнес-логиката:
+  // „всичко закупено между X и Y“ — отчетност към счетоводител/доставчик.
+  purchasedFrom: z.string().optional(),
+  purchasedTo: z.string().optional(),
+  // Сортиране по дата (created_at) и филтриране по период по нея
+  // съзнателно НЕ се поддържат — всеки климатик е уникален артикул,
+  // а не „склад на бройки“, така че подреждане по добавяне не носи смисъл.
+  // Поддържаните полета са онези, които стоят като колони в админ таблицата
+  // и могат да се сортират директно (без join към друга таблица).
   sortBy: z
-    .enum(["created_at", "name", "price", "stock_quantity", "sold_quantity", "stock_status", "is_featured"])
+    .enum(["name", "price", "purchase_price", "product_condition", "purchased_at"])
     .optional()
-    .default("created_at"),
-  sortDir: z.enum(["asc", "desc"]).optional().default("desc"),
+    .default("name"),
+  sortDir: z.enum(["asc", "desc"]).optional().default("asc"),
   page: z.coerce.number().int().min(1).optional().default(1),
   perPage: z.coerce.number().int().min(1).max(100).optional().default(20),
 });
@@ -110,14 +131,13 @@ export async function GET(req: NextRequest) {
     productRegion: regionFilter,
     brandId,
     typeId,
+    supplierId,
     priceMin,
     priceMax,
-    stockMin,
-    stockMax,
-    soldMin,
-    soldMax,
-    createdFrom,
-    createdTo,
+    hasSerial,
+    hasPurchasePrice,
+    purchasedFrom,
+    purchasedTo,
     sortBy,
     sortDir,
     page,
@@ -128,8 +148,20 @@ export async function GET(req: NextRequest) {
   const runList = (selectCols: string, applyStockLocationFilter: boolean, applyRegionFilter: boolean) => {
     let query = supabase.from("products").select(selectCols, { count: "exact" });
     if (q?.trim()) {
-      const t = q.trim();
-      query = query.or(`name.ilike.%${t}%,slug.ilike.%${t}%`);
+      // Универсално търсене: име, slug, серийни номера (вътрешен/външен
+      // блок) и номер на фактура от доставчик. Запетайките в `q` се
+      // премахват, защото PostgREST ползва запетая като разделител в
+      // `or` израза и невалиден синтаксис би върнал 400.
+      const t = q.trim().replace(/,/g, " ");
+      query = query.or(
+        [
+          `name.ilike.%${t}%`,
+          `slug.ilike.%${t}%`,
+          `indoor_unit_serial.ilike.%${t}%`,
+          `outdoor_unit_serial.ilike.%${t}%`,
+          `supplier_invoice_number.ilike.%${t}%`,
+        ].join(","),
+      );
     }
     if (condition) query = query.eq("product_condition", condition);
     if (featured === "featured") query = query.eq("is_featured", true);
@@ -139,23 +171,40 @@ export async function GET(req: NextRequest) {
     if (applyRegionFilter && regionFilter) query = query.eq("product_region", regionFilter);
     if (brandId) query = query.eq("brand_id", brandId);
     if (typeId) query = query.eq("type_id", typeId);
+    if (supplierId) query = query.eq("supplier_id", supplierId);
     if (priceMin !== undefined) query = query.gte("price", priceMin);
     if (priceMax !== undefined) query = query.lte("price", priceMax);
-    if (stockMin !== undefined) query = query.gte("stock_quantity", stockMin);
-    if (stockMax !== undefined) query = query.lte("stock_quantity", stockMax);
-    if (soldMin !== undefined) query = query.gte("sold_quantity", soldMin);
-    if (soldMax !== undefined) query = query.lte("sold_quantity", soldMax);
-    if (createdFrom) query = query.gte("created_at", `${createdFrom}T00:00:00.000Z`);
-    if (createdTo) query = query.lte("created_at", `${createdTo}T23:59:59.999Z`);
+    if (hasSerial === "with") {
+      // Има поне един сериен номер (вътрешен или външен блок).
+      query = query.or("indoor_unit_serial.not.is.null,outdoor_unit_serial.not.is.null");
+    }
+    if (hasSerial === "without") {
+      query = query.is("indoor_unit_serial", null).is("outdoor_unit_serial", null);
+    }
+    if (hasPurchasePrice === "with") query = query.not("purchase_price", "is", null);
+    if (hasPurchasePrice === "without") query = query.is("purchase_price", null);
+    // Период на закупуване: колоната е тип `date` (без час) → сравняваме
+    // директно с ISO дата (YYYY-MM-DD), което Postgres приема нативно.
+    if (purchasedFrom) query = query.gte("purchased_at", purchasedFrom);
+    if (purchasedTo) query = query.lte("purchased_at", purchasedTo);
     const from = (page - 1) * perPage;
     const to = from + perPage - 1;
+    // Допълнителното подреждане по `name` гарантира стабилен ред при
+    // равни стойности (напр. еднакви цени → азбучен ред по име).
     return query
       .order(sortBy, { ascending: sortDir === "asc" })
-      .order("created_at", { ascending: false })
+      .order("name", { ascending: true })
       .range(from, to);
   };
 
+  // Опитваме първо с `featured_position`+`featured_badge` (миграция 0035),
+  // и при липсващи колони падаме до старите варианти. Това запазва обратна
+  // съвместимост за DB-та, върху които миграцията още не е приложена.
   const listAttempts: Array<[string, boolean, boolean]> = [
+    [ADMIN_PRODUCT_LIST_SELECT_FULL + FEATURED_COLS, true, Boolean(regionFilter)],
+    [ADMIN_PRODUCT_LIST_SELECT_WITH_REGION + FEATURED_COLS, false, Boolean(regionFilter)],
+    [ADMIN_PRODUCT_LIST_SELECT_WITH_LOCATION + FEATURED_COLS, true, false],
+    [ADMIN_PRODUCT_LIST_SELECT_MIN + FEATURED_COLS, false, false],
     [ADMIN_PRODUCT_LIST_SELECT_FULL, true, Boolean(regionFilter)],
     [ADMIN_PRODUCT_LIST_SELECT_WITH_REGION, false, Boolean(regionFilter)],
     [ADMIN_PRODUCT_LIST_SELECT_WITH_LOCATION, true, false],

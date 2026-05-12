@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Star, Check, Wifi, ShieldCheck, Zap, Volume2, Wind, ChevronDown } from 'lucide-react';
+import { X, Star, Check, Wifi, ShieldCheck, Zap, Volume2, Wind, ChevronDown, Ruler, Weight } from 'lucide-react';
 import type { CatalogProduct } from '../../data/types/product';
 import { PremiumImageGallery } from '../media/PremiumImageGallery';
 import { rateProduct } from '../../data/productService';
@@ -254,6 +254,75 @@ export const QuickViewModal = ({
                     )}
                   </div>
                 </div>
+
+                {/* Размери и тегло */}
+                {(product.weightIndoorKg != null || product.weightOutdoorKg != null ||
+                  product.dimensions?.indoor || product.dimensions?.outdoor) && (
+                  <div className="bg-gray-50 rounded-2xl p-4 mb-5">
+                    <h3 className="text-xs font-black text-gray-500 uppercase tracking-wider mb-3">Размери и тегло</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {(product.weightIndoorKg != null || product.dimensions?.indoor) && (
+                        <div className="bg-white rounded-xl p-3 border border-gray-100">
+                          <div className="text-[10px] font-black text-[#0077B6] uppercase tracking-widest mb-2">Вътрешен блок</div>
+                          {product.weightIndoorKg != null && (
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <Weight className="w-3.5 h-3.5 text-gray-400" />
+                              <span className="text-xs text-gray-500">Тегло</span>
+                              <span className="text-xs font-bold text-gray-800 ml-auto">
+                                {product.weightIndoorKg.toLocaleString('bg-BG', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg
+                              </span>
+                            </div>
+                          )}
+                          {(product.dimensions?.indoor?.lengthMm != null ||
+                            product.dimensions?.indoor?.widthMm != null ||
+                            product.dimensions?.indoor?.heightMm != null) && (
+                            <div className="flex items-start gap-1.5">
+                              <Ruler className="w-3.5 h-3.5 text-gray-400 mt-0.5" />
+                              <span className="text-xs text-gray-500">Размери</span>
+                              <span className="text-xs font-bold text-gray-800 ml-auto text-right">
+                                {[
+                                  product.dimensions.indoor.lengthMm,
+                                  product.dimensions.indoor.widthMm,
+                                  product.dimensions.indoor.heightMm,
+                                ].map((v) => (v == null ? '—' : v)).join(' × ')} mm
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {(product.weightOutdoorKg != null || product.dimensions?.outdoor) && (
+                        <div className="bg-white rounded-xl p-3 border border-gray-100">
+                          <div className="text-[10px] font-black text-[#FF4D00] uppercase tracking-widest mb-2">Външен блок</div>
+                          {product.weightOutdoorKg != null && (
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <Weight className="w-3.5 h-3.5 text-gray-400" />
+                              <span className="text-xs text-gray-500">Тегло</span>
+                              <span className="text-xs font-bold text-gray-800 ml-auto">
+                                {product.weightOutdoorKg.toLocaleString('bg-BG', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg
+                              </span>
+                            </div>
+                          )}
+                          {(product.dimensions?.outdoor?.lengthMm != null ||
+                            product.dimensions?.outdoor?.widthMm != null ||
+                            product.dimensions?.outdoor?.heightMm != null) && (
+                            <div className="flex items-start gap-1.5">
+                              <Ruler className="w-3.5 h-3.5 text-gray-400 mt-0.5" />
+                              <span className="text-xs text-gray-500">Размери</span>
+                              <span className="text-xs font-bold text-gray-800 ml-auto text-right">
+                                {[
+                                  product.dimensions.outdoor.lengthMm,
+                                  product.dimensions.outdoor.widthMm,
+                                  product.dimensions.outdoor.heightMm,
+                                ].map((v) => (v == null ? '—' : v)).join(' × ')} mm
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-2 text-right">Размери в формат Д × Ш × В (mm)</p>
+                  </div>
+                )}
 
                 {/* Feature chips */}
                 <div className="flex flex-wrap gap-2 mb-5">

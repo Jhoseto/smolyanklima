@@ -1,218 +1,162 @@
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
-import { Star, Zap, Snowflake, Repeat, Check, ChevronRight } from 'lucide-react';
+import { Star, Zap, Snowflake, Repeat, Wifi, ChevronRight, Loader2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
-const products = [
-  {
-    id: 'daikin-perfera',
-    brand: 'DAIKIN',
-    model: 'Perfera FTXM25R',
-    type: 'Стенен климатик',
-    image: '/images/daikin-perfera.jpg',
-    price: '659',
-    priceWithMount: '812',
-    rating: 4.9,
-    reviews: 47,
-    energyClass: 'A+++',
-    badge: { text: 'Bestseller', bg: 'bg-yellow-100', textCol: 'text-yellow-700' },
-    specs: [
-      { icon: <Zap className="w-3.5 h-3.5 text-yellow-500" />, text: '2.5 kW' },
-      { icon: <Snowflake className="w-3.5 h-3.5 text-blue-500" />, text: 'Охл/Отопл' },
-      { icon: <Repeat className="w-3.5 h-3.5 text-teal-500" />, text: 'Инвертор' },
-    ],
-    extras: ['Инвертор', 'WiFi управление', 'Нощен режим'],
-    cardBorder: 'border-blue-200 shadow-blue-100/50',
-    imgBg: 'bg-gray-50',
-  },
-  {
-    id: 'mitsubishi-msz-ln25vgw',
-    brand: 'MITSUBISHI',
-    model: 'MSZ-LN35VG',
-    type: 'Стенен климатик',
-    image: '/images/mitsubishi-msz.jpg',
-    price: '761',
-    priceWithMount: '914',
-    rating: 4.8,
-    reviews: 31,
-    energyClass: 'A+++',
-    badge: { text: 'Premium', bg: 'bg-blue-100', textCol: 'text-blue-700' },
-    specs: [
-      { icon: <Zap className="w-3.5 h-3.5 text-yellow-500" />, text: '3.5 kW' },
-      { icon: <Snowflake className="w-3.5 h-3.5 text-blue-500" />, text: 'Охл/Отопл' },
-      { icon: <Repeat className="w-3.5 h-3.5 text-teal-500" />, text: 'Инвертор' },
-    ],
-    extras: ['3D i-see сензор', 'Плазмен филтър', 'Супер тих'],
-    cardBorder: 'border-gray-200',
-    imgBg: 'bg-white',
-  },
-  {
-    id: 'samsung-windfree',
-    brand: 'SAMSUNG',
-    model: 'WindFree Comfort',
-    type: 'Стенен климатик',
-    image: '/images/samsung-windfree.jpg',
-    price: '500',
-    priceWithMount: '653',
-    rating: 4.7,
-    reviews: 58,
-    energyClass: 'A++',
-    badge: { text: 'Топ оферта', bg: 'bg-green-100', textCol: 'text-green-700' },
-    specs: [
-      { icon: <Zap className="w-3.5 h-3.5 text-yellow-500" />, text: '3.5 kW' },
-      { icon: <Snowflake className="w-3.5 h-3.5 text-blue-500" />, text: 'Охл/Отопл' },
-      { icon: <Repeat className="w-3.5 h-3.5 text-teal-500" />, text: 'Инвертор' },
-    ],
-    extras: ['WindFree™', 'AI Auto Cooling', 'SmartThings'],
-    cardBorder: 'border-gray-200',
-    imgBg: 'bg-gray-100',
-  },
-  {
-    id: 'gree-fairy-12',
-    brand: 'GREE',
-    model: 'Fairy GWH12ACC',
-    type: 'Стенен климатик',
-    image: '/images/gree-fairy.jpg',
-    price: '536',
-    priceWithMount: '689',
-    rating: 4.6,
-    reviews: 82,
-    energyClass: 'A++',
-    badge: null,
-    specs: [
-      { icon: <Zap className="w-3.5 h-3.5 text-yellow-500" />, text: '3.5 kW' },
-      { icon: <Snowflake className="w-3.5 h-3.5 text-blue-500" />, text: 'Охл/Отопл' },
-      { icon: <Repeat className="w-3.5 h-3.5 text-teal-500" />, text: 'Инвертор' },
-    ],
-    extras: ['Йонизатор', 'Самопочистване', 'WiFi управление'],
-    cardBorder: 'border-gray-200',
-    imgBg: 'bg-white',
-  },
-  {
-    id: 'daikin-sensira-18',
-    brand: 'DAIKIN',
-    model: 'Sensira FTXF35D',
-    type: 'Стенен климатик',
-    image: '/images/daikin-sensira.jpg',
-    price: '587',
-    priceWithMount: '740',
-    rating: 4.8,
-    reviews: 124,
-    energyClass: 'A++',
-    badge: { text: 'Надежден', bg: 'bg-gray-100', textCol: 'text-gray-700' },
-    specs: [
-      { icon: <Zap className="w-3.5 h-3.5 text-yellow-500" />, text: '3.3 kW' },
-      { icon: <Snowflake className="w-3.5 h-3.5 text-blue-500" />, text: 'Охл/Отопл' },
-      { icon: <Repeat className="w-3.5 h-3.5 text-teal-500" />, text: 'Инвертор' },
-    ],
-    extras: ['Тих режим 20dBA', 'Икономичен', 'Компактен'],
-    cardBorder: 'border-gray-200',
-    imgBg: 'bg-gray-50',
-  },
-  {
-    id: 'fujitsu-asyg12kmtb',
-    brand: 'FUJITSU',
-    model: 'ASYG12KMTB',
-    type: 'Стенен климатик',
-    image: '/images/fujitsu-asyg.jpg',
-    price: '709',
-    priceWithMount: '862',
-    rating: 4.7,
-    reviews: 19,
-    energyClass: 'A++',
-    badge: null,
-    specs: [
-      { icon: <Zap className="w-3.5 h-3.5 text-yellow-500" />, text: '3.4 kW' },
-      { icon: <Snowflake className="w-3.5 h-3.5 text-blue-500" />, text: 'Охл/Отопл' },
-      { icon: <Repeat className="w-3.5 h-3.5 text-teal-500" />, text: 'Инвертор' },
-    ],
-    extras: ['Слим дизайн', 'Сензор за присъствие', 'Турбо режим'],
-    cardBorder: 'border-gray-200',
-    imgBg: 'bg-gray-50',
-  },
-] as const;
+// Зарежда секцията „Топ продукти“ от backend-а (endpoint:
+// /api/featured-products). Админът подрежда до 6 продукта в схема 3×2
+// и им задава визуален „badge“ от затворения списък по-долу.
 
-type Product = (typeof products)[number];
+type FeaturedBadge =
+  | 'bestseller'
+  | 'top_offer'
+  | 'promo'
+  | 'top_searched'
+  | 'premium'
+  | 'best_value';
 
-function ProductCard({ product, index }: { product: Product; index: number }) {
+type FeaturedProduct = {
+  id: string;
+  slug: string;
+  name: string;
+  price: number | null;
+  priceWithMount: number | null;
+  position: number; // 1..6
+  badge: FeaturedBadge | null;
+  rating: number | null;
+  reviewCount: number;
+  brand: { id?: string; slug?: string; name?: string } | null;
+  type: { id?: string; name?: string } | null;
+  image: string;
+  specs: {
+    coolingKw: number | null;
+    heatingKw: number | null;
+    powerKw: number | null;
+    energyClass: string | null;
+    wifi: boolean | null;
+    noiseDb: number | null;
+  };
+};
+
+const BADGE_META: Record<FeaturedBadge, { label: string; bg: string; text: string }> = {
+  bestseller:   { label: 'Bestseller',   bg: 'bg-yellow-100',  text: 'text-yellow-700'  },
+  top_offer:    { label: 'Топ оферта',   bg: 'bg-emerald-100', text: 'text-emerald-700' },
+  promo:        { label: 'Промоция',     bg: 'bg-rose-100',    text: 'text-rose-700'    },
+  top_searched: { label: 'Най-търсен',   bg: 'bg-blue-100',    text: 'text-blue-700'    },
+  premium:      { label: 'Премиум',      bg: 'bg-indigo-100',  text: 'text-indigo-700'  },
+  best_value:   { label: 'Най-изгоден',  bg: 'bg-teal-100',    text: 'text-teal-700'    },
+};
+
+function fmtKw(n: number | null): string {
+  if (n == null || !Number.isFinite(n) || n <= 0) return '';
+  return `${n.toFixed(1).replace(/\.0$/, '')} kW`;
+}
+
+function fmtPrice(n: number | null): string {
+  if (n == null || !Number.isFinite(n)) return '—';
+  return Math.round(n).toString();
+}
+
+function ProductCard({ product, index }: { product: FeaturedProduct; index: number }) {
+  const badge = product.badge ? BADGE_META[product.badge] : null;
+  const power = fmtKw(product.specs.powerKw);
+  const brand = (product.brand?.name ?? '').toUpperCase();
+  const typeLabel = product.type?.name ?? 'Климатик';
+  const rating = product.rating ?? 0;
   return (
     <motion.div
       initial={{ opacity: 0, y: 24 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ delay: index * 0.07 }}
-      className={`bg-white rounded-[1.75rem] overflow-hidden shadow-sm hover:shadow-xl transition-shadow duration-300 border ${product.cardBorder} flex flex-col group`}
+      className="bg-white rounded-[1.75rem] overflow-hidden shadow-sm hover:shadow-xl transition-shadow duration-300 border border-gray-200 flex flex-col group"
     >
       {/* Снимка */}
-      <div className={`relative shrink-0 overflow-hidden ${product.imgBg ?? 'bg-gray-50'}`} style={{ height: 110 }}>
-        <img
-          src={product.image}
-          alt={product.model}
-          className="w-full h-full object-contain p-2 transition-transform duration-700 group-hover:scale-105"
-          draggable={false}
-        />
+      <div className="relative shrink-0 overflow-hidden bg-gray-50" style={{ height: 110 }}>
+        {product.image ? (
+          <img
+            src={product.image}
+            alt={product.name}
+            className="w-full h-full object-contain p-2 transition-transform duration-700 group-hover:scale-105"
+            draggable={false}
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-gray-300 text-xs">няма снимка</div>
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
         <div className="absolute top-2.5 left-2.5 right-2.5 flex justify-between items-start">
-          {product.badge ? (
-            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${product.badge.bg} ${product.badge.textCol}`}>
-              {product.badge.text}
+          {badge ? (
+            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${badge.bg} ${badge.text}`}>
+              {badge.label}
             </span>
           ) : <div />}
-          <span className="bg-green-500/90 text-white text-[9px] font-black tracking-wider px-2 py-0.5 rounded-full">
-            {product.energyClass}
-          </span>
+          {product.specs.energyClass && (
+            <span className="bg-green-500/90 text-white text-[9px] font-black tracking-wider px-2 py-0.5 rounded-full">
+              {product.specs.energyClass}
+            </span>
+          )}
         </div>
       </div>
 
       {/* Съдържание */}
       <div className="flex flex-col flex-1 min-h-0 p-3">
-        {/* Марка + модел + тип */}
         <div className="mb-2">
-          <p className="text-[10px] font-bold text-[#00B4D8] uppercase tracking-wider mb-0.5">{product.brand}</p>
-          <Link to={`/product/${product.id}`} className="block group/title">
+          <p className="text-[10px] font-bold text-[#00B4D8] uppercase tracking-wider mb-0.5">{brand || '—'}</p>
+          <Link to={`/product/${product.slug}`} className="block group/title">
             <h3 className="text-sm font-bold text-gray-900 leading-tight mb-0.5 group-hover/title:text-[#FF4D00] transition-colors line-clamp-1">
-              {product.model}
+              {product.name}
             </h3>
           </Link>
-          <p className="text-[10px] text-gray-400">{product.type}</p>
+          <p className="text-[10px] text-gray-400">{typeLabel}</p>
         </div>
 
         {/* Спецификации */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mb-2">
-          {product.specs.map((spec, i) => (
-            <div key={i} className="flex items-center gap-1 text-[11px] font-medium text-gray-600">
-              {spec.icon}
-              {spec.text}
+          {power && (
+            <div className="flex items-center gap-1 text-[11px] font-medium text-gray-600">
+              <Zap className="w-3.5 h-3.5 text-yellow-500" />
+              {power}
             </div>
-          ))}
-        </div>
-
-        {/* Extras — хоризонтални */}
-        <div className="flex flex-wrap gap-1 mb-2">
-          {product.extras.slice(0, 3).map((extra, i) => (
-            <div key={i} className="flex items-center gap-1 bg-gray-50 border border-gray-100 rounded-full px-2 py-0.5 text-[10px] font-medium text-gray-600">
-              <Check className="w-2.5 h-2.5 text-green-500 shrink-0" strokeWidth={3} />
-              <span className="truncate">{extra}</span>
+          )}
+          <div className="flex items-center gap-1 text-[11px] font-medium text-gray-600">
+            <Snowflake className="w-3.5 h-3.5 text-blue-500" />
+            Охл/Отопл
+          </div>
+          <div className="flex items-center gap-1 text-[11px] font-medium text-gray-600">
+            <Repeat className="w-3.5 h-3.5 text-teal-500" />
+            Инвертор
+          </div>
+          {product.specs.wifi && (
+            <div className="flex items-center gap-1 text-[11px] font-medium text-gray-600">
+              <Wifi className="w-3.5 h-3.5 text-sky-500" />
+              Wi-Fi
             </div>
-          ))}
+          )}
         </div>
 
         {/* Рейтинг */}
         <div className="flex items-center gap-1 mb-2">
           <div className="flex text-yellow-400">
             {[...Array(5)].map((_, i) => (
-              <Star key={i} className={`w-3 h-3 ${i < Math.floor(product.rating) ? 'fill-current' : 'fill-gray-200 text-gray-200'}`} />
+              <Star key={i} className={`w-3 h-3 ${i < Math.floor(rating) ? 'fill-current' : 'fill-gray-200 text-gray-200'}`} />
             ))}
           </div>
-          <span className="text-xs font-semibold text-gray-700 ml-0.5">{product.rating}</span>
-          <span className="text-[10px] text-gray-400">({product.reviews})</span>
+          {rating > 0 && (
+            <>
+              <span className="text-xs font-semibold text-gray-700 ml-0.5">{rating.toFixed(1)}</span>
+              <span className="text-[10px] text-gray-400">({product.reviewCount})</span>
+            </>
+          )}
         </div>
 
         {/* Цена + CTA */}
         <div className="mt-auto pt-2 border-t border-gray-100">
           <div className="flex items-center justify-between mb-2">
             <div>
-              <span className="text-xl font-extrabold text-gray-900">€{product.price}</span>
-              <p className="text-[10px] text-gray-400 leading-tight">с монтаж €{product.priceWithMount}</p>
+              <span className="text-xl font-extrabold text-gray-900">€{fmtPrice(product.price)}</span>
+              {product.priceWithMount != null && (
+                <p className="text-[10px] text-gray-400 leading-tight">с монтаж €{fmtPrice(product.priceWithMount)}</p>
+              )}
             </div>
           </div>
           <a
@@ -222,7 +166,7 @@ function ProductCard({ product, index }: { product: Product; index: number }) {
             Направи запитване
           </a>
           <div className="text-center mt-1.5">
-            <Link to={`/product/${product.id}`} className="inline-flex items-center text-[10px] font-semibold text-gray-400 hover:text-[#FF4D00] transition-colors">
+            <Link to={`/product/${product.slug}`} className="inline-flex items-center text-[10px] font-semibold text-gray-400 hover:text-[#FF4D00] transition-colors">
               Виж характеристики
               <ChevronRight className="w-3 h-3 ml-0.5" />
             </Link>
@@ -234,6 +178,79 @@ function ProductCard({ product, index }: { product: Product; index: number }) {
 }
 
 export const ProductsSection = () => {
+  const [items, setItems] = useState<FeaturedProduct[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [debug, setDebug] = useState<{
+    httpStatus?: number;
+    error?: string;
+    raw?: unknown;
+  } | null>(null);
+
+  // Debug режим: ?debug=top в URL-а активира visible диагностичен панел.
+  // Полезно, когато админът току-що е назначил продукти, а секцията не се
+  // показва — обикновено това се дължи на липсваща миграция 0035 или на
+  // продукти с out_of_stock/is_active=false.
+  const isDebugMode =
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('debug') === 'top';
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await fetch('/api/featured-products');
+        const json = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!res.ok) {
+          setDebug({ httpStatus: res.status, error: (json as any)?.error ?? `HTTP ${res.status}`, raw: json });
+          return;
+        }
+        const data = (json?.data ?? []) as FeaturedProduct[];
+        data.sort((a, b) => a.position - b.position);
+        setItems(data);
+        setDebug({ httpStatus: res.status, raw: json });
+      } catch (e: any) {
+        if (!cancelled) setDebug({ error: String(e?.message ?? e) });
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Diagnostic banner (само ако ?debug=top): показва точно защо секцията
+  // може да липсва. В нормален режим връщаме null при празно (както преди).
+  if (isDebugMode && !loading && items.length === 0) {
+    return (
+      <section id="products" className="py-8">
+        <div className="max-w-3xl mx-auto px-4">
+          <div className="rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50 p-5 text-sm text-amber-900">
+            <div className="font-black text-base mb-2">🛠 Debug: Топ продукти секцията е празна</div>
+            <p className="mb-2">
+              Endpoint <code className="font-mono bg-white px-1 rounded">/api/featured-products</code> върна 0 продукта.
+              Възможни причини:
+            </p>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>Миграция <code>0035_featured_top_products.sql</code> не е приложена (колоните липсват).</li>
+              <li>Назначените продукти са с <code>stock_status = 'out_of_stock'</code> или <code>is_active = false</code>.</li>
+              <li>Backend сървърът не е стартиран / Vite proxy не пренасочва <code>/api</code>.</li>
+            </ul>
+            <details className="mt-3">
+              <summary className="cursor-pointer font-bold">Сурова диагностика</summary>
+              <pre className="mt-2 text-[11px] bg-white p-2 rounded overflow-auto max-h-48">{JSON.stringify(debug, null, 2)}</pre>
+            </details>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  // Не показваме секцията, ако админът още не е подредил Топ продуктите.
+  if (!loading && items.length === 0) return null;
+
   return (
     <section id="products" className="py-8 bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-5">
@@ -268,11 +285,17 @@ export const ProductsSection = () => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {products.map((p, i) => (
-            <ProductCard key={p.id} product={p} index={i} />
-          ))}
-        </div>
+        {loading ? (
+          <div className="flex items-center justify-center py-10 text-gray-400 gap-2">
+            <Loader2 className="w-5 h-5 animate-spin" /> Зареждам Топ продукти…
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {items.map((p, i) => (
+              <ProductCard key={p.id} product={p} index={i} />
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );

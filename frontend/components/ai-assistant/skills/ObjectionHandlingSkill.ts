@@ -131,7 +131,7 @@ export class ObjectionHandlingSkill {
     return `🔧 **Разбирам Вашето притеснение за качеството.**\n\n` +
       `**🏆 Нашата репутация:**\n` +
       `• 25 години на пазара в Смолян\n` +
-      `• Официален дилър на Daikin, Mitsubishi, Gree, Toshiba\n` +
+      `• Официален дилър на Daikin, Mitsubishi Electric, Mitsubishi Heavy, Gree, Toshiba\n` +
       `• Сертифицирани техници от производителите\n\n` +
       `**📜 Гаранции:**\n` +
       `• Продукт: 24-36 месеца\n` +

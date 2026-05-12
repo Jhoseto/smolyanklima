@@ -25,6 +25,7 @@ import type {
 function resolveBorderAndBg(brand: string): { cardBorder: string; imgBg: string } {
   const brandLower = brand.toLowerCase();
   if (brandLower.includes('daikin'))    return { cardBorder: 'border-blue-200 shadow-blue-50', imgBg: 'bg-gray-50' };
+  if (brandLower.includes('mitsubishi heavy')) return { cardBorder: 'border-rose-200 shadow-rose-50', imgBg: 'bg-white' };
   if (brandLower.includes('mitsubishi')) return { cardBorder: 'border-red-100 shadow-red-50', imgBg: 'bg-white' };
   if (brandLower.includes('samsung'))  return { cardBorder: 'border-indigo-100', imgBg: 'bg-gray-100' };
   if (brandLower.includes('fujitsu'))  return { cardBorder: 'border-gray-200', imgBg: 'bg-gray-50' };
@@ -127,6 +128,14 @@ type ApiProduct = {
     energy_class_cool?: string | null;
     energy_class_heat?: string | null;
     warranty_months?: number | null;
+    weight_indoor_kg?: number | null;
+    weight_outdoor_kg?: number | null;
+    dim_indoor_length_mm?: number | null;
+    dim_indoor_width_mm?: number | null;
+    dim_indoor_height_mm?: number | null;
+    dim_outdoor_length_mm?: number | null;
+    dim_outdoor_width_mm?: number | null;
+    dim_outdoor_height_mm?: number | null;
   }> | null;
   product_images?: Array<{ url: string; is_main: boolean; sort_order: number }> | null;
   product_features?: Array<{ features?: { name?: string } | null }> | null;
@@ -160,6 +169,32 @@ function mapApiToCatalogProduct(raw: ApiProduct): CatalogProduct {
   const noise = specs0?.noise_db ? `${specs0.noise_db} dB` : undefined;
   const area = specs0?.coverage_m2 ? `до ${Math.round(specs0.coverage_m2)} м²` : undefined;
   const warranty = specs0?.warranty_months ? `${Math.round(specs0.warranty_months / 12)} г. гаранция` : undefined;
+
+  const numOrUndef = (v: unknown): number | undefined => {
+    if (v == null) return undefined;
+    const n = typeof v === "number" ? v : Number(v);
+    return Number.isFinite(n) ? n : undefined;
+  };
+  const weightIndoorKg = numOrUndef(specs0?.weight_indoor_kg);
+  const weightOutdoorKg = numOrUndef(specs0?.weight_outdoor_kg);
+  const indoorDims = {
+    lengthMm: numOrUndef(specs0?.dim_indoor_length_mm),
+    widthMm: numOrUndef(specs0?.dim_indoor_width_mm),
+    heightMm: numOrUndef(specs0?.dim_indoor_height_mm),
+  };
+  const outdoorDims = {
+    lengthMm: numOrUndef(specs0?.dim_outdoor_length_mm),
+    widthMm: numOrUndef(specs0?.dim_outdoor_width_mm),
+    heightMm: numOrUndef(specs0?.dim_outdoor_height_mm),
+  };
+  const hasIndoorDims = indoorDims.lengthMm != null || indoorDims.widthMm != null || indoorDims.heightMm != null;
+  const hasOutdoorDims = outdoorDims.lengthMm != null || outdoorDims.widthMm != null || outdoorDims.heightMm != null;
+  const dimensions = hasIndoorDims || hasOutdoorDims
+    ? {
+        indoor: hasIndoorDims ? indoorDims : undefined,
+        outdoor: hasOutdoorDims ? outdoorDims : undefined,
+      }
+    : undefined;
 
   return {
     id: raw.slug,
@@ -199,6 +234,10 @@ function mapApiToCatalogProduct(raw: ApiProduct): CatalogProduct {
     features,
     energyCool,
     energyHeat,
+
+    weightIndoorKg,
+    weightOutdoorKg,
+    dimensions,
   };
 }
 
@@ -325,6 +364,25 @@ export async function fetchCatalogPriceBounds(cond?: "new" | "used"): Promise<{ 
   return { min, max };
 }
 
+/**
+ * Списък с активни марки в базата (с брой публично-видими продукти).
+ * Опционално `onlyWithProducts` ограничава до марки с поне 1 продукт.
+ */
+export async function fetchCatalogBrandOptions(
+  cond?: "new" | "used",
+  opts?: { onlyWithProducts?: boolean },
+): Promise<Array<{ name: string; productCount: number }>> {
+  const sp = new URLSearchParams();
+  if (cond) sp.set("cond", cond);
+  if (opts?.onlyWithProducts) sp.set("onlyWithProducts", "true");
+  const qs = sp.toString();
+  const res = await fetch(`/api/catalog/brand-options${qs ? `?${qs}` : ""}`);
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Грешка при зареждане на марките");
+  const data = (json.data ?? []) as Array<{ name: string; productCount: number }>;
+  return data;
+}
+
 /** Брой продукти по категория (без други филтри), за чиповете. */
 export async function fetchCategoryProductCounts(cond?: "new" | "used"): Promise<Record<string, number>> {
   const counts: Record<string, number> = { all: 0 };
@@ -395,14 +453,15 @@ export const CATEGORIES: CategoryMeta[] = [
 // ──────────────────────────────────────
 
 export const BRANDS: BrandMeta[] = [
-  { id: 'daikin',      name: 'Daikin',             color: '#0033A0' },
-  { id: 'mitsubishi',  name: 'Mitsubishi Electric', color: '#E50012' },
-  { id: 'samsung',     name: 'Samsung',             color: '#1428A0' },
-  { id: 'lg',          name: 'LG',                  color: '#A50034' },
-  { id: 'fujitsu',     name: 'Fujitsu',             color: '#FF0000' },
-  { id: 'gree',        name: 'Gree',                color: '#00A84F' },
-  { id: 'panasonic',   name: 'Panasonic',           color: '#003087' },
-  { id: 'hitachi',     name: 'Hitachi',             color: '#CC0000' },
-  { id: 'carrier',     name: 'Carrier',             color: '#003087' },
-  { id: 'toshiba',     name: 'Toshiba',             color: '#FF0000' },
+  { id: 'daikin',             name: 'Daikin',              color: '#0033A0' },
+  { id: 'mitsubishi-electric', name: 'Mitsubishi Electric', color: '#E50012' },
+  { id: 'mitsubishi-heavy',   name: 'Mitsubishi Heavy',    color: '#B00020' },
+  { id: 'samsung',            name: 'Samsung',             color: '#1428A0' },
+  { id: 'lg',                 name: 'LG',                  color: '#A50034' },
+  { id: 'fujitsu',            name: 'Fujitsu',             color: '#FF0000' },
+  { id: 'gree',               name: 'Gree',                color: '#00A84F' },
+  { id: 'panasonic',          name: 'Panasonic',           color: '#003087' },
+  { id: 'hitachi',            name: 'Hitachi',             color: '#CC0000' },
+  { id: 'carrier',            name: 'Carrier',             color: '#003087' },
+  { id: 'toshiba',            name: 'Toshiba',             color: '#FF0000' },
 ];

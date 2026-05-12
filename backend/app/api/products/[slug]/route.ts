@@ -48,16 +48,32 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
     return withCors(req, NextResponse.json({ error: "Not found" }, { status: 404 }));
   }
 
-  const [bRes, tRes, sRes, iRes, pfRes] = await Promise.all([
+  const SPECS_SELECT_WITH_DIMENSIONS =
+    "coverage_m2,noise_db,cooling_power_kw,heating_power_kw,refrigerant,wifi,energy_class_cool,energy_class_heat,seer,scop,warranty_months,weight_indoor_kg,weight_outdoor_kg,dim_indoor_length_mm,dim_indoor_width_mm,dim_indoor_height_mm,dim_outdoor_length_mm,dim_outdoor_width_mm,dim_outdoor_height_mm";
+  const SPECS_SELECT_BASE =
+    "coverage_m2,noise_db,cooling_power_kw,heating_power_kw,refrigerant,wifi,energy_class_cool,energy_class_heat,seer,scop,warranty_months";
+
+  let specsRes = await supabase
+    .from("product_specs")
+    .select(SPECS_SELECT_WITH_DIMENSIONS)
+    .eq("product_id", p.id);
+  if (
+    specsRes.error &&
+    (String((specsRes.error as any).code ?? "") === "42703" ||
+      /weight_(indoor|outdoor)_kg|dim_(indoor|outdoor)_(length|width|height)_mm/.test(
+        String((specsRes.error as any).message ?? ""),
+      ))
+  ) {
+    specsRes = await supabase.from("product_specs").select(SPECS_SELECT_BASE).eq("product_id", p.id);
+  }
+
+  const [bRes, tRes, iRes, pfRes] = await Promise.all([
     supabase.from("brands").select("id,slug,name").eq("id", (p as any).brand_id).maybeSingle(),
     supabase.from("product_types").select("id,name").eq("id", (p as any).type_id).maybeSingle(),
-    supabase
-      .from("product_specs")
-      .select("coverage_m2,noise_db,cooling_power_kw,heating_power_kw,refrigerant,wifi,energy_class_cool,energy_class_heat,seer,scop,warranty_months")
-      .eq("product_id", p.id),
     supabase.from("product_images").select("url,sort_order,is_main").eq("product_id", p.id).order("sort_order", { ascending: true }),
     supabase.from("product_features").select("feature_id").eq("product_id", p.id),
   ]);
+  const sRes = specsRes;
 
   if (bRes.error) return withCors(req, NextResponse.json({ error: bRes.error.message }, { status: 500 }));
   if (tRes.error) return withCors(req, NextResponse.json({ error: tRes.error.message }, { status: 500 }));

@@ -92,6 +92,22 @@ export interface CatalogProduct {
   features: string[];      // Full features list
   energyCool?: string;
   energyHeat?: string;
+
+  // Размери и тегло на блоковете
+  weightIndoorKg?: number;
+  weightOutdoorKg?: number;
+  dimensions?: {
+    indoor?: {
+      lengthMm?: number;
+      widthMm?: number;
+      heightMm?: number;
+    };
+    outdoor?: {
+      lengthMm?: number;
+      widthMm?: number;
+      heightMm?: number;
+    };
+  };
 }
 
 // ──────────────────────────────────────

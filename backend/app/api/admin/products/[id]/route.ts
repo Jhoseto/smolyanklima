@@ -23,6 +23,14 @@ const SpecsSchema = z.object({
   seer: z.number().nonnegative().nullable().optional(),
   scop: z.number().nonnegative().nullable().optional(),
   warranty_months: z.number().int().nonnegative().nullable().optional(),
+  weight_indoor_kg: z.number().nonnegative().nullable().optional(),
+  weight_outdoor_kg: z.number().nonnegative().nullable().optional(),
+  dim_indoor_length_mm: z.number().int().nonnegative().nullable().optional(),
+  dim_indoor_width_mm: z.number().int().nonnegative().nullable().optional(),
+  dim_indoor_height_mm: z.number().int().nonnegative().nullable().optional(),
+  dim_outdoor_length_mm: z.number().int().nonnegative().nullable().optional(),
+  dim_outdoor_width_mm: z.number().int().nonnegative().nullable().optional(),
+  dim_outdoor_height_mm: z.number().int().nonnegative().nullable().optional(),
 });
 
 const ImageSchema = z.object({

@@ -6,7 +6,6 @@
     "dev": "next dev -p 3001",
     "build": "next build",
     "start": "next start",
-    "import:products": "tsx scripts/import_products.ts",
     "import:blog": "tsx scripts/import_blog.ts",
     "catalog:images": "node scripts/sync-ddg-images.mjs",
     "catalog:images:stale": "node scripts/sync-ddg-images.mjs --only-stale"

@@ -20,6 +20,16 @@ const RequestSchema = z.discriminatedUnion("task", [
     }),
   }),
   z.object({
+    task: z.literal("product_dimensions"),
+    input: z.object({
+      name: z.string().min(2).max(240),
+      brandName: z.string().max(120).optional(),
+      typeName: z.string().max(120).optional(),
+      coolingPowerKw: z.number().nonnegative().optional(),
+      heatingPowerKw: z.number().nonnegative().optional(),
+    }),
+  }),
+  z.object({
     task: z.literal("inquiry_reply"),
     input: z.object({
       customerName: z.string().max(160),
@@ -75,6 +85,26 @@ function buildPrompt(payload: z.infer<typeof RequestSchema>) {
       "Структура:",
       `{"slug":"latin-url-slug","description":"кратко продаващо описание на български до 900 символа","specs":{"coverage_m2":"","cooling_power_kw":"","heating_power_kw":"","energy_class_cool":"","energy_class_heat":"","seer":"","scop":"","wifi":false,"refrigerant":"","warranty_months":""}}`,
       "Не измисляй технически стойности, ако не личат от името или входните данни. Остави празен string за неизвестно.",
+      `Вход: ${JSON.stringify(payload.input)}`,
+    ].join("\n");
+  }
+
+  if (payload.task === "product_dimensions") {
+    return [
+      "Ти си експерт по технически спецификации на климатици.",
+      "Задачата е: за подадения модел климатик да върнеш ТОЧНИ физически размери и тегло на вътрешния и външния блок, така както са в официалната техническа спецификация (datasheet, brochure, ръководство) на производителя.",
+      "",
+      "ВАЖНИ ПРАВИЛА:",
+      "1. Връщай ТОЧНО числови стойности — не приближения, не диапазони. Размерите са в милиметри (mm), теглото в килограми (kg, до 1 знак след запетаята).",
+      "2. ВЪТРЕШЕН БЛОК: за стенен климатик обикновено е плосък и широк → Дължина (ширината по фасадата) > Височина > Ширина (дълбочината). За касетъчен е квадратен (Д ≈ Ш).",
+      "3. ВЪНШЕН БЛОК: обикновено Височина е най-голяма за по-мощни модели (1000+ mm), за по-малки — около 540-600 mm. Дълбочината (Ширина) е най-малката страна.",
+      "4. Ако НЕ си сигурен в конкретна стойност (модела не ти е известен със сигурност или конфигурацията е променлива), върни null за това поле. По-добре null отколкото грешно число.",
+      "5. Ако моделът съществува в множество подварианти (R32 vs R410A, EUR vs JPN), използвай последния европейски (EUR) вариант с R-32.",
+      "6. confidence: \"high\" = сигурен от каталога; \"medium\" = от родов модел; \"low\" = предположение; \"none\" = не знаеш.",
+      "",
+      "Върни САМО валиден JSON без markdown:",
+      `{"weight_indoor_kg": <число или null>, "weight_outdoor_kg": <число или null>, "dim_indoor_length_mm": <int или null>, "dim_indoor_width_mm": <int или null>, "dim_indoor_height_mm": <int или null>, "dim_outdoor_length_mm": <int или null>, "dim_outdoor_width_mm": <int или null>, "dim_outdoor_height_mm": <int или null>, "source": "<кратка бележка откъде/как си определил, до 120 знака>", "confidence": "high"|"medium"|"low"|"none"}`,
+      "",
       `Вход: ${JSON.stringify(payload.input)}`,
     ].join("\n");
   }

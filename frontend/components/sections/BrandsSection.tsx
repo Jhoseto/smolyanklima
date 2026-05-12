@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 const brands = [
   { name: 'DAIKIN', color: 'hover:text-[#00A1E4]' },
   { name: 'MITSUBISHI ELECTRIC', color: 'hover:text-[#E60012]' },
+  { name: 'MITSUBISHI HEAVY', color: 'hover:text-[#B00020]' },
   { name: 'SAMSUNG', color: 'hover:text-[#1428A0]' },
   { name: 'GREE', color: 'hover:text-[#0082CA]' },
   { name: 'TOSHIBA', color: 'hover:text-[#FF0000]' },

@@ -21,6 +21,7 @@ import {
   fetchProductsCatalogPage,
   fetchCatalogPriceBounds,
   fetchCategoryProductCounts,
+  fetchCatalogBrandOptions,
 } from '../data/productService';
 import { getAllAccessories } from '../data/accessoryService';
 import { postPublicInquiry } from '../data/postInquiry';
@@ -155,6 +156,7 @@ const CatalogPage = () => {
   const [priceMin, setPriceMin] = useState(0);
   const [priceMax, setPriceMax] = useState(0);
   const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({ all: 0 });
+  const [climateBrandOptions, setClimateBrandOptions] = useState<Array<{ name: string; productCount: number }>>([]);
 
   const [search, setSearch] = useState(searchParams.get('q') || '');
   const [category, setCategory] = useState(searchParams.get('cat') || 'all');
@@ -227,15 +229,16 @@ const CatalogPage = () => {
     }
   }, [activeTab, category, selectedConditions]);
 
-  // ── Ценови граници + броя по категории (за нови/втора употреба) ──
+  // ── Ценови граници + броя по категории + налични марки (за нови/втора употреба) ──
   useEffect(() => {
     if (activeTab !== 'climate') return;
     let cancelled = false;
     (async () => {
       try {
-        const [bounds, counts] = await Promise.all([
+        const [bounds, counts, brandOptions] = await Promise.all([
           fetchCatalogPriceBounds(effectiveCondition),
           fetchCategoryProductCounts(effectiveCondition),
+          fetchCatalogBrandOptions(effectiveCondition),
         ]);
         if (cancelled) return;
         const minP = bounds.min;
@@ -244,8 +247,12 @@ const CatalogPage = () => {
         setPriceMax(maxP);
         setCategoryCounts(counts);
         setPriceRange([minP, maxP]);
+        setClimateBrandOptions(brandOptions);
       } catch {
-        if (!cancelled) setCategoryCounts({ all: 0 });
+        if (!cancelled) {
+          setCategoryCounts({ all: 0 });
+          setClimateBrandOptions([]);
+        }
       }
     })();
     return () => {
@@ -690,7 +697,7 @@ const CatalogPage = () => {
                 showConditionFilters={showConditionFilters}
                 selectedConditions={selectedConditions}
                 onConditionToggle={handleConditionToggle}
-                brandsOptions={activeTab === 'climate' ? undefined : accessoryBrandOptions}
+                brandsOptions={activeTab === 'climate' ? climateBrandOptions : accessoryBrandOptions}
                 selectedBrands={brands}
                 onBrandToggle={brandToggle}
                 selectedEnergy={energyClasses}
@@ -732,7 +739,7 @@ const CatalogPage = () => {
                       showConditionFilters={showConditionFilters}
                       selectedConditions={selectedConditions}
                       onConditionToggle={handleConditionToggle}
-                      brandsOptions={activeTab === 'climate' ? undefined : accessoryBrandOptions}
+                      brandsOptions={activeTab === 'climate' ? climateBrandOptions : accessoryBrandOptions}
                       selectedBrands={brands}
                       onBrandToggle={brandToggle}
                       selectedEnergy={energyClasses}

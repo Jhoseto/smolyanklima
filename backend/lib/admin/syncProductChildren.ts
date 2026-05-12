@@ -12,16 +12,46 @@ export type SpecsInput = {
   seer?: number | null;
   scop?: number | null;
   warranty_months?: number | null;
+  weight_indoor_kg?: number | null;
+  weight_outdoor_kg?: number | null;
+  dim_indoor_length_mm?: number | null;
+  dim_indoor_width_mm?: number | null;
+  dim_indoor_height_mm?: number | null;
+  dim_outdoor_length_mm?: number | null;
+  dim_outdoor_width_mm?: number | null;
+  dim_outdoor_height_mm?: number | null;
 };
 
 export type ImageInput = { url: string; sort_order: number; is_main: boolean };
+
+const DIMENSION_COLUMNS = [
+  "weight_indoor_kg",
+  "weight_outdoor_kg",
+  "dim_indoor_length_mm",
+  "dim_indoor_width_mm",
+  "dim_indoor_height_mm",
+  "dim_outdoor_length_mm",
+  "dim_outdoor_width_mm",
+  "dim_outdoor_height_mm",
+] as const;
+
+type DimensionColumn = (typeof DIMENSION_COLUMNS)[number];
+
+function isMissingDimensionColumn(error: { message?: string; code?: string } | null | undefined): boolean {
+  if (!error) return false;
+  const msg = String(error.message ?? "").toLowerCase();
+  if (String(error.code ?? "") !== "42703" && !msg.includes("does not exist") && !msg.includes("column")) {
+    return false;
+  }
+  return DIMENSION_COLUMNS.some((c) => msg.includes(c));
+}
 
 export async function upsertProductSpecs(
   supabase: SupabaseClient,
   productId: string,
   specs: SpecsInput,
 ): Promise<{ error: { message: string } | null }> {
-  const row = {
+  const row: Record<string, unknown> = {
     product_id: productId,
     coverage_m2: specs.coverage_m2 ?? null,
     noise_db: specs.noise_db ?? null,
@@ -34,8 +64,24 @@ export async function upsertProductSpecs(
     seer: specs.seer ?? null,
     scop: specs.scop ?? null,
     warranty_months: specs.warranty_months ?? null,
+    weight_indoor_kg: specs.weight_indoor_kg ?? null,
+    weight_outdoor_kg: specs.weight_outdoor_kg ?? null,
+    dim_indoor_length_mm: specs.dim_indoor_length_mm ?? null,
+    dim_indoor_width_mm: specs.dim_indoor_width_mm ?? null,
+    dim_indoor_height_mm: specs.dim_indoor_height_mm ?? null,
+    dim_outdoor_length_mm: specs.dim_outdoor_length_mm ?? null,
+    dim_outdoor_width_mm: specs.dim_outdoor_width_mm ?? null,
+    dim_outdoor_height_mm: specs.dim_outdoor_height_mm ?? null,
   };
-  const { error } = await supabase.from("product_specs").upsert(row, { onConflict: "product_id" });
+
+  let { error } = await supabase.from("product_specs").upsert(row, { onConflict: "product_id" });
+  if (error && isMissingDimensionColumn(error)) {
+    const fallback = { ...row };
+    for (const col of DIMENSION_COLUMNS) {
+      delete (fallback as Record<string, unknown>)[col as DimensionColumn];
+    }
+    ({ error } = await supabase.from("product_specs").upsert(fallback, { onConflict: "product_id" }));
+  }
   return { error };
 }
 

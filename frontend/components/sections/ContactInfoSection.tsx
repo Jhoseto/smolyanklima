@@ -1,8 +1,114 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Phone, Mail, MapPin, Clock, Navigation } from 'lucide-react';
 
+const SOFIA_TZ = 'Europe/Sofia';
+
+const SCHEDULE: Record<number, { open: number; close: number } | null> = {
+  0: null,
+  1: { open: 9 * 60, close: 18 * 60 },
+  2: { open: 9 * 60, close: 18 * 60 },
+  3: { open: 9 * 60, close: 18 * 60 },
+  4: { open: 9 * 60, close: 18 * 60 },
+  5: { open: 9 * 60, close: 18 * 60 },
+  6: { open: 9 * 60, close: 14 * 60 },
+};
+
+const DAY_NAMES_BG: Record<number, string> = {
+  0: 'Неделя',
+  1: 'Понеделник',
+  2: 'Вторник',
+  3: 'Сряда',
+  4: 'Четвъртък',
+  5: 'Петък',
+  6: 'Събота',
+};
+
+const formatMinutes = (totalMinutes: number) => {
+  const h = Math.floor(totalMinutes / 60).toString().padStart(2, '0');
+  const m = (totalMinutes % 60).toString().padStart(2, '0');
+  return `${h}:${m}`;
+};
+
+const getSofiaNow = () => {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: SOFIA_TZ,
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date());
+
+  const weekdayMap: Record<string, number> = {
+    Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+  };
+  const weekday = parts.find(p => p.type === 'weekday')?.value ?? 'Mon';
+  const hour = parseInt(parts.find(p => p.type === 'hour')?.value ?? '0', 10);
+  const minute = parseInt(parts.find(p => p.type === 'minute')?.value ?? '0', 10);
+
+  return {
+    day: weekdayMap[weekday] ?? 1,
+    minutes: hour * 60 + minute,
+  };
+};
+
+type ShopStatus = {
+  isOpen: boolean;
+  label: string;
+  detail: string;
+};
+
+const computeShopStatus = (): ShopStatus => {
+  const { day, minutes } = getSofiaNow();
+  const today = SCHEDULE[day];
+
+  if (today && minutes >= today.open && minutes < today.close) {
+    return {
+      isOpen: true,
+      label: 'Отворено сега',
+      detail: `Затваря в ${formatMinutes(today.close)}`,
+    };
+  }
+
+  if (today && minutes < today.open) {
+    return {
+      isOpen: false,
+      label: 'Затворено',
+      detail: `Отваря днес в ${formatMinutes(today.open)}`,
+    };
+  }
+
+  for (let offset = 1; offset <= 7; offset++) {
+    const nextDay = (day + offset) % 7;
+    const next = SCHEDULE[nextDay];
+    if (next) {
+      const when = offset === 1 ? 'утре' : `в ${DAY_NAMES_BG[nextDay]}`;
+      return {
+        isOpen: false,
+        label: 'Затворено',
+        detail: `Отваря ${when} в ${formatMinutes(next.open)}`,
+      };
+    }
+  }
+
+  return { isOpen: false, label: 'Затворено', detail: '' };
+};
+
+const useShopStatus = (): ShopStatus => {
+  const [status, setStatus] = useState<ShopStatus>(() => computeShopStatus());
+
+  useEffect(() => {
+    const tick = () => setStatus(computeShopStatus());
+    tick();
+    const id = window.setInterval(tick, 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  return status;
+};
+
 export const ContactInfoSection = () => {
+  const shopStatus = useShopStatus();
   const mapLink = "https://www.google.com/maps/dir//%D0%A1%D0%BC%D0%BE%D0%BB%D1%8F%D0%BD+%D0%9A%D0%BB%D0%B8%D0%BC%D0%B0+%D0%95%D0%9E%D0%9E%D0%94,+Raykovo,+ul.+%22Natalia%22+19,+4701+Smolyan/@41.5782786,24.7136256,14z/data=!4m8!4m7!1m0!1m5!1m1!1s0x14ac50b6e42fae4f:0xdb4fcdc658cc6bda!2m2!1d24.7339985!2d41.5685312?entry=ttu&g_ep=EgoyMDI2MDQyMi4wIKXMDSoASAFQAw%3D%3D";
 
   const contactCards = [
@@ -40,7 +146,8 @@ export const ContactInfoSection = () => {
       subtext: "Събота: 09:00-14:00 | Неделя: Почивен ден",
       href: null,
       color: "from-gray-700 to-gray-900",
-      shadow: "shadow-gray-900/20"
+      shadow: "shadow-gray-900/20",
+      isWorkingHours: true,
     }
   ];
 
@@ -92,10 +199,40 @@ export const ContactInfoSection = () => {
                   <div className={`w-14 h-14 rounded-2xl bg-gray-50 flex items-center justify-center shrink-0 group-hover:bg-gradient-to-br ${card.color} transition-all duration-300 shadow-sm group-hover:shadow-lg`}>
                     <card.icon className="w-6 h-6 text-gray-600 group-hover:text-white transition-colors duration-300" />
                   </div>
-                  <div>
-                    <p className="text-[11px] font-black tracking-widest uppercase text-gray-400 mb-1">{card.title}</p>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <p className="text-[11px] font-black tracking-widest uppercase text-gray-400">{card.title}</p>
+                      {card.isWorkingHours && (
+                        <span
+                          className={`relative inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide uppercase border ${
+                            shopStatus.isOpen
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : 'bg-rose-50 text-rose-700 border-rose-200'
+                          }`}
+                        >
+                          <span className="relative flex w-2 h-2">
+                            <span
+                              className={`absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping ${
+                                shopStatus.isOpen ? 'bg-emerald-500' : 'bg-rose-500'
+                              }`}
+                            />
+                            <span
+                              className={`relative inline-flex rounded-full h-2 w-2 ${
+                                shopStatus.isOpen ? 'bg-emerald-500' : 'bg-rose-500'
+                              }`}
+                            />
+                          </span>
+                          {shopStatus.label}
+                        </span>
+                      )}
+                    </div>
                     <p className="font-outfit font-bold text-gray-900 text-lg group-hover:text-[#FF4D00] transition-colors">{card.content}</p>
                     <p className="text-sm text-gray-500 mt-1">{card.subtext}</p>
+                    {card.isWorkingHours && shopStatus.detail && (
+                      <p className={`text-xs font-semibold mt-2 ${shopStatus.isOpen ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        {shopStatus.detail}
+                      </p>
+                    )}
                   </div>
                 </>
               );

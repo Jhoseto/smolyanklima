@@ -1058,6 +1058,86 @@ create policy admin_web_push_subscriptions_service on public.admin_web_push_subs
 comment on table public.admin_web_push_subscriptions is 'Web Push абонаменти за известия към админ PWA; записи само през Next API със service role.';
 
 
+-- ────────────────────────────────────────────────────────────
+-- 0034 · product_specs — тегло и размери на вътрешен/външен блок
+-- ────────────────────────────────────────────────────────────
+
+alter table public.product_specs
+  add column if not exists weight_indoor_kg     numeric(7,2),
+  add column if not exists weight_outdoor_kg    numeric(7,2),
+  add column if not exists dim_indoor_length_mm  int,
+  add column if not exists dim_indoor_width_mm   int,
+  add column if not exists dim_indoor_height_mm  int,
+  add column if not exists dim_outdoor_length_mm int,
+  add column if not exists dim_outdoor_width_mm  int,
+  add column if not exists dim_outdoor_height_mm int;
+
+alter table public.product_specs
+  drop constraint if exists chk_specs_nonneg;
+
+alter table public.product_specs
+  add constraint chk_specs_nonneg check (
+    (coverage_m2 is null or coverage_m2 >= 0) and
+    (noise_db is null or noise_db >= 0) and
+    (cooling_power_kw is null or cooling_power_kw >= 0) and
+    (heating_power_kw is null or heating_power_kw >= 0) and
+    (seer is null or seer >= 0) and
+    (scop is null or scop >= 0) and
+    (warranty_months is null or warranty_months >= 0) and
+    (weight_indoor_kg is null or weight_indoor_kg >= 0) and
+    (weight_outdoor_kg is null or weight_outdoor_kg >= 0) and
+    (dim_indoor_length_mm is null or dim_indoor_length_mm >= 0) and
+    (dim_indoor_width_mm is null or dim_indoor_width_mm >= 0) and
+    (dim_indoor_height_mm is null or dim_indoor_height_mm >= 0) and
+    (dim_outdoor_length_mm is null or dim_outdoor_length_mm >= 0) and
+    (dim_outdoor_width_mm is null or dim_outdoor_width_mm >= 0) and
+    (dim_outdoor_height_mm is null or dim_outdoor_height_mm >= 0)
+  );
+
+
+-- ============================================================
+-- 0035_featured_top_products.sql
+-- „Топ продукти“ за главната страница: до 6 позиции (3 горе, 3 долу),
+-- всяка може да има визуален „badge“. featured_position (1..6) определя
+-- позицията в 3×2 грида, featured_badge е от затворен списък.
+-- ============================================================
+
+alter table public.products
+  add column if not exists featured_position smallint,
+  add column if not exists featured_badge    text;
+
+create unique index if not exists uq_products_featured_position
+  on public.products (featured_position)
+  where featured_position is not null;
+
+create index if not exists idx_products_featured_position_active
+  on public.products (featured_position)
+  where featured_position is not null and is_active = true;
+
+alter table public.products
+  drop constraint if exists chk_products_featured_position;
+alter table public.products
+  add constraint chk_products_featured_position check (
+    featured_position is null
+    or (featured_position >= 1 and featured_position <= 6)
+  );
+
+alter table public.products
+  drop constraint if exists chk_products_featured_badge;
+alter table public.products
+  add constraint chk_products_featured_badge check (
+    featured_badge is null
+    or featured_badge in (
+      'bestseller', 'top_offer', 'promo',
+      'top_searched', 'premium', 'best_value'
+    )
+  );
+
+update public.products
+set is_featured = true
+where featured_position is not null and is_featured is distinct from true;
+
+
 -- ============================================================
 -- Край. След изпълнение:
 -- 1. Authentication → Settings → enable Email/Password sign-in

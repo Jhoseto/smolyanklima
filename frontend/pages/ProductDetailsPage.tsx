@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { ArrowLeft, Star, Phone, ShieldCheck, Clock, Check, Zap, Volume2, Wind } from 'lucide-react';
+import { ArrowLeft, Star, Phone, ShieldCheck, Clock, Check, Zap, Volume2, Wind, Ruler, Weight } from 'lucide-react';
 import { getAllProducts, getProductById, rateProduct } from '../data/productService';
 import type { CatalogProduct } from '../data/types/product';
 import { ProductCard } from '../components/catalog/ProductCard';
@@ -275,6 +275,29 @@ export default function ProductDetailsPage() {
           </div>
         </div>
 
+        {/* ── DIMENSIONS & WEIGHT ── */}
+        {hasDimensionsOrWeight(product) && (
+          <div className="mb-16">
+            <h2 className="text-2xl font-black text-gray-900 mb-8">Размери и тегло</h2>
+            <div className="grid md:grid-cols-2 gap-6">
+              <UnitBlockCard
+                title="Вътрешен блок"
+                accent="from-[#00B4D8] to-[#0077B6]"
+                accentText="text-[#0077B6]"
+                weightKg={product.weightIndoorKg}
+                dims={product.dimensions?.indoor}
+              />
+              <UnitBlockCard
+                title="Външен блок"
+                accent="from-[#FF4D00] to-[#FF2A4D]"
+                accentText="text-[#FF4D00]"
+                weightKg={product.weightOutdoorKg}
+                dims={product.dimensions?.outdoor}
+              />
+            </div>
+          </div>
+        )}
+
         {/* ── INCLUDED IN BOX ── */}
         <div className="mb-16">
           <h2 className="text-2xl font-black text-gray-900 mb-6">Включено в комплекта</h2>
@@ -348,4 +371,84 @@ function buildIncludedForAccessory(p: CatalogProduct): Array<{ label: string; in
     { label: "Инструкция/описание", included: true },
     { label: hasWarranty ? `Гаранция: ${p.warranty}` : "Гаранция", included: hasWarranty },
   ];
+}
+
+function hasDimensionsOrWeight(p: CatalogProduct): boolean {
+  if (p.weightIndoorKg != null || p.weightOutdoorKg != null) return true;
+  const ind = p.dimensions?.indoor;
+  const out = p.dimensions?.outdoor;
+  return Boolean(
+    ind?.lengthMm != null || ind?.widthMm != null || ind?.heightMm != null ||
+    out?.lengthMm != null || out?.widthMm != null || out?.heightMm != null,
+  );
+}
+
+function formatKg(kg?: number): string {
+  if (kg == null) return '—';
+  const rounded = Math.round(kg * 10) / 10;
+  return `${rounded.toLocaleString('bg-BG', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg`;
+}
+
+function formatMm(mm?: number): string {
+  if (mm == null) return '—';
+  return `${mm} mm`;
+}
+
+function UnitBlockCard({
+  title,
+  accent,
+  accentText,
+  weightKg,
+  dims,
+}: {
+  title: string;
+  accent: string;
+  accentText: string;
+  weightKg?: number;
+  dims?: { lengthMm?: number; widthMm?: number; heightMm?: number };
+}) {
+  const dimsSummary = [dims?.lengthMm, dims?.widthMm, dims?.heightMm]
+    .map((v) => (v == null ? '—' : `${v}`))
+    .join(' × ');
+  return (
+    <div className="relative bg-white border border-gray-100 rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+      <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${accent}`} />
+      <div className="flex items-center justify-between mb-5">
+        <h3 className="font-outfit font-black text-lg text-gray-900">{title}</h3>
+        <div className={`text-[11px] font-black tracking-widest uppercase ${accentText}`}>Спецификация</div>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between py-3 border-b border-gray-100">
+          <span className="flex items-center gap-2 text-sm text-gray-500 font-medium">
+            <Weight className="w-4 h-4 text-gray-400" /> Тегло
+          </span>
+          <span className="font-bold text-gray-900">{formatKg(weightKg)}</span>
+        </div>
+
+        <div className="py-3 border-b border-gray-100">
+          <div className="flex items-center justify-between mb-2">
+            <span className="flex items-center gap-2 text-sm text-gray-500 font-medium">
+              <Ruler className="w-4 h-4 text-gray-400" /> Размери (Д × Ш × В)
+            </span>
+            <span className="text-xs text-gray-400 font-semibold">{dimsSummary} mm</span>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <DimensionCell label="Дължина" value={formatMm(dims?.lengthMm)} />
+            <DimensionCell label="Ширина" value={formatMm(dims?.widthMm)} />
+            <DimensionCell label="Височина" value={formatMm(dims?.heightMm)} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DimensionCell({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-gray-50 rounded-xl px-3 py-2.5">
+      <div className="text-[10px] font-bold tracking-widest uppercase text-gray-400 mb-0.5">{label}</div>
+      <div className="font-bold text-gray-900 text-sm">{value}</div>
+    </div>
+  );
 }
