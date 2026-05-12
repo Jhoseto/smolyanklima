@@ -40,19 +40,25 @@ const ImageSchema = z.object({
 });
 const MAX_IMAGES = 4;
 
+// Включваме `model_code` (миграция 0038). Колоната е по избор —
+// при липсваща се прави fallback към варианти без нея.
 const ADMIN_PRODUCT_DETAIL_SELECT_WITH_LOCATION =
-  "id,slug,name,brand_id,type_id,product_condition,description,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,stock_status,stock_location,stock_quantity,sold_quantity,product_region";
+  "id,slug,name,model_code,brand_id,type_id,product_condition,description,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,stock_status,stock_location,stock_quantity,sold_quantity,product_region";
 const ADMIN_PRODUCT_DETAIL_SELECT_BASE =
-  "id,slug,name,brand_id,type_id,product_condition,description,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,stock_status,stock_quantity,sold_quantity,product_region";
+  "id,slug,name,model_code,brand_id,type_id,product_condition,description,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,stock_status,stock_quantity,sold_quantity,product_region";
 const ADMIN_PRODUCT_DETAIL_SELECT_NO_REGION =
-  "id,slug,name,brand_id,type_id,product_condition,description,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,stock_status,stock_location,stock_quantity,sold_quantity";
+  "id,slug,name,model_code,brand_id,type_id,product_condition,description,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,stock_status,stock_location,stock_quantity,sold_quantity";
 const ADMIN_PRODUCT_DETAIL_SELECT_NO_REGION_NO_LOC =
+  "id,slug,name,model_code,brand_id,type_id,product_condition,description,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,stock_status,stock_quantity,sold_quantity";
+const ADMIN_PRODUCT_DETAIL_SELECT_NO_MODEL_CODE =
   "id,slug,name,brand_id,type_id,product_condition,description,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,stock_status,stock_quantity,sold_quantity";
 
 const UpdateSchema = z
   .object({
   slug: z.string().max(120).nullable().optional(),
   name: z.string().min(2).max(200).optional(),
+  /** Кратък/технически модел (напр. „FTXA50AW“). */
+  modelCode: z.string().max(120).optional().nullable(),
   brandId: z.string().uuid().optional(),
   typeId: z.string().uuid().optional(),
   productCondition: z.enum(["new", "used"]).optional(),
@@ -107,6 +113,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   }
   if (error && isPostgrestMissingColumn(error, "stock_location")) {
     ({ data: row, error } = await supabase.from("products").select(ADMIN_PRODUCT_DETAIL_SELECT_NO_REGION_NO_LOC).eq("id", id).maybeSingle());
+  }
+  // Fallback ако миграция 0038 (model_code) не е приложена.
+  if (error && isPostgrestMissingColumn(error, "model_code")) {
+    ({ data: row, error } = await supabase.from("products").select(ADMIN_PRODUCT_DETAIL_SELECT_NO_MODEL_CODE).eq("id", id).maybeSingle());
   }
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   if (!row) return withCors(req, NextResponse.json({ error: "Not found" }, { status: 404 }));
@@ -166,6 +176,10 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     patch.slug = s === null || String(s).trim() === "" ? null : String(s).trim();
   }
   if (parsed.data.name !== undefined) patch.name = parsed.data.name;
+  if (parsed.data.modelCode !== undefined) {
+    const mc = parsed.data.modelCode === null ? null : String(parsed.data.modelCode).trim();
+    patch.model_code = mc && mc.length > 0 ? mc : null;
+  }
   if (parsed.data.brandId !== undefined) patch.brand_id = parsed.data.brandId;
   if (parsed.data.typeId !== undefined) patch.type_id = parsed.data.typeId;
   if (parsed.data.productCondition !== undefined) patch.product_condition = parsed.data.productCondition;
@@ -206,6 +220,12 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       const { product_region: _omitR, ...patchRest2 } = patch;
       ({ data, error } = await supabase.from("products").update(patchRest2).eq("id", id).select("id,slug").maybeSingle());
       delete patch.product_region;
+    }
+    // Fallback ако миграция 0038 (`model_code`) не е приложена.
+    if (error && isPostgrestMissingColumn(error, "model_code") && "model_code" in patch) {
+      const { model_code: _omitMc, ...patchRest3 } = patch;
+      ({ data, error } = await supabase.from("products").update(patchRest3).eq("id", id).select("id,slug").maybeSingle());
+      delete patch.model_code;
     }
     if (error) {
       console.error("[admin/products][PUT] products.update failed", { id, patch, ...formatSupabaseError(error) });

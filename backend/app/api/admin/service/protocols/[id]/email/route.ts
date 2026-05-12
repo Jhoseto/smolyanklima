@@ -108,11 +108,11 @@ export async function POST(
     return withCors(req, NextResponse.json({ error: result.error }, { status: 502 }));
   }
 
-  // Обнови статуса на протокола
-  await session.db
-    .from("service_protocols")
-    .update({ status: "sent" })
-    .eq("id", id);
+  // Бел.: преди тук обновявахме статуса на „sent“. С новия workflow
+  // (миграция 0036) статусите са prepared → in_progress → signed, а
+  // изпращането по имейл е странично действие — не променя жизнения
+  // цикъл. Подписаният протокол остава „signed“ и може да се изпраща
+  // многократно (повторно до клиента, до счетоводител и т.н.).
 
   const skipped = result.ok ? false : Boolean(result.skipped);
   return withCors(req, NextResponse.json({ ok: true, skipped }));

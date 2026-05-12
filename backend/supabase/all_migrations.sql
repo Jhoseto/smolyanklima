@@ -1139,6 +1139,33 @@ where featured_position is not null and is_featured is distinct from true;
 
 
 -- ============================================================
+-- 0036_service_protocols_status_workflow.sql
+-- ============================================================
+-- Преработка на жизнения цикъл на приемно-предавателния протокол:
+--   draft  → prepared    (офисът подготвя, чака сервизен екип)
+--   sent   → signed      (изпратеният протокол вече е бил подписан)
+--   in_progress          (нов — сервизният екип го попълва на място)
+
+alter table public.service_protocols
+  drop constraint if exists service_protocols_status_check;
+
+update public.service_protocols
+   set status = 'prepared'
+ where status = 'draft';
+
+update public.service_protocols
+   set status = 'signed'
+ where status = 'sent';
+
+alter table public.service_protocols
+  add constraint service_protocols_status_check
+  check (status in ('prepared', 'in_progress', 'signed'));
+
+alter table public.service_protocols
+  alter column status set default 'prepared';
+
+
+-- ============================================================
 -- Край. След изпълнение:
 -- 1. Authentication → Settings → enable Email/Password sign-in
 -- 2. Създай admin потребител в Authentication → Users

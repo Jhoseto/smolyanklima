@@ -41,6 +41,12 @@ type ProductRow = {
   supplier_invoice_number?: string | null;
   product_region?: ProductRegion | string | null;
   purchased_at?: string | null;
+  /** Технически код на модела (напр. „FTXA50AW“). Когато е попълнен,
+   *  продуктът е per-instance и количеството в каталога е COUNT(*)
+   *  на всички инстанции със същия модел и `stock_status=in_stock`
+   *  (поддържано от DB тригер; виж миграция 0039). */
+  model_code?: string | null;
+  brand_id?: string | null;
   brands?: { name?: string } | null;
   product_types?: { name?: string } | null;
 };
@@ -572,40 +578,75 @@ export default function AdminProductsPage() {
     customer: { id?: string; name: string; phone: string; address: string; email?: string; notes: string },
   ) {
     if (!canRecordSale(p)) return false;
-    // Намаляваме наличността с 1, но не под 0. Старият код караше всички
-    // количества към 0 след една продажба — затова продукти с qty > 1
-    // изчезваха от каталога. Сега „Изчерпан“ се сетва само ако реалната
-    // наличност стигне 0; иначе оставяме съществуващия статус.
+
+    // Архитектура на наличността:
+    //
+    //   • Нова (per-instance): продуктът има `model_code` → всеки запис в
+    //     базата е една физическа единица със свой сериен номер. Тогава
+    //     продажбата маркира ВИНАГИ конкретната инстанция като
+    //     out_of_stock, а DB тригерът (миграция 0039) преизчислява
+    //     stock_quantity на ВСИЧКИ инстанции със същата (марка, модел).
+    //
+    //   • Стара (per-record): липсва `model_code` → един запис представлява
+    //     N бройки → намаляваме `stock_quantity` с 1; out_of_stock само
+    //     когато стигне 0.
+    const hasModelCode = Boolean((p.model_code ?? "").trim());
     const currentQty = Math.max(0, Number(p.stock_quantity ?? 0));
-    const nextQty = Math.max(0, currentQty - 1);
     const nextSold = Math.max(0, Number(p.sold_quantity ?? 0) + 1);
-    const shouldHideFromCatalog = nextQty === 0;
+
+    // Тяло на PUT-заявката — за нова архитектура НЕ изпращаме
+    // `stockQuantity`, защото тригерът ще го преизчисли коректно.
+    const putBody: Record<string, unknown> = { soldQuantity: nextSold };
+    if (hasModelCode) {
+      putBody.stockStatus = "out_of_stock";
+    } else {
+      const nextQty = Math.max(0, currentQty - 1);
+      putBody.stockQuantity = nextQty;
+      putBody.stockStatus = nextQty === 0 ? "out_of_stock" : p.stock_status;
+    }
+
     const res = await fetch(`/api/admin/products/${p.id}`, {
       method: "PUT",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        stockQuantity: nextQty,
-        soldQuantity: nextSold,
-        stockStatus: shouldHideFromCatalog ? "out_of_stock" : p.stock_status,
-      }),
+      body: JSON.stringify(putBody),
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
       setError((json as any).error || "Грешка при маркиране на продажба");
       return false;
     }
+
+    // Optimistic UI обновяване:
+    //   • Продаденият продукт → out_of_stock + sold_quantity++.
+    //   • Per-instance: всички ОСТАНАЛИ продукти със същия модел
+    //     получават stock_quantity = currentQty - 1 (отразява тригера).
+    //   • Per-record: само продаденият — stock_quantity = nextQty.
+    // Optimistic UI: симулираме резултата на DB тригера, за да няма
+    // re-fetch след всяка продажба. Тригерът преизчислява COUNT за модела.
+    const nextQty = Math.max(0, currentQty - 1);
+    const modelKey = (p.model_code ?? "").trim().toLowerCase();
     setItems((prev) =>
-      prev.map((x) =>
-        x.id === p.id
-          ? {
-              ...x,
-              stock_quantity: nextQty,
-              sold_quantity: nextSold,
-              stock_status: shouldHideFromCatalog ? "out_of_stock" : x.stock_status,
-            }
-          : x,
-      ),
+      prev.map((x) => {
+        if (x.id === p.id) {
+          return {
+            ...x,
+            stock_status: hasModelCode || nextQty === 0 ? "out_of_stock" : x.stock_status,
+            sold_quantity: nextSold,
+            stock_quantity: nextQty,
+          };
+        }
+        if (
+          hasModelCode &&
+          x.brand_id &&
+          x.brand_id === p.brand_id &&
+          (x.model_code ?? "").trim().toLowerCase() === modelKey
+        ) {
+          // Тригерът ще обнови count = бившо - 1 (без продадения).
+          return { ...x, stock_quantity: nextQty };
+        }
+        return x;
+      }),
     );
 
     // Auto-create an operational record visible in the dashboard calendar.

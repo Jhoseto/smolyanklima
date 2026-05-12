@@ -42,13 +42,18 @@ const MAX_IMAGES = 4;
  *  `featured_position`+`featured_badge` (0035) — fallback при липсваща колона. */
 const FEATURED_COLS = ",featured_position,featured_badge";
 const ADMIN_PRODUCT_LIST_SELECT_MIN =
-  "id,slug,name,price,purchase_price,product_condition,is_featured,is_active,stock_status,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,brands:brand_id(name),product_types:type_id(name)";
+  "id,slug,name,price,purchase_price,product_condition,is_featured,is_active,stock_status,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,model_code,brand_id,brands:brand_id(name),product_types:type_id(name)";
 const ADMIN_PRODUCT_LIST_SELECT_WITH_REGION =
-  "id,slug,name,price,purchase_price,product_condition,is_featured,is_active,stock_status,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,product_region,brands:brand_id(name),product_types:type_id(name)";
+  "id,slug,name,price,purchase_price,product_condition,is_featured,is_active,stock_status,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,product_region,model_code,brand_id,brands:brand_id(name),product_types:type_id(name)";
 const ADMIN_PRODUCT_LIST_SELECT_WITH_LOCATION =
-  "id,slug,name,price,purchase_price,product_condition,is_featured,is_active,stock_status,stock_location,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,brands:brand_id(name),product_types:type_id(name)";
+  "id,slug,name,price,purchase_price,product_condition,is_featured,is_active,stock_status,stock_location,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,model_code,brand_id,brands:brand_id(name),product_types:type_id(name)";
 const ADMIN_PRODUCT_LIST_SELECT_FULL =
-  "id,slug,name,price,purchase_price,product_condition,is_featured,is_active,stock_status,stock_location,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,product_region,brands:brand_id(name),product_types:type_id(name)";
+  "id,slug,name,price,purchase_price,product_condition,is_featured,is_active,stock_status,stock_location,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,product_region,model_code,brand_id,brands:brand_id(name),product_types:type_id(name)";
+/** Подмножество без `model_code` — fallback за DB без миграция 0038. */
+const ADMIN_PRODUCT_LIST_SELECT_NO_MODEL_CODE_MIN = ADMIN_PRODUCT_LIST_SELECT_MIN.replace(",model_code", "");
+const ADMIN_PRODUCT_LIST_SELECT_NO_MODEL_CODE_REGION = ADMIN_PRODUCT_LIST_SELECT_WITH_REGION.replace(",model_code", "");
+const ADMIN_PRODUCT_LIST_SELECT_NO_MODEL_CODE_LOCATION = ADMIN_PRODUCT_LIST_SELECT_WITH_LOCATION.replace(",model_code", "");
+const ADMIN_PRODUCT_LIST_SELECT_NO_MODEL_CODE_FULL = ADMIN_PRODUCT_LIST_SELECT_FULL.replace(",model_code", "");
 const QuerySchema = z.object({
   q: z.string().optional(),
   condition: z.enum(["new", "used"]).optional(),
@@ -91,6 +96,9 @@ const emptyToUndef = (v: unknown) => (typeof v === "string" && v.trim() === "" ?
 const CreateSchema = z.object({
   slug: z.preprocess(emptyToUndef, z.string().min(2).max(120).optional()),
   name: z.string().min(2).max(200),
+  /** Кратък/технически модел (напр. „FTXA50AW“). Различен от `name`,
+   *  което е публичното име в каталога. */
+  modelCode: z.preprocess(emptyToUndef, z.string().max(120).optional().nullable()),
   brandId: z.string().uuid(),
   typeId: z.string().uuid(),
   productCondition: z.enum(["new", "used"]).optional().default("new"),
@@ -209,6 +217,15 @@ export async function GET(req: NextRequest) {
     [ADMIN_PRODUCT_LIST_SELECT_WITH_REGION, false, Boolean(regionFilter)],
     [ADMIN_PRODUCT_LIST_SELECT_WITH_LOCATION, true, false],
     [ADMIN_PRODUCT_LIST_SELECT_MIN, false, false],
+    // Fallback без `model_code` — DB без миграция 0038.
+    [ADMIN_PRODUCT_LIST_SELECT_NO_MODEL_CODE_FULL + FEATURED_COLS, true, Boolean(regionFilter)],
+    [ADMIN_PRODUCT_LIST_SELECT_NO_MODEL_CODE_REGION + FEATURED_COLS, false, Boolean(regionFilter)],
+    [ADMIN_PRODUCT_LIST_SELECT_NO_MODEL_CODE_LOCATION + FEATURED_COLS, true, false],
+    [ADMIN_PRODUCT_LIST_SELECT_NO_MODEL_CODE_MIN + FEATURED_COLS, false, false],
+    [ADMIN_PRODUCT_LIST_SELECT_NO_MODEL_CODE_FULL, true, Boolean(regionFilter)],
+    [ADMIN_PRODUCT_LIST_SELECT_NO_MODEL_CODE_REGION, false, Boolean(regionFilter)],
+    [ADMIN_PRODUCT_LIST_SELECT_NO_MODEL_CODE_LOCATION, true, false],
+    [ADMIN_PRODUCT_LIST_SELECT_NO_MODEL_CODE_MIN, false, false],
   ];
 
   let data: unknown[] | null = null;
@@ -259,6 +276,7 @@ export async function POST(req: NextRequest) {
     name: parsed.data.name,
     brand_id: parsed.data.brandId,
     type_id: parsed.data.typeId,
+    model_code: parsed.data.modelCode?.trim() || null,
     product_condition: parsed.data.productCondition,
     description: parsed.data.description,
     price: parsed.data.price,
@@ -276,11 +294,18 @@ export async function POST(req: NextRequest) {
     sold_quantity: parsed.data.soldQuantity,
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { model_code: _mc, ...insertBaseNoModelCode } = insertBase;
   const insertVariants: Record<string, unknown>[] = [
     { ...insertBase, stock_location: loc, product_region: reg },
     { ...insertBase, product_region: reg },
     { ...insertBase, stock_location: loc },
     insertBase,
+    // Fallback за DB без миграция 0038 (`model_code` колоната липсва).
+    { ...insertBaseNoModelCode, stock_location: loc, product_region: reg },
+    { ...insertBaseNoModelCode, product_region: reg },
+    { ...insertBaseNoModelCode, stock_location: loc },
+    insertBaseNoModelCode,
   ];
 
   let data: { id: string; slug?: string } | null = null;
@@ -292,7 +317,8 @@ export async function POST(req: NextRequest) {
     if (!error) break;
     const missingLoc = isPostgrestMissingColumn(error, "stock_location");
     const missingReg = isPostgrestMissingColumn(error, "product_region");
-    if (!missingLoc && !missingReg) break;
+    const missingMc = isPostgrestMissingColumn(error, "model_code");
+    if (!missingLoc && !missingReg && !missingMc) break;
   }
 
   if (error) {

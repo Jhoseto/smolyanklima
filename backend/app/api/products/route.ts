@@ -173,8 +173,111 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  // ===================================================================
+  // ГРУПИРАНЕ НА КАТАЛОГА ПО МОДЕЛ (deduplication)
+  // ---------------------------------------------------------------------
+  // В per-instance архитектурата (миграция 0038) всеки физически уред е
+  // отделен запис в `products`. Без групиране клиентът би видял 2-3
+  // еднакви картички за същия модел.
+  //
+  // Стратегия:
+  //  1. Lightweight fetch на ID-та + ключови sort-полета, прилагайки
+  //     всички текущи филтри.
+  //  2. Application-level groupBy по (brand_id, lower(model_code)) —
+  //     един представител на модел (in_stock се предпочита пред on_order,
+  //     при равни → най-малко продаден, при равни → най-стар по дата).
+  //  3. Pagination се прави върху списъка с представители.
+  //  4. Final fetch — пълните данни за paginated representatives.
+  //
+  //  Записи без `model_code` (legacy/per-record) остават неdedupнати —
+  //  всеки запис е своят собствен „модел“.
+  // ===================================================================
+  const dedupSelect = "id,brand_id,model_code,stock_status,price,sold_quantity,created_at,product_condition,is_featured,rating,reviews_count";
+  const buildDedupQuery = (includeCondition: boolean) => {
+    let q = (supabase.from("products") as any)
+      .select(includeCondition ? dedupSelect : dedupSelect.replace(",product_condition", ""))
+      .in("stock_status", PUBLIC_CATALOG_STOCK_STATUSES as unknown as string[]);
+    if (idRestriction !== null && idRestriction !== "empty") q = q.in("id", idRestriction);
+    if (typeof min === "number") q = q.gte("price", min);
+    if (typeof max === "number") q = q.lte("price", max);
+    if (includeCondition && cond) q = q.eq("product_condition", cond);
+    // Sort: in_stock пред on_order; sold_quantity ASC (предпочитаме нови
+    // непродадени); created_at ASC (best stable representative).
+    switch (s) {
+      case "price-asc":
+        q = q.order("price", { ascending: true });
+        break;
+      case "price-desc":
+        q = q.order("price", { ascending: false });
+        break;
+      case "rating-desc":
+        q = q.order("rating", { ascending: false }).order("reviews_count", { ascending: false });
+        break;
+      case "energy-class":
+      case "noise-asc":
+        // Sort по specs се прави по-късно — тук само стабилен fallback.
+        q = q.order("is_featured", { ascending: false }).order("rating", { ascending: false });
+        break;
+      default:
+        q = q
+          .order("reviews_count", { ascending: false })
+          .order("rating", { ascending: false })
+          .order("is_featured", { ascending: false });
+    }
+    // Tie-break: предпочитаме in_stock пред on_order, най-малко продаден,
+    // най-стар по дата (стабилен представител на модела).
+    q = q.order("stock_status", { ascending: true });
+    q = q.order("sold_quantity", { ascending: true, nullsFirst: true });
+    q = q.order("created_at", { ascending: true });
+    return q.limit(2000); // safety upper bound — магазинът няма столько публични артикули.
+  };
+
+  let dedupRes: any = await buildDedupQuery(true);
+  if (
+    dedupRes.error &&
+    (String(dedupRes.error.code ?? "") === "42703" ||
+      /product_condition|model_code|sold_quantity/.test(String(dedupRes.error.message ?? "")))
+  ) {
+    // Fallback за DB без миграция 0038 (липсва model_code) или 0007 (product_condition).
+    dedupRes = await buildDedupQuery(false);
+    if (dedupRes.error && /model_code/.test(String(dedupRes.error.message ?? ""))) {
+      // Като последна резерва — само ID и stock_status, без dedup (legacy DB).
+      dedupRes = await (supabase.from("products") as any)
+        .select("id,stock_status,price")
+        .in("stock_status", PUBLIC_CATALOG_STOCK_STATUSES as unknown as string[])
+        .limit(2000);
+    }
+  }
+  if (dedupRes.error) {
+    return withCors(req, NextResponse.json({ error: dedupRes.error.message }, { status: 500 }));
+  }
+
+  const dedupSeen = new Set<string>();
+  const representativeIds: string[] = [];
+  for (const row of (dedupRes.data ?? []) as Array<Record<string, unknown>>) {
+    const brand = String(row.brand_id ?? "");
+    const model = String(row.model_code ?? "").trim().toLowerCase();
+    const key = brand && model ? `${brand}:${model}` : `__instance:${row.id}`;
+    if (dedupSeen.has(key)) continue;
+    dedupSeen.add(key);
+    representativeIds.push(String(row.id));
+  }
+
+  const totalRepresentatives = representativeIds.length;
+  if (totalRepresentatives === 0) {
+    return withCors(
+      req,
+      NextResponse.json({ data: [], meta: { page, perPage, total: 0 } }),
+    );
+  }
+
   const from = (page - 1) * perPage;
   const to = from + perPage - 1;
+  const pageRepresentativeIds = representativeIds.slice(from, to + 1);
+  // Подменяме главната ID-рестрикция със страничната група представители —
+  // оттук нататък целият код работи само върху тях.
+  idRestriction = pageRepresentativeIds.length > 0 ? pageRepresentativeIds : "empty";
+
   const buildQuery = (includeCondition: boolean) => {
     const selectCols = includeCondition
       ? `
@@ -223,20 +326,34 @@ export async function GET(req: NextRequest) {
     return query;
   };
 
-  let { data, error, count } = await buildQuery(true).range(from, to);
+  // Final fetch — само за paginated представителите (idRestriction вече
+  // е заместен с pageRepresentativeIds). Не ползваме `.range()`, защото
+  // ограничението по ID е по-стриктно.
+  let { data, error } = await buildQuery(true);
   const isMissingConditionColumn =
     !!error &&
     (String((error as any).code ?? "") === "42703" ||
       String((error as any).message ?? "").includes("product_condition"));
   if (isMissingConditionColumn) {
-    ({ data, error, count } = await buildQuery(false).range(from, to));
+    ({ data, error } = await buildQuery(false));
   }
 
   if (error) {
     return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   }
 
-  let rows = (data ?? []) as Array<Record<string, unknown>>;
+  // Total count е броят УНИКАЛНИ модели след dedup-а (не raw COUNT
+  // на инстанциите), за да съответства на pagination логиката.
+  const count = totalRepresentatives;
+
+  // Stable re-order: PostgreSQL не гарантира ред при `.in("id", ...)`,
+  // затова сортираме връщаните редове според pageRepresentativeIds.
+  const orderIdx = new Map(pageRepresentativeIds.map((id, i) => [id, i]));
+  let rows = ((data ?? []) as Array<Record<string, unknown>>).slice().sort((a, b) => {
+    const ai = orderIdx.get(String(a.id)) ?? 999;
+    const bi = orderIdx.get(String(b.id)) ?? 999;
+    return ai - bi;
+  });
 
   // Client-visible sort for specs-backed fields (same-page only; total count still correct)
   if ((s === "noise-asc" || s === "energy-class") && rows.length > 1) {

@@ -26,7 +26,7 @@ const UpdateSchema = z.object({
   notes:            z.string().max(2000).optional().nullable(),
   signature_team:   z.string().optional().nullable(),
   signature_client: z.string().optional().nullable(),
-  status:           z.enum(["draft", "signed", "sent"]).optional(),
+  status:           z.enum(["prepared", "in_progress", "signed"]).optional(),
 });
 
 export async function OPTIONS(req: NextRequest) {
@@ -92,9 +92,56 @@ export async function PUT(
     return withCors(req, NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Невалидни данни" }, { status: 400 }));
   }
 
+  const update: Record<string, unknown> = { ...parsed.data };
+
+  // Автоматичен workflow на статуси (само ако клиентът не подава явно status):
+  //   prepared    → in_progress : при поява на техническо съдържание (начин на монтаж, материали и т.н.)
+  //   in_progress → signed      : при наличие на двата подписа (екип + клиент)
+  //   signed                    : final — не се връща назад автоматично
+  if (parsed.data.status === undefined) {
+    const { data: current } = await session.db
+      .from("service_protocols")
+      .select("status, mount_types, materials, cable_channels_m, accessories, signature_team, signature_client")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (current && current.status !== "signed") {
+      const merged = {
+        mount_types:      parsed.data.mount_types      ?? (current.mount_types as string[] | null),
+        materials:        parsed.data.materials        ?? (current.materials as Array<{ qty?: number }> | null),
+        cable_channels_m: parsed.data.cable_channels_m ?? (current.cable_channels_m as number | null),
+        accessories:      parsed.data.accessories      ?? (current.accessories as Record<string, number> | null),
+        signature_team:   parsed.data.signature_team   ?? (current.signature_team as string | null),
+        signature_client: parsed.data.signature_client ?? (current.signature_client as string | null),
+      };
+
+      const hasTechnicalContent =
+        (Array.isArray(merged.mount_types) && merged.mount_types.length > 0) ||
+        (Array.isArray(merged.materials) && merged.materials.some((m) => Number(m?.qty ?? 0) > 0)) ||
+        Number(merged.cable_channels_m ?? 0) > 0 ||
+        (merged.accessories && typeof merged.accessories === "object" &&
+          Object.values(merged.accessories).some((v) => Number(v ?? 0) > 0)) ||
+        Boolean(merged.signature_team) ||
+        Boolean(merged.signature_client);
+
+      const bothSigned = Boolean(merged.signature_team) && Boolean(merged.signature_client);
+
+      let newStatus: "prepared" | "in_progress" | "signed" = current.status;
+      if (bothSigned) {
+        newStatus = "signed";
+      } else if (current.status === "prepared" && hasTechnicalContent) {
+        newStatus = "in_progress";
+      }
+
+      if (newStatus !== current.status) {
+        update.status = newStatus;
+      }
+    }
+  }
+
   const { data, error } = await session.db
     .from("service_protocols")
-    .update(parsed.data)
+    .update(update)
     .eq("id", id)
     .select("*")
     .single();

@@ -6,7 +6,7 @@ import { adminSession, requireRole } from "@/lib/admin/db";
 const QuerySchema = z.object({
   page:    z.coerce.number().int().min(1).optional().default(1),
   perPage: z.coerce.number().int().min(1).max(100).optional().default(20),
-  status:  z.enum(["draft", "signed", "sent"]).optional(),
+  status:  z.enum(["prepared", "in_progress", "signed"]).optional(),
   q:       z.string().optional(),
 });
 
@@ -34,7 +34,7 @@ const CreateSchema = z.object({
   notes:            z.string().max(2000).optional().nullable(),
   signature_team:   z.string().optional().nullable(),
   signature_client: z.string().optional().nullable(),
-  status:           z.enum(["draft", "signed", "sent"]).optional().default("draft"),
+  status:           z.enum(["prepared", "in_progress", "signed"]).optional().default("prepared"),
 });
 
 export async function OPTIONS(req: NextRequest) {
@@ -107,6 +107,27 @@ export async function POST(req: NextRequest) {
   const protocolNumber = `SK-${year}${String(seq).padStart(3, "0")}`;
 
   const d = parsed.data;
+
+  // Автоматичен начален статус (ако клиентът не подава явно):
+  //   - prepared    : по подразбиране (офисът подготвя клиентски данни)
+  //   - in_progress : ако още при създаване има техническо съдържание (екип попълва на терен)
+  //   - signed      : ако още при създаване има и двата подписа
+  const inputHadStatus = Object.prototype.hasOwnProperty.call(json ?? {}, "status");
+  let computedStatus: "prepared" | "in_progress" | "signed" = d.status;
+  if (!inputHadStatus) {
+    const hasTechnicalContent =
+      (d.mount_types?.length ?? 0) > 0 ||
+      (d.materials?.some((m) => Number(m?.qty ?? 0) > 0) ?? false) ||
+      Number(d.cable_channels_m ?? 0) > 0 ||
+      Object.values(d.accessories ?? {}).some((v) => Number(v ?? 0) > 0) ||
+      Boolean(d.signature_team) ||
+      Boolean(d.signature_client);
+    const bothSigned = Boolean(d.signature_team) && Boolean(d.signature_client);
+    if (bothSigned) computedStatus = "signed";
+    else if (hasTechnicalContent) computedStatus = "in_progress";
+    else computedStatus = "prepared";
+  }
+
   const payload = {
     protocol_number:  protocolNumber,
     date:             d.date || new Date().toISOString().slice(0, 10),
@@ -125,7 +146,7 @@ export async function POST(req: NextRequest) {
     notes:            d.notes ?? null,
     signature_team:   d.signature_team ?? null,
     signature_client: d.signature_client ?? null,
-    status:           d.status,
+    status:           computedStatus,
     created_by:       session.userId,
   };
 

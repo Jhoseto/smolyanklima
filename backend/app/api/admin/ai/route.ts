@@ -29,6 +29,25 @@ const RequestSchema = z.discriminatedUnion("task", [
       heatingPowerKw: z.number().nonnegative().optional(),
     }),
   }),
+  // Снимка на етикет на климатик → AI чете етикета + допълва пълна
+  // продуктова спецификация по знания за модела. Един комбиниран call:
+  // (1) OCR на видимия текст от етикета;
+  // (2) lookup на размери/тегло/енергиен клас/SEER-SCOP по {марка, модел};
+  // (3) confidence-маркер за всяко поле.
+  z.object({
+    task: z.literal("product_label_extract"),
+    input: z.object({
+      /** base64 без data: префикса. Максимум ~3 MB (валидно за inline_data). */
+      imageBase64: z.string().min(64).max(5_000_000),
+      /** image/jpeg или image/png; webp също се поддържа от Gemini. */
+      imageMimeType: z.enum(["image/jpeg", "image/png", "image/webp"]).default("image/jpeg"),
+      /** Кое тяло се снима — определя коя серия да се попълни. */
+      whichUnit: z.enum(["indoor", "outdoor"]),
+      /** Hint от вече попълнени полета (модел/марка) — повишава точността при втора снимка. */
+      knownBrand: z.string().max(120).optional().nullable(),
+      knownModel: z.string().max(120).optional().nullable(),
+    }),
+  }),
   z.object({
     task: z.literal("inquiry_reply"),
     input: z.object({
@@ -66,11 +85,24 @@ export async function POST(req: NextRequest) {
   }
 
   const prompt = buildPrompt(parsed.data);
-  const result = await callGemini(env, prompt);
+  // ============================================================
+  // PRIVACY-NOTE: При `product_label_extract` идва base64 image.
+  // Той СЕ ПОЛЗВА САМО за изграждане на Gemini заявката и НИКЪДЕ
+  // не се персистира — нито в Cloudinary, нито в Supabase storage,
+  // нито в audit лога. След като функцията върне, garbage-collect-ва
+  // се заедно с request body-то. В лога записваме само името на
+  // task-а и token usage, без никакви raw данни.
+  // ============================================================
+  const imagePart =
+    parsed.data.task === "product_label_extract"
+      ? { mimeType: parsed.data.input.imageMimeType, base64: parsed.data.input.imageBase64 }
+      : undefined;
+  const result = await callGemini(env, prompt, imagePart);
 
   await logAdminActivity({
     action: `ai.${parsed.data.task}`,
     entityType: "ai",
+    // Внимание: НЕ включваме image base64 или OCR raw text — само метаданни.
     details: { task: parsed.data.task, usage: result.usage },
   });
 
@@ -109,6 +141,86 @@ function buildPrompt(payload: z.infer<typeof RequestSchema>) {
     ].join("\n");
   }
 
+  if (payload.task === "product_label_extract") {
+    const { whichUnit, knownBrand, knownModel } = payload.input;
+    const unitLabel = whichUnit === "indoor" ? "ВЪТРЕШНОТО тяло" : "ВЪНШНОТО тяло";
+    const serialField = whichUnit === "indoor" ? "indoor_unit_serial" : "outdoor_unit_serial";
+    const otherSerialField = whichUnit === "indoor" ? "outdoor_unit_serial" : "indoor_unit_serial";
+    const hints: string[] = [];
+    if (knownBrand) hints.push(`Вече известна марка: ${knownBrand}`);
+    if (knownModel) hints.push(`Вече известен модел: ${knownModel}`);
+    return [
+      "Ти си експерт по техническите спецификации на климатици.",
+      `Анализираш снимка на ОРИГИНАЛЕН ЕТИКЕТ от ${unitLabel} на климатик (от завода/производителя).`,
+      "",
+      "ЗАДАЧАТА Е В ДВЕ ЧАСТИ:",
+      "",
+      "ЧАСТ 1 — РАЗЧИТАНЕ НА ЕТИКЕТА (само това, което виждаш на снимката):",
+      "  • Марка (Daikin, Mitsubishi, Toshiba, Panasonic, Fujitsu, LG, Samsung, Haier, Hisense, Gree, Midea и т.н.).",
+      "  • Точен модел (model code, напр. „FTXA50AW“, „MSZ-LN50VG“). Запиши го ТОЧНО както е на етикета (главни/малки букви, цифри, тирета).",
+      "  • Сериен номер (Serial No., S/N) — ПЪЛЕН низ от етикета. Често е 8-15 цифри/букви.",
+      "  • Хладилен агент (R-32, R-410A, R-290 и т.н.).",
+      "  • Количество хладилен агент в грамове (Refrigerant charge, „kg“ или „g“).",
+      "  • Електрическо захранване (Voltage, Hz, напр. „220-240V ~ 50Hz“).",
+      "  • Година на производство (manufacture date, ако е видна).",
+      "  • Cooling/Heating capacity в kW (ако фигурират на етикета).",
+      "",
+      "ЧАСТ 2 — ПЪЛНА СПЕЦИФИКАЦИЯ ПО МОДЕЛА (от знанията ти, не от снимката):",
+      "  Имайки марката + модела, върни ТОЧНИ стойности от каталога/брошурата на производителя:",
+      "  • Cooling/Heating power (kW), енергиен клас (cool/heat), SEER, SCOP, гаранция (месеци).",
+      "  • Размери (mm) и тегло (kg) — ОТДЕЛНО за вътрешен и външен блок.",
+      "  • WiFi (вграден модул) — true/false.",
+      "  • Препоръчителна площ (m²), ниво на шум (dB).",
+      "",
+      "ВАЖНИ ПРАВИЛА:",
+      `1. Серийният номер ВИНАГИ върни в полето "${serialField}" (защото снимаме точно ${unitLabel}). НЕ попълвай "${otherSerialField}".`,
+      "2. Ако не виждаш или не си сигурен в дадена стойност — върни null (НЕ нула, НЕ празен string).",
+      "3. За model code: ако имаш съмнение, добави и алтернативния вариант в \"alt_model_codes\" (array).",
+      "4. confidence_label = качеството на разчитането от снимката („high“ = ясни цифри/букви; „medium“ = малко замазани; „low“ = трудно четим; „none“ = не виждаш етикет).",
+      "5. confidence_specs = доколко си сигурен в спецификациите от знанията си („high“ = известен модел в каталога; „medium“ = от родов модел/семейство; „low“ = предположение; „none“ = неизвестен).",
+      "6. source = откъде си взел спецификациите — кратко (до 120 знака), напр. „Daikin Stylish R32 каталог 2023“.",
+      "",
+      ...(hints.length > 0 ? [`HINT: ${hints.join("; ")}`, ""] : []),
+      "Върни САМО валиден JSON без markdown, със следната структура:",
+      `{
+  "from_label": {
+    "brand_hint": "<string или null>",
+    "model_code": "<string или null>",
+    "alt_model_codes": ["..."] ,
+    "${serialField}": "<string или null>",
+    "refrigerant": "<string или null>",
+    "refrigerant_amount_g": <number или null>,
+    "voltage": "<string или null>",
+    "manufacture_year": <number или null>
+  },
+  "model_specs": {
+    "coverage_m2": <number или null>,
+    "noise_db": <number или null>,
+    "cooling_power_kw": <number или null>,
+    "heating_power_kw": <number или null>,
+    "energy_class_cool": "<string или null>",
+    "energy_class_heat": "<string или null>",
+    "seer": <number или null>,
+    "scop": <number или null>,
+    "warranty_months": <int или null>,
+    "wifi": <boolean или null>,
+    "weight_indoor_kg": <number или null>,
+    "weight_outdoor_kg": <number или null>,
+    "dim_indoor_length_mm": <int или null>,
+    "dim_indoor_width_mm": <int или null>,
+    "dim_indoor_height_mm": <int или null>,
+    "dim_outdoor_length_mm": <int или null>,
+    "dim_outdoor_width_mm": <int или null>,
+    "dim_outdoor_height_mm": <int или null>
+  },
+  "confidence_label": "high"|"medium"|"low"|"none",
+  "confidence_specs": "high"|"medium"|"low"|"none",
+  "source": "<кратка бележка до 120 знака>",
+  "warnings": ["..."]
+}`,
+    ].join("\n");
+  }
+
   if (payload.task === "inquiry_reply") {
     return [
       "Ти си админ асистент за магазин за климатици в България.",
@@ -128,17 +240,28 @@ function buildPrompt(payload: z.infer<typeof RequestSchema>) {
   ].join("\n");
 }
 
-async function callGemini(env: ReturnType<typeof getEnv>, prompt: string) {
+async function callGemini(
+  env: ReturnType<typeof getEnv>,
+  prompt: string,
+  image?: { mimeType: string; base64: string },
+) {
   const model = env.GEMINI_MODEL ?? "gemini-2.5-flash";
   const url = `${GEMINI_API_BASE}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(env.GEMINI_API_KEY!)}`;
+  type Part = { text: string } | { inlineData: { mimeType: string; data: string } };
+  const parts: Part[] = [{ text: prompt }];
+  if (image) {
+    parts.push({ inlineData: { mimeType: image.mimeType, data: image.base64 } });
+  }
+  // По-висок tokens budget при image задачи — комбинираният JSON е по-голям.
+  const baseTokens = image ? 3200 : 1600;
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      contents: [{ role: "user", parts }],
       generationConfig: {
-        temperature: 0.25,
-        maxOutputTokens: Math.min(env.AI_MAX_OUTPUT_TOKENS ?? 1600, 2200),
+        temperature: image ? 0.15 : 0.25,
+        maxOutputTokens: Math.min(env.AI_MAX_OUTPUT_TOKENS ?? baseTokens, image ? 4096 : 2200),
         responseMimeType: "application/json",
       },
     }),

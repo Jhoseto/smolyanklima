@@ -48,7 +48,11 @@ export async function GET(req: NextRequest) {
   }
   const from = (page - 1) * perPage;
   const to = from + perPage - 1;
-  const { data, error, count } = await query.order("updated_at", { ascending: false }).range(from, to);
+  // Default sort: азбучно по име (възходящо), със стабилен tiebreaker.
+  const { data, error, count } = await query
+    .order("full_name", { ascending: true })
+    .order("id", { ascending: true })
+    .range(from, to);
   if (error && isMissingFollowupColumns(error.message)) {
     let fallback = supabase
       .from("contacts")
@@ -59,7 +63,10 @@ export async function GET(req: NextRequest) {
         `full_name.ilike.%${q.trim()}%,phone.ilike.%${q.trim()}%,email.ilike.%${q.trim()}%,address.ilike.%${q.trim()}%`,
       );
     }
-    const fallbackRes = await fallback.order("updated_at", { ascending: false }).range(from, to);
+    const fallbackRes = await fallback
+      .order("full_name", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to);
     if (fallbackRes.error) return withCors(req, NextResponse.json({ error: fallbackRes.error.message }, { status: 500 }));
     return withCors(
       req,

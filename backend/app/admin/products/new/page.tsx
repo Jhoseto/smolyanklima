@@ -21,6 +21,10 @@ export default function NewProductPage() {
   const [toast, setToast] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState<AdminProductForm>(emptyProductForm);
+  // Брой неприбрани (в preview, но не качени) снимки. Save-action-ът
+  // проверява тази стойност и показва confirm dialog преди да продължи.
+  const [pendingPhotos, setPendingPhotos] = useState(0);
+  const [pendingPhotosConfirm, setPendingPhotosConfirm] = useState<null | { proceed: () => void }>(null);
 
   useEffect(() => {
     if (!toast) return;
@@ -60,7 +64,9 @@ export default function NewProductPage() {
     })().catch((e) => setError(String(e?.message ?? e)));
   }, []);
 
-  async function submit() {
+  // Реалното submit действие — без protection guard. Извиква се след
+  // confirm dialog-а (или директно ако няма pending снимки).
+  async function doSubmit() {
     setError(null);
     setSubmitting(true);
     try {
@@ -82,6 +88,15 @@ export default function NewProductPage() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  // Wrapper за save бутона — ако има неприбрани снимки, иска потвърждение.
+  function submit() {
+    if (pendingPhotos > 0) {
+      setPendingPhotosConfirm({ proceed: () => void doSubmit() });
+      return;
+    }
+    void doSubmit();
   }
 
   return (
@@ -124,6 +139,7 @@ export default function NewProductPage() {
           canEditPrice={canEditPrice}
           canEditStockLocation={canEditStockLocation}
           canEditProductRegion={canEditStockLocation}
+          onPendingPhotosChange={setPendingPhotos}
         />
       </Card>
 
@@ -142,6 +158,60 @@ export default function NewProductPage() {
           {submitting ? "Създавам..." : "Създай продукт"}
         </Button>
       </div>
+
+      {/* Pending-photos protection modal — задейства се при опит за save,
+          ако в preview-a има неприбрани в Cloudinary снимки. */}
+      {pendingPhotosConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4 bg-slate-950/55 backdrop-blur-md"
+          onClick={() => setPendingPhotosConfirm(null)}
+        >
+          <div
+            className="w-full md:max-w-lg overflow-hidden rounded-t-3xl md:rounded-3xl border border-white/70 bg-white shadow-[0_-8px_40px_rgba(15,23,42,0.25)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-center pt-3 pb-1 md:hidden">
+              <div className="w-10 h-1 rounded-full bg-slate-200" />
+            </div>
+            <div className="border-b border-slate-100 bg-amber-50/60 px-6 py-5">
+              <div className="text-xs font-bold uppercase tracking-[0.24em] text-amber-700">
+                Внимание
+              </div>
+              <div className="mt-1 text-xl md:text-2xl font-black leading-tight text-slate-950">
+                Имаш {pendingPhotos} {pendingPhotos === 1 ? "снимка" : "снимки"} в preview
+              </div>
+            </div>
+            <div className="p-6 text-sm text-slate-700 leading-6">
+              {pendingPhotos === 1
+                ? "Тази снимка все още не е качена в Cloudinary."
+                : "Тези снимки все още не са качени в Cloudinary."}{" "}
+              Ако продължиш сега, продуктът ще се създаде <strong>без тях</strong>. Препоръчително
+              е първо да натиснеш бутона „Качи в Cloudinary“ в секцията със снимките.
+            </div>
+            <div className="flex flex-col sm:flex-row justify-end gap-2 border-t border-slate-100 bg-slate-50 px-6 py-4">
+              <Button
+                variant="secondary"
+                onClick={() => setPendingPhotosConfirm(null)}
+                className="sm:order-1 order-2"
+              >
+                Назад към снимките
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  const cb = pendingPhotosConfirm.proceed;
+                  setPendingPhotosConfirm(null);
+                  cb();
+                }}
+                className="sm:order-2 order-1 gap-2"
+              >
+                <Save className="w-4 h-4" />
+                Създай без качване
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

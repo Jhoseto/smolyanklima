@@ -16,13 +16,10 @@ export function SignatureCanvas({ label, onSave, onClose, existing }: Props) {
   const [isEmpty, setIsEmpty]   = useState(true);
   const lastPos = useRef<{ x: number; y: number } | null>(null);
 
-  // ── Inicializacia ─────────────────────────────────────────────────────────
-
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    // Размери — цял viewport
     const resize = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
@@ -35,7 +32,6 @@ export function SignatureCanvas({ label, onSave, onClose, existing }: Props) {
       ctx.scale(dpr, dpr);
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, w, h);
-      // Ако има съществуващ подпис — презареди го
       if (existing) {
         const img = new Image();
         img.onload = () => ctx.drawImage(img, 0, 0, w, h);
@@ -49,8 +45,6 @@ export function SignatureCanvas({ label, onSave, onClose, existing }: Props) {
     return () => window.removeEventListener("resize", resize);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // ── Помощни функции ───────────────────────────────────────────────────────
 
   const getPos = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current!;
@@ -70,8 +64,6 @@ export function SignatureCanvas({ label, onSave, onClose, existing }: Props) {
     ctx.lineJoin    = "round";
     return ctx;
   };
-
-  // ── Рисуване ──────────────────────────────────────────────────────────────
 
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -97,8 +89,6 @@ export function SignatureCanvas({ label, onSave, onClose, existing }: Props) {
     lastPos.current = null;
   }, []);
 
-  // ── Изчисти ───────────────────────────────────────────────────────────────
-
   const clear = useCallback(() => {
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext("2d")!;
@@ -107,18 +97,14 @@ export function SignatureCanvas({ label, onSave, onClose, existing }: Props) {
     setIsEmpty(true);
   }, []);
 
-  // ── Запази ────────────────────────────────────────────────────────────────
-
   const save = useCallback(() => {
     const canvas = canvasRef.current!;
-    // Компресирана PNG с качество 0.85
     const dataUrl = canvas.toDataURL("image/png", 0.85);
     onSave(dataUrl);
   }, [onSave]);
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-white">
-      {/* ── Toolbar ── */}
       <div className="flex items-center justify-between px-4 py-3 bg-slate-900 text-white shrink-0 safe-top">
         <button
           onClick={onClose}
@@ -149,12 +135,10 @@ export function SignatureCanvas({ label, onSave, onClose, existing }: Props) {
         </div>
       </div>
 
-      {/* ── Насока ── */}
       <div className="px-4 py-2 bg-slate-100 border-b border-slate-200 text-xs text-slate-500 text-center shrink-0">
         Подпишете се с пръст в полето по-долу
       </div>
 
-      {/* ── Canvas ── */}
       <div className="flex-1 overflow-hidden relative">
         <canvas
           ref={canvasRef}

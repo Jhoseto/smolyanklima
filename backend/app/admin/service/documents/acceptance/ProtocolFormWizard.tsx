@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import {
   ChevronLeft, ChevronRight, Check, Download, Mail,
-  PenLine, Trash2, X, Loader2, CheckCircle2,
+  PenLine, Trash2, X, Loader2, CheckCircle2, CloudOff,
 } from "lucide-react";
 import {
   PROTOCOL_MATERIALS, LEFT_MATERIALS, RIGHT_MATERIALS,
@@ -12,6 +12,8 @@ import {
 import type { AccessoriesEntry, MaterialEntry } from "@/lib/protocol-materials";
 import { SignatureCanvas } from "./SignatureCanvas";
 import { ProductAutocomplete } from "./ProductAutocomplete";
+import { offlineSend, offlineGet, newLocalId, isLocalId } from "@/lib/offline/offlineFetch";
+import { useOnlineStatus } from "@/lib/hooks/useOnlineStatus";
 
 // ─── Типове ──────────────────────────────────────────────────────────────────
 
@@ -32,7 +34,13 @@ interface FormData {
   notes:            string;
   signature_team:   string | null;
   signature_client: string | null;
-  status:           "draft" | "signed" | "sent";
+  /**
+   * Жизнен цикъл (виж миграция 0036):
+   *   prepared    — офисът е въвел клиентските данни, чака сервизен екип.
+   *   in_progress — сервизният екип е започнал да попълва на място.
+   *   signed      — завършен и подписан от двете страни.
+   */
+  status:           "prepared" | "in_progress" | "signed";
 }
 
 const defaultForm = (): FormData => ({
@@ -52,7 +60,7 @@ const defaultForm = (): FormData => ({
   notes:            "",
   signature_team:   null,
   signature_client: null,
-  status:           "draft",
+  status:           "prepared",
 });
 
 interface Props {
@@ -78,7 +86,15 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
   const [step, setStep]     = useState(0);
   const [form, setForm]     = useState<FormData>({ ...defaultForm(), ...initialData });
   const [saving, setSaving] = useState(false);
+  // savedId може да е серверен UUID или offline-generated "local-..." UUID
+  // (когато протоколът е създаден без мрежа). При възстановяване на мрежа,
+  // sync engine-ът мапва local-id → server-id зад кулисите.
   const [savedId, setSavedId] = useState<string | null>(protocolId ?? null);
+  // Локален UUID за нови протоколи — генерира се при първия POST, за да можем
+  // да трекваме записа в IndexedDB и преди да получим server id.
+  const localIdRef = useRef<string | null>(null);
+  const [pendingSync, setPendingSync] = useState(false);
+  const online = useOnlineStatus();
   const [sigOpen, setSigOpen] = useState<"team" | "client" | null>(null);
   const [sendEmail, setSendEmail] = useState(false);
   const [emailInput, setEmailInput] = useState(initialData?.client_email ?? "");
@@ -86,6 +102,78 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
   const [sent, setSent]      = useState(false);
   const [error, setError]    = useState<string | null>(null);
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Зареждане на initial data при отваряне на съществуващ протокол ─────────
+  useEffect(() => {
+    if (!protocolId || initialData) return;
+    let cancelled = false;
+    (async () => {
+      // Първо опитай мрежата (ако сме онлайн); fallback към cache.
+      try {
+        if (typeof navigator !== "undefined" && navigator.onLine && !isLocalId(protocolId)) {
+          const res = await fetch(`/api/admin/service/protocols/${protocolId}`, {
+            credentials: "include",
+          });
+          if (res.ok) {
+            const { data } = await res.json();
+            if (cancelled || !data) return;
+            applyServerData(data);
+            return;
+          }
+        }
+      } catch { /* mrejа падна — пробваме cache */ }
+      // Cache fallback (offline или мрежова грешка)
+      const cached = await offlineGet<Record<string, unknown>>(protocolId);
+      if (cancelled || !cached) return;
+      applyServerData(cached.data as Record<string, unknown>);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [protocolId]);
+
+  const applyServerData = useCallback((data: Record<string, unknown>) => {
+    const materialsMap: Record<string, number> = {};
+    if (Array.isArray(data.materials)) {
+      for (const m of data.materials as Array<{ id?: string; qty?: number }>) {
+        if (m?.id && typeof m.qty === "number") materialsMap[m.id] = m.qty;
+      }
+    }
+    setForm(prev => ({
+      ...prev,
+      work_item_id:     (data.work_item_id as string | null) ?? null,
+      date:             (data.date as string) ?? prev.date,
+      client_name:      (data.client_name as string) ?? "",
+      ac_model:         (data.ac_model as string) ?? "",
+      serial_number:    (data.serial_number as string) ?? "",
+      address:          (data.address as string) ?? "",
+      paid_amount:      data.paid_amount != null ? String(data.paid_amount) : "",
+      client_email:     (data.client_email as string) ?? "",
+      client_phone:     (data.client_phone as string) ?? "",
+      mount_types:      (data.mount_types as string[]) ?? [],
+      materials:        Object.keys(materialsMap).length ? materialsMap : prev.materials,
+      cable_channels_m: data.cable_channels_m != null ? String(data.cable_channels_m) : "",
+      accessories:      (data.accessories as AccessoriesEntry) ?? prev.accessories,
+      notes:            (data.notes as string) ?? "",
+      signature_team:   (data.signature_team as string | null) ?? null,
+      signature_client: (data.signature_client as string | null) ?? null,
+      status:           (data.status as FormData["status"]) ?? prev.status,
+    }));
+    setEmailInput((data.client_email as string) ?? "");
+  }, []);
+
+  // In-flight lock: предотвратява двойно повикване на persistForm,
+  // което би създало дубликати при паралелен auto-save + finalize (виж P7 в кода ревюто).
+  // Втория caller изчаква първия да приключи; последното състояние се запазва наново.
+  const persistRef = useRef<Promise<unknown> | null>(null);
+
+  // P14: При unmount изчистваме pending autoSave timeout-а, за да не извика
+  // setState на unmounted компонент.
+  useEffect(() => () => {
+    if (autoSaveTimer.current) {
+      clearTimeout(autoSaveTimer.current);
+      autoSaveTimer.current = null;
+    }
+  }, []);
 
   // Автоматично запазване при смяна на данните
   // Не стартира auto-save ако формулярът е все още напълно празен (нищо не е въведено)
@@ -111,11 +199,33 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
 
   // ── Запазване в API ───────────────────────────────────────────────────────
 
-  const persistForm = async (data: FormData, id: string | null, showSaving = true) => {
+  const persistForm = async (data: FormData, id: string | null, showSaving = true): Promise<string | null> => {
+    // Serialize concurrent calls (P7): чакаме предишен persist преди да започнем нов.
+    if (persistRef.current) {
+      try { await persistRef.current; } catch { /* ignore */ }
+    }
+    const job = persistFormInner(data, id, showSaving);
+    persistRef.current = job;
+    try {
+      return await job;
+    } finally {
+      if (persistRef.current === job) persistRef.current = null;
+    }
+  };
+
+  const persistFormInner = async (data: FormData, id: string | null, showSaving = true): Promise<string | null> => {
+    // Recovery от race: ако този persist е тригернат със стара closure стойност (id=null)
+    // но в междувременен предишен persist вече е създал localId, реюзваме него вместо
+    // да създадем втори запис в БД (виж P1 в кода ревюто).
+    if (id === null && localIdRef.current) {
+      id = localIdRef.current;
+    }
     if (showSaving) setSaving(true);
     setError(null);
     try {
-      // Само полетата, очаквани от API-то
+      // Бележка: status НЕ се изпраща — backend-ът сам управлява workflow-а:
+      //   prepared → in_progress (поява на техническо съдържание)
+      //   in_progress → signed   (двата подписа са налични)
       const payload = {
         work_item_id:     data.work_item_id,
         date:             data.date || new Date().toISOString().slice(0, 10),
@@ -135,29 +245,51 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
         notes:            data.notes || null,
         signature_team:   data.signature_team,
         signature_client: data.signature_client,
-        status:           data.status,
       };
 
       if (id) {
-        const res = await fetch(`/api/admin/service/protocols/${id}`, {
-          method: "PUT",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+        // UPDATE: ако id-то е локално (още няма серверен), използваме :localId placeholder,
+        // който sync engine-ът ще резолвне след първи успешен POST.
+        const isLocal = isLocalId(id);
+        const endpoint = isLocal
+          ? `/api/admin/service/protocols/:localId`
+          : `/api/admin/service/protocols/${id}`;
+        const result = await offlineSend<typeof payload, { id: string; status?: FormData["status"] }>({
+          kind:    "acceptance",
+          method:  "PUT",
+          endpoint,
+          body:    payload,
+          localId: isLocal ? id : undefined,
         });
-        if (!res.ok) throw new Error((await res.json()).error ?? "Грешка при запазване");
+        if (!result.ok) throw new Error(result.error ?? "Грешка при запазване");
+        setPendingSync(result.queued);
+        if (result.data?.status && result.data.status !== data.status) {
+          setForm(prev => ({ ...prev, status: result.data!.status! }));
+        }
       } else {
-        const res = await fetch("/api/admin/service/protocols", {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+        // CREATE: винаги генерираме localId за tracking в IndexedDB.
+        const localId = localIdRef.current ?? newLocalId();
+        localIdRef.current = localId;
+
+        const result = await offlineSend<typeof payload, { id: string; status?: FormData["status"] }>({
+          kind:    "acceptance",
+          method:  "POST",
+          endpoint: "/api/admin/service/protocols",
+          body:    payload,
+          localId,
         });
-        if (!res.ok) throw new Error((await res.json()).error ?? "Грешка при запазване");
-        const { data: created } = await res.json();
-        setSavedId(created.id);
-        onSaved(created.id);
-        return created.id as string;
+        if (!result.ok) throw new Error(result.error ?? "Грешка при запазване");
+
+        // Online: получихме server id → използваме него.
+        // Offline: оперираме с localId докато не дойде мрежа.
+        const effectiveId = result.data?.id ?? localId;
+        setSavedId(effectiveId);
+        setPendingSync(result.queued);
+        if (result.data?.status && result.data.status !== data.status) {
+          setForm(prev => ({ ...prev, status: result.data!.status! }));
+        }
+        onSaved(effectiveId);
+        return effectiveId;
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Грешка");
@@ -167,11 +299,10 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
     return id;
   };
 
-  // Финализиране + подписи
+  // Финализиране + подписи: backend-ът ще зададе status="signed" автоматично,
+  // ако и двата подписа (екип + клиент) са налични в текущия запис.
   const finalize = async () => {
-    const updated = { ...form, status: "signed" as const };
-    setForm(updated);
-    const id = await persistForm(updated, savedId, true);
+    const id = await persistForm(form, savedId, true);
     if (id) setSavedId(id);
   };
 
@@ -203,7 +334,7 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
   };
 
   const isLastStep = step === STEPS.length - 1;
-  const isSigned   = form.status === "signed" || form.status === "sent";
+  const isSigned   = form.status === "signed";
 
   // ─── Рендер стъпка ────────────────────────────────────────────────────────
 
@@ -220,6 +351,18 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
             <p className="text-xs text-slate-400">Стъпка {step + 1} от {STEPS.length}</p>
             <p className="text-sm font-bold text-slate-800">{STEPS[step]}</p>
           </div>
+          {!online && (
+            <div title="Офлайн — промените се пазят локално и ще се качат при възстановяване на мрежа" className="flex items-center gap-1 px-2 py-1 rounded-full bg-slate-900 text-white text-[10px] font-bold">
+              <CloudOff className="w-3 h-3" />
+              Офлайн
+            </div>
+          )}
+          {online && pendingSync && (
+            <div title="Чака да се качи към сървъра" className="flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500 text-white text-[10px] font-bold">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Чака
+            </div>
+          )}
           {saving && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
         </div>
         {/* Прогрес лента */}

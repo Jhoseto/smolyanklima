@@ -27,7 +27,6 @@ export function ProductAutocomplete({ value, onChange, placeholder = "Въвед
   const inputRef    = useRef<HTMLInputElement>(null);
   const listRef     = useRef<HTMLDivElement>(null);
 
-  // Синхронизирай query при промяна на prop
   useEffect(() => {
     if (!selected) setQuery(value);
   }, [value, selected]);
@@ -52,7 +51,7 @@ export function ProductAutocomplete({ value, onChange, placeholder = "Въвед
   const handleInput = (v: string) => {
     setQuery(v);
     setSelected(false);
-    onChange(v);                  // обнови parent с текущия текст
+    onChange(v);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => search(v), 280);
   };
@@ -73,7 +72,6 @@ export function ProductAutocomplete({ value, onChange, placeholder = "Въвед
     inputRef.current?.focus();
   };
 
-  // Затвори при клик извън
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (
@@ -117,7 +115,6 @@ export function ProductAutocomplete({ value, onChange, placeholder = "Въвед
         </div>
       </div>
 
-      {/* Dropdown */}
       {open && results.length > 0 && (
         <div
           ref={listRef}

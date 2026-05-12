@@ -6,6 +6,8 @@ import { MobileNav } from "./MobileNav";
 import { SplashScreen } from "./SplashScreen";
 import { ChatNavBadge } from "./chat/ChatNavBadge";
 import { AdminPushBanner } from "./AdminPushBanner";
+import { OfflineBootstrap } from "./OfflineBootstrap";
+import { OfflineExplainerCard } from "./OfflineExplainerCard";
 import { AdminLogo } from "./AdminLogo";
 import {
   LayoutDashboard, Package, Users, FileText, Star,
@@ -137,8 +139,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
         {/* Main content */}
         <main className="flex-1 min-h-0 w-full min-w-0 overflow-x-hidden overflow-y-auto p-3 md:p-4 pb-24 md:pb-4">
-          <AdminPushBanner role={role} />
-          {children}
+          <OfflineBootstrap>
+            <OfflineExplainerCard />
+            <AdminPushBanner role={role} />
+            {children}
+          </OfflineBootstrap>
         </main>
 
         {/* Mobile nav */}

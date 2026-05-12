@@ -32,6 +32,9 @@ export default function EditProductPage() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<AdminProductForm>(emptyProductForm);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Брой неприбрани (preview, но не качени) снимки.
+  const [pendingPhotos, setPendingPhotos] = useState(0);
+  const [pendingPhotosConfirm, setPendingPhotosConfirm] = useState<null | { proceed: () => void }>(null);
 
   useEffect(() => {
     if (!toast) return;
@@ -72,7 +75,7 @@ export default function EditProductPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  async function save() {
+  async function doSave() {
     setError(null);
     setSaving(true);
     try {
@@ -94,6 +97,15 @@ export default function EditProductPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  // Wrapper за save бутона — ако има pending снимки, иска потвърждение.
+  function save() {
+    if (pendingPhotos > 0) {
+      setPendingPhotosConfirm({ proceed: () => void doSave() });
+      return;
+    }
+    void doSave();
   }
 
   async function remove() {
@@ -150,6 +162,7 @@ export default function EditProductPage() {
           canEditStockLocation={canEditStockLocation}
           canEditProductRegion={canEditStockLocation}
           currentProductId={id}
+          onPendingPhotosChange={setPendingPhotos}
         />
       </Card>
 
@@ -176,6 +189,58 @@ export default function EditProductPage() {
           </Button>
         </div>
       </div>
+
+      {pendingPhotosConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4 bg-slate-950/55 backdrop-blur-md"
+          onClick={() => setPendingPhotosConfirm(null)}
+        >
+          <div
+            className="w-full md:max-w-lg overflow-hidden rounded-t-3xl md:rounded-3xl border border-white/70 bg-white shadow-[0_-8px_40px_rgba(15,23,42,0.25)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-center pt-3 pb-1 md:hidden">
+              <div className="w-10 h-1 rounded-full bg-slate-200" />
+            </div>
+            <div className="border-b border-slate-100 bg-amber-50/60 px-6 py-5">
+              <div className="text-xs font-bold uppercase tracking-[0.24em] text-amber-700">
+                Внимание
+              </div>
+              <div className="mt-1 text-xl md:text-2xl font-black leading-tight text-slate-950">
+                Имаш {pendingPhotos} {pendingPhotos === 1 ? "снимка" : "снимки"} в preview
+              </div>
+            </div>
+            <div className="p-6 text-sm text-slate-700 leading-6">
+              {pendingPhotos === 1
+                ? "Тази снимка все още не е качена в Cloudinary."
+                : "Тези снимки все още не са качени в Cloudinary."}{" "}
+              Ако продължиш сега, промените ще се запишат <strong>без тях</strong>. Препоръчително
+              е първо да натиснеш „Качи в Cloudinary“ в секцията със снимките.
+            </div>
+            <div className="flex flex-col sm:flex-row justify-end gap-2 border-t border-slate-100 bg-slate-50 px-6 py-4">
+              <Button
+                variant="secondary"
+                onClick={() => setPendingPhotosConfirm(null)}
+                className="sm:order-1 order-2"
+              >
+                Назад към снимките
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  const cb = pendingPhotosConfirm.proceed;
+                  setPendingPhotosConfirm(null);
+                  cb();
+                }}
+                className="sm:order-2 order-1 gap-2"
+              >
+                <Save className="w-4 h-4" />
+                Запази без качване
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4 bg-slate-950/55 backdrop-blur-md" onClick={() => setConfirmDelete(false)}>
