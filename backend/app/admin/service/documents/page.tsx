@@ -54,7 +54,7 @@ const DOC_KINDS: DocKind[] = [
     icon: Wrench,
     href: "/admin/service/documents/service",
     tone: "emerald",
-    enabled: false,
+    enabled: true,
   },
   {
     id: "warranty",
