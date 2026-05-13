@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
-import { adminDb, adminSession } from "@/lib/admin/db";
+import { adminDb, adminSession, requireRole } from "@/lib/admin/db";
 import { canEditProductStockLocation, normalizeProductStockLocation } from "@/lib/admin/productStockLocation";
 import { normalizeProductRegion } from "@/lib/admin/productRegion";
 import { isPostgrestMissingColumn } from "@/lib/admin/pgMissingColumn";
@@ -266,7 +266,18 @@ export async function POST(req: NextRequest) {
     return withCors(req, NextResponse.json({ error: detail }, { status: 400 }));
   }
 
-  const session = await adminSession();
+  let session;
+  try {
+    session = await adminSession();
+  } catch {
+    return withCors(req, NextResponse.json({ error: "Неоторизиран достъп" }, { status: 401 }));
+  }
+  try {
+    requireRole(session, "master_admin", "office_staff", "service_staff");
+  } catch {
+    return withCors(req, NextResponse.json({ error: "Нямате право да създавате продукти." }, { status: 403 }));
+  }
+
   const supabase = session.db;
   const loc =
     canEditProductStockLocation(session.role) ? normalizeProductStockLocation(parsed.data.stockLocation) : "warehouse";

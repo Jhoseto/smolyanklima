@@ -61,8 +61,8 @@ export function ProductQuickViewButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={`text-left font-bold text-slate-900 underline-offset-4 transition-colors hover:text-brand-blue-700 hover:underline focus:outline-none focus:ring-2 focus:ring-brand-blue-200 rounded ${className}`}
-        title="Бърз преглед на продукта"
+        className={`min-w-0 max-w-full text-left font-bold text-slate-900 underline-offset-4 transition-colors hover:text-brand-blue-700 hover:underline focus:outline-none focus:ring-2 focus:ring-brand-blue-200 rounded ${className}`}
+        title={productName}
       >
         {productName}
       </button>

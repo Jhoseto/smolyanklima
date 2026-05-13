@@ -58,14 +58,17 @@ export async function POST(req: NextRequest) {
   const kind = kindRaw as CloudinaryUploadKind;
 
   if (kind === "staff") {
-    try {
-      requireRole(session, "master_admin");
-    } catch {
-      return withCors(req, NextResponse.json({ error: "Forbidden" }, { status: 403 }));
-    }
     const idParse = z.string().uuid().safeParse(slugRaw);
     if (!idParse.success) {
       return withCors(req, NextResponse.json({ error: "Невалиден служител (UUID)" }, { status: 400 }));
+    }
+    const isSelfAvatar = slugRaw === session.userId;
+    if (!isSelfAvatar) {
+      try {
+        requireRole(session, "master_admin");
+      } catch {
+        return withCors(req, NextResponse.json({ error: "Forbidden" }, { status: 403 }));
+      }
     }
     const { data: exists, error: exErr } = await session.db
       .from("admin_users")

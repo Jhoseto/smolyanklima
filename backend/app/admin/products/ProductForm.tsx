@@ -585,9 +585,13 @@ type Props = {
   canEditProductRegion?: boolean;
   /** ID на текущия продукт при редакция — изключва се при duplicate-check. */
   currentProductId?: string;
+  /** Само при нов продукт: „цена с монтаж“ = продажна цена + стандарт от настройките на каталога, докато не редактираш полето ръчно. */
+  autoPriceWithMountFromCatalog?: boolean;
   /** Callback при промяна на броя „pending“ снимки (preview, но не качени).
    *  Родителят го ползва за save-protection (показва confirm, ако > 0). */
   onPendingPhotosChange?: (count: number) => void;
+  /** Само преглед: всички полета извън секцията „Снимки“ са неактивни (сервиз). */
+  readOnly?: boolean;
 };
 
 export function ProductFormFields({
@@ -601,8 +605,11 @@ export function ProductFormFields({
   canEditStockLocation = false,
   canEditProductRegion = false,
   currentProductId,
+  autoPriceWithMountFromCatalog = false,
   onPendingPhotosChange,
+  readOnly = false,
 }: Props) {
+  const ro = Boolean(readOnly);
   /** Локален overlay за марки, създадени по време на тази сесия чрез
    *  „+ Създай нова марка“ в BrandCombobox. Parent prop-ът може да не се
    *  rerender-не веднага (data idва от родителския state), затова пазим
@@ -667,6 +674,74 @@ export function ProductFormFields({
   useEffect(() => {
     onPendingPhotosChange?.(pendingPhotosCount);
   }, [pendingPhotosCount, onPendingPhotosChange]);
+
+  /** Стандартни суми за монтаж от панел Продукти → ⚙ (само при нов продукт). */
+  const [catalogMountDefaults, setCatalogMountDefaults] = useState<{ new: number; used: number } | null>(null);
+  /** След ръчна редакция на „цена с монтаж“ вече не я пипаме от настройките. */
+  const [catalogPwmUserEdited, setCatalogPwmUserEdited] = useState(false);
+
+  useEffect(() => {
+    if (!autoPriceWithMountFromCatalog || !canEditPrice) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/admin/products/catalog-settings", { credentials: "include" });
+        const json = (await res.json().catch(() => ({}))) as {
+          data?: { defaultMountNewEur?: number | null; defaultMountUsedEur?: number | null };
+        };
+        if (cancelled || !res.ok) return;
+        const n = json.data?.defaultMountNewEur;
+        const u = json.data?.defaultMountUsedEur;
+        if (n != null && u != null && Number.isFinite(n) && Number.isFinite(u)) {
+          setCatalogMountDefaults({ new: n, used: u });
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [autoPriceWithMountFromCatalog, canEditPrice]);
+
+  useEffect(() => {
+    if (!autoPriceWithMountFromCatalog || !canEditPrice || catalogPwmUserEdited) return;
+    if (!catalogMountDefaults) return;
+    const priceNum = Number(form.price);
+    if (!Number.isFinite(priceNum) || priceNum <= 0) return;
+    const addon = form.productCondition === "used" ? catalogMountDefaults.used : catalogMountDefaults.new;
+    const nextPwm = Math.round((priceNum + addon) * 100) / 100;
+    setForm((prev) => {
+      const cur = strNum(prev.priceWithMount);
+      if (cur != null && Math.abs(cur - nextPwm) < 1e-9) return prev;
+      return { ...prev, priceWithMount: String(nextPwm) };
+    });
+  }, [
+    autoPriceWithMountFromCatalog,
+    canEditPrice,
+    catalogMountDefaults,
+    catalogPwmUserEdited,
+    form.price,
+    form.productCondition,
+    setForm,
+  ]);
+
+  const priceWithMountFieldInfo = useMemo(() => {
+    if (autoPriceWithMountFromCatalog && canEditPrice) {
+      return "Продажна цена с включен стандартен монтаж. Докато не я редактираш ръчно, се изчислява като продажна цена + стандартния монтаж от настройките на каталога (икона зъбно колело до „Нов продукт“).";
+    }
+    return "Продажна цена с включен стандартен монтаж.";
+  }, [autoPriceWithMountFromCatalog, canEditPrice]);
+
+  const showCatalogMountAutoHint = useMemo(
+    () =>
+      autoPriceWithMountFromCatalog &&
+      canEditPrice &&
+      catalogMountDefaults != null &&
+      !catalogPwmUserEdited &&
+      Number(form.price) > 0,
+    [autoPriceWithMountFromCatalog, canEditPrice, catalogMountDefaults, catalogPwmUserEdited, form.price],
+  );
 
   /** Pre-fetched снимки от друг продукт със същия (марка, модел) —
    *  показват се като „линкни тези“ предложение, за да се избегне
@@ -1262,6 +1337,12 @@ export function ProductFormFields({
 
   return (
     <div className="grid gap-5">
+      {ro && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 leading-snug">
+          <strong>Сервизен преглед:</strong> полетата са само за четене. За промени по този продукт обърнете се към офис или главен администратор.
+        </div>
+      )}
+      <fieldset disabled={ro} className="min-w-0 border-0 p-0 m-0 w-full grid gap-5">
       <datalist id="energy-class-options">{ENERGY_CLASS_OPTIONS.map((v) => <option key={v} value={v} />)}</datalist>
       <datalist id="refrigerant-options">{REFRIGERANT_OPTIONS.map((v) => <option key={v} value={v} />)}</datalist>
       <datalist id="warranty-months-options">{WARRANTY_MONTHS_OPTIONS.map((v) => <option key={v} value={v} />)}</datalist>
@@ -1503,11 +1584,15 @@ export function ProductFormFields({
               </div>
             </label>
             <label className="block">
-              <FieldTitle label="Цена с монтаж (EUR)" info="Продажна цена с включен стандартен монтаж." />
+              <FieldTitle label="Цена с монтаж (EUR)" info={priceWithMountFieldInfo} />
               <div className="relative">
                 <Input
                   value={form.priceWithMount}
-                  onChange={(e) => canEditPrice && setForm({ ...form, priceWithMount: e.target.value })}
+                  onChange={(e) => {
+                    if (!canEditPrice) return;
+                    if (autoPriceWithMountFromCatalog) setCatalogPwmUserEdited(true);
+                    setForm({ ...form, priceWithMount: e.target.value });
+                  }}
                   placeholder="по избор"
                   disabled={!canEditPrice}
                   className={!canEditPrice ? "opacity-60 cursor-not-allowed bg-slate-50" : ""}
@@ -1516,6 +1601,15 @@ export function ProductFormFields({
                   <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-semibold">🔒</span>
                 )}
               </div>
+              {showCatalogMountAutoHint && catalogMountDefaults && (
+                <p className="mt-1 text-[10px] leading-snug text-slate-500">
+                  Автоматично: цена +{" "}
+                  {form.productCondition === "used"
+                    ? `${catalogMountDefaults.used} € (втора употреба)`
+                    : `${catalogMountDefaults.new} € (нов)`}{" "}
+                  от настройките на каталога.
+                </p>
+              )}
             </label>
           </div>
 
@@ -1896,6 +1990,7 @@ export function ProductFormFields({
           </div>
         </div>
       </CollapsibleSection>
+      </fieldset>
 
       <CollapsibleSection
         title={`Снимки на продукта (до ${MAX_PRODUCT_IMAGES})`}
@@ -1906,9 +2001,11 @@ export function ProductFormFields({
         }
       >
         <p className="text-[12px] text-slate-500 mb-3 -mt-1 leading-snug">
-          {form.modelCode.trim()
-            ? "Снимките се качват в споделена папка по модел — така различните инстанции (с различен сериен номер) ползват едни и същи каталожни снимки."
-            : "Попълни „Марка“ и „Модел“ за споделена папка между инстанции. Иначе папката се прави по slug."}
+          {ro
+            ? "Преглед на качените снимки. Качване и редакция са достъпни само за офис и главен администратор."
+            : form.modelCode.trim()
+              ? "Снимките се качват в споделена папка по модел — така различните инстанции (с различен сериен номер) ползват едни и същи каталожни снимки."
+              : "Попълни „Марка“ и „Модел“ за споделена папка между инстанции. Иначе папката се прави по slug."}
         </p>
 
         {/* === Вече качени снимки (form.images) — малки thumbnail-и === */}
@@ -1920,7 +2017,8 @@ export function ProductFormFields({
             />
 
             {/* AI enhance info за стари снимки */}
-            {(() => {
+            {!ro &&
+            (() => {
               const busyCount = Object.values(uploadedAiStatus).filter(
                 (v) => v.phase === "processing",
               ).length;
@@ -2001,7 +2099,7 @@ export function ProductFormFields({
                     )}
 
                     {/* Hover overlay с компактни action-и */}
-                    {!isProcessing && (
+                    {!isProcessing && !ro && (
                       <div className="absolute inset-x-0 bottom-0 flex bg-slate-900/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                         {!im.is_main && (
                           <button
@@ -2053,7 +2151,12 @@ export function ProductFormFields({
           </div>
         )}
 
+        {ro && form.images.length === 0 && (
+          <p className="text-sm text-slate-500 py-1">Няма качени снимки за този продукт.</p>
+        )}
+
         {/* === Multi-photo uploader === */}
+        {!ro && (
         <ProductPhotoUploader
           brandSlug={
             // Извличаме brand slug от името на марката (липсва от brands prop).
@@ -2104,10 +2207,11 @@ export function ProductFormFields({
               : undefined
           }
         />
+        )}
 
         {/* Pending-photos warning — duplicated на парент level от save handler-а,
              но и тук показваме персистентно напомняне. */}
-        {pendingPhotosCount > 0 && (
+        {pendingPhotosCount > 0 && !ro && (
           <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-[12px] text-amber-900 leading-snug font-medium">
             ⚠️ Имаш {pendingPhotosCount}{" "}
             {pendingPhotosCount === 1 ? "снимка в preview" : "снимки в preview"} които не са качени в

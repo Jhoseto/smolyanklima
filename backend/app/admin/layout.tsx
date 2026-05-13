@@ -13,6 +13,7 @@ import {
   LayoutDashboard, Package, Users, FileText, Star,
   Activity, Settings, LogOut,
   ShieldCheck, FolderOpen, MessageSquare, Receipt,
+  UserCircle,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -91,6 +92,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <nav className="flex flex-col gap-0.5 flex-1 p-2.5">
             {/* Главно: Табло */}
             <NavLink href="/admin" label="Табло" icon={<LayoutDashboard className="w-4 h-4" />} />
+            <NavLink href="/admin/profile" label="Моят профил" icon={<UserCircle className="w-4 h-4" />} />
 
             {showOffice && (
               <>
@@ -103,6 +105,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                   <NavLink href="/admin/history" label="Продажби" icon={<Receipt className="w-4 h-4" />} />
                 )}
                 <NavLink href="/admin/articles" label="Статии" icon={<FileText className="w-4 h-4" />} />
+              </>
+            )}
+
+            {role === "service_staff" && (
+              <>
+                <SectionLabel label="Каталог" />
+                <NavLink href="/admin/products" label="Продукти" icon={<Package className="w-4 h-4" />} />
               </>
             )}
 

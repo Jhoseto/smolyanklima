@@ -170,6 +170,12 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   }
 
   const session = await adminSession();
+  if (session.role === "service_staff") {
+    return withCors(
+      req,
+      NextResponse.json({ error: "Сервизните профили не редактират продукти." }, { status: 403 }),
+    );
+  }
   const supabase = session.db;
   const patch: Record<string, unknown> = {};
   if (parsed.data.slug !== undefined) {
@@ -294,6 +300,12 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
 export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   const session = await adminSession();
+  if (session.role === "service_staff") {
+    return withCors(
+      req,
+      NextResponse.json({ error: "Сервизните профили не изтриват продукти." }, { status: 403 }),
+    );
+  }
   const supabase = session.db;
 
   const { data: prod } = await supabase.from("products").select("id,name").eq("id", id).maybeSingle();

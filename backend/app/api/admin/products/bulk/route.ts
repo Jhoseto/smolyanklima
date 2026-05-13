@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
-import { adminSession } from "@/lib/admin/db";
+import { adminSession, requireRole } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
 import { insertProductCatalogStockCalendarEvent } from "@/lib/admin/productCatalogWorkItems";
 
@@ -25,6 +25,11 @@ export async function POST(req: NextRequest) {
 
   const { ids } = parsed.data;
   const session = await adminSession();
+  try {
+    requireRole(session, "master_admin", "office_staff");
+  } catch {
+    return withCors(req, NextResponse.json({ error: "Нямате право за масово изтриване." }, { status: 403 }));
+  }
   const supabase = session.db;
 
   const { data: rows, error: selErr } = await supabase.from("products").select("id,name").in("id", ids);

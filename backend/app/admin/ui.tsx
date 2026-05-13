@@ -132,10 +132,25 @@ export function Textarea({ className = "", ...props }: ComponentProps<"textarea"
   );
 }
 
-export function Table({ children, className = "" }: { children: ReactNode; className?: string }) {
+export function Table({
+  children,
+  className = "",
+  stickyHeader = false,
+}: {
+  children: ReactNode;
+  className?: string;
+  /** Залепен ред с заглавия при вертикален скрол (border-separate за съвместимост с position: sticky). */
+  stickyHeader?: boolean;
+}) {
   return (
-    <div className={`w-full overflow-x-auto bg-white border border-slate-200 rounded-lg shadow-sm ${className}`}>
-      <table className="w-full text-left border-collapse">
+    <div
+      className={`${
+        stickyHeader ? "w-full" : "w-full overflow-x-auto"
+      } bg-white border border-slate-200 rounded-lg shadow-sm ${className}`}
+    >
+      <table
+        className={`w-full text-left ${stickyHeader ? "border-separate border-spacing-0" : "border-collapse"}`}
+      >
         {children}
       </table>
     </div>

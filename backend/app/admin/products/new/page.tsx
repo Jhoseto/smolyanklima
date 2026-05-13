@@ -53,7 +53,7 @@ export default function NewProductPage() {
         })),
       );
       const role = (w.data?.admin?.role as string) ?? "master_admin";
-      setCanEditPrice(role === "master_admin");
+      setCanEditPrice(role === "master_admin" || role === "service_staff");
       setCanEditStockLocation(role === "master_admin" || role === "office_staff");
       // Default type: „Стенни климатици“ — това е най-често продаваният
       // вид и почти всеки нов запис е стенен климатик. Така спестяваме
@@ -149,6 +149,7 @@ export default function NewProductPage() {
           canEditPrice={canEditPrice}
           canEditStockLocation={canEditStockLocation}
           canEditProductRegion={canEditStockLocation}
+          autoPriceWithMountFromCatalog
           onPendingPhotosChange={setPendingPhotos}
         />
       </Card>

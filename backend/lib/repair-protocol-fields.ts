@@ -20,6 +20,8 @@ export const JAPANESE_BRANDS = [
   "Fujitsu",
   "Toshiba",
   "Panasonic",
+  "Nacional",
+  "National",
   "Hitachi",
   "Sharp",
 ] as const;

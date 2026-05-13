@@ -7,7 +7,7 @@ import { logoutAction } from "@/app/login/actions";
 import {
   LayoutDashboard, Package, Users, MoreHorizontal, X,
   FileText, Star, Activity, Settings, LogOut, Headphones,
-  ShieldCheck, FolderOpen, MessageSquare, Receipt,
+  ShieldCheck, FolderOpen, MessageSquare, Receipt, UserCircle,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/admin/db";
 import type { LucideIcon } from "lucide-react";
@@ -21,6 +21,7 @@ export function MobileNav({ role }: { role: AdminRole }) {
   const primaryLinks = role === "service_staff"
     ? [
         { href: "/admin", label: "Табло", icon: LayoutDashboard, exact: true },
+        { href: "/admin/products", label: "Продукти", icon: Package, exact: false },
         { href: "/admin/service/documents", label: "Документи", icon: FolderOpen, exact: false },
       ]
     : [
@@ -31,9 +32,22 @@ export function MobileNav({ role }: { role: AdminRole }) {
       ];
 
   const drawerSections: DrawerSection[] = role === "service_staff"
-    ? []
+    ? [
+        {
+          title: "Акаунт",
+          links: [{ href: "/admin/profile", label: "Профил", icon: UserCircle }],
+        },
+        {
+          title: "Връзка",
+          links: [{ href: "/admin/chat", label: "Чат", icon: Headphones }],
+        },
+      ]
     : (() => {
         const sections: DrawerSection[] = [
+          {
+            title: "Акаунт",
+            links: [{ href: "/admin/profile", label: "Профил", icon: UserCircle }],
+          },
           {
             title: "Офис",
             links: [

@@ -3,10 +3,28 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { SectionTitle, Card, Button, Input, Select, Table, Th, Td, Textarea } from "../ui";
-import { Plus, FilterX, CheckCircle, Trash2, Edit, Filter, ChevronDown, MessageCircle, PackageCheck, PackageX, Clock4, Star, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
+import {
+  Plus,
+  FilterX,
+  CheckCircle,
+  Trash2,
+  Edit,
+  Filter,
+  ChevronDown,
+  MessageCircle,
+  PackageCheck,
+  PackageX,
+  Clock4,
+  Star,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
+  Settings,
+} from "lucide-react";
 import { ShareToChatModal } from "../chat/ShareToChatModal";
 import { ProductQuickViewButton } from "../ProductQuickView";
 import { FeaturedSlotModal } from "./FeaturedSlotModal";
+import { ProductCatalogSettingsModal } from "./ProductCatalogSettingsModal";
 import { useDebounce } from "@/lib/hooks/useDebounce";
 import { assertNoContactPrimaryPhoneDuplicate } from "@/lib/admin/contactPhoneConflictClient";
 import {
@@ -74,6 +92,7 @@ function SortableTh({
   sortDir,
   onSort,
   className = "",
+  center = false,
 }: {
   label: string;
   field: SortField;
@@ -81,19 +100,23 @@ function SortableTh({
   sortDir: SortDir;
   onSort: (f: SortField) => void;
   className?: string;
+  /** Подравняване по център (таблица продукти). */
+  center?: boolean;
 }) {
   const isActive = sortBy === field;
   const ArrowIcon = !isActive ? ArrowUpDown : sortDir === "asc" ? ArrowUp : ArrowDown;
   return (
-    <Th className={`cursor-pointer select-none hover:bg-slate-100 transition-colors ${className}`}>
+    <Th
+      className={`cursor-pointer select-none hover:bg-slate-100 transition-colors ${center ? "text-center" : ""} ${className}`}
+    >
       <button
         type="button"
         onClick={() => onSort(field)}
-        className={`w-full text-left inline-flex items-center gap-1.5 ${isActive ? "text-brand-blue-700" : "text-slate-600"}`}
+        className={`w-full inline-flex items-center gap-1.5 ${center ? "justify-center" : "text-left"} ${isActive ? "text-brand-blue-700" : "text-slate-600"}`}
         title={`Сортирай по „${label}“`}
       >
         <span>{label}</span>
-        <ArrowIcon className={`w-3 h-3 ${isActive ? "opacity-100" : "opacity-40"}`} />
+        <ArrowIcon className={`w-3 h-3 shrink-0 ${isActive ? "opacity-100" : "opacity-40"}`} />
       </button>
     </Th>
   );
@@ -415,10 +438,15 @@ export default function AdminProductsPage() {
   const [saleSuccess, setSaleSuccess] = useState<{ productName: string; customerName: string; amount: number } | null>(null);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [catalogSettingsOpen, setCatalogSettingsOpen] = useState(false);
   const [locationBusyId, setLocationBusyId] = useState<string | null>(null);
   const [suppliersById, setSuppliersById] = useState<Record<string, string>>({});
   /** Бърза инлайн редакция на продажна / закупна цена в таблицата — само master_admin (сървърът също валидира). */
   const [canEditMasterPricesInline, setCanEditMasterPricesInline] = useState(false);
+  /** Master + офис: редакции в списъка, продажба, изтриване, топ продукти. Сервиз — само преглед + нов продукт. */
+  const [canMutateProductRows, setCanMutateProductRows] = useState(true);
+  /** Роля от whoami — за каталог настройки (сервиз: преглед). */
+  const [adminRole, setAdminRole] = useState<string>("");
 
   const debouncedQ = useDebounce(q, 350);
   /*
@@ -499,7 +527,9 @@ export default function AdminProductsPage() {
       }
       if (wRes.ok) {
         const role = (wJson as { data?: { admin?: { role?: string } | null } }).data?.admin?.role ?? "";
+        setAdminRole(role);
         setCanEditMasterPricesInline(role === "master_admin");
+        setCanMutateProductRows(role === "master_admin" || role === "office_staff");
       }
     } catch {
       // non-blocking for products table
@@ -801,6 +831,7 @@ export default function AdminProductsPage() {
   }
 
   function toggleStockLocation(p: ProductRow) {
+    if (!canMutateProductRows) return;
     const cur = normalizeProductStockLocation(p.stock_location);
     const next: ProductStockLocation = cur === "showroom" ? "warehouse" : "showroom";
     void patchStockLocation(p.id, next);
@@ -959,13 +990,41 @@ export default function AdminProductsPage() {
             Каталог с уникални артикули — всеки климатик с отделни серийни номера, доставчик и фактура.{" "}
             Филтри, сортиране с клик върху колоните, инлайн редакция на цени и място, ★ Топ продукти и продажба.
           </p>
+          {!canMutateProductRows && (
+            <p className="mt-1.5 text-[11px] text-slate-600 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 inline-block max-w-2xl">
+              <strong>Сервизен преглед:</strong> вижте списъка и детайлите от името; можете да добавяте нов продукт. Редакция, продажба и изтриване са само за офис / главен администратор.
+            </p>
+          )}
         </div>
-        <Link href="/admin/products/new" className="inline-flex items-center gap-2 bg-brand-orange-500 text-white px-3 py-2 md:px-4 rounded-xl font-semibold hover:bg-brand-orange-600 active:bg-brand-orange-700 transition-colors shadow-sm text-sm">
-          <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">Нов продукт</span>
-          <span className="sm:hidden">Нов</span>
-        </Link>
+        <div className="flex items-center gap-2 shrink-0">
+          {(canEditMasterPricesInline || adminRole === "service_staff") && (
+            <button
+              type="button"
+              onClick={() => setCatalogSettingsOpen(true)}
+              className="inline-flex items-center justify-center w-10 h-10 md:w-11 md:h-11 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 hover:text-slate-900 transition-colors shadow-sm"
+              title={canEditMasterPricesInline ? "Настройки на каталога" : "Настройки на каталога (преглед)"}
+              aria-label="Настройки на каталога"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+          )}
+          <Link
+            href="/admin/products/new"
+            className="inline-flex items-center gap-2 bg-brand-orange-500 text-white px-3 py-2 md:px-4 rounded-xl font-semibold hover:bg-brand-orange-600 active:bg-brand-orange-700 transition-colors shadow-sm text-sm"
+          >
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">Нов продукт</span>
+            <span className="sm:hidden">Нов</span>
+          </Link>
+        </div>
       </div>
+
+      <ProductCatalogSettingsModal
+        open={catalogSettingsOpen}
+        onClose={() => setCatalogSettingsOpen(false)}
+        onApplied={() => void load()}
+        readOnly={!canEditMasterPricesInline}
+      />
 
       {/* Mobile: search + filter toggle row */}
       <div className="flex gap-2 md:hidden">
@@ -1168,7 +1227,7 @@ export default function AdminProductsPage() {
       </Card>
 
       {/* Bulk actions — само „Изтрий“. Видимо когато има поне един избран ред. */}
-      {selected.length > 0 && (
+      {canMutateProductRows && selected.length > 0 && (
         <div className="bg-brand-blue-50 border border-brand-blue-200 rounded-xl px-3 py-2.5 flex items-center justify-between gap-2 flex-wrap">
           <span className="text-xs md:text-sm font-bold text-brand-blue-700">
             Избрани: {selected.length}{" "}
@@ -1199,74 +1258,100 @@ export default function AdminProductsPage() {
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm font-medium">{error}</div>}
 
-      {/* Desktop table */}
-      <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200">
-        <Table className="min-w-[1100px]">
-          <thead>
+      {/* Desktop table: хоризонтален скрол тук (не вътре в Table), за да работи sticky th с вертикалния скрол на main */}
+      <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+        <Table className="min-w-[1100px] border-0 rounded-none shadow-none bg-transparent" stickyHeader>
+          <thead className="[&>tr>th]:sticky [&>tr>th]:top-0 [&>tr>th]:z-40 [&>tr>th]:align-middle [&>tr>th]:!bg-slate-50 [&>tr>th]:!py-1.5 [&>tr>th]:shadow-[0_1px_0_0_rgb(226,232,240)]">
             <tr>
-              <Th className="w-10">
-                <input
-                  type="checkbox"
-                  className="rounded border-slate-300 text-brand-blue-500 focus:ring-brand-blue-500"
-                  checked={items.length > 0 && selected.length === items.length}
-                  onChange={(e) => setSelected(e.target.checked ? items.map((x) => x.id) : [])}
-                />
-              </Th>
-              <SortableTh label="Име" field="name" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
-              <Th>Марка</Th>
-              <SortableTh label="Състояние" field="product_condition" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
-              <Th>Тип</Th>
-              <Th>Доставчик</Th>
-              <SortableTh label="Закупна" field="purchase_price" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
-              <SortableTh label="Закупен на" field="purchased_at" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
-              <SortableTh label="Продажна" field="price" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
-              <Th>Сер. вътр.</Th>
-              <Th>Сер. външ.</Th>
-              <Th>Фактура доставчик</Th>
-              <Th>Страна</Th>
-              <Th>Място</Th>
-              <Th></Th>
-            </tr>
-          </thead>
-          <tbody>
-            {!loading && items.map((p) => (
-              <tr key={p.id} className="hover:bg-slate-50 transition-colors group">
-                <Td>
+              {canMutateProductRows && (
+              <Th className="w-10 text-center align-middle">
+                <span className="inline-flex w-full justify-center">
                   <input
                     type="checkbox"
                     className="rounded border-slate-300 text-brand-blue-500 focus:ring-brand-blue-500"
-                    checked={selected.includes(p.id)}
-                    onChange={(e) => setSelected((prev) => e.target.checked ? [...prev, p.id] : prev.filter((x) => x !== p.id))}
+                    checked={items.length > 0 && selected.length === items.length}
+                    onChange={(e) => setSelected(e.target.checked ? items.map((x) => x.id) : [])}
                   />
-                </Td>
-                <Td className="font-bold text-slate-900">
-                  <ProductQuickViewButton productId={p.id} productName={p.name} />
-                </Td>
-                <Td>{p.brands?.name ?? "—"}</Td>
-                <Td>
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${p.product_condition === "used" ? "bg-brand-orange-100 text-brand-orange-700" : "bg-brand-blue-100 text-brand-blue-700"}`}>
-                    {p.product_condition === "used" ? "Втора употреба" : "Нови"}
+                </span>
+              </Th>
+              )}
+              <SortableTh label="Име" field="name" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} center />
+              <Th className="text-center">Марка</Th>
+              <SortableTh label="Състояние" field="product_condition" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} center />
+              <Th className="text-center">Тип</Th>
+              <Th className="text-center">Доставчик</Th>
+              <SortableTh label="Закупна цена" field="purchase_price" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} center />
+              <SortableTh label="Закупен на" field="purchased_at" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} center />
+              <SortableTh label="Продажна цена" field="price" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} center />
+              <Th className="text-center">Сериен вътрешно</Th>
+              <Th className="text-center">Сериен външно</Th>
+              <Th className="text-center">Фактура доставчик</Th>
+              <Th className="text-center">Страна</Th>
+              <Th className="text-center">Място</Th>
+              <Th className="text-center min-w-[11rem]">Действия</Th>
+            </tr>
+          </thead>
+          <tbody className="[&>tr>td]:align-middle [&>tr>td]:!py-1.5">
+            {!loading && items.map((p) => (
+              <tr key={p.id} className="hover:bg-slate-50 transition-colors group">
+                {canMutateProductRows && (
+                <Td className="text-center align-middle whitespace-nowrap">
+                  <span className="inline-flex w-full justify-center">
+                    <input
+                      type="checkbox"
+                      className="rounded border-slate-300 text-brand-blue-500 focus:ring-brand-blue-500"
+                      checked={selected.includes(p.id)}
+                      onChange={(e) => setSelected((prev) => e.target.checked ? [...prev, p.id] : prev.filter((x) => x !== p.id))}
+                    />
                   </span>
                 </Td>
-                <Td>{p.product_types?.name ?? "—"}</Td>
-                <Td className="max-w-[9rem]">
-                  <span className="block truncate text-sm text-slate-800" title={supplierLabel(p.supplier_id)}>
+                )}
+                <Td className="font-bold text-slate-900 text-center !align-top max-w-[15rem] min-w-0 py-1.5 whitespace-normal">
+                  <div className="flex justify-center min-w-0">
+                    <ProductQuickViewButton
+                      productId={p.id}
+                      productName={p.name}
+                      className="block whitespace-normal text-center leading-snug max-w-[15rem] break-words font-bold"
+                    />
+                  </div>
+                </Td>
+                <Td className="text-center align-middle min-w-0 max-w-[5.5rem] truncate whitespace-nowrap" title={p.brands?.name ?? undefined}>
+                  {p.brands?.name ?? "—"}
+                </Td>
+                <Td className="text-center align-middle whitespace-nowrap">
+                  <span
+                    className={`inline-flex shrink-0 items-center justify-center px-1.5 py-0.5 rounded text-[11px] font-medium whitespace-nowrap ${
+                      p.product_condition === "used" ? "bg-brand-orange-100 text-brand-orange-700" : "bg-brand-blue-100 text-brand-blue-700"
+                    }`}
+                  >
+                    {p.product_condition === "used" ? "Втора употр." : "Нови"}
+                  </span>
+                </Td>
+                <Td className="text-center !align-top min-w-0 max-w-[10rem] whitespace-normal text-sm leading-snug text-slate-800">
+                  {p.product_types?.name ?? "—"}
+                </Td>
+                <Td className="max-w-[9rem] text-center align-middle min-w-0 whitespace-nowrap">
+                  <span className="inline-block max-w-full truncate text-sm text-slate-800" title={supplierLabel(p.supplier_id)}>
                     {supplierLabel(p.supplier_id)}
                   </span>
                 </Td>
-                <Td className="whitespace-nowrap text-sm">
+                <Td
+                  className={`text-sm text-center align-middle min-w-0 ${
+                    editingPurchaseId === p.id && canEditMasterPricesInline ? "whitespace-normal" : "whitespace-nowrap"
+                  }`}
+                >
                   {editingPurchaseId === p.id && canEditMasterPricesInline ? (
-                    <div className="flex flex-col gap-1 min-w-[7rem]">
+                    <div className="flex flex-col gap-1 min-w-[7rem] mx-auto items-center">
                       <Input
                         type="number"
                         min={0}
                         value={purchaseDraft}
                         onChange={(e) => setPurchaseDraft(e.target.value)}
-                        className="!text-xs !py-1"
+                        className="!text-xs !py-1 text-center"
                         autoFocus
                         placeholder="—"
                       />
-                      <div className="flex gap-1">
+                      <div className="flex gap-1 justify-center">
                         <Button size="sm" className="!py-0.5 !px-2 !text-[11px]" onClick={() => void savePurchasePrice(p)} disabled={purchaseBusy}>
                           OK
                         </Button>
@@ -1288,14 +1373,14 @@ export default function AdminProductsPage() {
                     <button
                       type="button"
                       onClick={() => startPurchaseEdit(p)}
-                      className="rounded-md px-2 py-1 text-left font-semibold text-slate-900 bg-brand-orange-50/60 hover:bg-brand-orange-100 hover:text-brand-orange-700 focus:outline-none focus:ring-2 focus:ring-brand-orange-300 cursor-pointer transition"
+                      className="rounded-md px-2 py-1 font-semibold text-slate-900 bg-brand-orange-50/60 hover:bg-brand-orange-100 hover:text-brand-orange-700 focus:outline-none focus:ring-2 focus:ring-brand-orange-300 cursor-pointer transition tabular-nums"
                       title="Клик за редакция на закупна цена"
                     >
                       {fmtEuro(p.purchase_price)}
                     </button>
                   ) : (
                     <span
-                      className="rounded-md px-2 py-1 font-semibold text-slate-900 tabular-nums"
+                      className="inline-block rounded-md px-2 py-1 font-semibold text-slate-900 tabular-nums"
                       title="Само главен администратор може да променя закупната цена тук"
                     >
                       {fmtEuro(p.purchase_price)}
@@ -1303,14 +1388,18 @@ export default function AdminProductsPage() {
                   )}
                 </Td>
                 {/* Дата на закупуване от доставчик — редактира се от формата на продукта. */}
-                <Td className="whitespace-nowrap text-xs text-slate-600">
+                <Td className="whitespace-nowrap text-xs text-slate-600 text-center align-middle tabular-nums">
                   {fmtPurchaseDate(p.purchased_at)}
                 </Td>
-                <Td className="whitespace-nowrap text-sm font-semibold">
+                <Td
+                  className={`text-sm font-semibold text-center align-middle min-w-0 ${
+                    editingPriceId === p.id && canEditMasterPricesInline ? "whitespace-normal" : "whitespace-nowrap"
+                  }`}
+                >
                   {editingPriceId === p.id && canEditMasterPricesInline ? (
-                    <div className="flex flex-col gap-1 min-w-[7rem]">
-                      <Input type="number" min={0} value={priceDraft} onChange={(e) => setPriceDraft(e.target.value)} className="!text-xs !py-1" autoFocus />
-                      <div className="flex gap-1">
+                    <div className="flex flex-col gap-1 min-w-[7rem] mx-auto items-center">
+                      <Input type="number" min={0} value={priceDraft} onChange={(e) => setPriceDraft(e.target.value)} className="!text-xs !py-1 text-center" autoFocus />
+                      <div className="flex gap-1 justify-center">
                         <Button size="sm" className="!py-0.5 !px-2 !text-[11px]" onClick={() => void savePrice(p)} disabled={priceBusy}>
                           OK
                         </Button>
@@ -1332,54 +1421,67 @@ export default function AdminProductsPage() {
                     <button
                       type="button"
                       onClick={() => startPriceEdit(p)}
-                      className="rounded-md px-2 py-1 text-left text-slate-900 bg-brand-blue-50/60 hover:bg-brand-blue-100 hover:text-brand-blue-700 focus:outline-none focus:ring-2 focus:ring-brand-blue-300 cursor-pointer transition"
+                      className="rounded-md px-2 py-1 text-slate-900 bg-brand-blue-50/60 hover:bg-brand-blue-100 hover:text-brand-blue-700 focus:outline-none focus:ring-2 focus:ring-brand-blue-300 cursor-pointer transition tabular-nums"
                       title="Клик за редакция на продажна цена"
                     >
                       {fmtEuro(p.price)}
                     </button>
                   ) : (
-                    <span className="rounded-md px-2 py-1 text-slate-900 tabular-nums" title="Само главен администратор може да променя продажната цена тук">
+                    <span className="inline-block rounded-md px-2 py-1 text-slate-900 tabular-nums" title="Само главен администратор може да променя продажната цена тук">
                       {fmtEuro(p.price)}
                     </span>
                   )}
                 </Td>
-                <Td className="max-w-[5.5rem] text-xs font-mono text-slate-700" title={(p.indoor_unit_serial ?? "").trim() || undefined}>
+                <Td className="max-w-[5.5rem] text-xs font-mono text-slate-700 text-center align-middle whitespace-nowrap" title={(p.indoor_unit_serial ?? "").trim() || undefined}>
                   {truncCell(p.indoor_unit_serial, 14)}
                 </Td>
-                <Td className="max-w-[5.5rem] text-xs font-mono text-slate-700" title={(p.outdoor_unit_serial ?? "").trim() || undefined}>
+                <Td className="max-w-[5.5rem] text-xs font-mono text-slate-700 text-center align-middle whitespace-nowrap" title={(p.outdoor_unit_serial ?? "").trim() || undefined}>
                   {truncCell(p.outdoor_unit_serial, 14)}
                 </Td>
-                <Td className="max-w-[6rem] text-xs text-slate-700" title={(p.supplier_invoice_number ?? "").trim() || undefined}>
+                <Td className="max-w-[6rem] text-xs text-slate-700 text-center align-middle whitespace-nowrap" title={(p.supplier_invoice_number ?? "").trim() || undefined}>
                   {truncCell(p.supplier_invoice_number, 14)}
                 </Td>
-                <Td className="min-w-[6.5rem]">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold tracking-wide text-slate-700 bg-slate-100">
-                    {productRegionLabel(p.product_region)}
-                  </span>
+                <Td className="min-w-[6.5rem] text-center align-middle whitespace-nowrap">
+                  <div className="flex justify-center">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold tracking-wide text-slate-700 bg-slate-100">
+                      {productRegionLabel(p.product_region)}
+                    </span>
+                  </div>
                 </Td>
-                <Td className="min-w-[132px]">
+                <Td className="min-w-[132px] text-center align-middle whitespace-nowrap">
+                  <div className="flex justify-center">
+                  {canMutateProductRows ? (
                   <button
                     type="button"
                     disabled={locationBusyId === p.id}
                     onClick={() => toggleStockLocation(p)}
                     title="Клик за смяна: магазин ↔ склад"
-                    className={`inline-flex w-fit max-w-full items-center px-2.5 py-1 rounded-md text-xs font-semibold border border-slate-200/80 shadow-sm cursor-pointer transition hover:opacity-90 hover:ring-2 hover:ring-brand-blue-300/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue-500 disabled:cursor-wait disabled:opacity-60 ${productStockLocationBadgeClass(p.stock_location)}`}
+                    className={`inline-flex w-fit max-w-full items-center justify-center px-2.5 py-1 rounded-md text-xs font-semibold border border-slate-200/80 shadow-sm cursor-pointer transition hover:opacity-90 hover:ring-2 hover:ring-brand-blue-300/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue-500 disabled:cursor-wait disabled:opacity-60 ${productStockLocationBadgeClass(p.stock_location)}`}
                   >
                     {locationBusyId === p.id ? "Запис…" : productStockLocationLabel(p.stock_location)}
                   </button>
+                  ) : (
+                  <span
+                    className={`inline-flex w-fit max-w-full items-center justify-center px-2.5 py-1 rounded-md text-xs font-semibold border border-slate-200/80 ${productStockLocationBadgeClass(p.stock_location)}`}
+                  >
+                    {productStockLocationLabel(p.stock_location)}
+                  </span>
+                  )}
+                  </div>
                 </Td>
-                <Td>
-                  <div className="flex items-center gap-2">
-                    <Button variant="secondary" size="sm" onClick={() => { setSaleFor(p); setSaleForm(emptySaleModalForm()); setContactQuery(""); setContactResults([]); }} disabled={!canRecordSale(p)} className="!py-1 !px-2 !text-xs font-bold">
+                <Td className="text-center align-middle whitespace-nowrap">
+                  {canMutateProductRows ? (
+                  <div className="flex flex-nowrap items-center justify-center gap-1 min-w-0">
+                    <Button variant="secondary" size="sm" onClick={() => { setSaleFor(p); setSaleForm(emptySaleModalForm()); setContactQuery(""); setContactResults([]); }} disabled={!canRecordSale(p)} className="!py-0.5 !px-1.5 !text-[11px] font-bold shrink-0">
                       Продажба
                     </Button>
-                    <Link href={`/admin/products/${p.id}`} className="inline-flex items-center gap-1.5 px-2 py-1 bg-brand-blue-50 text-brand-blue-700 hover:bg-brand-blue-100 rounded-lg text-xs font-bold transition-colors">
-                      <Edit className="w-3.5 h-3.5" /> Редакция
+                    <Link href={`/admin/products/${p.id}`} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-brand-blue-50 text-brand-blue-700 hover:bg-brand-blue-100 rounded-lg text-[11px] font-bold transition-colors shrink-0">
+                      <Edit className="w-3 h-3 shrink-0" /> Редакция
                     </Link>
                     <button
                       onClick={() => setShareProduct(p)}
                       title="Сподели в чат"
-                      className="inline-flex items-center gap-1 px-2 py-1 bg-brand-orange-50 text-brand-orange-600 hover:bg-brand-orange-100 rounded-lg text-xs font-bold transition-colors"
+                      className="inline-flex items-center justify-center p-1.5 bg-brand-orange-50 text-brand-orange-600 hover:bg-brand-orange-100 rounded-lg shrink-0"
                     >
                       <MessageCircle className="w-3.5 h-3.5" />
                     </button>
@@ -1390,7 +1492,7 @@ export default function AdminProductsPage() {
                           ? `Топ продукти — позиция #${p.featured_position}`
                           : "Постави в Топ продукти на главната страница"
                       }
-                      className={`relative inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold transition-colors ${
+                      className={`relative inline-flex items-center justify-center p-1.5 rounded-lg shrink-0 ${
                         p.featured_position
                           ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
                           : "bg-slate-100 text-slate-500 hover:bg-amber-50 hover:text-amber-600"
@@ -1404,11 +1506,14 @@ export default function AdminProductsPage() {
                       )}
                     </button>
                   </div>
+                  ) : (
+                    <span className="text-xs text-slate-400">Преглед</span>
+                  )}
                 </Td>
               </tr>
             ))}
             {!loading && items.length === 0 && (
-              <tr><Td colSpan={15} className="text-center py-8 text-slate-500">Няма намерени продукти.</Td></tr>
+              <tr><Td colSpan={canMutateProductRows ? 15 : 14} className="text-center py-8 text-slate-500">Няма намерени продукти.</Td></tr>
             )}
           </tbody>
         </Table>
@@ -1426,12 +1531,14 @@ export default function AdminProductsPage() {
           <div key={p.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden active:bg-slate-50 transition-colors">
             <div className="px-4 pt-4 pb-3">
               <div className="flex items-start gap-3">
+                {canMutateProductRows && (
                 <input
                   type="checkbox"
                   className="mt-1 rounded border-slate-300 text-brand-blue-500 focus:ring-brand-blue-500 w-4 h-4 shrink-0"
                   checked={selected.includes(p.id)}
                   onChange={(e) => setSelected((prev) => e.target.checked ? [...prev, p.id] : prev.filter((x) => x !== p.id))}
                 />
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="font-bold text-slate-900 text-sm leading-snug">
                     <ProductQuickViewButton productId={p.id} productName={p.name} />
@@ -1492,6 +1599,7 @@ export default function AdminProductsPage() {
                     {productRegionLabel(p.product_region)}
                   </span>
                   <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 pt-0.5">Място</div>
+                  {canMutateProductRows ? (
                   <button
                     type="button"
                     disabled={locationBusyId === p.id}
@@ -1501,6 +1609,13 @@ export default function AdminProductsPage() {
                   >
                     {locationBusyId === p.id ? "Запис…" : productStockLocationLabel(p.stock_location)}
                   </button>
+                  ) : (
+                  <span
+                    className={`w-full inline-flex items-center justify-center px-2 py-1 rounded-md text-[11px] font-semibold border border-slate-200/80 ${productStockLocationBadgeClass(p.stock_location)}`}
+                  >
+                    {productStockLocationLabel(p.stock_location)}
+                  </span>
+                  )}
                 </div>
               </div>
               <div className="mt-3 grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-[11px] border-t border-slate-100 pt-2 text-slate-600">
@@ -1508,11 +1623,11 @@ export default function AdminProductsPage() {
                 <span className="font-medium text-slate-800 truncate" title={supplierLabel(p.supplier_id)}>
                   {supplierLabel(p.supplier_id)}
                 </span>
-                <span className="text-slate-400">Сер. вътр.</span>
+                <span className="text-slate-400">Сериен вътрешно</span>
                 <span className="font-mono text-slate-800 break-all" title={(p.indoor_unit_serial ?? "").trim() || undefined}>
                   {truncCell(p.indoor_unit_serial, 40)}
                 </span>
-                <span className="text-slate-400">Сер. външ.</span>
+                <span className="text-slate-400">Сериен външно</span>
                 <span className="font-mono text-slate-800 break-all" title={(p.outdoor_unit_serial ?? "").trim() || undefined}>
                   {truncCell(p.outdoor_unit_serial, 40)}
                 </span>
@@ -1522,6 +1637,7 @@ export default function AdminProductsPage() {
                 </span>
               </div>
             </div>
+            {canMutateProductRows && (
             <div className="flex border-t border-slate-100">
               <button
                 type="button"
@@ -1560,6 +1676,7 @@ export default function AdminProductsPage() {
                 )}
               </button>
             </div>
+            )}
           </div>
         ))}
       </div>
