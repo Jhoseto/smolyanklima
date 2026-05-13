@@ -64,7 +64,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
         String((specsRes.error as any).message ?? ""),
       ))
   ) {
-    specsRes = await supabase.from("product_specs").select(SPECS_SELECT_BASE).eq("product_id", p.id);
+    specsRes = (await supabase
+      .from("product_specs")
+      .select(SPECS_SELECT_BASE)
+      .eq("product_id", p.id)) as typeof specsRes;
   }
 
   const [bRes, tRes, iRes, pfRes] = await Promise.all([

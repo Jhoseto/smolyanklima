@@ -13,6 +13,21 @@ const PutSchema = z.object({
   defaultMountUsedEur: z.number().nonnegative(),
 });
 
+function catalogSettingsDbErrorMessage(raw: string): string {
+  const m = raw.toLowerCase();
+  if (
+    m.includes("product_catalog_settings") &&
+    (m.includes("schema cache") || m.includes("could not find") || m.includes("does not exist"))
+  ) {
+    return (
+      "В базата липсва таблицата за настройки на каталога. " +
+      "Пусни миграцията `0048_product_catalog_settings.sql` върху проекта в Supabase " +
+      "(локално: `supabase db push` или SQL Editor → копирай съдържанието на файла от `backend/supabase/migrations/`)."
+    );
+  }
+  return raw;
+}
+
 export async function GET(req: NextRequest) {
   let session;
   try {
@@ -32,7 +47,7 @@ export async function GET(req: NextRequest) {
     .eq("id", 1)
     .maybeSingle();
 
-  if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
+  if (error) return withCors(req, NextResponse.json({ error: catalogSettingsDbErrorMessage(error.message) }, { status: 500 }));
   const row = data as {
     default_mount_new_eur?: number | null;
     default_mount_used_eur?: number | null;
@@ -83,7 +98,7 @@ export async function PUT(req: NextRequest) {
       { onConflict: "id" },
     );
 
-  if (upErr) return withCors(req, NextResponse.json({ error: upErr.message }, { status: 500 }));
+  if (upErr) return withCors(req, NextResponse.json({ error: catalogSettingsDbErrorMessage(upErr.message) }, { status: 500 }));
 
   await logAdminActivity({
     action: "product_catalog.settings_update",

@@ -21,17 +21,17 @@ export async function POST(req: NextRequest) {
 
   // Update само на тези редове, които реално се нуждаят от промяна, за да
   // избегнем ненужни write-ове и трикгер на updated_at.
-  const { error, count } = await supabase
+  const { data, error } = await supabase
     .from("products")
     .update({ stock_status: "in_stock", is_active: true })
     .or("stock_status.neq.in_stock,is_active.eq.false")
-    .select("id", { count: "exact", head: true });
+    .select("id");
 
   if (error) {
     return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   }
 
-  const affected = count ?? 0;
+  const affected = data?.length ?? 0;
   await logAdminActivity({
     action: "product.restore_visibility_all",
     entityType: "product",

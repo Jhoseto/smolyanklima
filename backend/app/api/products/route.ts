@@ -399,7 +399,10 @@ export async function GET(req: NextRequest) {
           String((res.error as any).message ?? ""),
         ))
     ) {
-      res = await supabase.from("product_specs").select(SPECS_LIST_SELECT_BASE).in("product_id", productIds);
+      res = (await supabase
+        .from("product_specs")
+        .select(SPECS_LIST_SELECT_BASE)
+        .in("product_id", productIds)) as typeof res;
     }
     return res as { data: unknown[]; error: { message?: string; code?: string } | null };
   };
@@ -424,7 +427,7 @@ export async function GET(req: NextRequest) {
   for (const srow of specsRes.data ?? []) {
     const pid = (srow as any).product_id as string;
     const arr = specsByProduct.get(pid) ?? [];
-    arr.push({ ...srow, product_id: undefined });
+    arr.push({ ...(srow as Record<string, unknown>), product_id: undefined });
     specsByProduct.set(pid, arr);
   }
   const imagesByProduct = new Map<string, any[]>();
