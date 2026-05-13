@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/admin/db";
+import { adminSessionIfChatOperator } from "@/lib/admin/db";
 
 export const dynamic = "force-dynamic";
 
 /** GET /api/admin/chat — list chats */
 export async function GET(req: NextRequest) {
-  const supabase = await adminDb().catch(() => null);
-  if (!supabase) return NextResponse.json({ error: "NOT_ADMIN" }, { status: 403 });
+  const session = await adminSessionIfChatOperator();
+  if (!session) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+  const supabase = session.db;
 
   const status = req.nextUrl.searchParams.get("status") ?? "";
 

@@ -212,6 +212,20 @@ function fmtPurchaseDate(value: string | null | undefined): string {
   return `${dd}.${mm}.${yyyy}`;
 }
 
+function catalogStockBadgeText(status: string) {
+  if (status === "in_stock") return "В наличност";
+  if (status === "out_of_stock") return "Изчерпан";
+  if (status === "on_order") return "По поръчка";
+  return status || "—";
+}
+
+function catalogStockBadgeClass(status: string) {
+  if (status === "in_stock") return "bg-emerald-100 text-emerald-800 border border-emerald-200/70";
+  if (status === "out_of_stock") return "bg-rose-50 text-rose-800 border border-rose-200/70";
+  if (status === "on_order") return "bg-amber-50 text-amber-900 border border-amber-200/70";
+  return "bg-slate-100 text-slate-700 border border-slate-200/70";
+}
+
 /**
  * Подсветка на текстов фрагмент, който отговаря на текущия search query.
  * Регистър-нечувствително. Връща JSX с обвити в <mark> съвпадения.
@@ -379,7 +393,7 @@ function ChipToggle({
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors ${
+      className={`inline-flex items-center gap-0.5 sm:gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold border transition-colors ${
         active ? styles.active : styles.idle
       }`}
     >
@@ -979,7 +993,7 @@ export default function AdminProductsPage() {
   const activeFiltersCount = activeFilters.length;
 
   return (
-    <div className="w-full space-y-3">
+    <div className="w-full space-y-2.5 md:space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div>
@@ -1027,8 +1041,8 @@ export default function AdminProductsPage() {
       />
 
       {/* Mobile: search + filter toggle row */}
-      <div className="flex gap-2 md:hidden">
-        <div className="flex-1">
+      <div className="flex gap-1.5 md:hidden">
+        <div className="flex-1 min-w-0">
           <ProductSearchBox
             value={q}
             onChange={(next) => { setPage(1); setQ(next); }}
@@ -1037,8 +1051,9 @@ export default function AdminProductsPage() {
           />
         </div>
         <button
+          type="button"
           onClick={() => setFiltersOpen((o) => !o)}
-          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border font-semibold text-sm shrink-0 transition-colors ${filtersOpen ? "bg-brand-blue-50 border-brand-blue-200 text-brand-blue-700" : "bg-white border-slate-200 text-slate-700"}`}
+          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border font-bold text-xs shrink-0 transition-colors ${filtersOpen ? "bg-brand-blue-50 border-brand-blue-200 text-brand-blue-700" : "bg-white border-slate-200 text-slate-700"}`}
         >
           <Filter className="w-4 h-4" />
           {activeFiltersCount > 0 && (
@@ -1049,10 +1064,10 @@ export default function AdminProductsPage() {
       </div>
 
       {/* Filters card — always visible on desktop, toggleable on mobile */}
-      <Card className={`p-3 md:p-4 ${filtersOpen ? "block" : "hidden"} md:block space-y-4`}>
+      <Card className={`p-2.5 md:p-4 ${filtersOpen ? "block" : "hidden"} md:block space-y-2.5 md:space-y-4 rounded-lg md:rounded-xl shadow-sm`}>
         {/* Row 1: търсене + общ брояч + reset */}
-        <div className="flex items-center gap-2">
-          <div className="flex-1 hidden md:block">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
+          <div className="flex-1 hidden md:block min-w-0">
             <ProductSearchBox
               value={q}
               onChange={(next) => { setPage(1); setQ(next); }}
@@ -1060,13 +1075,13 @@ export default function AdminProductsPage() {
               placeholder="Търси по име, slug, сериен номер (вътрешен/външен) или № на фактура от доставчик…"
             />
           </div>
-          <div className="flex items-center gap-2 ml-auto">
-            <span className="text-xs font-semibold text-slate-500">
+          <div className="flex items-center justify-between gap-2 w-full sm:w-auto sm:ml-auto sm:justify-end flex-wrap">
+            <span className="text-[10px] md:text-xs font-semibold text-slate-500 tabular-nums">
               Намерени: <span className="text-slate-900">{meta.total}</span>
             </span>
             {activeFiltersCount > 0 && (
-              <Button variant="secondary" size="sm" onClick={resetFilters} title="Изчисти всички филтри" className="gap-1.5">
-                <FilterX className="w-3.5 h-3.5 text-slate-500" /> Изчисти ({activeFiltersCount})
+              <Button variant="secondary" size="sm" onClick={resetFilters} title="Изчисти всички филтри" className="gap-1 !py-1 !px-2 !text-[11px] md:!text-xs md:!py-1.5 md:!px-2.5">
+                <FilterX className="w-3 h-3 md:w-3.5 md:h-3.5 text-slate-500 shrink-0" /> Изчисти ({activeFiltersCount})
               </Button>
             )}
           </div>
@@ -1075,9 +1090,9 @@ export default function AdminProductsPage() {
         {/* Бързи филтри: състояние + наличност в каталога — обединени на
             един ред с малки prefix-етикети. На малки екрани групите се
             пренареждат естествено във wrap. */}
-        <div className="space-y-2">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Бързи филтри</div>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="space-y-1.5 md:space-y-2">
+          <div className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500">Бързи филтри</div>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 md:gap-x-4 md:gap-y-2">
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mr-0.5">Състояние:</span>
               <ChipToggle active={!condition} onClick={() => { setPage(1); setCondition(""); }}>Всички</ChipToggle>
@@ -1122,9 +1137,9 @@ export default function AdminProductsPage() {
         </div>
 
         {/* Класификация: марка / тип / доставчик / място / страна */}
-        <div className="space-y-2">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Класификация</div>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 md:gap-3">
+        <div className="space-y-1.5 md:space-y-2">
+          <div className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500">Класификация</div>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-1.5 md:gap-3 [&_select]:text-xs md:[&_select]:text-sm">
             <Select value={brandId} onChange={(e) => { setPage(1); setBrandId(e.target.value); }}>
               <option value="">Марка: всички</option>
               {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
@@ -1160,9 +1175,11 @@ export default function AdminProductsPage() {
             в 2 колони. Дата полетата имат „floating label“ — малък етикет
             горе вляво в самия input, защото HTML5 date input не показва
             placeholder. */}
-        <div className="space-y-2">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Цена, период на закупуване и критерии</div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 md:gap-3">
+        <div className="space-y-1.5 md:space-y-2">
+          <div className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500 leading-snug">
+            Цена, период и критерии
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-1.5 md:gap-3 [&_input]:!text-xs md:[&_input]:!text-sm [&_select]:text-xs md:[&_select]:text-sm">
             <Input value={priceMin} onChange={(e) => { setPage(1); setPriceMin(e.target.value); }} placeholder="Цена от (€)" type="number" min={0} />
             <Input value={priceMax} onChange={(e) => { setPage(1); setPriceMax(e.target.value); }} placeholder="Цена до (€)" type="number" min={0} />
             <div className="relative">
@@ -1208,17 +1225,19 @@ export default function AdminProductsPage() {
         {/* Active filter chips */}
         {activeFilters.length > 0 && (
           <div className="pt-1 border-t border-slate-100">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Активни филтри</div>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 md:mb-2">
+              Активни филтри
+            </div>
+            <div className="flex flex-wrap gap-1 md:gap-1.5">
               {activeFilters.map((f) => (
                 <button
                   key={f.key}
                   onClick={() => { setPage(1); f.onClear(); }}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-blue-50 text-brand-blue-700 border border-brand-blue-200 hover:bg-brand-blue-100 hover:text-brand-blue-800 transition-colors"
+                  className="inline-flex items-center gap-1 max-w-full min-w-0 px-2 py-0.5 md:px-2.5 md:py-1 rounded-full text-[10px] md:text-xs font-semibold bg-brand-blue-50 text-brand-blue-700 border border-brand-blue-200 hover:bg-brand-blue-100 hover:text-brand-blue-800 transition-colors"
                   title="Премахни този филтър"
                 >
-                  {f.label}
-                  <span aria-hidden className="text-brand-blue-500">×</span>
+                  <span className="min-w-0 truncate">{f.label}</span>
+                  <span aria-hidden className="text-brand-blue-500 shrink-0">×</span>
                 </button>
               ))}
             </div>
@@ -1228,8 +1247,8 @@ export default function AdminProductsPage() {
 
       {/* Bulk actions — само „Изтрий“. Видимо когато има поне един избран ред. */}
       {canMutateProductRows && selected.length > 0 && (
-        <div className="bg-brand-blue-50 border border-brand-blue-200 rounded-xl px-3 py-2.5 flex items-center justify-between gap-2 flex-wrap">
-          <span className="text-xs md:text-sm font-bold text-brand-blue-700">
+        <div className="bg-brand-blue-50 border border-brand-blue-200 rounded-lg md:rounded-xl px-2.5 py-2 md:px-3 md:py-2.5 flex items-center justify-between gap-2 flex-wrap">
+          <span className="text-[11px] md:text-sm font-bold text-brand-blue-700">
             Избрани: {selected.length}{" "}
             <span className="font-normal text-brand-blue-600/80 hidden sm:inline">
               (за останалите промени отвори картата на продукта)
@@ -1519,175 +1538,292 @@ export default function AdminProductsPage() {
         </Table>
       </div>
 
-      {/* Mobile card list */}
-      <div className="md:hidden space-y-2">
+      {/* Mobile: компактен списък (PWA / телефон) */}
+      <div className="md:hidden space-y-1.5">
         {loading && (
-          <div className="text-center py-10 text-slate-500 text-sm">Зареждане...</div>
+          <div className="text-center py-6 text-slate-500 text-xs">Зареждане...</div>
         )}
         {!loading && items.length === 0 && (
-          <div className="bg-white rounded-xl border border-slate-200 p-6 text-center text-slate-500 text-sm">Няма намерени продукти.</div>
+          <div className="bg-white rounded-lg border border-slate-200 px-3 py-4 text-center text-slate-500 text-xs">
+            Няма намерени продукти.
+          </div>
         )}
         {!loading && items.map((p) => (
-          <div key={p.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden active:bg-slate-50 transition-colors">
-            <div className="px-4 pt-4 pb-3">
-              <div className="flex items-start gap-3">
-                {canMutateProductRows && (
+          <article
+            key={p.id}
+            className="rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden active:bg-slate-50/90 transition-colors"
+          >
+            <div className="px-2.5 pt-2 pb-1.5 flex gap-2 items-start min-w-0">
+              {canMutateProductRows && (
                 <input
                   type="checkbox"
-                  className="mt-1 rounded border-slate-300 text-brand-blue-500 focus:ring-brand-blue-500 w-4 h-4 shrink-0"
+                  className="mt-0.5 rounded border-slate-300 text-brand-blue-500 focus:ring-brand-blue-500 w-3.5 h-3.5 shrink-0"
                   checked={selected.includes(p.id)}
-                  onChange={(e) => setSelected((prev) => e.target.checked ? [...prev, p.id] : prev.filter((x) => x !== p.id))}
+                  onChange={(e) =>
+                    setSelected((prev) =>
+                      e.target.checked ? [...prev, p.id] : prev.filter((x) => x !== p.id),
+                    )
+                  }
+                  aria-label="Избери за масово изтриване"
                 />
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="font-bold text-slate-900 text-sm leading-snug">
-                    <ProductQuickViewButton productId={p.id} productName={p.name} />
-                  </div>
-                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${p.product_condition === "used" ? "bg-brand-orange-100 text-brand-orange-700" : "bg-brand-blue-100 text-brand-blue-700"}`}>
-                      {p.product_condition === "used" ? "Втора употр." : "Нов"}
+              )}
+              <div className="flex-1 min-w-0">
+                <ProductQuickViewButton
+                  productId={p.id}
+                  productName={p.name}
+                  className="!text-[13px] !font-bold leading-snug line-clamp-2"
+                />
+                <div className="mt-1 flex flex-wrap items-center gap-1">
+                  <span
+                    className={`inline-flex items-center px-1 py-px rounded text-[10px] font-bold ${
+                      p.product_condition === "used"
+                        ? "bg-brand-orange-100 text-brand-orange-800"
+                        : "bg-brand-blue-100 text-brand-blue-800"
+                    }`}
+                  >
+                    {p.product_condition === "used" ? "Употр." : "Нов"}
+                  </span>
+                  <span
+                    className={`inline-flex items-center px-1 py-px rounded text-[10px] font-bold ${catalogStockBadgeClass(p.stock_status)}`}
+                    title="Статус в публичния каталог"
+                  >
+                    {catalogStockBadgeText(p.stock_status)}
+                  </span>
+                  {p.is_active === false && (
+                    <span className="inline-flex items-center px-1 py-px rounded text-[10px] font-bold bg-slate-200 text-slate-700">
+                      Скрит
                     </span>
-                    {p.brands?.name && <span className="text-xs text-slate-500">{p.brands.name}</span>}
-                    {p.product_types?.name && <span className="text-xs text-slate-400">{p.product_types.name}</span>}
-                  </div>
+                  )}
+                  {p.model_code?.trim() && (
+                    <span className="font-mono text-[10px] text-slate-600 truncate max-w-[9rem]" title={p.model_code}>
+                      {p.model_code}
+                    </span>
+                  )}
                 </div>
-                <div className="text-right shrink-0 space-y-1.5 min-w-[6.5rem]">
-                  <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Продажна</div>
+              </div>
+              <div className="shrink-0 text-right w-[5.75rem] leading-tight space-y-1">
+                <div>
+                  <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400 leading-none">Продажна</div>
                   {editingPriceId === p.id && canEditMasterPricesInline ? (
-                    <div className="flex flex-col gap-1.5 items-end">
-                      <Input type="number" min={0} value={priceDraft} onChange={(e) => setPriceDraft(e.target.value)} className="w-24 text-right" autoFocus />
-                      <div className="flex gap-1">
-                        <Button size="sm" onClick={() => void savePrice(p)} disabled={priceBusy} className="!py-1 !px-2 !text-xs">OK</Button>
-                        <Button variant="secondary" size="sm" onClick={() => { setEditingPriceId(null); setPriceDraft(""); }} disabled={priceBusy} className="!py-1 !px-2 !text-xs">✕</Button>
+                    <div className="mt-0.5 flex flex-col items-end gap-0.5">
+                      <Input
+                        type="number"
+                        min={0}
+                        value={priceDraft}
+                        onChange={(e) => setPriceDraft(e.target.value)}
+                        className="!py-1 !px-1.5 !text-xs w-full text-right"
+                        autoFocus
+                      />
+                      <div className="flex gap-0.5">
+                        <Button size="sm" onClick={() => void savePrice(p)} disabled={priceBusy} className="!py-0.5 !px-1.5 !text-[10px]">
+                          OK
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => {
+                            setEditingPriceId(null);
+                            setPriceDraft("");
+                          }}
+                          disabled={priceBusy}
+                          className="!py-0.5 !px-1.5 !text-[10px]"
+                        >
+                          ✕
+                        </Button>
                       </div>
                     </div>
                   ) : canEditMasterPricesInline ? (
                     <button
                       type="button"
                       onClick={() => startPriceEdit(p)}
-                      className="text-lg font-black text-slate-900 rounded-lg px-2 py-1 bg-brand-blue-50/60 hover:bg-brand-blue-100 hover:text-brand-blue-700 focus:outline-none active:bg-brand-blue-100 transition-colors cursor-pointer"
+                      className="mt-0.5 text-sm font-black text-slate-900 tabular-nums rounded-md px-1.5 py-0.5 bg-brand-blue-50/80 hover:bg-brand-blue-100 w-full text-right"
                     >
                       {fmtEuro(p.price)}
                     </button>
                   ) : (
-                    <span className="text-lg font-black text-slate-900 tabular-nums" title="Само главен администратор може да променя продажната цена тук">
+                    <div className="mt-0.5 text-sm font-black text-slate-900 tabular-nums" title="Само главен администратор може да променя продажната цена тук">
                       {fmtEuro(p.price)}
-                    </span>
+                    </div>
                   )}
-                  <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 pt-0.5">Закупна</div>
+                </div>
+                <div>
+                  <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400 leading-none pt-0.5">Закупна</div>
                   {editingPurchaseId === p.id && canEditMasterPricesInline ? (
-                    <div className="flex flex-col gap-1 items-end">
-                      <Input type="number" min={0} value={purchaseDraft} onChange={(e) => setPurchaseDraft(e.target.value)} className="w-24 text-right !text-sm" placeholder="—" />
-                      <div className="flex gap-1">
-                        <Button size="sm" onClick={() => void savePurchasePrice(p)} disabled={purchaseBusy} className="!py-1 !px-2 !text-xs">OK</Button>
-                        <Button variant="secondary" size="sm" onClick={() => { setEditingPurchaseId(null); setPurchaseDraft(""); }} disabled={purchaseBusy} className="!py-1 !px-2 !text-xs">✕</Button>
+                    <div className="mt-0.5 flex flex-col items-end gap-0.5">
+                      <Input
+                        type="number"
+                        min={0}
+                        value={purchaseDraft}
+                        onChange={(e) => setPurchaseDraft(e.target.value)}
+                        className="!py-1 !px-1.5 !text-xs w-full text-right"
+                        placeholder="—"
+                      />
+                      <div className="flex gap-0.5">
+                        <Button size="sm" onClick={() => void savePurchasePrice(p)} disabled={purchaseBusy} className="!py-0.5 !px-1.5 !text-[10px]">
+                          OK
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => {
+                            setEditingPurchaseId(null);
+                            setPurchaseDraft("");
+                          }}
+                          disabled={purchaseBusy}
+                          className="!py-0.5 !px-1.5 !text-[10px]"
+                        >
+                          ✕
+                        </Button>
                       </div>
                     </div>
                   ) : canEditMasterPricesInline ? (
-                    <button type="button" onClick={() => startPurchaseEdit(p)} className="text-sm font-bold text-slate-800 rounded-lg px-2 py-0.5 bg-brand-orange-50/60 hover:bg-brand-orange-100 cursor-pointer transition">
+                    <button
+                      type="button"
+                      onClick={() => startPurchaseEdit(p)}
+                      className="mt-0.5 text-xs font-bold text-slate-800 tabular-nums rounded-md px-1.5 py-0.5 bg-brand-orange-50/80 hover:bg-brand-orange-100 w-full text-right"
+                    >
                       {fmtEuro(p.purchase_price)}
                     </button>
                   ) : (
-                    <span className="text-sm font-bold text-slate-800 tabular-nums" title="Само главен администратор може да променя закупната цена тук">
+                    <div className="mt-0.5 text-xs font-bold text-slate-800 tabular-nums" title="Само главен администратор може да променя закупната цена тук">
                       {fmtEuro(p.purchase_price)}
-                    </span>
+                    </div>
                   )}
-                  <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 pt-0.5">Закупен на</div>
-                  <div className="text-xs font-semibold text-slate-700">{fmtPurchaseDate(p.purchased_at)}</div>
-                  <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 pt-0.5">Страна</div>
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-bold text-slate-700 bg-slate-100">
-                    {productRegionLabel(p.product_region)}
-                  </span>
-                  <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 pt-0.5">Място</div>
-                  {canMutateProductRows ? (
+                </div>
+              </div>
+            </div>
+
+            <div className="px-2.5 pb-1 text-[10px] text-slate-600 leading-snug border-b border-slate-100 flex flex-wrap gap-x-2 gap-y-0.5 items-baseline">
+              {p.brands?.name && <span className="font-semibold text-slate-800 truncate max-w-[42%]">{p.brands.name}</span>}
+              {p.product_types?.name && (
+                <span className="text-slate-500 truncate max-w-[42%]" title={p.product_types.name}>
+                  · {p.product_types.name}
+                </span>
+              )}
+              <span className="text-slate-500 shrink-0">· {productRegionLabel(p.product_region)}</span>
+              <span className="text-slate-500 shrink-0">
+                ·{" "}
+                {canMutateProductRows ? (
                   <button
                     type="button"
                     disabled={locationBusyId === p.id}
                     onClick={() => toggleStockLocation(p)}
                     title="Клик: магазин ↔ склад"
-                    className={`w-full inline-flex items-center justify-center px-2 py-1 rounded-md text-[11px] font-semibold border border-slate-200/80 cursor-pointer transition hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue-500 disabled:cursor-wait disabled:opacity-60 ${productStockLocationBadgeClass(p.stock_location)}`}
+                    className="inline font-semibold text-slate-800 underline-offset-2 hover:underline disabled:opacity-50"
                   >
-                    {locationBusyId === p.id ? "Запис…" : productStockLocationLabel(p.stock_location)}
+                    {locationBusyId === p.id ? "…" : productStockLocationLabel(p.stock_location)}
                   </button>
-                  ) : (
-                  <span
-                    className={`w-full inline-flex items-center justify-center px-2 py-1 rounded-md text-[11px] font-semibold border border-slate-200/80 ${productStockLocationBadgeClass(p.stock_location)}`}
-                  >
-                    {productStockLocationLabel(p.stock_location)}
-                  </span>
-                  )}
-                </div>
-              </div>
-              <div className="mt-3 grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-[11px] border-t border-slate-100 pt-2 text-slate-600">
-                <span className="text-slate-400 shrink-0">Доставчик</span>
-                <span className="font-medium text-slate-800 truncate" title={supplierLabel(p.supplier_id)}>
+                ) : (
+                  <span className="font-semibold text-slate-800">{productStockLocationLabel(p.stock_location)}</span>
+                )}
+              </span>
+              <span className="text-slate-400 shrink-0">· {fmtPurchaseDate(p.purchased_at)}</span>
+            </div>
+
+            <div className="px-2.5 py-1.5 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px] text-slate-600">
+              <div className="col-span-2 flex min-w-0 gap-1">
+                <span className="text-slate-400 shrink-0">Дост.</span>
+                <span className="font-medium text-slate-800 truncate min-w-0" title={supplierLabel(p.supplier_id)}>
                   {supplierLabel(p.supplier_id)}
                 </span>
-                <span className="text-slate-400">Сериен вътрешно</span>
-                <span className="font-mono text-slate-800 break-all" title={(p.indoor_unit_serial ?? "").trim() || undefined}>
-                  {truncCell(p.indoor_unit_serial, 40)}
-                </span>
-                <span className="text-slate-400">Сериен външно</span>
-                <span className="font-mono text-slate-800 break-all" title={(p.outdoor_unit_serial ?? "").trim() || undefined}>
-                  {truncCell(p.outdoor_unit_serial, 40)}
-                </span>
-                <span className="text-slate-400">Фактура</span>
-                <span className="text-slate-800 break-all" title={(p.supplier_invoice_number ?? "").trim() || undefined}>
-                  {truncCell(p.supplier_invoice_number, 48)}
+              </div>
+              <div className="min-w-0">
+                <span className="text-slate-400">Вътр. сер.</span>
+                <div className="font-mono text-slate-900 break-all leading-tight" title={(p.indoor_unit_serial ?? "").trim() || undefined}>
+                  {truncCell(p.indoor_unit_serial, 22)}
+                </div>
+              </div>
+              <div className="min-w-0">
+                <span className="text-slate-400">Външ. сер.</span>
+                <div className="font-mono text-slate-900 break-all leading-tight" title={(p.outdoor_unit_serial ?? "").trim() || undefined}>
+                  {truncCell(p.outdoor_unit_serial, 22)}
+                </div>
+              </div>
+              <div className="col-span-2 min-w-0">
+                <span className="text-slate-400">Фактура </span>
+                <span className="text-slate-900 break-all" title={(p.supplier_invoice_number ?? "").trim() || undefined}>
+                  {truncCell(p.supplier_invoice_number, 36)}
                 </span>
               </div>
             </div>
-            {canMutateProductRows && (
-            <div className="flex border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => { setSaleFor(p); setSaleForm(emptySaleModalForm()); setContactQuery(""); setContactResults([]); }}
-                disabled={!canRecordSale(p)}
-                className="flex-1 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 active:bg-slate-100 transition-colors disabled:opacity-40 border-r border-slate-100"
-              >
-                Продажба
-              </button>
-              <Link href={`/admin/products/${p.id}`} className="flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-semibold text-brand-blue-700 hover:bg-brand-blue-50 active:bg-brand-blue-100 transition-colors">
-                <Edit className="w-4 h-4" /> Редакция
-              </Link>
-              <button
-                onClick={() => setShareProduct(p)}
-                className="flex items-center justify-center gap-1.5 px-4 py-3 text-sm font-semibold text-brand-orange-600 hover:bg-brand-orange-50 active:bg-brand-orange-100 transition-colors border-r border-slate-100"
-                title="Сподели в чат"
-              >
-                <MessageCircle className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setFeaturedFor(p)}
-                className={`flex items-center justify-center gap-1.5 px-4 py-3 text-sm font-semibold transition-colors ${
-                  p.featured_position
-                    ? "text-amber-700 bg-amber-50 hover:bg-amber-100"
-                    : "text-slate-500 hover:bg-amber-50 hover:text-amber-600"
-                }`}
-                title={
-                  p.featured_position
-                    ? `Топ продукти — позиция #${p.featured_position}`
-                    : "Постави в Топ продукти"
-                }
-              >
-                <Star className={`w-4 h-4 ${p.featured_position ? "fill-current" : ""}`} />
-                {p.featured_position && (
-                  <span className="text-[11px] font-black leading-none">#{p.featured_position}</span>
-                )}
-              </button>
-            </div>
+
+            {canMutateProductRows ? (
+              <div className="grid grid-cols-4 border-t border-slate-100 divide-x divide-slate-100 bg-slate-50/50">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSaleFor(p);
+                    setSaleForm(emptySaleModalForm());
+                    setContactQuery("");
+                    setContactResults([]);
+                  }}
+                  disabled={!canRecordSale(p)}
+                  className="py-2 px-0.5 text-[10px] font-bold text-slate-800 hover:bg-white active:bg-slate-100 transition-colors disabled:opacity-35 leading-tight"
+                >
+                  Продажба
+                </button>
+                <Link
+                  href={`/admin/products/${p.id}`}
+                  className="flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-bold text-brand-blue-700 hover:bg-white active:bg-brand-blue-50/60 min-w-0"
+                  title="Редакция"
+                >
+                  <Edit className="w-3.5 h-3.5 shrink-0" />
+                  <span className="leading-none">Ред.</span>
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setShareProduct(p)}
+                  className="flex flex-col items-center justify-center gap-0.5 py-2 text-brand-orange-600 hover:bg-white active:bg-brand-orange-50/50 min-w-0"
+                  title="Сподели в чат"
+                >
+                  <MessageCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span className="text-[9px] font-bold leading-none">Чат</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFeaturedFor(p)}
+                  className={`flex flex-col items-center justify-center gap-0.5 py-2 min-w-0 ${
+                    p.featured_position
+                      ? "text-amber-800 bg-amber-50/80 hover:bg-amber-100"
+                      : "text-slate-500 hover:bg-white hover:text-amber-700"
+                  }`}
+                  title={
+                    p.featured_position
+                      ? `Топ продукти — позиция #${p.featured_position}`
+                      : "Постави в Топ продукти"
+                  }
+                >
+                  <Star className={`w-3.5 h-3.5 shrink-0 ${p.featured_position ? "fill-current" : ""}`} />
+                  <span className="text-[9px] font-bold leading-none">{p.featured_position ? `#${p.featured_position}` : "Топ"}</span>
+                </button>
+              </div>
+            ) : (
+              <div className="border-t border-slate-100 bg-slate-50/40">
+                <Link
+                  href={`/admin/products/${p.id}`}
+                  className="block py-2 text-center text-[11px] font-bold text-brand-blue-700 hover:bg-white transition-colors"
+                >
+                  Пълен запис на продукта →
+                </Link>
+              </div>
             )}
-          </div>
+          </article>
         ))}
       </div>
 
       {/* Pagination */}
-      <div className="flex justify-between items-center">
-        <span className="text-sm text-slate-500 font-medium">Общо: {meta.total}</span>
-        <div className="flex items-center gap-2 md:gap-3">
-          <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹ Пред.</Button>
-          <span className="text-sm font-medium text-slate-600">{page} / {pages}</span>
-          <Button variant="secondary" size="sm" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>Следв. ›</Button>
+      <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 pt-1">
+        <span className="text-xs md:text-sm text-slate-500 font-medium">Общо: {meta.total}</span>
+        <div className="flex items-center justify-end gap-1.5 md:gap-3">
+          <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className="!text-xs md:!text-sm">
+            ‹ Пред.
+          </Button>
+          <span className="text-xs md:text-sm font-medium text-slate-600 tabular-nums px-1">
+            {page} / {pages}
+          </span>
+          <Button variant="secondary" size="sm" disabled={page >= pages} onClick={() => setPage((p) => p + 1)} className="!text-xs md:!text-sm">
+            Следв. ›
+          </Button>
         </div>
       </div>
 

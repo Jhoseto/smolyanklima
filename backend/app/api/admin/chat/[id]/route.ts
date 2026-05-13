@@ -1,14 +1,15 @@
 import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/admin/db";
+import { adminSessionIfChatOperator } from "@/lib/admin/db";
 
 type Params = { params: Promise<{ id: string }> };
 
 /** GET /api/admin/chat/[id] — full chat with messages */
 export async function GET(req: NextRequest, { params }: Params) {
   const { id } = await params;
-  const supabase = await adminDb().catch(() => null);
-  if (!supabase) return NextResponse.json({ error: "NOT_ADMIN" }, { status: 403 });
+  const session = await adminSessionIfChatOperator();
+  if (!session) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+  const supabase = session.db;
 
   const { data: chat, error } = await supabase
     .from("live_chats")
@@ -35,8 +36,9 @@ const PatchSchema = z.object({
 /** PATCH /api/admin/chat/[id] — update status / notes */
 export async function PATCH(req: NextRequest, { params }: Params) {
   const { id } = await params;
-  const supabase = await adminDb().catch(() => null);
-  if (!supabase) return NextResponse.json({ error: "NOT_ADMIN" }, { status: 403 });
+  const session = await adminSessionIfChatOperator();
+  if (!session) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+  const supabase = session.db;
 
   const json = await req.json().catch(() => null);
   const parsed = PatchSchema.safeParse(json);

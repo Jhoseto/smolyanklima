@@ -121,15 +121,21 @@ export default function EditProductPage() {
     else router.push("/admin/products");
   }
 
-  if (loading) return <div className="flex items-center justify-center p-12 text-slate-500 font-medium">Зареждане...</div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-10 md:p-12 text-slate-500 text-sm font-medium">
+        Зареждане...
+      </div>
+    );
+  }
 
   const readOnly = role === "service_staff";
 
   return (
-    <div className="w-full max-w-none space-y-4 pb-24 md:pb-4">
+    <div className="w-full max-w-none space-y-3 pb-24 md:space-y-4 md:pb-4">
       {toast && (
         <div
-          className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-lg border font-bold text-sm transition-all ${
+          className={`fixed top-2 left-2 right-2 md:top-4 md:left-auto md:right-4 z-50 px-3 py-2.5 md:px-4 md:py-3 rounded-xl shadow-lg border font-bold text-xs md:text-sm transition-all ${
             toast.kind === "ok" ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-red-50 border-red-200 text-red-800"
           }`}
           role="status"
@@ -140,7 +146,7 @@ export default function EditProductPage() {
       )}
       
       <div>
-        <h1 className="text-lg md:text-xl font-bold text-slate-900 mb-1 leading-tight">
+        <h1 className="text-base md:text-xl font-bold text-slate-900 mb-0.5 md:mb-1 leading-tight">
           <SectionTitle
             title={readOnly ? "Преглед на продукт" : "Редакция на продукт"}
             hint={
@@ -153,18 +159,18 @@ export default function EditProductPage() {
       </div>
 
       {!readOnly && (
-        <HelpCard>
+        <HelpCard className="!p-2.5 md:!p-3">
           <HelpRow items={["Запис запазва всички промени в картата", "Изтрий премахва продукта и свързаните му публични данни", "Магазин/склад и каталог-статус са отделни полета"]} />
         </HelpCard>
       )}
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 text-sm font-medium">
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg md:rounded-xl p-3 text-sm font-medium">
           {error}
         </div>
       )}
 
-      <Card className="p-4 md:p-6">
+      <Card className="p-3 sm:p-4 md:p-6 shadow-sm border-slate-200/90">
         <ProductFormFields
           brands={brands}
           types={types}
@@ -194,12 +200,12 @@ export default function EditProductPage() {
           </div>
 
           {/* Mobile sticky save bar */}
-          <div className="fixed bottom-16 left-0 right-0 z-40 md:hidden border-t border-slate-200 bg-white/95 backdrop-blur-sm px-4 py-3 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
+          <div className="fixed bottom-16 left-0 right-0 z-40 md:hidden border-t border-slate-200 bg-white/95 backdrop-blur-sm px-3 py-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
             <div className="flex gap-2">
-              <Button variant="danger" onClick={remove} className="gap-1.5 shrink-0 !py-3 text-xs">
+              <Button variant="danger" onClick={remove} className="gap-1.5 shrink-0 !py-3 text-xs rounded-xl" title="Изтрий продукт">
                 <Trash2 className="w-4 h-4" />
               </Button>
-              <Button variant="primary" className="flex-1 justify-center gap-2 !py-3 text-sm font-bold" onClick={save} disabled={saving}>
+              <Button variant="primary" className="flex-1 justify-center gap-2 !py-3 text-sm font-bold rounded-xl" onClick={save} disabled={saving}>
                 <Save className="w-4 h-4" />
                 {saving ? "Запазвам..." : "Запази промените"}
               </Button>

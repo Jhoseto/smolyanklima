@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { adminDb } from "@/lib/admin/db";
+import { adminSessionIfChatOperator } from "@/lib/admin/db";
 
 export const dynamic = "force-dynamic";
 
@@ -21,8 +21,9 @@ const POLL_MS = 2_500;
 /** GET /api/admin/chat/[id]/stream — SSE for messages in a specific chat */
 export async function GET(req: NextRequest, { params }: Params) {
   const { id } = await params;
-  const supabase = await adminDb().catch(() => null);
-  if (!supabase) return new Response("Forbidden", { status: 403 });
+  const session = await adminSessionIfChatOperator();
+  if (!session) return new Response("Forbidden", { status: 403 });
+  const supabase = session.db;
 
   const encoder = new TextEncoder();
   let lastMsgTs = new Date().toISOString();

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/admin/db";
+import { adminSessionIfChatOperator } from "@/lib/admin/db";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 export async function GET(req: NextRequest) {
-  const supabaseAdmin = await adminDb().catch(() => null);
-  if (!supabaseAdmin) return NextResponse.json({ error: "NOT_ADMIN" }, { status: 403 });
+  const session = await adminSessionIfChatOperator();
+  if (!session) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
 
   const supabase = createSupabaseServiceRoleClient();
   const { data } = await supabase

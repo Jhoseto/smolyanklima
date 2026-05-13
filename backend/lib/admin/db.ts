@@ -50,6 +50,17 @@ export function requireRole(session: AdminSession, ...roles: AdminRole[]) {
   }
 }
 
+/** Сесия само за потребители с достъп до live чат с посетители (офис + главен). Сервизните техници са изключени. */
+export async function adminSessionIfChatOperator(): Promise<AdminSession | null> {
+  try {
+    const session = await adminSession();
+    requireRole(session, "master_admin", "office_staff");
+    return session;
+  } catch {
+    return null;
+  }
+}
+
 /** Legacy helper — returns only the service-role DB client.
  *  Kept for backwards compatibility with existing routes. */
 export async function adminDb() {

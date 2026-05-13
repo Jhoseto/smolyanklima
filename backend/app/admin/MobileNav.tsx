@@ -37,10 +37,6 @@ export function MobileNav({ role }: { role: AdminRole }) {
           title: "Акаунт",
           links: [{ href: "/admin/profile", label: "Профил", icon: UserCircle }],
         },
-        {
-          title: "Връзка",
-          links: [{ href: "/admin/chat", label: "Чат", icon: Headphones }],
-        },
       ]
     : (() => {
         const sections: DrawerSection[] = [

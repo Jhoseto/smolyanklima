@@ -516,14 +516,14 @@ function CollapsibleSection({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="border-t border-slate-200 pt-3 md:pt-4">
+    <div className="border-t border-slate-200 pt-2.5 md:pt-4">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between gap-2 mb-2 group"
+        className="w-full flex items-center justify-between gap-2 mb-1.5 md:mb-2 group min-h-[2.25rem] md:min-h-0"
       >
-        <div className="flex items-center gap-2 min-w-0">
-          <h2 className="text-sm md:text-base font-bold text-slate-900 leading-tight">{title}</h2>
+        <div className="flex items-center gap-2 min-w-0 text-left">
+          <h2 className="text-[13px] md:text-base font-bold text-slate-900 leading-tight">{title}</h2>
           {badge && <span className="text-[11px] text-slate-500 font-normal hidden sm:inline">{badge}</span>}
         </div>
         <ChevronDown
@@ -1336,13 +1336,13 @@ export function ProductFormFields({
   // (Legacy single-file uploader е премахнат в полза на ProductPhotoUploader.)
 
   return (
-    <div className="grid gap-5">
+    <div className="grid gap-3 md:gap-5">
       {ro && (
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 leading-snug">
           <strong>Сервизен преглед:</strong> полетата са само за четене. За промени по този продукт обърнете се към офис или главен администратор.
         </div>
       )}
-      <fieldset disabled={ro} className="min-w-0 border-0 p-0 m-0 w-full grid gap-5">
+      <fieldset disabled={ro} className="min-w-0 border-0 p-0 m-0 w-full grid gap-3 md:gap-5">
       <datalist id="energy-class-options">{ENERGY_CLASS_OPTIONS.map((v) => <option key={v} value={v} />)}</datalist>
       <datalist id="refrigerant-options">{REFRIGERANT_OPTIONS.map((v) => <option key={v} value={v} />)}</datalist>
       <datalist id="warranty-months-options">{WARRANTY_MONTHS_OPTIONS.map((v) => <option key={v} value={v} />)}</datalist>
@@ -1358,8 +1358,8 @@ export function ProductFormFields({
       {/* Multi-photo: бутоните може да се ползват многократно; повторен скан */}
       {/* допълва само празните полета (никога не презаписва ръчни стойности). */}
       {/* ===================================================================== */}
-      <section className="rounded-2xl border-2 border-dashed border-brand-blue-200 bg-gradient-to-br from-brand-blue-50/70 via-white to-brand-orange-50/40 p-3 sm:p-4">
-        <div className="flex items-start sm:items-center justify-between gap-3 mb-3">
+      <section className="rounded-xl md:rounded-2xl border-2 border-dashed border-brand-blue-200 bg-gradient-to-br from-brand-blue-50/70 via-white to-brand-orange-50/40 p-2.5 sm:p-4">
+        <div className="flex items-start sm:items-center justify-between gap-2 sm:gap-3 mb-2 sm:mb-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <div className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-brand-blue-500 text-white shadow-sm">
@@ -1447,10 +1447,10 @@ export function ProductFormFields({
       </section>
 
       {/* Двуколоновъ layout на desktop: основни полета (2/3) + страничен панел „Каталог & наличност" (1/3). */}
-      <div className="grid gap-4 lg:grid-cols-3 lg:gap-x-5">
-        <div className="lg:col-span-2 grid gap-4">
+      <div className="grid gap-3 md:gap-4 lg:grid-cols-3 lg:gap-x-5">
+        <div className="lg:col-span-2 grid gap-3 md:gap-4">
           {/* НАЙ-ГОРЕ: Марка + Модел — техническата идентификация. */}
-          <div className="grid gap-4 md:grid-cols-12">
+          <div className="grid gap-3 md:gap-4 md:grid-cols-12">
             <label className="block md:col-span-5">
               <FieldTitle
                 label="Марка"
@@ -1494,7 +1494,7 @@ export function ProductFormFields({
           </div>
 
           {/* СЛЕД МАРКА+МОДЕЛ: Slug + Име в клиентския каталог. */}
-          <div className="grid gap-4 md:grid-cols-12">
+          <div className="grid gap-3 md:gap-4 md:grid-cols-12">
             <label className="block md:col-span-5">
               <div className="flex items-center justify-between gap-2 mb-1">
                 <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">Slug (по избор)</div>
@@ -1551,7 +1551,7 @@ export function ProductFormFields({
             </label>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
             <label className="block">
               <FieldTitle label="Тип" info="Стенен, мулти-сплит, касетъчен и т.н." />
               <Select value={form.typeId} onChange={(e) => setForm({ ...form, typeId: e.target.value })}>
@@ -1567,7 +1567,7 @@ export function ProductFormFields({
             </label>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <label className="block">
               <FieldTitle label="Цена (EUR)" info="Цена на уреда без монтаж, в евро." />
               <div className="relative">
@@ -1625,9 +1625,9 @@ export function ProductFormFields({
         </div>
 
         {/* Страничен панел: Каталог & наличност */}
-        <aside className="lg:col-span-1 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-4 lg:sticky lg:top-4 lg:self-start">
-          <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-            <div className="text-xs font-bold uppercase tracking-wider text-slate-700">Каталог &amp; наличност</div>
+        <aside className="lg:col-span-1 grid gap-2.5 md:gap-3 rounded-xl md:rounded-2xl border border-slate-200 bg-slate-50/60 p-3 md:p-4 lg:sticky lg:top-4 lg:self-start order-first lg:order-none">
+          <div className="flex items-center justify-between border-b border-slate-200 pb-1.5 md:pb-2">
+            <div className="text-[11px] md:text-xs font-bold uppercase tracking-wider text-slate-700">Каталог &amp; наличност</div>
             <span className="text-[10px] text-slate-400">витрина / склад</span>
           </div>
 
@@ -1748,7 +1748,7 @@ export function ProductFormFields({
       </div>
 
       <CollapsibleSection title="Серийни номера и доставчик" badge="вътрешен запис, не се показва публично">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-4 gap-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-3 gap-y-2.5 md:gap-x-4 md:gap-y-3">
           <label className="block">
             <div className="flex items-center justify-between gap-2 mb-1 leading-tight">
               <div>
@@ -1863,7 +1863,7 @@ export function ProductFormFields({
       </CollapsibleSection>
 
       <CollapsibleSection title="Технически данни" badge="Остави празно поле, ако нямаш надеждна стойност">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-3 gap-y-2.5 md:gap-x-4 md:gap-y-3">
           <label className="block">
             <FieldTitle label="Площ (м²)" info="Препоръчителна квадратура (по спецификация)." ai={isAiField("specs.coverage_m2")} />
             <Input value={form.specs.coverage_m2} onChange={(e) => setSpec("coverage_m2", e.target.value)} list="coverage-m2-options" placeholder="25" className={aiHl("specs.coverage_m2")} />
@@ -1944,10 +1944,10 @@ export function ProductFormFields({
           </div>
         )}
 
-        <div className="space-y-5">
+        <div className="space-y-3 md:space-y-5">
           <div>
-            <div className="text-xs font-bold uppercase tracking-wider text-brand-blue-700 mb-2">Вътрешен блок</div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="text-[11px] md:text-xs font-bold uppercase tracking-wider text-brand-blue-700 mb-1.5 md:mb-2">Вътрешен блок</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
               <label className="block">
                 <FieldTitle label="Тегло (kg)" info="Тегло на вътрешния блок в килограми." ai={isAiField("specs.weight_indoor_kg")} />
                 <Input value={form.specs.weight_indoor_kg} onChange={(e) => setSpec("weight_indoor_kg", e.target.value)} placeholder="24.0" inputMode="decimal" className={aiHl("specs.weight_indoor_kg")} />
@@ -1968,8 +1968,8 @@ export function ProductFormFields({
           </div>
 
           <div>
-            <div className="text-xs font-bold uppercase tracking-wider text-brand-orange-700 mb-2">Външен блок</div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="text-[11px] md:text-xs font-bold uppercase tracking-wider text-brand-orange-700 mb-1.5 md:mb-2">Външен блок</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
               <label className="block">
                 <FieldTitle label="Тегло (kg)" info="Тегло на външния блок в килограми." ai={isAiField("specs.weight_outdoor_kg")} />
                 <Input value={form.specs.weight_outdoor_kg} onChange={(e) => setSpec("weight_outdoor_kg", e.target.value)} placeholder="134.0" inputMode="decimal" className={aiHl("specs.weight_outdoor_kg")} />

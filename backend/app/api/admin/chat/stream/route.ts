@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { adminDb } from "@/lib/admin/db";
+import { adminSessionIfChatOperator, type AdminSession } from "@/lib/admin/db";
 
 export const dynamic = "force-dynamic";
 
@@ -23,8 +23,9 @@ const INACTIVITY_CHECK_INTERVAL = 30_000;
 
 /** GET /api/admin/chat/stream — SSE for inbox changes (new chats / status changes) */
 export async function GET(req: NextRequest) {
-  const supabase = await adminDb().catch(() => null);
-  if (!supabase) return new Response("Forbidden", { status: 403 });
+  const session = await adminSessionIfChatOperator();
+  if (!session) return new Response("Forbidden", { status: 403 });
+  const supabase = session.db;
 
   const encoder = new TextEncoder();
   let lastSig = await getSignature(supabase);
@@ -76,7 +77,7 @@ export async function GET(req: NextRequest) {
   });
 }
 
-async function getSignature(supabase: Awaited<ReturnType<typeof adminDb>>) {
+async function getSignature(supabase: AdminSession["db"]) {
   const { data } = await supabase
     .from("live_chats")
     .select("id,updated_at")
@@ -92,7 +93,7 @@ async function getSignature(supabase: Awaited<ReturnType<typeof adminDb>>) {
  * even when the visitor has closed/minimised the chat widget.
  */
 async function checkInactivity(
-  supabase: Awaited<ReturnType<typeof adminDb>>,
+  supabase: AdminSession["db"],
   now: number
 ) {
   const warnThreshold = new Date(now - INACTIVITY_WARN_MS).toISOString();

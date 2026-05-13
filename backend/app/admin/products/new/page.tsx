@@ -111,10 +111,10 @@ export default function NewProductPage() {
   }
 
   return (
-    <div className="w-full max-w-none space-y-4 pb-24 md:pb-4">
+    <div className="w-full max-w-none space-y-3 pb-24 md:space-y-4 md:pb-4">
       {toast && (
         <div
-          className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-lg border font-bold text-sm transition-all ${
+          className={`fixed top-2 left-2 right-2 md:top-4 md:left-auto md:right-4 z-50 px-3 py-2.5 md:px-4 md:py-3 rounded-xl shadow-lg border font-bold text-xs md:text-sm transition-all ${
             toast.kind === "ok" ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-red-50 border-red-200 text-red-800"
           }`}
           role="status"
@@ -124,12 +124,12 @@ export default function NewProductPage() {
         </div>
       )}
       
-      <div>
-        <h1 className="text-lg md:text-xl font-bold text-slate-900 leading-tight">
+      <div className="md:pt-0">
+        <h1 className="text-base md:text-xl font-bold text-slate-900 leading-tight">
           <SectionTitle title="Нов продукт" />
         </h1>
-        <p className="mt-1 text-[13px] text-slate-500 leading-snug">
-          Добавяне на нов климатик в каталога — снимки, марка, модел, спецификации.
+        <p className="mt-0.5 md:mt-1 text-[12px] md:text-[13px] text-slate-500 leading-snug">
+          Марка, модел, снимки и спецификации — стъпка по стъпка.
         </p>
       </div>
 
@@ -139,7 +139,7 @@ export default function NewProductPage() {
         </div>
       )}
 
-      <Card className="p-4 md:p-6">
+      <Card className="p-3 sm:p-4 md:p-6 shadow-sm border-slate-200/90">
         <ProductFormFields
           brands={brands}
           types={types}
@@ -163,8 +163,8 @@ export default function NewProductPage() {
       </div>
 
       {/* Mobile sticky save bar */}
-      <div className="fixed bottom-16 left-0 right-0 z-40 md:hidden border-t border-slate-200 bg-white/95 backdrop-blur-sm px-4 py-3 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
-        <Button variant="primary" className="w-full justify-center gap-2 !py-3 text-sm font-bold" onClick={submit} disabled={submitting}>
+      <div className="fixed bottom-16 left-0 right-0 z-40 md:hidden border-t border-slate-200 bg-white/95 backdrop-blur-sm px-3 py-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
+        <Button variant="primary" className="w-full justify-center gap-2 !py-3 text-sm font-bold rounded-xl" onClick={submit} disabled={submitting}>
           <Save className="w-4 h-4" />
           {submitting ? "Създавам..." : "Създай продукт"}
         </Button>
