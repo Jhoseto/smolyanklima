@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import {
   Users, Plus, ShieldCheck, Briefcase, Wrench,
   CheckCircle2, XCircle, Pencil, Trash2, KeyRound,
-  Loader2, X, Eye, EyeOff, Phone,
+  Loader2, X, Eye, EyeOff, Phone, ImagePlus,
 } from "lucide-react";
 import { Button, Input, Select } from "../ui";
+import { StaffAvatarCropModal } from "./StaffAvatarCropModal";
 
 type AdminRole = "master_admin" | "office_staff" | "service_staff";
 
@@ -18,6 +19,7 @@ interface StaffMember {
   is_active: boolean;
   created_at: string;
   last_login_at: string | null;
+  avatar_url: string | null;
 }
 
 const ROLE_LABELS: Record<AdminRole, string> = {
@@ -75,6 +77,10 @@ export function StaffPageClient({ currentUserId }: { currentUserId: string }) {
   const [confirmDelete, setConfirmDelete] = useState<StaffMember | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  const avatarFileRef = useRef<HTMLInputElement>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarCropSrc, setAvatarCropSrc] = useState<string | null>(null);
+
   const fetchStaff = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -82,7 +88,8 @@ export function StaffPageClient({ currentUserId }: { currentUserId: string }) {
       const res = await fetch("/api/admin/staff", { credentials: "include" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Грешка при зареждане");
-      setStaff(data.staff);
+      const rows = (data.staff ?? []) as StaffMember[];
+      setStaff(rows.map((r) => ({ ...r, avatar_url: r.avatar_url ?? null })));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Грешка");
     } finally {
@@ -91,6 +98,70 @@ export function StaffPageClient({ currentUserId }: { currentUserId: string }) {
   }, []);
 
   useEffect(() => { fetchStaff(); }, [fetchStaff]);
+
+  useEffect(() => {
+    if (!editMember && avatarCropSrc) {
+      URL.revokeObjectURL(avatarCropSrc);
+      setAvatarCropSrc(null);
+    }
+  }, [editMember, avatarCropSrc]);
+
+  const uploadStaffAvatar = async (file: File, staffId: string) => {
+    if (file.size > 6 * 1024 * 1024) {
+      setEditError("Снимката е прекалено голяма (макс. 6 MB).");
+      return;
+    }
+    setEditError(null);
+    setAvatarBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("kind", "staff");
+      fd.append("slug", staffId);
+      const up = await fetch("/api/admin/uploads/image", { method: "POST", body: fd, credentials: "include" });
+      const upJson = await up.json();
+      if (!up.ok) throw new Error(upJson.error ?? "Качването неуспешно");
+      const url = upJson.data?.url as string | undefined;
+      if (!url) throw new Error("Липсва URL от Cloudinary");
+      const res = await fetch(`/api/admin/staff/${staffId}`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ avatar_url: url }),
+      });
+      const resJson = await res.json();
+      if (!res.ok) throw new Error(resJson.error ?? "Грешка при запис");
+      setEditMember((prev) => (prev && prev.id === staffId ? { ...prev, avatar_url: url } : prev));
+      void fetchStaff();
+    } catch (e: unknown) {
+      setEditError(e instanceof Error ? e.message : "Грешка");
+    } finally {
+      setAvatarBusy(false);
+      if (avatarFileRef.current) avatarFileRef.current.value = "";
+    }
+  };
+
+  const removeStaffAvatar = async () => {
+    if (!editMember?.avatar_url) return;
+    setEditError(null);
+    setAvatarBusy(true);
+    try {
+      const res = await fetch(`/api/admin/staff/${editMember.id}`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ avatar_url: null }),
+      });
+      const resJson = await res.json();
+      if (!res.ok) throw new Error(resJson.error ?? "Грешка");
+      setEditMember((prev) => (prev ? { ...prev, avatar_url: null } : null));
+      void fetchStaff();
+    } catch (e: unknown) {
+      setEditError(e instanceof Error ? e.message : "Грешка");
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
 
   const handleAdd = async () => {
     setAddError(null);
@@ -301,8 +372,13 @@ export function StaffPageClient({ currentUserId }: { currentUserId: string }) {
                   <tr key={m.id} className={`border-b border-slate-100 last:border-0 ${i % 2 === 0 ? "" : "bg-slate-50/50"}`}>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-bold text-sm shrink-0">
-                          {m.name.charAt(0).toUpperCase()}
+                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-bold text-sm shrink-0 overflow-hidden ring-1 ring-slate-200/80">
+                          {m.avatar_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={m.avatar_url} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            m.name.charAt(0).toUpperCase()
+                          )}
                         </div>
                         <div>
                           <p className="font-semibold text-slate-800">{m.name}
@@ -369,6 +445,72 @@ export function StaffPageClient({ currentUserId }: { currentUserId: string }) {
                 <X className="w-4 h-4" />
               </button>
             </div>
+
+            <div className="flex flex-col items-center gap-3 pb-4 border-b border-slate-100">
+              <div className="relative w-24 h-24 rounded-full bg-slate-100 overflow-hidden ring-2 ring-slate-200/90 shadow-inner">
+                {editMember.avatar_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={editMember.avatar_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-3xl font-bold text-slate-400">
+                    {(editName.trim() || editMember.name).charAt(0).toUpperCase() || "?"}
+                  </div>
+                )}
+                {avatarBusy ? (
+                  <div className="absolute inset-0 bg-white/75 flex items-center justify-center">
+                    <Loader2 className="w-8 h-8 animate-spin text-brand-blue-600" />
+                  </div>
+                ) : null}
+              </div>
+              <input
+                ref={avatarFileRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (!f || !editMember) return;
+                  if (f.size > 6 * 1024 * 1024) {
+                    setEditError("Снимката е прекалено голяма (макс. 6 MB).");
+                    e.target.value = "";
+                    return;
+                  }
+                  setEditError(null);
+                  const url = URL.createObjectURL(f);
+                  setAvatarCropSrc(url);
+                  e.target.value = "";
+                }}
+              />
+              <div className="flex flex-wrap gap-2 justify-center">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="text-xs"
+                  disabled={avatarBusy}
+                  onClick={() => avatarFileRef.current?.click()}
+                >
+                  <ImagePlus className="w-3.5 h-3.5 mr-1 shrink-0" />
+                  Качи снимка
+                </Button>
+                {editMember.avatar_url ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="text-xs"
+                    disabled={avatarBusy}
+                    onClick={() => void removeStaffAvatar()}
+                  >
+                    Махни снимката
+                  </Button>
+                ) : null}
+              </div>
+              <p className="text-[10px] text-slate-400 text-center leading-snug max-w-xs">
+                Първо позиционирай в кръга (като във Facebook), после се качва в{" "}
+                <span className="font-mono">smolyanklima/personal/…</span>
+                {" · "}до 6 MB оригинал
+              </p>
+            </div>
+
             <div className="space-y-3">
               <div>
                 <label className="text-xs font-semibold text-slate-600 block mb-1">Имe</label>
@@ -456,6 +598,22 @@ export function StaffPageClient({ currentUserId }: { currentUserId: string }) {
           </div>
         </div>
       )}
+
+      {avatarCropSrc && editMember ? (
+        <StaffAvatarCropModal
+          imageSrc={avatarCropSrc}
+          onCancel={() => {
+            URL.revokeObjectURL(avatarCropSrc);
+            setAvatarCropSrc(null);
+          }}
+          onConfirm={async (file) => {
+            const id = editMember.id;
+            URL.revokeObjectURL(avatarCropSrc);
+            setAvatarCropSrc(null);
+            await uploadStaffAvatar(file, id);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

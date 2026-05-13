@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { logAdminActivity } from "@/lib/admin/audit";
-import { adminDb } from "@/lib/admin/db";
+import { adminSession, requireRole } from "@/lib/admin/db";
 import {
   buildUploadFolderPath,
   formatCloudinaryUploadError,
@@ -13,15 +14,16 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const KINDS: CloudinaryUploadKind[] = ["product", "accessory", "blog"];
+const KINDS: CloudinaryUploadKind[] = ["product", "accessory", "blog", "staff"];
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflight(req);
 }
 
 export async function POST(req: NextRequest) {
+  let session;
   try {
-    await adminDb();
+    session = await adminSession();
   } catch {
     return withCors(req, NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
   }
@@ -50,10 +52,32 @@ export async function POST(req: NextRequest) {
   if (!KINDS.includes(kindRaw as (typeof KINDS)[number])) {
     return withCors(
       req,
-      NextResponse.json({ error: "Невалиден kind (product | accessory | blog)" }, { status: 400 }),
+      NextResponse.json({ error: "Невалиден kind (product | accessory | blog | staff)" }, { status: 400 }),
     );
   }
   const kind = kindRaw as CloudinaryUploadKind;
+
+  if (kind === "staff") {
+    try {
+      requireRole(session, "master_admin");
+    } catch {
+      return withCors(req, NextResponse.json({ error: "Forbidden" }, { status: 403 }));
+    }
+    const idParse = z.string().uuid().safeParse(slugRaw);
+    if (!idParse.success) {
+      return withCors(req, NextResponse.json({ error: "Невалиден служител (UUID)" }, { status: 400 }));
+    }
+    const { data: exists, error: exErr } = await session.db
+      .from("admin_users")
+      .select("id")
+      .eq("id", slugRaw)
+      .maybeSingle();
+    if (exErr) return withCors(req, NextResponse.json({ error: exErr.message }, { status: 500 }));
+    if (!exists) {
+      return withCors(req, NextResponse.json({ error: "Служителят не е намерен" }, { status: 404 }));
+    }
+  }
+
   if (slugRaw.length < 2) {
     return withCors(req, NextResponse.json({ error: "Липсва или е твърде кратък slug за папката в Cloudinary" }, { status: 400 }));
   }
@@ -62,6 +86,14 @@ export async function POST(req: NextRequest) {
   const folderBase = buildUploadFolderPath(kind, safe);
 
   const buf = Buffer.from(await file.arrayBuffer());
+  const maxBytes = kind === "staff" ? 6 * 1024 * 1024 : 12 * 1024 * 1024;
+  if (buf.length > maxBytes) {
+    const mb = maxBytes / (1024 * 1024);
+    return withCors(
+      req,
+      NextResponse.json({ error: `Файлът е прекалено голям (макс. ${mb} MB)` }, { status: 400 }),
+    );
+  }
   const mime = file.type || "application/octet-stream";
   if (!mime.startsWith("image/")) {
     return withCors(req, NextResponse.json({ error: "Файлът трябва да е изображение" }, { status: 400 }));
@@ -75,7 +107,8 @@ export async function POST(req: NextRequest) {
     });
     await logAdminActivity({
       action: "media.upload",
-      entityType: "media",
+      entityType: kind === "staff" ? "admin_user" : "media",
+      entityId: kind === "staff" ? slugRaw : undefined,
       details: {
         kind,
         slug: safe,

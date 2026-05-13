@@ -8,6 +8,11 @@ import {
   loadContactPhones,
   replaceContactPhones,
 } from "@/lib/admin/contactPhones";
+import {
+  findPrimaryPhoneConflict,
+  formatDuplicatePrimaryPhoneMessage,
+  isPostgresContactsPhoneUniqueViolation,
+} from "@/lib/admin/contactPhoneDuplicate";
 
 const UpdateSchema = z.object({
   fullName: z.string().min(2).max(200).optional(),
@@ -191,6 +196,24 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   if (parsed.data.lastContactedAt !== undefined) patch.last_contacted_at = parsed.data.lastContactedAt || null;
 
   const supabase = await adminDb();
+  if (parsed.data.phone !== undefined) {
+    const nextPhone = parsed.data.phone.trim();
+    const conflict = await findPrimaryPhoneConflict(supabase, nextPhone, id);
+    if (conflict) {
+      return withCors(
+        req,
+        NextResponse.json(
+          {
+            error: formatDuplicatePrimaryPhoneMessage(conflict),
+            code: "DUPLICATE_PHONE",
+            existingContact: { id: conflict.id, fullName: conflict.full_name },
+          },
+          { status: 409 },
+        ),
+      );
+    }
+  }
+
   let { data, error } = await supabase.from("contacts").update(patch).eq("id", id).select("*").maybeSingle();
   if (error && isMissingFollowupColumns(error.message)) {
     const {
@@ -204,7 +227,25 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     data = legacyRes.data;
     error = legacyRes.error;
   }
-  if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
+  if (error) {
+    if (isPostgresContactsPhoneUniqueViolation(error.message) && parsed.data.phone !== undefined) {
+      const c = await findPrimaryPhoneConflict(supabase, parsed.data.phone.trim(), id);
+      if (c) {
+        return withCors(
+          req,
+          NextResponse.json(
+            {
+              error: formatDuplicatePrimaryPhoneMessage(c),
+              code: "DUPLICATE_PHONE",
+              existingContact: { id: c.id, fullName: c.full_name },
+            },
+            { status: 409 },
+          ),
+        );
+      }
+    }
+    return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
+  }
   if (!data) return withCors(req, NextResponse.json({ error: "Контактът не е намерен" }, { status: 404 }));
 
   // Ако клиентът е изпратил additionalPhones (включително празен масив),

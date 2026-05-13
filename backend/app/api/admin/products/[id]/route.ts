@@ -8,6 +8,7 @@ import { isPostgrestMissingColumn } from "@/lib/admin/pgMissingColumn";
 import { getEnv } from "@/lib/env";
 import { withCloudinaryWebOptimization } from "@/lib/services/cloudinaryService";
 import { logAdminActivity } from "@/lib/admin/audit";
+import { insertProductCatalogStockCalendarEvent } from "@/lib/admin/productCatalogWorkItems";
 import { formatSupabaseError, mapProductDbError } from "@/lib/admin/productDbErrors";
 import { replaceProductImages, upsertProductSpecs, type ImageInput, type SpecsInput } from "@/lib/admin/syncProductChildren";
 
@@ -292,7 +293,18 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
 
 export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const supabase = await adminDb();
+  const session = await adminSession();
+  const supabase = session.db;
+
+  const { data: prod } = await supabase.from("products").select("id,name").eq("id", id).maybeSingle();
+  if (prod) {
+    await insertProductCatalogStockCalendarEvent(supabase, {
+      kind: "removed",
+      productId: id,
+      productName: String((prod as { name?: string }).name ?? ""),
+      createdBy: session.userId,
+    });
+  }
 
   const { error } = await supabase.from("products").delete().eq("id", id);
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));

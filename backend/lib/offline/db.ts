@@ -16,7 +16,14 @@
  *   - `clearOfflineDb` използва readwrite tx за всички stores наведнъж.
  */
 
-export type DocKind = "acceptance" | "service_protocol" | "offer" | "invoice" | "warranty";
+export type DocKind = "acceptance" | "offer" | "invoice" | "warranty";
+
+const SUPPORTED_OFFLINE_KINDS = new Set<string>(["acceptance", "offer", "invoice", "warranty"]);
+
+/** Дали този вид още участва в offline кеша/опашката (исторически видове се чистят при bootstrap). */
+export function isSupportedOfflineKind(kind: string): boolean {
+  return SUPPORTED_OFFLINE_KINDS.has(kind);
+}
 export type HttpMethod = "POST" | "PUT" | "PATCH" | "DELETE";
 export type QueueStatus = "pending" | "syncing" | "error";
 
@@ -219,6 +226,42 @@ export async function clearOfflineDb(): Promise<void> {
     reqToPromise(tx.objectStore("id_map").clear()),
   ]);
   await txDone(tx);
+}
+
+/**
+ * Изтрива кеширани документи с вид, който вече не се ползва в offline слоя
+ * (напр. старо "service_protocol" след преминаване към само online API).
+ */
+export async function purgeUnsupportedCachedDocuments(): Promise<number> {
+  try {
+    const all = await idbGetAll<CachedDocument & { kind: string }>("documents");
+    let deleted = 0;
+    for (const doc of all) {
+      if (isSupportedOfflineKind(doc.kind)) continue;
+      await idbDelete("documents", doc.key);
+      deleted += 1;
+    }
+    if (deleted > 0) await cleanupOrphanIdMap();
+    return deleted;
+  } catch {
+    return 0;
+  }
+}
+
+/** Премахва id_map за видове, които вече не са в offline слоя. */
+export async function purgeUnsupportedIdMapEntries(): Promise<number> {
+  try {
+    const maps = await idbGetAll<IdMapEntry & { kind: string }>("id_map");
+    let n = 0;
+    for (const e of maps) {
+      if (isSupportedOfflineKind(e.kind)) continue;
+      await idbDelete("id_map", e.localId);
+      n += 1;
+    }
+    return n;
+  } catch {
+    return 0;
+  }
 }
 
 /**

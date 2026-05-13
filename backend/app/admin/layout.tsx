@@ -26,11 +26,13 @@ const ROLE_LABELS: Record<AdminRole, string> = {
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   let role: AdminRole = "office_staff";
   let userName = "";
+  let avatarUrl: string | null = null;
 
   try {
     const session = await adminSession();
     role = session.role;
     userName = session.name;
+    avatarUrl = session.avatarUrl;
   } catch {
     redirect("/login");
   }
@@ -43,8 +45,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const showService = true; // всички роли виждат секция Сервиз → Документи
   const showReports = role === "master_admin";
   const showAdminSection = role === "master_admin";
-  // „Продажби" е аналитичен модул — само за главен админ.
-  const showSales = role === "master_admin";
+  // „Продажби" — master_admin + офис (списък продажби / work_items).
+  const showSales = role === "master_admin" || role === "office_staff";
 
   return (
     <>
@@ -64,8 +66,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
           {/* Профил на оператора */}
           <div className="px-3 py-3 border-b border-slate-100 flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-full bg-brand-blue-100 text-brand-blue-700 flex items-center justify-center font-extrabold text-base shrink-0">
-              {initial}
+            <div className="w-10 h-10 rounded-full bg-brand-blue-100 text-brand-blue-700 flex items-center justify-center font-extrabold text-base shrink-0 overflow-hidden ring-1 ring-slate-200/80">
+              {avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                initial
+              )}
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-xs font-bold text-slate-900 truncate" title={userName}>

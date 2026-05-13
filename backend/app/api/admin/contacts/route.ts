@@ -4,6 +4,11 @@ import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminDb } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
 import { ContactPhoneInputSchema, replaceContactPhones } from "@/lib/admin/contactPhones";
+import {
+  findPrimaryPhoneConflict,
+  formatDuplicatePrimaryPhoneMessage,
+  isPostgresContactsPhoneUniqueViolation,
+} from "@/lib/admin/contactPhoneDuplicate";
 
 const QuerySchema = z.object({
   q: z.string().optional(),
@@ -86,9 +91,25 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return withCors(req, NextResponse.json({ error: "Невалидни данни" }, { status: 400 }));
 
   const supabase = await adminDb();
+  const phoneTrimmed = parsed.data.phone.trim();
+  const conflictBefore = await findPrimaryPhoneConflict(supabase, phoneTrimmed, null);
+  if (conflictBefore) {
+    return withCors(
+      req,
+      NextResponse.json(
+        {
+          error: formatDuplicatePrimaryPhoneMessage(conflictBefore),
+          code: "DUPLICATE_PHONE",
+          existingContact: { id: conflictBefore.id, fullName: conflictBefore.full_name },
+        },
+        { status: 409 },
+      ),
+    );
+  }
+
   const payload = {
     full_name: parsed.data.fullName.trim(),
-    phone: parsed.data.phone.trim(),
+    phone: phoneTrimmed,
     email: parsed.data.email?.trim() || null,
     address: parsed.data.address?.trim() || null,
     notes: parsed.data.notes?.trim() || null,
@@ -111,7 +132,25 @@ export async function POST(req: NextRequest) {
     data = legacyRes.data;
     error = legacyRes.error;
   }
-  if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
+  if (error) {
+    if (isPostgresContactsPhoneUniqueViolation(error.message)) {
+      const c = await findPrimaryPhoneConflict(supabase, phoneTrimmed, null);
+      if (c) {
+        return withCors(
+          req,
+          NextResponse.json(
+            {
+              error: formatDuplicatePrimaryPhoneMessage(c),
+              code: "DUPLICATE_PHONE",
+              existingContact: { id: c.id, fullName: c.full_name },
+            },
+            { status: 409 },
+          ),
+        );
+      }
+    }
+    return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
+  }
 
   // Записваме всички телефони (основен + допълнителни) в contact_phones,
   // за да могат да се показват и редактират като списък в UI.

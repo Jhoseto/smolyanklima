@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card, Button, Select, Input, Textarea } from "./ui";
 import { ContactPersonPicker } from "./ContactPersonPicker";
+import { InstallationMountDetailModal } from "./InstallationMountDetailModal";
 import { CalendarDays, List } from "lucide-react";
 
 type EventCode =
@@ -10,9 +11,9 @@ type EventCode =
   | "item_removed"
   | "sale"
   | "service_installation"
-  | "service_inspection"
-  | "service_repair"
-  | "service_maintenance";
+  | "service_maintenance"
+  | "service_on_site"
+  | "service_in_shop";
 
 type WorkItem = {
   id: string;
@@ -30,6 +31,11 @@ type WorkItem = {
   unit_price?: number | null;
   total_amount?: number | null;
   due_date?: string | null;
+  scheduled_start?: string | null;
+  scheduled_end?: string | null;
+  product_id?: string | null;
+  sale_work_item_id?: string | null;
+  products?: { id?: string; name?: string; slug?: string } | null;
 };
 
 type WorkForm = {
@@ -66,14 +72,12 @@ const TYPE_COLOR: Record<WorkItem["type"], string> = {
   task: "#64748b",
 };
 
-const EVENT_OPTIONS: Array<{ id: EventCode; label: string; type: WorkItem["type"] }> = [
-  { id: "item_added", label: "Добавяне на артикул", type: "stock_in" },
-  { id: "item_removed", label: "Премахване на артикул", type: "stock_out" },
-  { id: "sale", label: "Продажба", type: "sale" },
-  { id: "service_installation", label: "Услуга: монтаж", type: "service" },
-  { id: "service_inspection", label: "Услуга: оглед", type: "service" },
-  { id: "service_repair", label: "Услуга: сервиз", type: "service" },
-  { id: "service_maintenance", label: "Услуга: профилактика", type: "service" },
+/** Ръчно създавани типове в календара (без продажби; склад от каталога е само автоматичен). */
+const PLANNER_CREATABLE_EVENT_OPTIONS: Array<{ id: EventCode; label: string; type: WorkItem["type"] }> = [
+  { id: "service_installation", label: "Монтаж", type: "service" },
+  { id: "service_maintenance", label: "Профилактика", type: "service" },
+  { id: "service_on_site", label: "Сервиз на терен", type: "service" },
+  { id: "service_in_shop", label: "Сервиз в склад", type: "service" },
 ];
 
 function createDefaultForm(date = ""): WorkForm {
@@ -145,16 +149,23 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
   const [items, setItems] = useState<WorkItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [monthOffset, setMonthOffset] = useState(0);
-  const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState<WorkForm>(createDefaultForm());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [addForm, setAddForm] = useState<WorkForm>(createDefaultForm());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<WorkForm>(createDefaultForm());
   const [savingBusy, setSavingBusy] = useState(false);
-  const [viewMode, setViewMode] = useState<"all" | "sales" | "services" | "stock">("all");
+  const [viewMode, setViewMode] = useState<
+    | "all"
+    | "item_added"
+    | "item_removed"
+    | "service_installation"
+    | "service_maintenance"
+    | "service_on_site"
+    | "service_in_shop"
+  >("all");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [displayMode, setDisplayMode] = useState<"calendar" | "agenda">("calendar");
+  const [mountDetailId, setMountDetailId] = useState<string | null>(null);
 
   const now = useMemo(() => {
     const d = new Date();
@@ -191,14 +202,19 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
 
   useEffect(() => {
     if (!readOnly) return;
-    setCreating(false);
     setEditingId(null);
     setConfirmDeleteId(null);
   }, [readOnly]);
 
+  /** Продажбите не се показват в оперативния календар — само панел „Продажби“. */
+  const plannerItems = useMemo(
+    () => items.filter((item) => item.event_code !== "sale" && item.type !== "sale"),
+    [items],
+  );
+
   const byDate = useMemo(() => {
     const map = new Map<string, WorkItem[]>();
-    for (const item of items) {
+    for (const item of plannerItems) {
       const key = String(item.due_date ?? "").slice(0, 10);
       if (!key) continue;
       const arr = map.get(key) ?? [];
@@ -206,14 +222,14 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
       map.set(key, arr);
     }
     return map;
-  }, [items]);
+  }, [plannerItems]);
 
   const agendaItems = useMemo(() => {
-    return [...items]
+    return [...plannerItems]
       .filter(matchesViewMode)
       .sort((a, b) => String(a.due_date ?? "").localeCompare(String(b.due_date ?? "")));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, viewMode]);
+  }, [plannerItems, viewMode]);
 
   const agendaByDate = useMemo(() => {
     const map = new Map<string, WorkItem[]>();
@@ -242,22 +258,23 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
 
   function matchesViewMode(item: WorkItem) {
     if (viewMode === "all") return true;
-    if (viewMode === "sales") return item.event_code === "sale";
-    if (viewMode === "services") {
-      return (
-        item.event_code === "service_installation" ||
-        item.event_code === "service_inspection" ||
-        item.event_code === "service_repair" ||
-        item.event_code === "service_maintenance"
-      );
-    }
-    return item.event_code === "item_added" || item.event_code === "item_removed";
+    return item.event_code === viewMode;
   }
 
   const selectedItems = selectedDate ? (byDate.get(selectedDate) ?? []).filter(matchesViewMode) : [];
 
   async function createFromForm(localForm: WorkForm) {
     if (!localForm.title.trim() || !localForm.dueDate) return false;
+    if (localForm.eventCode === "sale" || localForm.type === "sale") {
+      setError("Продажбите се записват от панела „Продажби“ (каталог → Продажба), не от оперативния календар.");
+      return false;
+    }
+    if (localForm.eventCode === "item_added" || localForm.eventCode === "item_removed") {
+      setError(
+        "Добавянето и премахването на продукт в календара се записват автоматично при нов продукт или изтриване от каталога.",
+      );
+      return false;
+    }
     const cid = localForm.contactId.trim();
     if (!cid || !isContactUuid(cid)) {
       setError("Задължително изберете контакт от CRM (полето със синята рамка). Ползвайте ▼ за списък или + за нов контакт.");
@@ -275,15 +292,6 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
       return false;
     }
     return true;
-  }
-
-  async function createItem() {
-    setError(null);
-    const ok = await createFromForm(form);
-    if (!ok) return;
-    setCreating(false);
-    setForm(createDefaultForm());
-    await load();
   }
 
   async function createItemInDay() {
@@ -333,10 +341,14 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
 
   async function saveEdit(itemId: string) {
     if (!editForm.title.trim() || !editForm.dueDate) return;
-    const ecid = editForm.contactId.trim();
-    if (!ecid || !isContactUuid(ecid)) {
-      setError("За запис е задължителен избран контакт от CRM (синьото поле по-горе).");
-      return;
+    const catalogStock =
+      editForm.eventCode === "item_added" || editForm.eventCode === "item_removed";
+    if (!catalogStock) {
+      const ecid = editForm.contactId.trim();
+      if (!ecid || !isContactUuid(ecid)) {
+        setError("За запис е задължителен избран контакт от CRM (синьото поле по-горе).");
+        return;
+      }
     }
     setSavingBusy(true);
     setError(null);
@@ -413,24 +425,26 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
           <Button variant="secondary" size="sm" onClick={() => setMonthOffset((x) => x - 1)}>◀</Button>
           <Button variant="secondary" size="sm" onClick={() => setMonthOffset(0)}>Днес</Button>
           <Button variant="secondary" size="sm" onClick={() => setMonthOffset((x) => x + 1)}>▶</Button>
-          {!readOnly && (
-            <Button variant="primary" size="sm" onClick={() => setCreating((v) => !v)}>+ Събитие</Button>
-          )}
         </div>
       </div>
 
       {/* View mode filters */}
       <div className="flex gap-1 mb-2 flex-wrap">
-        {[
-          { id: "all", label: "Всички" },
-          { id: "sales", label: "Продажби" },
-          { id: "services", label: "Услуги" },
-          { id: "stock", label: "Склад" },
-        ].map((m) => (
+        {(
+          [
+            { id: "all" as const, label: "Всички" },
+            { id: "item_added" as const, label: "Добавяне на продукт" },
+            { id: "item_removed" as const, label: "Премахване на продукт" },
+            { id: "service_installation" as const, label: "Монтаж" },
+            { id: "service_maintenance" as const, label: "Профилактика" },
+            { id: "service_on_site" as const, label: "Сервиз на терен" },
+            { id: "service_in_shop" as const, label: "Сервиз в склад" },
+          ] as const
+        ).map((m) => (
           <button
             key={m.id}
             type="button"
-            onClick={() => setViewMode(m.id as typeof viewMode)}
+            onClick={() => setViewMode(m.id)}
             className={`rounded-full px-2 py-0.5 text-[10px] font-bold border transition-colors ${
               viewMode === m.id
                 ? "border-brand-blue-500 bg-brand-blue-50 text-brand-blue-700"
@@ -441,37 +455,6 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
           </button>
         ))}
       </div>
-
-      {/* Quick create form */}
-      {creating && !readOnly && (
-        <div className="border border-slate-200 rounded-xl p-3 mb-3 bg-slate-50 overflow-visible">
-          <div className="text-xs font-bold text-slate-700 mb-2">Бързо добавяне на събитие</div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 overflow-visible">
-            <FormField label="Тип събитие"><EventSelect form={form} setForm={setForm} /></FormField>
-            <FormField label="Заглавие"><Input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} /></FormField>
-            <FormField label="Дата"><Input type="date" value={form.dueDate} onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))} /></FormField>
-            <FormField label="Статус"><StatusSelect form={form} setForm={setForm} /></FormField>
-            <FormField label="Приоритет"><PrioritySelect form={form} setForm={setForm} /></FormField>
-            <div className="col-span-full">
-              <ContactPersonPicker
-                variant="planner"
-                instanceId="quick"
-                readOnly={readOnly}
-                customerName={form.customerName}
-                customerPhone={form.customerPhone}
-                customerAddress={form.customerAddress}
-                contactId={form.contactId}
-                onPatch={(patch) => setForm((f) => ({ ...f, ...patch }))}
-              />
-            </div>
-            <ContactDerivedSummary form={form} />
-            <FormField label="Бележки" full><Textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={2} className="min-h-[3rem]" /></FormField>
-            <div className="col-span-full flex justify-end">
-              <Button variant="primary" onClick={() => void createItem()}>Запази събитие</Button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-2 mb-2 text-xs font-medium">{error}</div>}
 
@@ -524,10 +507,12 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
         </div>
 
         <div className="flex flex-wrap gap-2 mt-2 text-[10px] font-medium text-slate-500">
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-brand-blue-500 shrink-0" /> Продажби</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 shrink-0" /> Добавени</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500 shrink-0" /> Премахнати</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-500 shrink-0" /> Услуги</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" /> Добавяне на продукт</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500 shrink-0" /> Премахване на продукт</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-sky-600 shrink-0" /> Монтаж</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-teal-500 shrink-0" /> Профилактика</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" /> Сервиз на терен</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-500 shrink-0" /> Сервиз в склад</span>
         </div>
       </div>
 
@@ -555,24 +540,37 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
                   </button>
                   <div className="space-y-1.5">
                     {dayEvts.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => openDay(dateKey)}
-                        className="w-full text-left bg-white rounded-xl border border-slate-200 px-3 py-3 flex items-start gap-3 hover:border-brand-blue-200 active:bg-slate-50 transition-colors shadow-sm"
-                      >
-                        <div className="w-1 self-stretch rounded-full shrink-0" style={{ backgroundColor: eventColor(item) }} />
-                        <div className="min-w-0 flex-1">
-                          <div className="text-sm font-bold text-slate-900 leading-tight">{item.title}</div>
-                          <div className="text-xs text-slate-500 mt-0.5">{eventCodeLabel(item)}</div>
-                          {(item.customer_name || item.customer_phone) && (
-                            <div className="text-xs text-slate-400 mt-0.5">
-                              {[item.customer_name, item.customer_phone].filter(Boolean).join(" · ")}
-                            </div>
-                          )}
-                        </div>
-                        <span className={statusPillClass(item.status)}>{statusLabel(item.status)}</span>
-                      </button>
+                      <div key={item.id} className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openDay(dateKey)}
+                          className="flex-1 text-left bg-white rounded-xl border border-slate-200 px-3 py-3 flex items-start gap-3 hover:border-brand-blue-200 active:bg-slate-50 transition-colors shadow-sm"
+                        >
+                          <div className="w-1 self-stretch rounded-full shrink-0" style={{ backgroundColor: eventColor(item) }} />
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-bold text-slate-900 leading-tight">{item.title}</div>
+                            <div className="text-xs text-slate-500 mt-0.5">{eventCodeLabel(item)}</div>
+                            {(item.customer_name || item.customer_phone) && (
+                              <div className="text-xs text-slate-400 mt-0.5">
+                                {[item.customer_name, item.customer_phone].filter(Boolean).join(" · ")}
+                              </div>
+                            )}
+                          </div>
+                          <span className={statusPillClass(item.status)}>{statusLabel(item.status)}</span>
+                        </button>
+                        {item.event_code === "service_installation" && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMountDetailId(item.id);
+                            }}
+                            className="shrink-0 self-center px-2 py-2 text-[10px] font-bold uppercase text-brand-blue-700 bg-brand-blue-50 rounded-lg border border-brand-blue-100"
+                          >
+                            Инфо
+                          </button>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -608,9 +606,6 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
                 </h2>
                 <p className="mt-0.5 text-xs md:text-sm text-slate-500">
                   {selectedItems.length} {selectedItems.length === 1 ? "събитие" : "събития"}
-                  {selectedItems.filter((x) => x.event_code === "sale").length > 0 && (
-                    <> · {selectedItems.filter((x) => x.event_code === "sale").length} продажби</>
-                  )}
                 </p>
               </div>
               <Button type="button" variant="secondary" size="sm" onClick={closeDayModal}>
@@ -636,6 +631,19 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
                         </div>
                         <div className="flex shrink-0 flex-wrap justify-end gap-2">
                           <span className={statusPillClass(item.status)}>{statusLabel(item.status)}</span>
+                          {item.event_code === "service_installation" && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMountDetailId(item.id);
+                              }}
+                            >
+                              Детайли монтаж
+                            </Button>
+                          )}
                           {!readOnly && (
                             <>
                               <Button variant="secondary" size="sm" onClick={() => startEdit(item)}>
@@ -655,24 +663,40 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
 
                       {editingId === item.id && !readOnly && (
                         <div className="mt-4 grid grid-cols-1 gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
-                          <FormField label="Тип събитие"><EventSelect form={editForm} setForm={setEditForm} /></FormField>
+                          <FormField label="Тип събитие">
+                            <EventSelect
+                              form={editForm}
+                              setForm={setEditForm}
+                              catalogEventLocked={
+                                item.event_code === "item_added" || item.event_code === "item_removed"
+                              }
+                            />
+                          </FormField>
                           <FormField label="Заглавие"><Input value={editForm.title} onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))} /></FormField>
                           <FormField label="Дата"><Input type="date" value={editForm.dueDate} onChange={(e) => setEditForm((f) => ({ ...f, dueDate: e.target.value }))} /></FormField>
                           <FormField label="Статус"><StatusSelect form={editForm} setForm={setEditForm} /></FormField>
                           <FormField label="Приоритет"><PrioritySelect form={editForm} setForm={setEditForm} /></FormField>
-                          <div className="col-span-full md:col-span-2">
-                            <ContactPersonPicker
-                              variant="planner"
-                              instanceId="edit"
-                              readOnly={readOnly}
-                              customerName={editForm.customerName}
-                              customerPhone={editForm.customerPhone}
-                              customerAddress={editForm.customerAddress}
-                              contactId={editForm.contactId}
-                              onPatch={(patch) => setEditForm((f) => ({ ...f, ...patch }))}
-                            />
-                          </div>
-                          <ContactDerivedSummary form={editForm} />
+                          {item.event_code !== "item_added" && item.event_code !== "item_removed" ? (
+                            <>
+                              <div className="col-span-full md:col-span-2">
+                                <ContactPersonPicker
+                                  variant="planner"
+                                  instanceId="edit"
+                                  readOnly={readOnly}
+                                  customerName={editForm.customerName}
+                                  customerPhone={editForm.customerPhone}
+                                  customerAddress={editForm.customerAddress}
+                                  contactId={editForm.contactId}
+                                  onPatch={(patch) => setEditForm((f) => ({ ...f, ...patch }))}
+                                />
+                              </div>
+                              <ContactDerivedSummary form={editForm} />
+                            </>
+                          ) : (
+                            <div className="col-span-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-600">
+                              Без CRM контакт — събитието е от каталога с продукти.
+                            </div>
+                          )}
                           <FormField label="Бележки" full><Textarea value={editForm.notes} onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))} rows={2} className="min-h-[2.75rem]" /></FormField>
                           <div className="col-span-full flex gap-2 mt-2">
                             <Button variant="primary" onClick={() => void saveEdit(item.id)} disabled={savingBusy}>
@@ -730,6 +754,13 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
         </div>
       )}
 
+      <InstallationMountDetailModal
+        workItemId={mountDetailId}
+        readOnly={readOnly}
+        onClose={() => setMountDetailId(null)}
+        onCompleted={() => void load()}
+      />
+
       {confirmDeleteId && (
         <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center md:p-4 bg-slate-950/55 backdrop-blur-md" onClick={() => setConfirmDeleteId(null)}>
           <div className="w-full md:max-w-lg rounded-t-3xl md:rounded-3xl border border-white/70 bg-white p-6 shadow-[0_-8px_40px_rgba(15,23,42,0.25)]" onClick={(e) => e.stopPropagation()}>
@@ -756,17 +787,39 @@ function FormField({ label, full = false, children }: { label: string; full?: bo
   );
 }
 
-function EventSelect({ form, setForm }: { form: WorkForm; setForm: React.Dispatch<React.SetStateAction<WorkForm>> }) {
+function EventSelect({
+  form,
+  setForm,
+  catalogEventLocked = false,
+}: {
+  form: WorkForm;
+  setForm: React.Dispatch<React.SetStateAction<WorkForm>>;
+  catalogEventLocked?: boolean;
+}) {
+  if (catalogEventLocked) {
+    const label =
+      form.eventCode === "item_added"
+        ? "Добавяне на продукт"
+        : "Премахване на продукт";
+    return (
+      <div className="grid gap-1">
+        <Select value={form.eventCode} disabled className="opacity-90">
+          <option value={form.eventCode}>{label}</option>
+        </Select>
+        <p className="text-[10px] leading-snug text-slate-500">Автоматично от каталога с продукти; типът не се сменя оттук.</p>
+      </div>
+    );
+  }
   return (
     <Select
       value={form.eventCode}
       onChange={(e) => {
         const eventCode = e.target.value as EventCode;
-        const matched = EVENT_OPTIONS.find((x) => x.id === eventCode);
+        const matched = PLANNER_CREATABLE_EVENT_OPTIONS.find((x) => x.id === eventCode);
         setForm((f) => ({ ...f, eventCode, type: matched?.type ?? f.type }));
       }}
     >
-      {EVENT_OPTIONS.map((opt) => (
+      {PLANNER_CREATABLE_EVENT_OPTIONS.map((opt) => (
         <option key={opt.id} value={opt.id}>
           {opt.label}
         </option>
@@ -823,7 +876,7 @@ function inferEventCode(type: WorkItem["type"]): EventCode {
   if (type === "sale") return "sale";
   if (type === "stock_in") return "item_added";
   if (type === "stock_out") return "item_removed";
-  return "service_repair";
+  return "service_on_site";
 }
 
 function formatDateKey(d: Date): string {
@@ -836,19 +889,19 @@ function formatDateKey(d: Date): string {
 function eventCodeLabel(item: WorkItem): string {
   switch (item.event_code) {
     case "item_added":
-      return "Добавяне на артикул";
+      return "Добавяне на продукт";
     case "item_removed":
-      return "Премахване на артикул";
+      return "Премахване на продукт";
     case "sale":
       return "Продажба";
     case "service_installation":
-      return "Услуга: монтаж";
-    case "service_inspection":
-      return "Услуга: оглед";
-    case "service_repair":
-      return "Услуга: сервиз";
+      return "Монтаж";
     case "service_maintenance":
-      return "Услуга: профилактика";
+      return "Профилактика";
+    case "service_on_site":
+      return "Сервиз на терен";
+    case "service_in_shop":
+      return "Сервиз в склад";
     default:
       return `${TYPE_LABEL[item.type]}: ${item.title}`;
   }
@@ -870,14 +923,12 @@ function statusPillClass(status: WorkItem["status"]): string {
 }
 
 function eventColor(item: WorkItem): string {
-  if (item.event_code === "item_added") return "#10b981"; // green-500
-  if (item.event_code === "item_removed") return "#f97316"; // orange-500
-  if (item.event_code === "sale") return "#0ea5e9"; // brand-blue-500
-  if (
-    item.event_code === "service_installation" ||
-    item.event_code === "service_inspection" ||
-    item.event_code === "service_repair" ||
-    item.event_code === "service_maintenance"
-  ) return "#8b5cf6"; // violet-500
+  if (item.event_code === "item_added") return "#10b981";
+  if (item.event_code === "item_removed") return "#f97316";
+  if (item.event_code === "sale") return "#0ea5e9";
+  if (item.event_code === "service_installation") return "#0284c7";
+  if (item.event_code === "service_maintenance") return "#14b8a6";
+  if (item.event_code === "service_on_site") return "#6366f1";
+  if (item.event_code === "service_in_shop") return "#a855f7";
   return TYPE_COLOR[item.type];
 }

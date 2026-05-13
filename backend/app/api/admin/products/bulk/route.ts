@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
-import { adminDb } from "@/lib/admin/db";
+import { adminSession } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
+import { insertProductCatalogStockCalendarEvent } from "@/lib/admin/productCatalogWorkItems";
 
 // Единственото масово действие е изтриване. Всички останали характеристики
 // (статус, тип, наличност, нови/втора употреба) се настройват индивидуално
@@ -23,7 +24,22 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return withCors(req, NextResponse.json({ error: "Невалидни данни" }, { status: 400 }));
 
   const { ids } = parsed.data;
-  const supabase = await adminDb();
+  const session = await adminSession();
+  const supabase = session.db;
+
+  const { data: rows, error: selErr } = await supabase.from("products").select("id,name").in("id", ids);
+  if (selErr) return withCors(req, NextResponse.json({ error: selErr.message }, { status: 500 }));
+
+  for (const r of rows ?? []) {
+    const row = r as { id: string; name?: string | null };
+    await insertProductCatalogStockCalendarEvent(supabase, {
+      kind: "removed",
+      productId: row.id,
+      productName: String(row.name ?? ""),
+      createdBy: session.userId,
+    });
+  }
+
   const { error } = await supabase.from("products").delete().in("id", ids);
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
 

@@ -15,13 +15,15 @@ const QuerySchema = z.object({
       "item_removed",
       "sale",
       "service_installation",
-      "service_inspection",
-      "service_repair",
       "service_maintenance",
+      "service_on_site",
+      "service_in_shop",
     ])
     .optional(),
   type: z.enum(["sale", "service", "stock_in", "stock_out", "task"]).optional(),
   status: z.enum(["planned", "in_progress", "done", "cancelled"]).optional(),
+  /** Филтър за панела „Продажби“: чака монтаж / завършен. */
+  saleInstallState: z.enum(["pending_mount", "completed"]).optional(),
   page: z.coerce.number().int().min(1).optional().default(1),
   perPage: z.coerce.number().int().min(1).max(500).optional().default(200),
 });
@@ -48,15 +50,18 @@ const BodySchema = z.object({
       "item_removed",
       "sale",
       "service_installation",
-      "service_inspection",
-      "service_repair",
       "service_maintenance",
+      "service_on_site",
+      "service_in_shop",
     ])
     .optional()
     .nullable(),
   quantity: z.number().int().positive().optional().default(1),
   unitPrice: z.number().nonnegative().optional().nullable(),
   totalAmount: z.number().nonnegative().optional().nullable(),
+  saleInstallState: z.enum(["pending_mount", "completed"]).optional().nullable(),
+  installationWorkItemId: z.string().uuid().optional().nullable(),
+  saleWorkItemId: z.string().uuid().optional().nullable(),
 });
 
 export async function OPTIONS(req: NextRequest) {
@@ -68,13 +73,16 @@ export async function GET(req: NextRequest) {
   const parsed = QuerySchema.safeParse(params);
   if (!parsed.success) return withCors(req, NextResponse.json({ error: "Невалидни параметри" }, { status: 400 }));
 
-  const { from, to, q, eventCode, type, status, page, perPage } = parsed.data;
+  const { from, to, q, eventCode, type, status, saleInstallState, page, perPage } = parsed.data;
   const supabase = await adminDb();
   let query = supabase
     .from("work_items")
-    .select("id,type,event_code,status,priority,title,notes,due_date,scheduled_start,scheduled_end,product_id,contact_id,inquiry_id,customer_name,customer_phone,customer_address,quantity,unit_price,total_amount,assigned_to,completed_at,created_at,products:product_id(id,slug,name),contacts:contact_id(id,full_name,phone,email,address)", {
+    .select(
+      "id,type,event_code,status,priority,title,notes,due_date,scheduled_start,scheduled_end,product_id,contact_id,inquiry_id,customer_name,customer_phone,customer_address,quantity,unit_price,total_amount,assigned_to,completed_at,created_at,sale_install_state,installation_work_item_id,sale_work_item_id,products:product_id(id,slug,name),contacts:contact_id(id,full_name,phone,email,address)",
+      {
       count: "exact",
-    })
+    },
+    )
     .order("due_date", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: false });
 
@@ -86,6 +94,7 @@ export async function GET(req: NextRequest) {
   if (eventCode) query = query.eq("event_code", eventCode);
   if (type) query = query.eq("type", type);
   if (status) query = query.eq("status", status);
+  if (saleInstallState) query = query.eq("sale_install_state", saleInstallState);
   if (from) query = query.gte("due_date", from);
   if (to) query = query.lte("due_date", to);
 
@@ -113,13 +122,44 @@ export async function POST(req: NextRequest) {
   const parsed = BodySchema.safeParse(json);
   if (!parsed.success) return withCors(req, NextResponse.json({ error: "Невалидни данни" }, { status: 400 }));
 
+  const isSaleWorkItem = parsed.data.type === "sale" || parsed.data.eventCode === "sale";
+  if (isSaleWorkItem) {
+    const fromProductSaleFlow =
+      Boolean(parsed.data.productId) && parsed.data.saleInstallState === "pending_mount";
+    if (!fromProductSaleFlow) {
+      return withCors(
+        req,
+        NextResponse.json(
+          {
+            error:
+              "Продажбите се създават от панела „Продажби“ (каталог → бутон „Продажба“), не като ръчно събитие в календара.",
+          },
+          { status: 400 },
+        ),
+      );
+    }
+  }
+
+  if (parsed.data.eventCode === "item_added" || parsed.data.eventCode === "item_removed") {
+    return withCors(
+      req,
+      NextResponse.json(
+        {
+          error:
+            "Добавянето и премахването на продукт в календара се записват автоматично при нов продукт или изтриване от каталога.",
+        },
+        { status: 400 },
+      ),
+    );
+  }
+
   const supabase = session.db;
   const anon = await createSupabaseServerClient();
   const {
     data: { user },
   } = await anon.auth.getUser();
 
-  const payload = {
+  const payload: Record<string, unknown> = {
     type: parsed.data.type,
     title: parsed.data.title.trim(),
     notes: parsed.data.notes ?? null,
@@ -141,6 +181,15 @@ export async function POST(req: NextRequest) {
     total_amount: parsed.data.totalAmount ?? null,
     created_by: user?.id ?? null,
   };
+  if (parsed.data.saleInstallState !== undefined) {
+    payload.sale_install_state = parsed.data.saleInstallState;
+  }
+  if (parsed.data.installationWorkItemId !== undefined) {
+    payload.installation_work_item_id = parsed.data.installationWorkItemId;
+  }
+  if (parsed.data.saleWorkItemId !== undefined) {
+    payload.sale_work_item_id = parsed.data.saleWorkItemId;
+  }
 
   const { data, error } = await supabase.from("work_items").insert(payload).select("*").single();
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));

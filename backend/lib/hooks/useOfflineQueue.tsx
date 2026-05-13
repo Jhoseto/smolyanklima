@@ -10,7 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { countPendingMutations } from "@/lib/offline/queue";
+import { countPendingMutations, getPendingQueueSampleError } from "@/lib/offline/queue";
 import { flushQueue, type SyncResult } from "@/lib/offline/sync";
 import { useOnlineStatus } from "./useOnlineStatus";
 
@@ -23,14 +23,20 @@ export interface QueueState {
   lastResult?: SyncResult;
   /** Грешка при последен опит. */
   lastError?: string;
+  /** Примерна грешка от чакаща мутация (HTTP/сървър), за пояснение в UI. */
+  pendingSampleError?: string;
   /** Ръчно стартира sync (idempotent). */
   syncNow: () => Promise<void>;
+  /** Обновява брояча и примерната грешка от IDB (след нов запис в опашката). */
+  refreshQueueState: () => Promise<void>;
 }
 
 const DEFAULT_STATE: QueueState = {
   pendingCount: 0,
   isSyncing: false,
+  pendingSampleError: undefined,
   syncNow: async () => { /* no-op fallback */ },
+  refreshQueueState: async () => { /* no-op */ },
 };
 
 const OfflineQueueContext = createContext<QueueState>(DEFAULT_STATE);
@@ -52,12 +58,17 @@ export function OfflineQueueProvider({ children }: { children: ReactNode }) {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastResult, setLastResult] = useState<SyncResult | undefined>();
   const [lastError, setLastError] = useState<string | undefined>();
+  const [pendingSampleError, setPendingSampleError] = useState<string | undefined>();
   const mountedRef = useRef(true);
 
   const refreshCount = useCallback(async () => {
     try {
       const n = await countPendingMutations();
-      if (mountedRef.current) setPendingCount(n);
+      const sample = n > 0 ? await getPendingQueueSampleError() : undefined;
+      if (mountedRef.current) {
+        setPendingCount(n);
+        setPendingSampleError(sample);
+      }
     } catch { /* IDB може да не е готов */ }
   }, []);
 
@@ -69,7 +80,7 @@ export function OfflineQueueProvider({ children }: { children: ReactNode }) {
       const result = await flushQueue();
       if (mountedRef.current) {
         setLastResult(result);
-        setPendingCount(result.remaining);
+        await refreshCount();
       }
     } catch (e: unknown) {
       if (mountedRef.current) {
@@ -78,7 +89,7 @@ export function OfflineQueueProvider({ children }: { children: ReactNode }) {
     } finally {
       if (mountedRef.current) setIsSyncing(false);
     }
-  }, []);
+  }, [refreshCount]);
 
   // Initial + periodic count refresh — 1× за цялото app
   useEffect(() => {
@@ -118,8 +129,14 @@ export function OfflineQueueProvider({ children }: { children: ReactNode }) {
   }, [online]);
 
   const value = useMemo<QueueState>(() => ({
-    pendingCount, isSyncing, lastResult, lastError, syncNow,
-  }), [pendingCount, isSyncing, lastResult, lastError, syncNow]);
+    pendingCount,
+    isSyncing,
+    lastResult,
+    lastError,
+    pendingSampleError,
+    syncNow,
+    refreshQueueState: refreshCount,
+  }), [pendingCount, isSyncing, lastResult, lastError, pendingSampleError, syncNow, refreshCount]);
 
   return (
     <OfflineQueueContext.Provider value={value}>

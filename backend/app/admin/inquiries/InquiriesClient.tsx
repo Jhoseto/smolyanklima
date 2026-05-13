@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { HelpRow, InfoDot, SectionTitle, HelpCard, Card, Input, Select, Button, Table, Th, Td, Textarea } from "../ui";
 import { RefreshCw, MessageSquare, PlayCircle, CheckCircle, ShieldAlert, StickyNote, Sparkles, X, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
 import { useDebounce } from "@/lib/hooks/useDebounce";
+import { assertNoContactPrimaryPhoneDuplicate } from "@/lib/admin/contactPhoneConflictClient";
 
 function Badge({ label, colorClass }: { label: string; colorClass: string }) {
   return (
@@ -157,11 +158,16 @@ export function InquiriesClient() {
     setActionBusy(`contact:${inquiry.id}`);
     setError(null);
     try {
+      const phone = String(inquiry.customer_phone ?? "").trim();
+      if (phone.length >= 3) {
+        await assertNoContactPrimaryPhoneDuplicate(phone);
+      }
       const res = await fetch("/api/admin/contacts", {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          fullName: inquiry.customer_name, phone: inquiry.customer_phone,
+          fullName: inquiry.customer_name,
+          phone,
           email: inquiry.customer_email ?? null,
           notes: inquiry.message ? `От заявка: ${inquiry.message}` : null,
           customerStatus: "new", nextFollowUpAt: new Date().toISOString().slice(0, 10),
@@ -183,7 +189,7 @@ export function InquiriesClient() {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          type: "service", eventCode: "service_inspection",
+          type: "service", eventCode: "service_on_site",
           title: `Оглед: ${inquiry.customer_name}`,
           dueDate: new Date().toISOString().slice(0, 10),
           status: "planned", priority: inquiry.priority === "high" ? "high" : "medium",

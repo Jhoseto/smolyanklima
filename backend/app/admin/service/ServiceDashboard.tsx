@@ -4,13 +4,17 @@ import { useCallback, useEffect, useState } from "react";
 import {
   CalendarClock, MapPin, Phone, User, CheckCircle2,
   Clock, Loader2, AlertCircle, ChevronDown, RefreshCw,
-  Wrench, ShoppingCart, ClipboardList,
+  Wrench, ShoppingCart,
 } from "lucide-react";
 
 type TaskStatus = "planned" | "in_progress" | "done" | "cancelled";
 type EventCode =
-  | "sale" | "service_installation" | "service_inspection"
-  | "service_repair" | "service_maintenance" | null;
+  | "sale"
+  | "service_installation"
+  | "service_maintenance"
+  | "service_on_site"
+  | "service_in_shop"
+  | null;
 
 interface Task {
   id: string;
@@ -48,9 +52,9 @@ const PRIORITY_DOT: Record<string, string> = {
 
 const EVENT_ICON: Partial<Record<string, React.ReactNode>> = {
   service_installation: <Wrench className="w-4 h-4 text-brand-blue-500" />,
-  service_inspection: <ClipboardList className="w-4 h-4 text-purple-500" />,
-  service_repair: <Wrench className="w-4 h-4 text-orange-500" />,
   service_maintenance: <Wrench className="w-4 h-4 text-teal-500" />,
+  service_on_site: <Wrench className="w-4 h-4 text-indigo-500" />,
+  service_in_shop: <Wrench className="w-4 h-4 text-violet-500" />,
   sale: <ShoppingCart className="w-4 h-4 text-green-500" />,
 };
 

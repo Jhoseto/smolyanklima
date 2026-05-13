@@ -34,8 +34,9 @@ const CreateSchema = z.object({
   work_item_id:  z.string().uuid().optional().nullable(),
   date:          z.string().optional(),
 
-  // Клиент
+  // Клиент + климатик
   client_name:   z.string().max(200).optional().nullable(),
+  ac_brand:      z.string().max(120).optional().nullable(),
   ac_model:      z.string().max(200).optional().nullable(),
   serial_number: z.string().max(100).optional().nullable(),
   address:       z.string().max(500).optional().nullable(),
@@ -76,7 +77,6 @@ const CreateSchema = z.object({
   // Други
   notes:            z.string().max(2000).optional().nullable(),
   signature_team:   z.string().optional().nullable(),
-  signature_client: z.string().optional().nullable(),
   status:           z.enum(["prepared", "in_progress", "signed"]).optional().default("prepared"),
 });
 
@@ -99,25 +99,51 @@ export async function GET(req: NextRequest) {
   const { page, perPage, status, q } = parsed.data;
   const offset = (page - 1) * perPage;
 
-  let query = session.db
-    .from("service_repair_protocols")
-    .select("id,protocol_number,date,client_name,ac_model,address,status,created_at,created_by,service_rating", { count: "exact" })
-    .order("date", { ascending: false })
-    .order("created_at", { ascending: false })
-    .range(offset, offset + perPage - 1);
+  const selectWithBrand =
+    "id,protocol_number,date,client_name,ac_brand,ac_model,serial_number,address,is_japanese_brand,freon_charge_method,status,created_at,created_by,service_rating";
+  const selectLegacy =
+    "id,protocol_number,date,client_name,ac_model,serial_number,address,is_japanese_brand,freon_charge_method,status,created_at,created_by,service_rating";
 
-  // service_staff вижда само своите; офис и master — всички
-  if (session.role === "service_staff") {
-    query = query.eq("created_by", session.userId);
-  }
-  if (status) query = query.eq("status", status);
-  if (q?.trim()) {
-    query = query.or(
-      `client_name.ilike.%${q.trim()}%,protocol_number.ilike.%${q.trim()}%,ac_model.ilike.%${q.trim()}%`
+  const runList = async (includeAcBrand: boolean) => {
+    const cols = includeAcBrand ? selectWithBrand : selectLegacy;
+    let listQuery = session.db
+      .from("service_repair_protocols")
+      .select(cols, { count: "exact" })
+      .order("date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .range(offset, offset + perPage - 1);
+
+    if (session.role === "service_staff") {
+      listQuery = listQuery.eq("created_by", session.userId);
+    }
+    if (status) listQuery = listQuery.eq("status", status);
+    if (q?.trim()) {
+      const term = q.trim();
+      const orClause = includeAcBrand
+        ? `client_name.ilike.%${term}%,protocol_number.ilike.%${term}%,ac_brand.ilike.%${term}%,ac_model.ilike.%${term}%`
+        : `client_name.ilike.%${term}%,protocol_number.ilike.%${term}%,ac_model.ilike.%${term}%`;
+      listQuery = listQuery.or(orClause);
+    }
+    return listQuery;
+  };
+
+  let { data, error, count } = await runList(true);
+  const missingBrandColumn =
+    !!error &&
+    /ac_brand|42703|does not exist|undefined_column/i.test(
+      `${error.message} ${(error as { code?: string }).code ?? ""}`,
     );
+  if (missingBrandColumn) {
+    const retry = await runList(false);
+    data = retry.data;
+    error = retry.error;
+    count = retry.count;
+    if (!error && Array.isArray(data)) {
+      const rows = data as unknown as Record<string, unknown>[];
+      data = rows.map((row) => ({ ...row, ac_brand: null })) as unknown as typeof data;
+    }
   }
 
-  const { data, error, count } = await query;
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   return withCors(req, NextResponse.json({ data: data ?? [], meta: { page, perPage, total: count ?? 0 } }));
 }
@@ -173,14 +199,14 @@ export async function POST(req: NextRequest) {
   // Автоматичен начален статус — еднаква логика като в acceptance:
   //   prepared    : по подразбиране (офисът подготвя клиентски данни)
   //   in_progress : ако има технически параметри / подписи
-  //   signed      : ако и двата подписа са налични
+  //   signed      : ако сервизният техник е подписал
   const inputHadStatus = Object.prototype.hasOwnProperty.call(json ?? {}, "status");
   let computedStatus: "prepared" | "in_progress" | "signed" = d.status;
   if (!inputHadStatus) {
     const technicalPresent = hasTechnicalContent(d);
-    const bothSigned = Boolean(d.signature_team) && Boolean(d.signature_client);
-    if (bothSigned) computedStatus = "signed";
-    else if (technicalPresent || d.signature_team || d.signature_client) computedStatus = "in_progress";
+    const techSigned = Boolean(d.signature_team);
+    if (techSigned) computedStatus = "signed";
+    else if (technicalPresent || d.signature_team) computedStatus = "in_progress";
     else computedStatus = "prepared";
   }
 
@@ -190,6 +216,7 @@ export async function POST(req: NextRequest) {
     work_item_id:     d.work_item_id ?? null,
 
     client_name:      d.client_name ?? null,
+    ac_brand:         d.ac_brand ?? null,
     ac_model:         d.ac_model ?? null,
     serial_number:    d.serial_number ?? null,
     address:          d.address ?? null,
@@ -223,16 +250,31 @@ export async function POST(req: NextRequest) {
 
     notes:            d.notes ?? null,
     signature_team:   d.signature_team ?? null,
-    signature_client: d.signature_client ?? null,
     status:           computedStatus,
     created_by:       session.userId,
   };
 
-  const { data, error } = await session.db
+  let { data, error } = await session.db
     .from("service_repair_protocols")
     .insert(payload)
     .select("*")
     .single();
+
+  const missingBrandColumn =
+    !!error &&
+    /ac_brand|42703|does not exist|undefined_column/i.test(
+      `${error.message} ${(error as { code?: string }).code ?? ""}`,
+    );
+  if (missingBrandColumn) {
+    const { ac_brand: _drop, ...payloadLegacy } = payload;
+    const retry = await session.db
+      .from("service_repair_protocols")
+      .insert(payloadLegacy)
+      .select("*")
+      .single();
+    data = retry.data;
+    error = retry.error;
+  }
 
   if (error) {
     console.error("[POST /api/admin/service/repair-protocols] insert:", error);

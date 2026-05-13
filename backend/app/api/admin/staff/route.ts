@@ -19,7 +19,7 @@ export async function GET() {
 
     const { data, error } = await session.db
       .from("admin_users")
-      .select("id,phone,name,role,is_active,created_at,last_login_at")
+      .select("id,phone,name,role,is_active,created_at,last_login_at,avatar_url")
       .order("created_at", { ascending: true });
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
     const { data: staffRow, error: dbError } = await serviceClient
       .from("admin_users")
       .insert({ id: userId, email, phone, name, role, is_active: true })
-      .select("id,phone,name,role,is_active,created_at")
+      .select("id,phone,name,role,is_active,created_at,avatar_url")
       .single();
 
     if (dbError) {

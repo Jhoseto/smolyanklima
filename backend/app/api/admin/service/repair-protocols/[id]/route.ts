@@ -15,6 +15,7 @@ const UpdateSchema = z.object({
   date:             z.string().optional(),
 
   client_name:      z.string().max(200).optional().nullable(),
+  ac_brand:         z.string().max(120).optional().nullable(),
   ac_model:         z.string().max(200).optional().nullable(),
   serial_number:    z.string().max(100).optional().nullable(),
   address:          z.string().max(500).optional().nullable(),
@@ -48,7 +49,6 @@ const UpdateSchema = z.object({
 
   notes:            z.string().max(2000).optional().nullable(),
   signature_team:   z.string().optional().nullable(),
-  signature_client: z.string().optional().nullable(),
   status:           z.enum(["prepared", "in_progress", "signed"]).optional(),
 });
 
@@ -132,23 +132,27 @@ export async function PUT(
   const update: Record<string, unknown> = { ...parsed.data };
 
   // Автоматичен workflow на статуси (само ако клиентът НЕ изпраща явно status):
-  //   prepared    → in_progress : при поява на технически параметри или подпис
-  //   in_progress → signed      : при наличие на двата подписа (екип + клиент)
+  //   prepared    → in_progress : при поява на технически параметри или подпис на техник
+  //   *           → signed      : при подпис на сервизен техник
   //   signed                    : final — не се връща назад
   if (parsed.data.status === undefined) {
     const { data: current } = await session.db
       .from("service_repair_protocols")
       .select([
-        "status", "signature_team", "signature_client",
+        "status", "signature_team",
         ...TECHNICAL_FIELDS,
       ].join(","))
       .eq("id", id)
       .maybeSingle();
 
-    if (current && (current as { status?: string }).status !== "signed") {
+    if (
+      current &&
+      typeof current === "object" &&
+      "status" in current &&
+      (current as { status: string }).status !== "signed"
+    ) {
       const c = current as Record<string, unknown>;
       const sigTeam = parsed.data.signature_team !== undefined ? parsed.data.signature_team : (c.signature_team as string | null);
-      const sigClient = parsed.data.signature_client !== undefined ? parsed.data.signature_client : (c.signature_client as string | null);
 
       // Проверка дали има технически параметри (merged: входящи || текущи).
       const technicalPresent = TECHNICAL_FIELDS.some((field) => {
@@ -157,12 +161,12 @@ export async function PUT(
         return merged !== null && merged !== undefined;
       });
 
-      const bothSigned = Boolean(sigTeam) && Boolean(sigClient);
+      const techSigned = Boolean(sigTeam);
 
       let newStatus: "prepared" | "in_progress" | "signed" = (c.status as "prepared" | "in_progress" | "signed");
-      if (bothSigned) {
+      if (techSigned) {
         newStatus = "signed";
-      } else if (c.status === "prepared" && (technicalPresent || sigTeam || sigClient)) {
+      } else if (c.status === "prepared" && (technicalPresent || sigTeam)) {
         newStatus = "in_progress";
       }
       if (newStatus !== c.status) {
@@ -171,14 +175,58 @@ export async function PUT(
     }
   }
 
-  const { data, error } = await session.db
+  // Без undefined стойности — иначе PostgREST може да изпрати невалиден PATCH.
+  const cleaned: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(update)) {
+    if (v !== undefined) cleaned[k] = v;
+  }
+
+  // Няма какво да се обнови → върни текущия ред (избягваме UPDATE с 0 колони).
+  if (Object.keys(cleaned).length === 0) {
+    const { data: row, error: selErr } = await session.db
+      .from("service_repair_protocols")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (selErr) return withCors(req, NextResponse.json({ error: selErr.message }, { status: 500 }));
+    if (!row) return withCors(req, NextResponse.json({ error: "Не е намерен" }, { status: 404 }));
+    return withCors(req, NextResponse.json({ data: row }));
+  }
+
+  let { data, error } = await session.db
     .from("service_repair_protocols")
-    .update(update)
+    .update(cleaned)
     .eq("id", id)
     .select("*")
-    .single();
+    .maybeSingle();
+
+  const missingBrandColumn =
+    !!error &&
+    /ac_brand|42703|does not exist|undefined_column/i.test(
+      `${error.message} ${(error as { code?: string }).code ?? ""}`,
+    );
+  if (missingBrandColumn && "ac_brand" in cleaned) {
+    const { ac_brand: _drop, ...updateLegacy } = cleaned;
+    const retry = await session.db
+      .from("service_repair_protocols")
+      .update(updateLegacy)
+      .eq("id", id)
+      .select("*")
+      .maybeSingle();
+    data = retry.data;
+    error = retry.error;
+  }
 
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
+  if (!data) {
+    return withCors(
+      req,
+      NextResponse.json(
+        { error: "Протоколът не е намерен или не може да бъде обновен (проверете дали записът съществува)." },
+        { status: 404 },
+      ),
+    );
+  }
   return withCors(req, NextResponse.json({ data }));
 }
 

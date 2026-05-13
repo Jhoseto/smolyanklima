@@ -35,7 +35,7 @@ const C = {
   muted:  "#333333",
   line:   "#000000",
   faint:  "#888888",
-  accent: "#047857",
+  accent: "#0077B6",
 };
 
 const s = StyleSheet.create({
@@ -124,7 +124,7 @@ const s = StyleSheet.create({
   ratingRow: { flexDirection: "row", alignItems: "center" },
   starFilled: {
     width: 14, height: 14, marginRight: 1,
-    backgroundColor: "#fbbf24",
+    backgroundColor: "#FF4D00",
     borderWidth: 0.4, borderColor: "#000",
   },
   starEmpty: {
@@ -132,7 +132,7 @@ const s = StyleSheet.create({
     backgroundColor: "#ffffff",
     borderWidth: 0.4, borderColor: "#cbd5e1",
   },
-  ratingText: { fontSize: 9, fontWeight: "bold", marginLeft: 4 },
+  ratingText: { fontSize: 9, fontWeight: "bold", marginLeft: 4, color: C.accent },
 
   // Signatures
   sigRow: { flexDirection: "row", gap: 14, marginTop: 8 },
@@ -168,6 +168,7 @@ interface RepairProtocolData {
   date: string;
 
   client_name: string | null;
+  ac_brand: string | null;
   ac_model: string | null;
   serial_number: string | null;
   address: string | null;
@@ -201,7 +202,6 @@ interface RepairProtocolData {
 
   notes: string | null;
   signature_team: string | null;
-  signature_client: string | null;
 }
 
 function fmtDate(iso: string) {
@@ -250,31 +250,14 @@ export function RepairProtocolPDF({ data }: { data: RepairProtocolData }) {
           </View>
         </View>
 
-        {/* Клиент */}
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>Клиент</Text>
-          <View style={s.sectionBody}>
-            <View style={s.grid}>
-              <PdfCell label="Име" value={data.client_name} />
-              <PdfCell label="Адрес" value={data.address} />
-              <PdfCell label="Телефон" value={data.client_phone} />
-              <PdfCell label="Имейл" value={data.client_email} />
-            </View>
-          </View>
-        </View>
-
-        {/* Климатик */}
+        {/* Климатик (сервизният протокол не включва клиентски данни) */}
         <View style={s.section}>
           <Text style={s.sectionTitle}>Климатик</Text>
           <View style={s.sectionBody}>
             <View style={s.grid}>
+              <PdfCell label="Марка" value={data.ac_brand} />
               <PdfCell label="Модел" value={data.ac_model} />
-              <PdfCell label="Сериен №" value={data.serial_number} />
               <PdfCell label="Японски" value={data.is_japanese_brand === null ? "—" : boolText(data.is_japanese_brand)} />
-              <PdfCell
-                label="Платена сума"
-                value={data.paid_amount != null ? `${Number(data.paid_amount).toFixed(2)} лв.` : "—"}
-              />
             </View>
           </View>
         </View>
@@ -375,18 +358,12 @@ export function RepairProtocolPDF({ data }: { data: RepairProtocolData }) {
           </View>
         </View>
 
-        {/* Подписи */}
-        <View style={s.sigRow}>
-          <View style={s.sigBox}>
-            <Text style={s.sigTitle}>Сервизен екип</Text>
+        {/* Подпис */}
+        <View style={{ marginTop: 8, alignItems: "center" }}>
+          <View style={{ width: "62%" }}>
+            <Text style={s.sigTitle}>Подпис на сервизен техник</Text>
             <View style={s.sigLine}>
               {data.signature_team ? <Image src={data.signature_team} style={s.sigImg} /> : null}
-            </View>
-          </View>
-          <View style={s.sigBox}>
-            <Text style={s.sigTitle}>Подпис на клиента</Text>
-            <View style={s.sigLine}>
-              {data.signature_client ? <Image src={data.signature_client} style={s.sigImg} /> : null}
             </View>
           </View>
         </View>

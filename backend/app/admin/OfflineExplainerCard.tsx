@@ -26,7 +26,7 @@ export function OfflineExplainerCard() {
   useEffect(() => { setMounted(true); }, []);
 
   const online = useOnlineStatus();
-  const { pendingCount, isSyncing, lastResult } = useOfflineQueue();
+  const { pendingCount, isSyncing, lastResult, pendingSampleError } = useOfflineQueue();
   const [dismissed, setDismissed] = useState(false);
   const [reconnectToast, setReconnectToast] = useState<{ flushed: number } | null>(null);
   const [wasOffline, setWasOffline] = useState(false);
@@ -100,8 +100,10 @@ export function OfflineExplainerCard() {
           {!online
             ? `Офлайн режим${pendingCount > 0 ? ` · ${pendingCount} ${pendingCount === 1 ? "запис чака" : "записа чакат"}` : ""}`
             : isSyncing
-              ? `Качване в момента…`
-              : `${pendingCount} ${pendingCount === 1 ? "запис чака" : "записа чакат"} качване`}
+              ? "Синхронизация със сървъра…"
+              : pendingCount === 1
+                ? "1 запис не е приет от сървъра"
+                : `${pendingCount} записа не са приети от сървъра`}
         </p>
         <button
           onClick={() => setDismissed(false)}
@@ -127,13 +129,18 @@ export function OfflineExplainerCard() {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-base font-extrabold leading-tight">
-            {!online ? "Няма интернет връзка" : "Има неизпратени промени"}
+            {!online ? "Няма интернет връзка" : "Сървърът не прие записа"}
           </p>
           <p className={`text-sm mt-1 leading-relaxed ${!online ? "text-slate-200" : "text-amber-800"}`}>
             {!online
               ? "Не се притеснявайте — продължете да работите нормално. Всичко, което попълвате, се пази тук, на устройството ви."
-              : `Качването към сървъра все още не е приключило. ${pendingCount} ${pendingCount === 1 ? "запис чака" : "записа чакат"} мрежа.`}
+              : `Интернетът обикновено работи — проблемът е при записа в системата. Има ${pendingCount} ${pendingCount === 1 ? "локален запис" : "локални записа"}. Отворете списъка с протоколите и натиснете „Опитай отново“, или проверете миграциите в Supabase.`}
           </p>
+          {online && pendingSampleError ? (
+            <p className="text-[11px] mt-2 font-mono break-words bg-white/80 text-amber-950 rounded-lg px-2 py-1.5 border border-amber-300/80">
+              {pendingSampleError.length > 320 ? `${pendingSampleError.slice(0, 319)}…` : pendingSampleError}
+            </p>
+          ) : null}
         </div>
         <button
           onClick={handleDismiss}
@@ -156,8 +163,12 @@ export function OfflineExplainerCard() {
         <ExplainerLine
           icon={<RotateCcw className="w-4 h-4" />}
           dark={!online}
-          title="Автоматично качване"
-          body="Щом мрежата се появи (от мобилни данни или Wi-Fi), всичко тръгва към сървъра автоматично."
+          title={online ? "Синхронизация" : "Автоматично качване"}
+          body={
+            online
+              ? "При успешен отговор от сървъра записите се качват сами. Ако виждате това съобщение с включен интернет, натиснете „Опитай отново“ в списъка или проверете миграциите в Supabase."
+              : "Щом мрежата се появи (от мобилни данни или Wi-Fi), всичко тръгва към сървъра автоматично."
+          }
         />
         <ExplainerLine
           icon={<CheckCircle2 className="w-4 h-4" />}

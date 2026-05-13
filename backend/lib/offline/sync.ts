@@ -8,21 +8,50 @@ import {
   listPendingMutations,
   markError,
   markSyncing,
+  purgeObsoleteQueueMutations,
   resetStaleSyncing,
   resolveServerId,
   setIdMap,
   updateMutation,
 } from "./queue";
 import {
+  cleanupOldDocuments,
   getOfflineDb,
   idbDelete,
   idbGet,
   idbPut,
+  purgeUnsupportedCachedDocuments,
+  purgeUnsupportedIdMapEntries,
   type CachedDocument,
 } from "./db";
 
 const MAX_RETRIES = 5;
 const LOCK_NAME = "sk-offline-sync";
+
+/** UUID в пътя на endpoint след успешна мутация — синхронизираме `dirty` в кеша. */
+const ID_IN_API_PATH =
+  /\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})(?:\/|\?|$)/;
+
+/**
+ * След успешен PUT/PATCH/DELETE от опашката: маркираме кеша като чист или го махаме.
+ * (POST се грижи `migrateDocumentKey`.)
+ */
+async function reconcileDocumentCacheAfterMutation(endpoint: string, method: string): Promise<void> {
+  const match = endpoint.match(ID_IN_API_PATH);
+  const id = match?.[1];
+  if (!id) return;
+
+  if (method === "DELETE") {
+    await idbDelete("documents", id);
+    return;
+  }
+
+  if (method === "PUT" || method === "PATCH") {
+    const doc = await idbGet<CachedDocument>("documents", id);
+    if (!doc) return;
+    await idbPut("documents", { ...doc, dirty: false, updatedAt: Date.now() });
+  }
+}
 
 export interface SyncResult {
   flushed: number;
@@ -70,16 +99,23 @@ export function flushQueue(): Promise<SyncResult> {
 
 /**
  * Веднъж при mount на админ панела:
+ *   0) Премахва исторически offline записи за видове, които вече не се синхронизират.
  *   1) Изчиства "syncing" мутации, които са останали зомби от убит tab/SW (P3).
  *   2) Изтрива стари clean cached документи > 30 дни (P11) — пазим IDB quota.
  * Безопасно е да се вика няколко пъти — idempotent.
  */
 export async function bootstrapOfflineQueue(): Promise<void> {
   try {
+    await purgeObsoleteQueueMutations();
+  } catch { /* IDB не е достъпен */ }
+  try {
+    await purgeUnsupportedCachedDocuments();
+    await purgeUnsupportedIdMapEntries();
+  } catch { /* best-effort */ }
+  try {
     await resetStaleSyncing();
   } catch { /* IDB не е достъпен */ }
   try {
-    const { cleanupOldDocuments } = await import("./db");
     await cleanupOldDocuments();
   } catch { /* best-effort */ }
 }
@@ -151,6 +187,8 @@ async function doFlush(): Promise<SyncResult> {
         } catch {
           /* без JSON отговор е ОК */
         }
+      } else {
+        await reconcileDocumentCacheAfterMutation(endpoint, m.method);
       }
 
       await deleteMutation(m.id);

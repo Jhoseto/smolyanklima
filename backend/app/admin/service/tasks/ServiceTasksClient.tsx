@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  Wrench, ClipboardList, ShoppingCart, CalendarDays,
+  Wrench, ShoppingCart, CalendarDays,
   MapPin, Phone, User, CheckCircle2, Clock, Loader2,
   AlertCircle, ChevronLeft, ChevronRight, RefreshCw,
   ChevronDown, FileText,
@@ -12,8 +12,12 @@ import {
 
 type TaskStatus = "planned" | "in_progress" | "done" | "cancelled";
 type EventCode =
-  | "sale" | "service_installation" | "service_inspection"
-  | "service_repair" | "service_maintenance" | null;
+  | "sale"
+  | "service_installation"
+  | "service_maintenance"
+  | "service_on_site"
+  | "service_in_shop"
+  | null;
 
 interface Task {
   id: string;
@@ -82,14 +86,17 @@ const PRIORITY_DOT: Record<string, string> = {
 };
 const EVENT_ICON: Partial<Record<string, React.ReactNode>> = {
   service_installation: <Wrench className="w-5 h-5 text-brand-blue-500" />,
-  service_inspection:   <ClipboardList className="w-5 h-5 text-purple-500" />,
-  service_repair:       <Wrench className="w-5 h-5 text-orange-500" />,
-  service_maintenance:  <Wrench className="w-5 h-5 text-teal-500" />,
-  sale:                 <ShoppingCart className="w-5 h-5 text-green-500" />,
+  service_maintenance: <Wrench className="w-5 h-5 text-teal-500" />,
+  service_on_site: <Wrench className="w-5 h-5 text-indigo-500" />,
+  service_in_shop: <Wrench className="w-5 h-5 text-violet-500" />,
+  sale: <ShoppingCart className="w-5 h-5 text-green-500" />,
 };
 const EVENT_LABEL: Partial<Record<string, string>> = {
-  service_installation: "Монтаж", service_inspection: "Оглед",
-  service_repair: "Ремонт", service_maintenance: "Профилактика", sale: "Продажба",
+  service_installation: "Монтаж",
+  service_maintenance: "Профилактика",
+  service_on_site: "Сервиз на терен",
+  service_in_shop: "Сервиз в склад",
+  sale: "Продажба",
 };
 const NEXT_STATUS: Partial<Record<TaskStatus, TaskStatus>> = { planned: "in_progress", in_progress: "done" };
 const NEXT_LABEL: Partial<Record<TaskStatus, string>> = {

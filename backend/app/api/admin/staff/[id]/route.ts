@@ -11,6 +11,7 @@ const UpdateSchema = z.object({
   role: z.enum(["master_admin", "office_staff", "service_staff"]).optional(),
   is_active: z.boolean().optional(),
   password: z.string().min(4).optional(),
+  avatar_url: z.union([z.string().url("Невалиден URL").max(2048), z.null()]).optional(),
 });
 
 /** PUT /api/admin/staff/[id] — update role / status / password / phone */
@@ -43,6 +44,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (parsed.data.role !== undefined) update.role = parsed.data.role;
     if (parsed.data.is_active !== undefined) update.is_active = parsed.data.is_active;
     if (parsed.data.phone !== undefined) update.phone = parsed.data.phone;
+    if (parsed.data.avatar_url !== undefined) update.avatar_url = parsed.data.avatar_url;
 
     if (Object.keys(update).length > 0) {
       const { error } = await serviceClient.from("admin_users").update(update).eq("id", id);

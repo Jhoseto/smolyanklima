@@ -65,6 +65,16 @@ export function isLocalId(id: string | null | undefined): boolean {
   return typeof id === "string" && id.startsWith("local-");
 }
 
+function summarizeServerErrorText(txt: string, httpStatus: number): string {
+  const t = txt.trim();
+  if (!t) return `HTTP ${httpStatus} — сървърът върна празен отговор`;
+  try {
+    const j = JSON.parse(t) as { error?: string };
+    if (j && typeof j.error === "string" && j.error.trim()) return j.error.trim();
+  } catch { /* не е JSON */ }
+  return t.length > 500 ? `${t.slice(0, 499)}…` : t;
+}
+
 /**
  * Изпраща мутация. При мрежова грешка / offline я слага в опашка.
  */
@@ -87,6 +97,7 @@ export async function offlineSend<TBody = unknown, TData = unknown>(
           await enqueueMutation({
             kind: opts.kind, method: opts.method, endpoint: opts.endpoint,
             body: opts.body, localId: opts.localId,
+            initialError: "Очаква се първи успешен запис (POST) преди обновяване.",
           });
           return { ok: true, queued: true, key: cacheKey };
         }
@@ -105,13 +116,20 @@ export async function offlineSend<TBody = unknown, TData = unknown>(
       if (!res.ok && res.status !== 204) {
         const txt = await res.text().catch(() => "");
         if (res.status >= 500) {
+          const errMsg = summarizeServerErrorText(txt, res.status);
           await enqueueMutation({
             kind: opts.kind, method: opts.method, endpoint: opts.endpoint,
             body: opts.body, localId: opts.localId,
+            initialError: errMsg,
           });
-          return { ok: true, queued: true, key: cacheKey, error: txt };
+          return { ok: true, queued: true, key: cacheKey, error: errMsg };
         }
-        return { ok: false, queued: false, key: cacheKey, error: txt || `HTTP ${res.status}` };
+        return {
+          ok: false,
+          queued: false,
+          key: cacheKey,
+          error: summarizeServerErrorText(txt, res.status) || `HTTP ${res.status}`,
+        };
       }
 
       let data: TData | undefined;
@@ -134,18 +152,22 @@ export async function offlineSend<TBody = unknown, TData = unknown>(
       }
 
       return { ok: true, queued: false, key: cacheKey, data };
-    } catch {
+    } catch (e) {
+      const netMsg =
+        e instanceof Error ? e.message : "Неуспешна връзка със сървъра";
       await enqueueMutation({
         kind: opts.kind, method: opts.method, endpoint: opts.endpoint,
         body: opts.body, localId: opts.localId,
+        initialError: `Мрежа/връзка: ${netMsg}`,
       });
-      return { ok: true, queued: true, key: cacheKey };
+      return { ok: true, queued: true, key: cacheKey, error: netMsg };
     }
   }
 
   await enqueueMutation({
     kind: opts.kind, method: opts.method, endpoint: opts.endpoint,
     body: opts.body, localId: opts.localId,
+    initialError: "Няма мрежова връзка — записът е в опашката.",
   });
   return { ok: true, queued: true, key: cacheKey };
 }
@@ -180,7 +202,9 @@ async function writeDocument<TData>(
       ? { ...(existing.data as object), ...(data as object) } as TData
       : data,
     updatedAt: Date.now(),
-    dirty: dirty || (existing?.dirty ?? false),
+    // false = успешен отговор от сървъра → изчистваме dirty; true = оптимистичен офлайн запис.
+    // (Предишното `|| existing.dirty` оставяше „Чака мрежа“ завинаги след успешен PUT.)
+    dirty,
   };
   await idbPut("documents", merged);
 }

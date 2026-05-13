@@ -53,8 +53,7 @@ export default function NewProductPage() {
         })),
       );
       const role = (w.data?.admin?.role as string) ?? "master_admin";
-      /* Първоначални цени при създаване: офис или главен; промяна в списък/редакция — само главен. */
-      setCanEditPrice(role === "master_admin" || role === "office_staff");
+      setCanEditPrice(role === "master_admin");
       setCanEditStockLocation(role === "master_admin" || role === "office_staff");
       // Default type: „Стенни климатици“ — това е най-често продаваният
       // вид и почти всеки нов запис е стенен климатик. Така спестяваме

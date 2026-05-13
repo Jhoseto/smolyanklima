@@ -12,7 +12,7 @@ const CLOUDINARY_UPLOAD_MARKER = "/image/upload/";
 /** Редът на трансформациите след upload/ — формат + качество (препоръка Cloudinary). */
 const WEB_AUTO_TRANSFORM = "f_auto,q_auto";
 
-export type CloudinaryUploadKind = "product" | "accessory" | "blog";
+export type CloudinaryUploadKind = "product" | "accessory" | "blog" | "staff";
 
 export type CloudinaryCredentials = {
   cloudName: string;
@@ -83,9 +83,13 @@ export function sanitizeMediaFolderSlug(raw: string): string {
   return s || "item";
 }
 
-/** Пълен folder за upload според вида медия (климатици / аксесоари / блог). */
+/** Пълен folder за upload според вида медия (климатици / аксесоари / блог / персонал). */
 export function buildUploadFolderPath(kind: CloudinaryUploadKind, slugSanitized: string): string {
-  const segment = kind === "product" ? "klimatici" : kind === "accessory" ? "aksesoari" : "blog";
+  const segment =
+    kind === "product" ? "klimatici" :
+      kind === "accessory" ? "aksesoari" :
+        kind === "blog" ? "blog" :
+          "personal";
   return `smolyanklima/${segment}/${slugSanitized}`;
 }
 

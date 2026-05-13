@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { createPortal } from "react-dom";
 import { Button, Input, Textarea } from "./ui";
 import { UserPlus, X, Loader2, ChevronDown } from "lucide-react";
+import { assertNoContactPrimaryPhoneDuplicate } from "@/lib/admin/contactPhoneConflictClient";
 
 export type ContactPersonPatch = {
   customerName?: string;
@@ -187,6 +188,8 @@ export function ContactPersonPicker({
     }
     setNewBusy(true);
     try {
+      await assertNoContactPrimaryPhoneDuplicate(ph);
+
       const res = await fetch("/api/admin/contacts", {
         method: "POST",
         credentials: "include",

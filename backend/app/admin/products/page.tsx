@@ -8,6 +8,7 @@ import { ShareToChatModal } from "../chat/ShareToChatModal";
 import { ProductQuickViewButton } from "../ProductQuickView";
 import { FeaturedSlotModal } from "./FeaturedSlotModal";
 import { useDebounce } from "@/lib/hooks/useDebounce";
+import { assertNoContactPrimaryPhoneDuplicate } from "@/lib/admin/contactPhoneConflictClient";
 import {
   normalizeProductStockLocation,
   productStockLocationLabel,
@@ -106,6 +107,69 @@ function productStockLocationBadgeClass(loc: unknown) {
 
 function canRecordSale(p: ProductRow) {
   return p.stock_status !== "out_of_stock";
+}
+
+function defaultNextMountDate(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function emptySaleModalForm() {
+  return {
+    contactId: "",
+    customerName: "",
+    customerPhone: "",
+    customerAddress: "",
+    customerEmail: "",
+    notes: "",
+    mountDate: defaultNextMountDate(),
+    mountTimeFrom: "09:00",
+    mountTimeTo: "13:00",
+  };
+}
+
+/** Локална дата + час → ISO за `scheduled_start` / `scheduled_end`. */
+function toIsoFromDateAndTimeLocal(dateStr: string, timeStr: string | undefined | null): string | null {
+  const d0 = (dateStr ?? "").trim();
+  if (!d0) return null;
+  const rawT = (timeStr ?? "").trim();
+  const time = rawT.length >= 4 ? rawT : "09:00";
+  const m = /^(\d{1,2}):(\d{2})$/.exec(time);
+  if (!m) return null;
+  const h = Math.min(23, Math.max(0, parseInt(m[1], 10)));
+  const min = Math.min(59, Math.max(0, parseInt(m[2], 10)));
+  const d = new Date(`${d0}T${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}:00`);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
+async function adminPostWorkItem(body: Record<string, unknown>): Promise<{ id: string }> {
+  const res = await fetch("/api/admin/work-items", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const json = (await res.json().catch(() => ({}))) as { error?: string; data?: { id: string } };
+  if (!res.ok) throw new Error(json.error || "Грешка при създаване на задача");
+  if (!json.data?.id) throw new Error("Липсва ID на задача");
+  return { id: json.data.id };
+}
+
+async function adminPatchWorkItem(itemId: string, body: Record<string, unknown>): Promise<void> {
+  const res = await fetch(`/api/admin/work-items/${itemId}`, {
+    method: "PUT",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const json = (await res.json().catch(() => ({}))) as { error?: string };
+  if (!res.ok) throw new Error(json.error || "Грешка при обновяване на задача");
+}
+
+async function adminDeleteWorkItem(itemId: string): Promise<void> {
+  await fetch(`/api/admin/work-items/${itemId}`, { method: "DELETE", credentials: "include" });
 }
 
 function fmtEuro(n: number | null | undefined) {
@@ -338,14 +402,7 @@ export default function AdminProductsPage() {
   const [error, setError] = useState<string | null>(null);
   const [saleFor, setSaleFor] = useState<ProductRow | null>(null);
   const [saleBusy, setSaleBusy] = useState(false);
-  const [saleForm, setSaleForm] = useState({
-    contactId: "",
-    customerName: "",
-    customerPhone: "",
-    customerAddress: "",
-    customerEmail: "",
-    notes: "",
-  });
+  const [saleForm, setSaleForm] = useState(emptySaleModalForm);
   const [contactQuery, setContactQuery] = useState("");
   const [contactLoading, setContactLoading] = useState(false);
   const [contactResults, setContactResults] = useState<ContactChoice[]>([]);
@@ -360,10 +417,12 @@ export default function AdminProductsPage() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [locationBusyId, setLocationBusyId] = useState<string | null>(null);
   const [suppliersById, setSuppliersById] = useState<Record<string, string>>({});
+  /** Бърза инлайн редакция на продажна / закупна цена в таблицата — само master_admin (сървърът също валидира). */
+  const [canEditMasterPricesInline, setCanEditMasterPricesInline] = useState(false);
 
   const debouncedQ = useDebounce(q, 350);
   /*
-   * UI винаги показва клетките като кликабилни (бърза инлайн редакция).
+   * Инлайн „Продажна“ и „Закупна“: кликабилни само за master_admin.
    * Authorization се прави **изцяло на сървъра** в `PUT /api/admin/products/[id]`:
    *   - `price`, `priceWithMount`, `purchasePrice` → само `master_admin`;
    *   - `stockLocation`, `productRegion` → `master_admin` + `office_staff`.
@@ -415,15 +474,17 @@ export default function AdminProductsPage() {
 
   async function loadMeta() {
     try {
-      const [bRes, tRes, sRes] = await Promise.all([
+      const [bRes, tRes, sRes, wRes] = await Promise.all([
         fetch("/api/admin/meta/brands", { credentials: "include" }),
         fetch("/api/admin/meta/product-types", { credentials: "include" }),
         fetch("/api/admin/contacts?kind=supplier&perPage=500", { credentials: "include" }),
+        fetch("/api/admin/whoami", { credentials: "include" }),
       ]);
-      const [bJson, tJson, sJson] = await Promise.all([
+      const [bJson, tJson, sJson, wJson] = await Promise.all([
         bRes.json().catch(() => ({})),
         tRes.json().catch(() => ({})),
         sRes.json().catch(() => ({})),
+        wRes.json().catch(() => ({})),
       ]);
       if (bRes.ok) setBrands(((bJson as { data?: OptionRow[] }).data ?? []) as OptionRow[]);
       if (tRes.ok) setTypes(((tJson as { data?: OptionRow[] }).data ?? []) as OptionRow[]);
@@ -435,6 +496,10 @@ export default function AdminProductsPage() {
         const m: Record<string, string> = {};
         for (const r of rows) m[r.id] = r.full_name;
         setSuppliersById(m);
+      }
+      if (wRes.ok) {
+        const role = (wJson as { data?: { admin?: { role?: string } | null } }).data?.admin?.role ?? "";
+        setCanEditMasterPricesInline(role === "master_admin");
       }
     } catch {
       // non-blocking for products table
@@ -553,6 +618,7 @@ export default function AdminProductsPage() {
 
   async function createContactInline() {
     if (!saleForm.customerName.trim() || !saleForm.customerPhone.trim()) return;
+    await assertNoContactPrimaryPhoneDuplicate(saleForm.customerPhone.trim());
     const res = await fetch("/api/admin/contacts", {
       method: "POST",
       credentials: "include",
@@ -574,114 +640,140 @@ export default function AdminProductsPage() {
   }
 
   async function markAsSold(
-    p: ProductRow,
+    prod: ProductRow,
     customer: { id?: string; name: string; phone: string; address: string; email?: string; notes: string },
+    mount: { date: string; timeFrom: string; timeTo: string },
   ) {
-    if (!canRecordSale(p)) return false;
+    if (!canRecordSale(prod)) return false;
 
-    // Архитектура на наличността:
-    //
-    //   • Нова (per-instance): продуктът има `model_code` → всеки запис в
-    //     базата е една физическа единица със свой сериен номер. Тогава
-    //     продажбата маркира ВИНАГИ конкретната инстанция като
-    //     out_of_stock, а DB тригерът (миграция 0039) преизчислява
-    //     stock_quantity на ВСИЧКИ инстанции със същата (марка, модел).
-    //
-    //   • Стара (per-record): липсва `model_code` → един запис представлява
-    //     N бройки → намаляваме `stock_quantity` с 1; out_of_stock само
-    //     когато стигне 0.
-    const hasModelCode = Boolean((p.model_code ?? "").trim());
-    const currentQty = Math.max(0, Number(p.stock_quantity ?? 0));
-    const nextSold = Math.max(0, Number(p.sold_quantity ?? 0) + 1);
+    const mountDate = mount.date.trim();
+    if (!mountDate) {
+      setError("Посочете дата за монтаж.");
+      return false;
+    }
 
-    // Тяло на PUT-заявката — за нова архитектура НЕ изпращаме
-    // `stockQuantity`, защото тригерът ще го преизчисли коректно.
+    const schedStart = toIsoFromDateAndTimeLocal(mountDate, mount.timeFrom);
+    let schedEnd = toIsoFromDateAndTimeLocal(mountDate, mount.timeTo);
+    if (schedStart && schedEnd && new Date(schedEnd) < new Date(schedStart)) {
+      schedEnd = schedStart;
+    }
+
+    const hasModelCode = Boolean((prod.model_code ?? "").trim());
+    const currentQty = Math.max(0, Number(prod.stock_quantity ?? 0));
+    const nextSold = Math.max(0, Number(prod.sold_quantity ?? 0) + 1);
+
     const putBody: Record<string, unknown> = { soldQuantity: nextSold };
     if (hasModelCode) {
       putBody.stockStatus = "out_of_stock";
     } else {
       const nextQty = Math.max(0, currentQty - 1);
       putBody.stockQuantity = nextQty;
-      putBody.stockStatus = nextQty === 0 ? "out_of_stock" : p.stock_status;
+      putBody.stockStatus = nextQty === 0 ? "out_of_stock" : prod.stock_status;
     }
 
-    const res = await fetch(`/api/admin/products/${p.id}`, {
-      method: "PUT",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(putBody),
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setError((json as any).error || "Грешка при маркиране на продажба");
-      return false;
-    }
+    let saleId: string | null = null;
+    let installId: string | null = null;
 
-    // Optimistic UI обновяване:
-    //   • Продаденият продукт → out_of_stock + sold_quantity++.
-    //   • Per-instance: всички ОСТАНАЛИ продукти със същия модел
-    //     получават stock_quantity = currentQty - 1 (отразява тригера).
-    //   • Per-record: само продаденият — stock_quantity = nextQty.
-    // Optimistic UI: симулираме резултата на DB тригера, за да няма
-    // re-fetch след всяка продажба. Тригерът преизчислява COUNT за модела.
-    const nextQty = Math.max(0, currentQty - 1);
-    const modelKey = (p.model_code ?? "").trim().toLowerCase();
-    setItems((prev) =>
-      prev.map((x) => {
-        if (x.id === p.id) {
-          return {
-            ...x,
-            stock_status: hasModelCode || nextQty === 0 ? "out_of_stock" : x.stock_status,
-            sold_quantity: nextSold,
-            stock_quantity: nextQty,
-          };
-        }
-        if (
-          hasModelCode &&
-          x.brand_id &&
-          x.brand_id === p.brand_id &&
-          (x.model_code ?? "").trim().toLowerCase() === modelKey
-        ) {
-          // Тригерът ще обнови count = бившо - 1 (без продадения).
-          return { ...x, stock_quantity: nextQty };
-        }
-        return x;
-      }),
-    );
-
-    // Auto-create an operational record visible in the dashboard calendar.
-    const today = new Date().toISOString().slice(0, 10);
-    void fetch("/api/admin/work-items", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    try {
+      const saleRow = await adminPostWorkItem({
         type: "sale",
         eventCode: "sale",
-        title: `Продажба: ${p.name}`,
-        dueDate: today,
+        title: `Продажба: ${prod.name}`,
+        status: "planned",
         priority: "medium",
-        status: "done",
-        productId: p.id,
+        dueDate: mountDate,
+        saleInstallState: "pending_mount",
+        productId: prod.id,
         contactId: customer.id || null,
         customerName: customer.name || null,
         customerPhone: customer.phone || null,
         customerAddress: customer.address || null,
         notes: customer.notes || null,
         quantity: 1,
-        unitPrice: Number(p.price),
-        totalAmount: Number(p.price),
-      }),
-    });
-    return true;
+        unitPrice: Number(prod.price),
+        totalAmount: Number(prod.price),
+      });
+      saleId = saleRow.id;
+
+      const noteLines = [customer.notes.trim() || null, `Връзка продажба: ${saleId}`].filter(Boolean) as string[];
+      const combinedNotes = noteLines.join("\n\n");
+
+      const inst = await adminPostWorkItem({
+        type: "service",
+        eventCode: "service_installation",
+        title: `Монтаж: ${prod.name}`,
+        status: "planned",
+        priority: "medium",
+        dueDate: mountDate,
+        scheduledStart: schedStart,
+        scheduledEnd: schedEnd,
+        productId: prod.id,
+        contactId: customer.id || null,
+        customerName: customer.name || null,
+        customerPhone: customer.phone || null,
+        customerAddress: customer.address || null,
+        notes: combinedNotes || null,
+        saleWorkItemId: saleId,
+        quantity: 1,
+        unitPrice: null,
+        totalAmount: null,
+      });
+      installId = inst.id;
+
+      await adminPatchWorkItem(saleId, { installationWorkItemId: installId });
+
+      const res = await fetch(`/api/admin/products/${prod.id}`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(putBody),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((json as { error?: string }).error || "Грешка при маркиране на продажба в склада");
+      }
+
+      const nextQty = Math.max(0, currentQty - 1);
+      const modelKey = (prod.model_code ?? "").trim().toLowerCase();
+      setItems((prev) =>
+        prev.map((x) => {
+          if (x.id === prod.id) {
+            return {
+              ...x,
+              stock_status: hasModelCode || nextQty === 0 ? "out_of_stock" : x.stock_status,
+              sold_quantity: nextSold,
+              stock_quantity: nextQty,
+            };
+          }
+          if (
+            hasModelCode &&
+            x.brand_id &&
+            x.brand_id === prod.brand_id &&
+            (x.model_code ?? "").trim().toLowerCase() === modelKey
+          ) {
+            return { ...x, stock_quantity: nextQty };
+          }
+          return x;
+        }),
+      );
+
+      return true;
+    } catch (e: unknown) {
+      if (installId) void adminDeleteWorkItem(installId);
+      if (saleId) void adminDeleteWorkItem(saleId);
+      setError(String(e instanceof Error ? e.message : e));
+      return false;
+    }
   }
 
   function startPriceEdit(p: ProductRow) {
+    if (!canEditMasterPricesInline) return;
     setEditingPriceId(p.id);
     setPriceDraft(String(Number(p.price)));
   }
 
   async function savePrice(p: ProductRow) {
+    if (!canEditMasterPricesInline) return;
     const nextPrice = Number(String(priceDraft).replace(",", "."));
     if (!Number.isFinite(nextPrice) || nextPrice < 0) {
       setError("Въведете валидна цена.");
@@ -736,12 +828,14 @@ export default function AdminProductsPage() {
   }
 
   function startPurchaseEdit(p: ProductRow) {
+    if (!canEditMasterPricesInline) return;
     setEditingPurchaseId(p.id);
     const pp = p.purchase_price;
     setPurchaseDraft(pp == null || !Number.isFinite(Number(pp)) ? "" : String(Number(pp)));
   }
 
   async function savePurchasePrice(p: ProductRow) {
+    if (!canEditMasterPricesInline) return;
     const raw = purchaseDraft.trim().replace(",", ".");
     let nextPurchase: number | null;
     if (raw === "") nextPurchase = null;
@@ -1161,7 +1255,7 @@ export default function AdminProductsPage() {
                   </span>
                 </Td>
                 <Td className="whitespace-nowrap text-sm">
-                  {editingPurchaseId === p.id ? (
+                  {editingPurchaseId === p.id && canEditMasterPricesInline ? (
                     <div className="flex flex-col gap-1 min-w-[7rem]">
                       <Input
                         type="number"
@@ -1190,7 +1284,7 @@ export default function AdminProductsPage() {
                         </Button>
                       </div>
                     </div>
-                  ) : (
+                  ) : canEditMasterPricesInline ? (
                     <button
                       type="button"
                       onClick={() => startPurchaseEdit(p)}
@@ -1199,6 +1293,13 @@ export default function AdminProductsPage() {
                     >
                       {fmtEuro(p.purchase_price)}
                     </button>
+                  ) : (
+                    <span
+                      className="rounded-md px-2 py-1 font-semibold text-slate-900 tabular-nums"
+                      title="Само главен администратор може да променя закупната цена тук"
+                    >
+                      {fmtEuro(p.purchase_price)}
+                    </span>
                   )}
                 </Td>
                 {/* Дата на закупуване от доставчик — редактира се от формата на продукта. */}
@@ -1206,7 +1307,7 @@ export default function AdminProductsPage() {
                   {fmtPurchaseDate(p.purchased_at)}
                 </Td>
                 <Td className="whitespace-nowrap text-sm font-semibold">
-                  {editingPriceId === p.id ? (
+                  {editingPriceId === p.id && canEditMasterPricesInline ? (
                     <div className="flex flex-col gap-1 min-w-[7rem]">
                       <Input type="number" min={0} value={priceDraft} onChange={(e) => setPriceDraft(e.target.value)} className="!text-xs !py-1" autoFocus />
                       <div className="flex gap-1">
@@ -1227,7 +1328,7 @@ export default function AdminProductsPage() {
                         </Button>
                       </div>
                     </div>
-                  ) : (
+                  ) : canEditMasterPricesInline ? (
                     <button
                       type="button"
                       onClick={() => startPriceEdit(p)}
@@ -1236,6 +1337,10 @@ export default function AdminProductsPage() {
                     >
                       {fmtEuro(p.price)}
                     </button>
+                  ) : (
+                    <span className="rounded-md px-2 py-1 text-slate-900 tabular-nums" title="Само главен администратор може да променя продажната цена тук">
+                      {fmtEuro(p.price)}
+                    </span>
                   )}
                 </Td>
                 <Td className="max-w-[5.5rem] text-xs font-mono text-slate-700" title={(p.indoor_unit_serial ?? "").trim() || undefined}>
@@ -1265,7 +1370,7 @@ export default function AdminProductsPage() {
                 </Td>
                 <Td>
                   <div className="flex items-center gap-2">
-                    <Button variant="secondary" size="sm" onClick={() => { setSaleFor(p); setSaleForm({ contactId: "", customerName: "", customerPhone: "", customerAddress: "", customerEmail: "", notes: "" }); setContactQuery(""); setContactResults([]); }} disabled={!canRecordSale(p)} className="!py-1 !px-2 !text-xs font-bold">
+                    <Button variant="secondary" size="sm" onClick={() => { setSaleFor(p); setSaleForm(emptySaleModalForm()); setContactQuery(""); setContactResults([]); }} disabled={!canRecordSale(p)} className="!py-1 !px-2 !text-xs font-bold">
                       Продажба
                     </Button>
                     <Link href={`/admin/products/${p.id}`} className="inline-flex items-center gap-1.5 px-2 py-1 bg-brand-blue-50 text-brand-blue-700 hover:bg-brand-blue-100 rounded-lg text-xs font-bold transition-colors">
@@ -1341,7 +1446,7 @@ export default function AdminProductsPage() {
                 </div>
                 <div className="text-right shrink-0 space-y-1.5 min-w-[6.5rem]">
                   <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Продажна</div>
-                  {editingPriceId === p.id ? (
+                  {editingPriceId === p.id && canEditMasterPricesInline ? (
                     <div className="flex flex-col gap-1.5 items-end">
                       <Input type="number" min={0} value={priceDraft} onChange={(e) => setPriceDraft(e.target.value)} className="w-24 text-right" autoFocus />
                       <div className="flex gap-1">
@@ -1349,7 +1454,7 @@ export default function AdminProductsPage() {
                         <Button variant="secondary" size="sm" onClick={() => { setEditingPriceId(null); setPriceDraft(""); }} disabled={priceBusy} className="!py-1 !px-2 !text-xs">✕</Button>
                       </div>
                     </div>
-                  ) : (
+                  ) : canEditMasterPricesInline ? (
                     <button
                       type="button"
                       onClick={() => startPriceEdit(p)}
@@ -1357,9 +1462,13 @@ export default function AdminProductsPage() {
                     >
                       {fmtEuro(p.price)}
                     </button>
+                  ) : (
+                    <span className="text-lg font-black text-slate-900 tabular-nums" title="Само главен администратор може да променя продажната цена тук">
+                      {fmtEuro(p.price)}
+                    </span>
                   )}
                   <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 pt-0.5">Закупна</div>
-                  {editingPurchaseId === p.id ? (
+                  {editingPurchaseId === p.id && canEditMasterPricesInline ? (
                     <div className="flex flex-col gap-1 items-end">
                       <Input type="number" min={0} value={purchaseDraft} onChange={(e) => setPurchaseDraft(e.target.value)} className="w-24 text-right !text-sm" placeholder="—" />
                       <div className="flex gap-1">
@@ -1367,10 +1476,14 @@ export default function AdminProductsPage() {
                         <Button variant="secondary" size="sm" onClick={() => { setEditingPurchaseId(null); setPurchaseDraft(""); }} disabled={purchaseBusy} className="!py-1 !px-2 !text-xs">✕</Button>
                       </div>
                     </div>
-                  ) : (
+                  ) : canEditMasterPricesInline ? (
                     <button type="button" onClick={() => startPurchaseEdit(p)} className="text-sm font-bold text-slate-800 rounded-lg px-2 py-0.5 bg-brand-orange-50/60 hover:bg-brand-orange-100 cursor-pointer transition">
                       {fmtEuro(p.purchase_price)}
                     </button>
+                  ) : (
+                    <span className="text-sm font-bold text-slate-800 tabular-nums" title="Само главен администратор може да променя закупната цена тук">
+                      {fmtEuro(p.purchase_price)}
+                    </span>
                   )}
                   <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 pt-0.5">Закупен на</div>
                   <div className="text-xs font-semibold text-slate-700">{fmtPurchaseDate(p.purchased_at)}</div>
@@ -1412,7 +1525,7 @@ export default function AdminProductsPage() {
             <div className="flex border-t border-slate-100">
               <button
                 type="button"
-                onClick={() => { setSaleFor(p); setSaleForm({ contactId: "", customerName: "", customerPhone: "", customerAddress: "", customerEmail: "", notes: "" }); setContactQuery(""); setContactResults([]); }}
+                onClick={() => { setSaleFor(p); setSaleForm(emptySaleModalForm()); setContactQuery(""); setContactResults([]); }}
                 disabled={!canRecordSale(p)}
                 className="flex-1 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 active:bg-slate-100 transition-colors disabled:opacity-40 border-r border-slate-100"
               >
@@ -1474,7 +1587,7 @@ export default function AdminProductsPage() {
               <div className="text-xs font-bold uppercase tracking-[0.24em] text-brand-blue-700">Запис на продажба</div>
               <div className="mt-1 text-2xl font-black leading-tight text-slate-950">{saleFor.name}</div>
               <div className="mt-1 text-sm font-medium text-slate-500">
-                Създава продажба в календара, маркира този артикул като продаден (скрива се от каталога) и връзва контакт към сделката.
+                Контакт за сделката (съществуващ или нов), дата и час за монтаж. Създава се продажба в панела „Продажби“ (чака монтаж) и отделно събитие „Монтаж“ в оперативния календар.
               </div>
             </div>
 
@@ -1524,6 +1637,36 @@ export default function AdminProductsPage() {
               <Input value={saleForm.customerEmail} onChange={(e) => setSaleForm((s) => ({ ...s, customerEmail: e.target.value }))} placeholder="Имейл" />
               <Input value={saleForm.customerAddress} onChange={(e) => setSaleForm((s) => ({ ...s, customerAddress: e.target.value }))} placeholder="Адрес" className="md:col-span-2" />
               <Textarea value={saleForm.notes} onChange={(e) => setSaleForm((s) => ({ ...s, notes: e.target.value }))} placeholder="Бележки (по желание)" rows={2} className="md:col-span-2 min-h-[2.75rem]" />
+
+              <div className="col-span-full border-t border-slate-100 pt-3 mt-1">
+                <div className="text-xs font-black uppercase tracking-wide text-brand-blue-700 mb-2">Монтаж</div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <label className="grid gap-1.5">
+                    <span className="text-xs font-bold text-slate-600">Дата *</span>
+                    <Input
+                      type="date"
+                      value={saleForm.mountDate}
+                      onChange={(e) => setSaleForm((s) => ({ ...s, mountDate: e.target.value }))}
+                    />
+                  </label>
+                  <label className="grid gap-1.5">
+                    <span className="text-xs font-bold text-slate-600">Час от</span>
+                    <Input
+                      type="time"
+                      value={saleForm.mountTimeFrom}
+                      onChange={(e) => setSaleForm((s) => ({ ...s, mountTimeFrom: e.target.value }))}
+                    />
+                  </label>
+                  <label className="grid gap-1.5">
+                    <span className="text-xs font-bold text-slate-600">Час до</span>
+                    <Input
+                      type="time"
+                      value={saleForm.mountTimeTo}
+                      onChange={(e) => setSaleForm((s) => ({ ...s, mountTimeTo: e.target.value }))}
+                    />
+                  </label>
+                </div>
+              </div>
             </div>
 
             <div className="flex justify-between items-center border-t border-slate-100 bg-slate-50 px-6 py-4 gap-2 flex-wrap">
@@ -1548,18 +1691,26 @@ export default function AdminProductsPage() {
                 <Button variant="secondary" disabled={saleBusy} onClick={() => setSaleFor(null)}>Отказ</Button>
                 <Button
                   variant="primary"
-                  disabled={saleBusy || !saleForm.customerName.trim() || !saleForm.customerPhone.trim()}
+                  disabled={saleBusy || !saleForm.customerName.trim() || !saleForm.customerPhone.trim() || !saleForm.mountDate.trim()}
                   onClick={async () => {
                     setSaleBusy(true);
                     try {
-                      const ok = await markAsSold(saleFor, {
-                        id: saleForm.contactId || undefined,
-                        name: saleForm.customerName.trim(),
-                        phone: saleForm.customerPhone.trim(),
-                        address: saleForm.customerAddress.trim(),
-                        email: saleForm.customerEmail.trim(),
-                        notes: saleForm.notes.trim(),
-                      });
+                      const ok = await markAsSold(
+                        saleFor,
+                        {
+                          id: saleForm.contactId || undefined,
+                          name: saleForm.customerName.trim(),
+                          phone: saleForm.customerPhone.trim(),
+                          address: saleForm.customerAddress.trim(),
+                          email: saleForm.customerEmail.trim(),
+                          notes: saleForm.notes.trim(),
+                        },
+                        {
+                          date: saleForm.mountDate,
+                          timeFrom: saleForm.mountTimeFrom,
+                          timeTo: saleForm.mountTimeTo,
+                        },
+                      );
                       if (ok) {
                         setSaleSuccess({ productName: saleFor.name, customerName: saleForm.customerName.trim(), amount: Number(saleFor.price) });
                         setSaleFor(null);
@@ -1598,7 +1749,7 @@ export default function AdminProductsPage() {
                 <div className="mt-1 text-2xl font-black text-slate-900">€{saleSuccess.amount.toLocaleString()}</div>
               </div>
               <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-semibold leading-6 text-emerald-900">
-                Артикулът е маркиран като продаден, продажбата е в историята и в календара.
+                Артикулът е маркиран като продаден. В панела „Продажби“ сделката е със статус <strong>чака монтаж</strong>, а в таблото е планиран <strong>монтаж</strong> на избраната дата.
               </div>
             </div>
             <div className="flex justify-end border-t border-slate-100 bg-slate-50 px-6 py-4">

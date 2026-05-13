@@ -2,8 +2,8 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import {
-  ChevronLeft, ChevronRight, Check, Download, Mail,
-  PenLine, Trash2, X, Loader2, CheckCircle2, CloudOff, Star,
+  ChevronLeft, ChevronRight, Download,
+  PenLine, Trash2, X, Loader2, CheckCircle2, Star,
 } from "lucide-react";
 import { SignatureCanvas } from "../acceptance/SignatureCanvas";
 import { ProductAutocomplete } from "../acceptance/ProductAutocomplete";
@@ -12,21 +12,14 @@ import {
   SERVICE_RATING_OPTIONS, isJapaneseBrand,
   type FreonChargeMethod, type BearingsState, type NoiseLevel,
 } from "@/lib/repair-protocol-fields";
-import { offlineSend, offlineGet, newLocalId, isLocalId } from "@/lib/offline/offlineFetch";
-import { useOnlineStatus } from "@/lib/hooks/useOnlineStatus";
 
 // ─── Типове ──────────────────────────────────────────────────────────────────
 
 interface FormData {
   date:             string;
   work_item_id:     string | null;
-  client_name:      string;
+  ac_brand:         string;
   ac_model:         string;
-  serial_number:    string;
-  address:          string;
-  paid_amount:      string;
-  client_email:     string;
-  client_phone:     string;
 
   is_japanese_brand:   boolean | null;
   freon_charge_method: FreonChargeMethod | null;
@@ -54,7 +47,6 @@ interface FormData {
 
   notes:            string;
   signature_team:   string | null;
-  signature_client: string | null;
   /** Виж миграция 0041: prepared | in_progress | signed */
   status:           "prepared" | "in_progress" | "signed";
 }
@@ -62,13 +54,8 @@ interface FormData {
 const defaultForm = (): FormData => ({
   date:             new Date().toISOString().slice(0, 10),
   work_item_id:     null,
-  client_name:      "",
+  ac_brand:         "",
   ac_model:         "",
-  serial_number:    "",
-  address:          "",
-  paid_amount:      "",
-  client_email:     "",
-  client_phone:     "",
 
   is_japanese_brand:   null,
   freon_charge_method: null,
@@ -96,7 +83,6 @@ const defaultForm = (): FormData => ({
 
   notes:            "",
   signature_team:   null,
-  signature_client: null,
   status:           "prepared",
 });
 
@@ -108,13 +94,13 @@ interface Props {
 }
 
 const STEPS = [
-  "Основна информация",
+  "Марка, модел и дата",
   "Фреон & почистване",
   "Клапи, лагери & дистанционно",
   "Налягания & консумация",
   "Шум & заварки",
   "Ремонти & оценка",
-  "Забележки & подписи",
+  "Забележки & подпис",
 ] as const;
 
 // ─── Главен компонент ────────────────────────────────────────────────────────
@@ -124,13 +110,7 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
   const [form, setForm]     = useState<FormData>({ ...defaultForm(), ...initialData });
   const [saving, setSaving] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(protocolId ?? null);
-  const localIdRef = useRef<string | null>(null);
-  const [pendingSync, setPendingSync] = useState(false);
-  const online = useOnlineStatus();
-  const [sigOpen, setSigOpen] = useState<"team" | "client" | null>(null);
-  const [emailInput, setEmailInput] = useState(initialData?.client_email ?? "");
-  const [sending, setSending] = useState(false);
-  const [sent, setSent]      = useState(false);
+  const [sigOpen, setSigOpen] = useState(false);
   const [error, setError]    = useState<string | null>(null);
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -140,21 +120,14 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
     let cancelled = false;
     (async () => {
       try {
-        if (typeof navigator !== "undefined" && navigator.onLine && !isLocalId(protocolId)) {
-          const res = await fetch(`/api/admin/service/repair-protocols/${protocolId}`, {
-            credentials: "include",
-          });
-          if (res.ok) {
-            const { data } = await res.json();
-            if (cancelled || !data) return;
-            applyServerData(data);
-            return;
-          }
-        }
-      } catch { /* мрежа падна — cache fallback */ }
-      const cached = await offlineGet<Record<string, unknown>>(protocolId);
-      if (cancelled || !cached) return;
-      applyServerData(cached.data as Record<string, unknown>);
+        const res = await fetch(`/api/admin/service/repair-protocols/${protocolId}`, {
+          credentials: "include",
+        });
+        if (!res.ok) return;
+        const { data } = await res.json();
+        if (cancelled || !data) return;
+        applyServerData(data);
+      } catch { /* ignore */ }
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -165,13 +138,8 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
       ...prev,
       date:             (data.date as string) ?? prev.date,
       work_item_id:     (data.work_item_id as string | null) ?? null,
-      client_name:      (data.client_name as string) ?? "",
+      ac_brand:         (data.ac_brand as string) ?? "",
       ac_model:         (data.ac_model as string) ?? "",
-      serial_number:    (data.serial_number as string) ?? "",
-      address:          (data.address as string) ?? "",
-      paid_amount:      data.paid_amount != null ? String(data.paid_amount) : "",
-      client_email:     (data.client_email as string) ?? "",
-      client_phone:     (data.client_phone as string) ?? "",
 
       is_japanese_brand:   (data.is_japanese_brand as boolean | null) ?? null,
       freon_charge_method: (data.freon_charge_method as FreonChargeMethod | null) ?? null,
@@ -199,21 +167,20 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
 
       notes:            (data.notes as string) ?? "",
       signature_team:   (data.signature_team as string | null) ?? null,
-      signature_client: (data.signature_client as string | null) ?? null,
       status:           (data.status as FormData["status"]) ?? prev.status,
     }));
-    setEmailInput((data.client_email as string) ?? "");
   }, []);
 
   // Auto-detect: ако моделът съдържа японска марка и потребителят не е дал
   // изричен отговор на is_japanese_brand → отбелязваме автоматично.
   useEffect(() => {
     if (form.is_japanese_brand !== null) return;
-    if (isJapaneseBrand(form.ac_model)) {
+    const brandModelHint = `${form.ac_brand} ${form.ac_model}`.trim();
+    if (isJapaneseBrand(brandModelHint)) {
       setForm(prev => ({ ...prev, is_japanese_brand: true }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.ac_model]);
+  }, [form.ac_brand, form.ac_model]);
 
   // In-flight lock: предотвратява двойно повикване на persistForm.
   const persistRef = useRef<Promise<unknown> | null>(null);
@@ -231,8 +198,7 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
    */
   const autoSave = useCallback(async (data: FormData, id: string | null) => {
     const hasContent =
-      data.client_name || data.ac_model || data.serial_number || data.address ||
-      data.paid_amount || data.client_phone || data.client_email ||
+      data.ac_brand || data.ac_model ||
       data.is_japanese_brand !== null || data.freon_charge_method !== null ||
       data.vacuum_cleaning_done !== null || data.valves_ok !== null ||
       data.outdoor_bearings_state !== null || data.indoor_bearings_state !== null ||
@@ -243,7 +209,7 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
       data.welds_outdoor_heat_exchanger !== null || data.welds_pipes !== null ||
       data.indoor_mechanism_repaired !== null || data.broken_turbine !== null ||
       data.service_rating !== null || data.notes ||
-      data.signature_team || data.signature_client;
+      data.signature_team;
     if (!hasContent && !id) return;
 
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
@@ -260,7 +226,7 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
     });
   }, [savedId, autoSave]);
 
-  // ── Запазване в API (с offline поддръжка) ────────────────────────────────
+  // ── Запазване в API ─────────────────────────────────────────────────────
 
   const persistForm = async (data: FormData, id: string | null, showSaving = true): Promise<string | null> => {
     if (persistRef.current) {
@@ -276,9 +242,6 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
   };
 
   const persistFormInner = async (data: FormData, id: string | null, showSaving = true): Promise<string | null> => {
-    if (id === null && localIdRef.current) {
-      id = localIdRef.current;
-    }
     if (showSaving) setSaving(true);
     setError(null);
     try {
@@ -292,13 +255,15 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
       const payload = {
         work_item_id:     data.work_item_id,
         date:             data.date || new Date().toISOString().slice(0, 10),
-        client_name:      data.client_name || null,
+        // Сервизният протокол не събира клиентски данни — винаги нулираме колоните в БД.
+        client_name:      null,
+        ac_brand:         data.ac_brand || null,
         ac_model:         data.ac_model || null,
-        serial_number:    data.serial_number || null,
-        address:          data.address || null,
-        paid_amount:      data.paid_amount ? parseFloat(data.paid_amount) : null,
-        client_email:     data.client_email || null,
-        client_phone:     data.client_phone || null,
+        serial_number:    null,
+        address:          null,
+        paid_amount:      null,
+        client_email:     null,
+        client_phone:     null,
 
         is_japanese_brand:   data.is_japanese_brand,
         freon_charge_method: data.freon_charge_method,
@@ -324,59 +289,42 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
 
         service_rating: data.service_rating,
 
-        notes:            data.notes || null,
-        signature_team:   data.signature_team,
-        signature_client: data.signature_client,
+        notes:          data.notes || null,
+        signature_team: data.signature_team,
       };
 
       if (id) {
-        const isLocal = isLocalId(id);
-        const endpoint = isLocal
-          ? `/api/admin/service/repair-protocols/:localId`
-          : `/api/admin/service/repair-protocols/${id}`;
-        const result = await offlineSend<typeof payload, { id: string; status?: FormData["status"] }>({
-          kind:    "service_protocol",
+        const res = await fetch(`/api/admin/service/repair-protocols/${id}`, {
           method:  "PUT",
-          endpoint,
-          body:    payload,
-          localId: isLocal ? id : undefined,
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify(payload),
         });
-        if (!result.ok) throw new Error(result.error ?? "Грешка при запазване");
-        setPendingSync(result.queued);
-        // Ако сме онлайн, но заявката пак е попаднала в queue (5xx),
-        // показваме реалната backend грешка вместо тихо „Чака мрежа“.
-        // Така потребителят разбира че проблемът е сървърен (липсваща
-        // миграция, RLS, валидация…), а не липса на интернет.
-        if (result.queued && online && result.error) {
-          setError(`Сървърна грешка при запазване: ${truncate(result.error, 240)}`);
-        }
-        if (result.data?.status && result.data.status !== data.status) {
-          setForm(prev => ({ ...prev, status: result.data!.status! }));
+        const json = await res.json().catch(() => ({})) as { error?: string; data?: { status?: FormData["status"] } };
+        if (!res.ok) throw new Error(json.error ?? `Грешка при запазване (${res.status})`);
+        if (json.data?.status && json.data.status !== data.status) {
+          setForm(prev => ({ ...prev, status: json.data!.status! }));
         }
       } else {
-        const localId = localIdRef.current ?? newLocalId();
-        localIdRef.current = localId;
-
-        const result = await offlineSend<typeof payload, { id: string; status?: FormData["status"] }>({
-          kind:    "service_protocol",
+        const res = await fetch("/api/admin/service/repair-protocols", {
           method:  "POST",
-          endpoint: "/api/admin/service/repair-protocols",
-          body:    payload,
-          localId,
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify(payload),
         });
-        if (!result.ok) throw new Error(result.error ?? "Грешка при запазване");
-
-        const effectiveId = result.data?.id ?? localId;
-        setSavedId(effectiveId);
-        setPendingSync(result.queued);
-        if (result.queued && online && result.error) {
-          setError(`Сървърна грешка при запазване: ${truncate(result.error, 240)}`);
+        const json = await res.json().catch(() => ({})) as {
+          error?: string;
+          data?: { id?: string; status?: FormData["status"] };
+        };
+        if (!res.ok) throw new Error(json.error ?? `Грешка при създаване (${res.status})`);
+        const newId = json.data?.id;
+        if (!newId) throw new Error("Липсва id от сървъра");
+        setSavedId(newId);
+        if (json.data?.status) {
+          setForm(prev => ({ ...prev, status: json.data!.status! }));
         }
-        if (result.data?.status && result.data.status !== data.status) {
-          setForm(prev => ({ ...prev, status: result.data!.status! }));
-        }
-        onSaved(effectiveId);
-        return effectiveId;
+        onSaved(newId);
+        return newId;
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Грешка");
@@ -389,26 +337,6 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
   const finalize = async () => {
     const id = await persistForm(form, savedId, true);
     if (id) setSavedId(id);
-  };
-
-  const doSendEmail = async () => {
-    if (!savedId || !emailInput) return;
-    setSending(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/admin/service/repair-protocols/${savedId}/email`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: emailInput }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error ?? "Грешка");
-      setSent(true);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Грешка при изпращане");
-    } finally {
-      setSending(false);
-    }
   };
 
   const downloadPdf = () => {
@@ -433,23 +361,11 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
             <p className="text-xs text-slate-400">Стъпка {step + 1} от {STEPS.length}</p>
             <p className="text-sm font-bold text-slate-800">{STEPS[step]}</p>
           </div>
-          {!online && (
-            <div title="Офлайн — промените се пазят локално и ще се качат при възстановяване на мрежа" className="flex items-center gap-1 px-2 py-1 rounded-full bg-slate-900 text-white text-[10px] font-bold">
-              <CloudOff className="w-3 h-3" />
-              Офлайн
-            </div>
-          )}
-          {online && pendingSync && (
-            <div title="Чака да се качи към сървъра" className="flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500 text-white text-[10px] font-bold">
-              <Loader2 className="w-3 h-3 animate-spin" />
-              Чака
-            </div>
-          )}
           {saving && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
         </div>
         <div className="h-1 bg-slate-100">
           <div
-            className="h-1 bg-emerald-600 transition-all duration-300"
+            className="h-1 bg-brand-orange-500 transition-all duration-300"
             style={{ width: `${((step + 1) / STEPS.length) * 100}%` }}
           />
         </div>
@@ -458,83 +374,33 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
       {/* ── Съдържание ── */}
       <div className="flex-1 overflow-y-auto">
         <div className="p-4 pb-24 max-w-2xl mx-auto">
-          {/* Стъпка 0 — Основна информация */}
+          {/* Стъпка 0 — само дата + марка + модел */}
           {step === 0 && (
             <div className="space-y-3">
-              <Field label="Клиент">
-                <input
-                  type="text"
-                  value={form.client_name}
-                  onChange={e => update("client_name", e.target.value)}
-                  placeholder="Иван Петров"
-                  className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500"
-                />
-              </Field>
-
-              <Field label="Модел климатик">
-                <ProductAutocomplete
-                  value={form.ac_model}
-                  onChange={(model) => update("ac_model", model)}
-                />
-              </Field>
-
-              <Field label="Сериен №">
-                <input
-                  type="text"
-                  value={form.serial_number}
-                  onChange={e => update("serial_number", e.target.value)}
-                  className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
-                />
-              </Field>
-
-              <Field label="Адрес">
-                <input
-                  type="text"
-                  value={form.address}
-                  onChange={e => update("address", e.target.value)}
-                  placeholder="гр. Смолян, ул. ..."
-                  className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500"
-                />
-              </Field>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Телефон">
-                  <input
-                    type="tel"
-                    value={form.client_phone}
-                    onChange={e => update("client_phone", e.target.value)}
-                    placeholder="0888 ..."
-                    className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                </Field>
-                <Field label="Имейл">
-                  <input
-                    type="email"
-                    value={form.client_email}
-                    onChange={e => update("client_email", e.target.value)}
-                    placeholder="kli@example.com"
-                    className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                </Field>
-              </div>
-
-              <Field label="Платена сума (BGN)">
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.paid_amount}
-                  onChange={e => update("paid_amount", e.target.value)}
-                  className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500"
-                />
-              </Field>
-
               <Field label="Дата на сервиз">
                 <input
                   type="date"
                   value={form.date}
                   onChange={e => update("date", e.target.value)}
-                  className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-blue-400"
+                />
+              </Field>
+
+              <Field label="Марка">
+                <input
+                  type="text"
+                  value={form.ac_brand}
+                  onChange={e => update("ac_brand", e.target.value)}
+                  placeholder="напр. Daikin"
+                  className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-blue-400"
+                />
+              </Field>
+
+              <Field label="Модел">
+                <ProductAutocomplete
+                  value={form.ac_model}
+                  onChange={(model) => update("ac_model", model)}
+                  placeholder="Търси в каталога или въведи ръчно"
                 />
               </Field>
             </div>
@@ -614,7 +480,7 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
                       value={form.pressure_cold_bar}
                       onChange={e => update("pressure_cold_bar", e.target.value)}
                       placeholder="bar"
-                      className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                      className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-blue-400"
                     />
                   </Field>
                   <Field label="Топъл режим">
@@ -626,7 +492,7 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
                       value={form.pressure_hot_bar}
                       onChange={e => update("pressure_hot_bar", e.target.value)}
                       placeholder="bar"
-                      className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                      className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-blue-400"
                     />
                   </Field>
                 </div>
@@ -646,7 +512,7 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
                       value={form.consumption_cold_kw}
                       onChange={e => update("consumption_cold_kw", e.target.value)}
                       placeholder="kW"
-                      className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                      className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-blue-400"
                     />
                   </Field>
                   <Field label="Топъл режим">
@@ -658,7 +524,7 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
                       value={form.consumption_hot_kw}
                       onChange={e => update("consumption_hot_kw", e.target.value)}
                       placeholder="kW"
-                      className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                      className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-blue-400"
                     />
                   </Field>
                 </div>
@@ -727,7 +593,7 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
             </div>
           )}
 
-          {/* Стъпка 6 — Забележки & подписи */}
+          {/* Стъпка 6 — Забележки & подпис */}
           {step === 6 && (
             <div className="space-y-4">
               <Field label="Забележки">
@@ -736,87 +602,51 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
                   onChange={e => update("notes", e.target.value)}
                   rows={4}
                   placeholder="Допълнителни наблюдения, препоръки, направени интервенции..."
-                  className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+                  className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-blue-400 resize-none"
                 />
               </Field>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <SignatureSlot
-                  label="Подпис на сервизен екип"
-                  signature={form.signature_team}
-                  onSign={() => setSigOpen("team")}
-                  onClear={() => update("signature_team", null)}
-                  disabled={isSigned && !!form.signature_team}
-                />
-                <SignatureSlot
-                  label="Подпис на клиента"
-                  signature={form.signature_client}
-                  onSign={() => setSigOpen("client")}
-                  onClear={() => update("signature_client", null)}
-                  disabled={isSigned && !!form.signature_client}
-                />
-              </div>
+              <SignatureSlot
+                label="Подпис на сервизен техник"
+                signature={form.signature_team}
+                onSign={() => setSigOpen(true)}
+                onClear={() => update("signature_team", null)}
+                disabled={isSigned && !!form.signature_team}
+              />
 
               {sigOpen && (
                 <SignatureCanvas
-                  title={sigOpen === "team" ? "Подпис на сервизен екип" : "Подпис на клиента"}
+                  label="Подпис на сервизен техник"
                   onSave={dataUrl => {
-                    update(sigOpen === "team" ? "signature_team" : "signature_client", dataUrl);
-                    setSigOpen(null);
+                    update("signature_team", dataUrl);
+                    setSigOpen(false);
                   }}
-                  onClose={() => setSigOpen(null)}
+                  onClose={() => setSigOpen(false)}
                 />
               )}
 
               {/* Финализиране */}
-              {form.signature_team && form.signature_client && form.status !== "signed" && (
+              {form.signature_team && form.status !== "signed" && (
                 <button
                   onClick={finalize}
                   disabled={saving}
-                  className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-60"
+                  className="w-full py-3 bg-brand-blue-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-brand-blue-800 disabled:opacity-60"
                 >
                   {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
                   Финализирай протокола
                 </button>
               )}
 
-              {/* PDF + email — само за signed протоколи */}
+              {/* PDF — само за подписан протокол (без имейл към клиент). */}
               {savedId && isSigned && (
                 <div className="space-y-3 pt-2">
                   <button
                     onClick={downloadPdf}
-                    className="w-full py-3 bg-slate-800 text-white rounded-xl font-semibold flex items-center justify-center gap-2"
+                    className="w-full py-3 bg-slate-800 text-white rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-slate-900"
                   >
                     <Download className="w-5 h-5" />
                     Свали PDF
                   </button>
-
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 space-y-2">
-                    <p className="text-xs font-bold text-emerald-900 uppercase tracking-wide">
-                      Изпрати на клиента
-                    </p>
-                    <div className="flex gap-2">
-                      <input
-                        type="email"
-                        value={emailInput}
-                        onChange={e => setEmailInput(e.target.value)}
-                        placeholder="kli@example.com"
-                        className="flex-1 px-3 py-2 bg-white border border-emerald-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
-                      />
-                      <button
-                        onClick={doSendEmail}
-                        disabled={!emailInput || sending}
-                        className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-semibold text-sm flex items-center gap-1.5 disabled:opacity-60"
-                      >
-                        {sending
-                          ? <Loader2 className="w-4 h-4 animate-spin" />
-                          : sent
-                            ? <Check className="w-4 h-4" />
-                            : <Mail className="w-4 h-4" />}
-                        {sent ? "Изпратен" : "Изпрати"}
-                      </button>
-                    </div>
-                  </div>
                 </div>
               )}
             </div>
@@ -843,7 +673,7 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
           </button>
           <button
             onClick={() => isLastStep ? onClose() : setStep(s => s + 1)}
-            className="flex-1 flex items-center justify-center gap-1 px-4 py-2.5 bg-emerald-600 text-white rounded-xl font-semibold text-sm"
+            className="flex-1 flex items-center justify-center gap-1 px-4 py-2.5 bg-brand-blue-700 text-white rounded-xl font-semibold text-sm hover:bg-brand-blue-800 active:bg-brand-blue-900"
           >
             {isLastStep ? "Затвори" : "Напред"}
             {!isLastStep && <ChevronRight className="w-4 h-4" />}
@@ -855,12 +685,6 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
 }
 
 // ─── Помощни sub-components ──────────────────────────────────────────────────
-
-/** Малък helper: отрязва дълги съобщения, за да не „разтегнат“ UI. */
-function truncate(s: string, max: number): string {
-  if (!s) return s;
-  return s.length <= max ? s : s.slice(0, max - 1) + "…";
-}
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -907,7 +731,7 @@ function YesNoField({
           onClick={() => onChange(true)}
           className={`py-2.5 rounded-lg text-sm font-semibold transition-colors ${
             value === true
-              ? "bg-emerald-600 text-white"
+              ? "bg-brand-blue-700 text-white"
               : "bg-slate-100 text-slate-600 hover:bg-slate-200"
           }`}
         >
@@ -968,7 +792,7 @@ function EnumField<T extends string>({
             onClick={() => onChange(opt.value)}
             className={`py-2 px-3 rounded-lg text-sm font-medium text-left transition-colors ${
               value === opt.value
-                ? "bg-emerald-600 text-white"
+                ? "bg-brand-blue-700 text-white"
                 : "bg-slate-100 text-slate-600 hover:bg-slate-200"
             }`}
           >
@@ -1002,7 +826,7 @@ function StarRatingField({
               <Star
                 className={`w-9 h-9 transition-colors ${
                   active
-                    ? "fill-amber-400 text-amber-400"
+                    ? "fill-brand-orange-500 text-brand-orange-500"
                     : "text-slate-300"
                 }`}
               />
@@ -1051,7 +875,7 @@ function SignatureSlot({
           type="button"
           onClick={onSign}
           disabled={disabled}
-          className="w-full h-24 border-2 border-dashed border-slate-300 hover:border-emerald-400 hover:bg-emerald-50 rounded-lg flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-emerald-700 transition-colors disabled:opacity-50"
+          className="w-full h-24 border-2 border-dashed border-slate-300 hover:border-brand-blue-400 hover:bg-brand-blue-50 rounded-lg flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-brand-blue-800 transition-colors disabled:opacity-50"
         >
           <PenLine className="w-5 h-5" />
           <span className="text-xs font-semibold">Подпиши</span>

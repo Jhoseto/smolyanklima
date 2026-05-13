@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
 
   const { data: adminRow, error: adminErr } = await supabase
     .from("admin_users")
-    .select("id,is_active,role")
+    .select("id,is_active,role,avatar_url")
     .eq("id", user.id)
     .maybeSingle();
 

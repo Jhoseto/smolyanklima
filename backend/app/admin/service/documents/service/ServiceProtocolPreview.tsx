@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Pencil, Download, Loader2, Mail, Star, PlayCircle, ClipboardCheck, Wrench, CheckCircle } from "lucide-react";
+import { X, Pencil, Download, Loader2, Star, PlayCircle, ClipboardCheck, Wrench, CheckCircle } from "lucide-react";
 import { Logo } from "@/app/admin/ui/Logo";
 import type { AdminRole } from "@/lib/admin/db";
 import {
@@ -24,13 +24,8 @@ interface ProtocolRow {
   protocol_number: string;
   date: string;
 
-  client_name: string | null;
+  ac_brand: string | null;
   ac_model: string | null;
-  serial_number: string | null;
-  address: string | null;
-  paid_amount: number | null;
-  client_email: string | null;
-  client_phone: string | null;
 
   is_japanese_brand: boolean | null;
   freon_charge_method: FreonChargeMethod | null;
@@ -58,7 +53,6 @@ interface ProtocolRow {
 
   notes: string | null;
   signature_team: string | null;
-  signature_client: string | null;
   status: string;
 }
 
@@ -75,9 +69,9 @@ const STATUS_BADGE: Record<"prepared" | "in_progress" | "signed", {
   icon: React.ComponentType<{ className?: string }>;
   cls: string;
 }> = {
-  prepared:    { label: "Подготвен",              icon: ClipboardCheck, cls: "bg-amber-100  text-amber-800"  },
-  in_progress: { label: "В процес на изпълнение", icon: Wrench,         cls: "bg-blue-100   text-blue-800"   },
-  signed:      { label: "Подписан",               icon: CheckCircle,    cls: "bg-emerald-100 text-emerald-800"},
+  prepared:    { label: "Подготвен",              icon: ClipboardCheck, cls: "bg-brand-orange-100  text-brand-orange-900"  },
+  in_progress: { label: "В процес на изпълнение", icon: Wrench,         cls: "bg-brand-blue-100   text-brand-blue-900"   },
+  signed:      { label: "Подписан",               icon: CheckCircle,    cls: "bg-brand-blue-100 text-brand-blue-900"},
 };
 
 /** „Да“ / „Не“ / „—“ за nullable boolean полета. */
@@ -94,9 +88,6 @@ export function ServiceProtocolPreview({
   const [row, setRow] = useState<ProtocolRow | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [emailTo, setEmailTo] = useState("");
-  const [emailBusy, setEmailBusy] = useState(false);
-  const [emailFeedback, setEmailFeedback] = useState<{ ok: boolean; text: string } | null>(null);
 
   const pdfUrl = `/api/admin/service/repair-protocols/${protocolId}/pdf`;
 
@@ -114,16 +105,6 @@ export function ServiceProtocolPreview({
   const canEditFinished = isFinished && (role === "master_admin" || role === "office_staff");
 
   const statusBadge = status ? STATUS_BADGE[status] : null;
-
-  useEffect(() => {
-    setEmailTo("");
-    setEmailFeedback(null);
-  }, [protocolId]);
-
-  useEffect(() => {
-    const em = row?.client_email?.trim();
-    if (em) setEmailTo(em);
-  }, [row?.client_email]);
 
   useEffect(() => {
     let cancelled = false;
@@ -145,38 +126,6 @@ export function ServiceProtocolPreview({
     })();
     return () => { cancelled = true; };
   }, [protocolId]);
-
-  async function sendProtocolEmail() {
-    const trimmed = emailTo.trim();
-    if (!trimmed) {
-      setEmailFeedback({ ok: false, text: "Въведете имейл адрес." });
-      return;
-    }
-    setEmailBusy(true);
-    setEmailFeedback(null);
-    try {
-      const res = await fetch(`/api/admin/service/repair-protocols/${protocolId}/email`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: trimmed }),
-      });
-      const json = (await res.json().catch(() => ({}))) as { error?: string; skipped?: boolean };
-      if (!res.ok) throw new Error(json.error ?? "Грешка при изпращане");
-      const skipped = Boolean(json.skipped);
-      setEmailFeedback({
-        ok: true,
-        text: skipped ? "Имейл услугата не е конфигурирана — изпращането е пропуснато." : "Протоколът е изпратен на имейла.",
-      });
-    } catch (e) {
-      setEmailFeedback({
-        ok: false,
-        text: e instanceof Error ? e.message : "Грешка при изпращане",
-      });
-    } finally {
-      setEmailBusy(false);
-    }
-  }
 
   return (
     <div
@@ -233,7 +182,7 @@ export function ServiceProtocolPreview({
               <button
                 type="button"
                 onClick={onEdit}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 shrink-0 shadow-sm"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-brand-blue-700 text-white text-sm font-semibold hover:bg-brand-blue-800 shrink-0 shadow-sm"
               >
                 <PlayCircle className="w-4 h-4" />
                 Довърши
@@ -253,44 +202,13 @@ export function ServiceProtocolPreview({
               </button>
             )}
           </div>
-          {/* Email секция — само за завършени (signed) протоколи.
-              Няма смисъл да изпращаме чернова на клиента. */}
-          {!loading && !loadErr && row && isFinished ? (
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 px-3 pb-3 sm:px-4 sm:pb-3 pt-0 border-t border-slate-100">
-              <input
-                type="email"
-                autoComplete="email"
-                placeholder="Имейл на получателя"
-                value={emailTo}
-                onChange={e => { setEmailTo(e.target.value); setEmailFeedback(null); }}
-                className="flex-1 min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-emerald-400"
-              />
-              <button
-                type="button"
-                disabled={emailBusy}
-                onClick={() => void sendProtocolEmail()}
-                className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-60 shrink-0"
-              >
-                {emailBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
-                Изпрати имейл
-              </button>
-              {emailFeedback ? (
-                <p
-                  className={`text-xs font-medium sm:ml-1 ${emailFeedback.ok ? "text-emerald-700" : "text-red-600"}`}
-                  role="status"
-                >
-                  {emailFeedback.text}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
         </div>
 
         {/* ── Съдържание ── */}
         <div className="flex-1 overflow-y-auto min-h-0 p-3 sm:p-4">
           {loading && (
             <div className="flex justify-center py-20">
-              <Loader2 className="w-10 h-10 animate-spin text-emerald-600" />
+              <Loader2 className="w-10 h-10 animate-spin text-brand-blue-700" />
             </div>
           )}
           {!loading && loadErr && (
@@ -301,26 +219,26 @@ export function ServiceProtocolPreview({
           {/* CTA банер за недовършени протоколи. Показва ясно на екипа на терен,
               че протоколът чака допълване и предлага бърз бутон „Довърши“. */}
           {!loading && !loadErr && row && canContinue && (
-            <div className="max-w-[720px] mx-auto mb-3 rounded-xl border-2 border-emerald-300 bg-emerald-50 px-4 py-3 flex items-start gap-3">
-              <div className="w-9 h-9 rounded-full bg-emerald-600 flex items-center justify-center shrink-0">
+            <div className="max-w-[720px] mx-auto mb-3 rounded-xl border-2 border-brand-orange-300 bg-brand-orange-50 px-4 py-3 flex items-start gap-3">
+              <div className="w-9 h-9 rounded-full bg-brand-orange-500 flex items-center justify-center shrink-0">
                 <PlayCircle className="w-5 h-5 text-white" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-emerald-900">
+                <p className="text-sm font-bold text-brand-orange-900">
                   {status === "prepared"
                     ? "Протоколът чака сервизен екип"
                     : "Протоколът се попълва"}
                 </p>
-                <p className="text-xs text-emerald-800 leading-snug mt-0.5">
+                <p className="text-xs text-brand-orange-800 leading-snug mt-0.5">
                   {status === "prepared"
-                    ? "Офисът е въвел клиентските данни. Натиснете „Довърши“, за да продължите попълването на място."
-                    : "Има въведени данни, но липсват подписи. Натиснете „Довърши“, за да приключите попълването и да подпишете протокола."}
+                    ? "Протоколът е започнат (дата, марка, модел). Натиснете „Довърши“, за да попълните сервизните данни и подписа на място."
+                    : "Има въведени данни, но липсва подпис на сервизен техник. Натиснете „Довърши“, за да приключите попълването и да подпишете протокола."}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={onEdit}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm shrink-0"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-brand-blue-700 hover:bg-brand-blue-800 text-white text-xs font-bold shadow-sm shrink-0"
               >
                 <PlayCircle className="w-4 h-4" />
                 Довърши
@@ -351,26 +269,12 @@ export function ServiceProtocolPreview({
               </div>
 
               <div className="px-4 pb-4 space-y-4">
-                {/* ── Клиентски данни ── */}
-                <Section title="Клиент">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
-                    <PreviewField label="Име" value={row.client_name} />
-                    <PreviewField label="Адрес" value={row.address} />
-                    <PreviewField label="Телефон" value={row.client_phone} />
-                    <PreviewField label="Имейл" value={row.client_email} />
-                  </div>
-                </Section>
-
-                {/* ── Климатик ── */}
+                {/* ── Климатик (без клиентска секция) ── */}
                 <Section title="Климатик">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+                    <PreviewField label="Марка" value={row.ac_brand} />
                     <PreviewField label="Модел" value={row.ac_model} />
-                    <PreviewField label="Сериен №" value={row.serial_number} />
                     <PreviewField label="Японски" value={row.is_japanese_brand === null ? "—" : boolLabel(row.is_japanese_brand)} />
-                    <PreviewField
-                      label="Платена сума"
-                      value={row.paid_amount != null ? `${Number(row.paid_amount).toFixed(2)} лв.` : "—"}
-                    />
                   </div>
                 </Section>
 
@@ -446,7 +350,7 @@ export function ServiceProtocolPreview({
                           key={n}
                           className={`w-7 h-7 ${
                             n <= (row.service_rating ?? 0)
-                              ? "fill-amber-400 text-amber-400"
+                              ? "fill-brand-orange-500 text-brand-orange-500"
                               : "text-slate-300"
                           }`}
                         />
@@ -465,10 +369,9 @@ export function ServiceProtocolPreview({
                   </div>
                 </Section>
 
-                {/* ── Подписи ── */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2">
-                  <SigBlock title="Сервизен екип" src={row.signature_team} />
-                  <SigBlock title="Подпис на клиента:" src={row.signature_client} />
+                {/* ── Подпис ── */}
+                <div className="pt-2 max-w-md mx-auto">
+                  <SigBlock title="Подпис на сервизен техник" src={row.signature_team} />
                 </div>
 
                 <p className="text-center text-[10px] text-slate-500 pt-4 border-t border-slate-200 leading-relaxed">
@@ -485,8 +388,8 @@ export function ServiceProtocolPreview({
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="border-l-2 border-emerald-400 pl-3">
-      <p className="text-xs font-extrabold uppercase tracking-wider text-emerald-700 mb-1.5">
+    <div className="border-l-2 border-brand-orange-500 pl-3">
+      <p className="text-xs font-extrabold uppercase tracking-wider text-brand-blue-800 mb-1.5">
         {title}
       </p>
       {children}

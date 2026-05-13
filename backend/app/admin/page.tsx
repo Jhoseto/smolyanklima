@@ -334,12 +334,12 @@ function customerStatusLabel(value: string | null | undefined) {
 
 function eventLabel(value: string | null | undefined) {
   if (value === "sale") return "Продажба";
-  if (value === "item_added") return "Добавяне";
-  if (value === "item_removed") return "Премахване";
+  if (value === "item_added") return "Добавяне на продукт";
+  if (value === "item_removed") return "Премахване на продукт";
   if (value === "service_installation") return "Монтаж";
-  if (value === "service_inspection") return "Оглед";
-  if (value === "service_repair") return "Сервиз";
   if (value === "service_maintenance") return "Профилактика";
+  if (value === "service_on_site") return "Сервиз на терен";
+  if (value === "service_in_shop") return "Сервиз в склад";
   return "Задача";
 }
 

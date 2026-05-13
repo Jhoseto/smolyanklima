@@ -31,7 +31,7 @@ type DocKind = {
   description: string;
   icon: React.ComponentType<{ className?: string }>;
   href: string;
-  tone: "blue" | "emerald" | "amber" | "violet" | "rose";
+  tone: "blue" | "brand" | "amber" | "violet" | "rose";
   enabled: boolean;
 };
 
@@ -53,7 +53,7 @@ const DOC_KINDS: DocKind[] = [
       "При профилактика, ремонт или диагностика — описва открити проблеми, извършена работа и резервни части.",
     icon: Wrench,
     href: "/admin/service/documents/service",
-    tone: "emerald",
+    tone: "brand",
     enabled: true,
   },
   {
@@ -89,11 +89,11 @@ const DOC_KINDS: DocKind[] = [
 ];
 
 const TONE_CLASSES: Record<DocKind["tone"], { iconBg: string; iconText: string; ring: string }> = {
-  blue:    { iconBg: "bg-blue-50",    iconText: "text-blue-600",    ring: "hover:ring-blue-200" },
-  emerald: { iconBg: "bg-emerald-50", iconText: "text-emerald-600", ring: "hover:ring-emerald-200" },
-  amber:   { iconBg: "bg-amber-50",   iconText: "text-amber-600",   ring: "hover:ring-amber-200" },
-  violet:  { iconBg: "bg-violet-50",  iconText: "text-violet-600",  ring: "hover:ring-violet-200" },
-  rose:    { iconBg: "bg-rose-50",    iconText: "text-rose-600",    ring: "hover:ring-rose-200" },
+  blue:    { iconBg: "bg-blue-50",         iconText: "text-blue-600",         ring: "hover:ring-blue-200" },
+  brand:   { iconBg: "bg-brand-orange-50", iconText: "text-brand-blue-700",   ring: "hover:ring-brand-blue-200" },
+  amber:   { iconBg: "bg-amber-50",        iconText: "text-amber-600",        ring: "hover:ring-amber-200" },
+  violet:  { iconBg: "bg-violet-50",       iconText: "text-violet-600",       ring: "hover:ring-violet-200" },
+  rose:    { iconBg: "bg-rose-50",         iconText: "text-rose-600",         ring: "hover:ring-rose-200" },
 };
 
 export default async function ServiceDocumentsHubPage() {

@@ -8,6 +8,8 @@ export interface AdminSession {
   userId: string;
   name: string;
   email: string;
+  /** Профилна снимка (Cloudinary URL), ако е зададена. */
+  avatarUrl: string | null;
 }
 
 /** Full session with role — use for new routes and the layout. */
@@ -24,7 +26,7 @@ export async function adminSession(): Promise<AdminSession> {
 
   const { data: adminRow, error: adminErr } = await anon
     .from("admin_users")
-    .select("id,is_active,role,name,email")
+    .select("id,is_active,role,name,email,avatar_url")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -37,6 +39,7 @@ export async function adminSession(): Promise<AdminSession> {
     userId: adminRow.id,
     name: adminRow.name ?? "",
     email: adminRow.email ?? "",
+    avatarUrl: (adminRow as { avatar_url?: string | null }).avatar_url ?? null,
   };
 }
 

@@ -18,15 +18,26 @@ export function useOnlineStatus(): boolean {
   const [online, setOnline] = useState<boolean>(true);
 
   useEffect(() => {
+    const sync = () => setOnline(navigator.onLine);
     const onOnline = () => setOnline(true);
     const onOffline = () => setOnline(false);
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
+    // Windows/Chrome понякога оставят `navigator.onLine` грешен докато не се върне фокусът.
+    window.addEventListener("focus", sync);
+    window.addEventListener("pageshow", sync);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") sync();
+    };
+    document.addEventListener("visibilitychange", onVisible);
     // Sync веднага след монтиране — реалната стойност от браузъра.
-    setOnline(navigator.onLine);
+    sync();
     return () => {
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
+      window.removeEventListener("focus", sync);
+      window.removeEventListener("pageshow", sync);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
 

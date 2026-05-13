@@ -6,6 +6,7 @@ import { HelpRow, HelpCard, Card, Input, Select, Textarea, Button, Table, Th, Td
 import { ChevronDown, ChevronUp, Search, UserPlus, Users, Activity, FileText, Phone, Mail, MapPin, X, ChevronLeft, ChevronRight, Truck, Plus, Trash2, Save, Pencil } from "lucide-react";
 import { ProductQuickViewButton } from "../ProductQuickView";
 import { useDebounce } from "@/lib/hooks/useDebounce";
+import { assertNoContactPrimaryPhoneDuplicate } from "@/lib/admin/contactPhoneConflictClient";
 
 type ContactKind = "client" | "supplier";
 
@@ -430,6 +431,8 @@ function AdminContactsPageInner() {
     setCreating(true);
     setError(null);
     try {
+      await assertNoContactPrimaryPhoneDuplicate(newForm.phone.trim());
+
       // Изхвърляме празните допълнителни телефони и нормализираме labels.
       const extras = newForm.additionalPhones
         .map((p) => ({ phone: p.phone.trim(), label: p.label.trim() }))
@@ -492,6 +495,8 @@ function AdminContactsPageInner() {
     setSavingProfile(true);
     setError(null);
     try {
+      await assertNoContactPrimaryPhoneDuplicate(phone, detail.id);
+
       const extras = phonesDraft
         .map((p) => ({ phone: p.phone.trim(), label: p.label.trim() }))
         .filter((p) => p.phone.length >= 3)

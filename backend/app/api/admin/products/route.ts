@@ -7,6 +7,7 @@ import { normalizeProductRegion } from "@/lib/admin/productRegion";
 import { isPostgrestMissingColumn } from "@/lib/admin/pgMissingColumn";
 import { logAdminActivity } from "@/lib/admin/audit";
 import { mapProductDbError } from "@/lib/admin/productDbErrors";
+import { insertProductCatalogStockCalendarEvent } from "@/lib/admin/productCatalogWorkItems";
 import { replaceProductImages, upsertProductSpecs, type ImageInput, type SpecsInput } from "@/lib/admin/syncProductChildren";
 
 const SpecsSchema = z.object({
@@ -363,6 +364,13 @@ export async function POST(req: NextRequest) {
       price: parsed.data.price,
       condition: parsed.data.productCondition,
     },
+  });
+
+  await insertProductCatalogStockCalendarEvent(session.db, {
+    kind: "added",
+    productId,
+    productName: parsed.data.name.trim(),
+    createdBy: session.userId,
   });
 
   return withCors(req, NextResponse.json({ data }, { status: 201 }));

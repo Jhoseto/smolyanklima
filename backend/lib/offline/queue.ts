@@ -8,8 +8,10 @@ import {
   idbAdd,
   idbDelete,
   idbGet,
+  idbGetAll,
   idbGetAllFromIndex,
   idbPut,
+  isSupportedOfflineKind,
   type DocKind,
   type HttpMethod,
   type IdMapEntry,
@@ -23,6 +25,8 @@ export interface EnqueueOptions {
   body?: unknown;
   localId?: string;
   idempotencyKey?: string;
+  /** Ако е известна веднага (напр. тяло от 5xx отговор). */
+  initialError?: string;
 }
 
 /**
@@ -46,7 +50,7 @@ export async function enqueueMutation(opts: EnqueueOptions): Promise<number> {
       existing.endpoint = opts.endpoint;
       existing.status = "pending";
       existing.retries = 0;
-      existing.lastError = undefined;
+      existing.lastError = opts.initialError?.trim() || undefined;
       existing.updatedAt = now;
       await idbPut("mutation_queue", existing);
       return existing.id;
@@ -62,6 +66,7 @@ export async function enqueueMutation(opts: EnqueueOptions): Promise<number> {
     idempotencyKey: opts.idempotencyKey,
     status: "pending",
     retries: 0,
+    lastError: opts.initialError?.trim() || undefined,
     createdAt: now,
     updatedAt: now,
   };
@@ -96,14 +101,28 @@ async function findDuplicateMutation(opts: EnqueueOptions): Promise<QueuedMutati
 /** Връща всички pending mutations подредени по createdAt asc. */
 export async function listPendingMutations(): Promise<QueuedMutation[]> {
   const all = await idbGetAllFromIndex<QueuedMutation>("mutation_queue", "by-createdAt");
-  return all.filter(m => m.status !== "syncing");
+  return all.filter(m => m.status !== "syncing" && isSupportedOfflineKind(String(m.kind)));
 }
 
-/** Брой неизпратени мутации. */
+/** Брой неизпратени мутации (само за видове, които още се синхронизират). */
 export async function countPendingMutations(): Promise<number> {
   const pending = await idbGetAllFromIndex<QueuedMutation>("mutation_queue", "by-status", "pending");
   const errs = await idbGetAllFromIndex<QueuedMutation>("mutation_queue", "by-status", "error");
-  return pending.length + errs.length;
+  const active = (m: QueuedMutation) => isSupportedOfflineKind(String(m.kind));
+  return pending.filter(active).length + errs.filter(active).length;
+}
+
+/**
+ * Последна запазена грешка от опашката (за UI — „не е интернет, а сървърът отказа“).
+ */
+export async function getPendingQueueSampleError(): Promise<string | undefined> {
+  const active = (m: QueuedMutation) => isSupportedOfflineKind(String(m.kind));
+  const pending = (await idbGetAllFromIndex<QueuedMutation>("mutation_queue", "by-status", "pending")).filter(active);
+  const errs = (await idbGetAllFromIndex<QueuedMutation>("mutation_queue", "by-status", "error")).filter(active);
+  const all = [...pending, ...errs]
+    .filter((m): m is QueuedMutation & { lastError?: string } => Boolean(m.lastError?.trim()))
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+  return all[0]?.lastError?.trim();
 }
 
 /** Маркира мутация като in-progress, за да не я хване друг tab/SW. */
@@ -165,6 +184,23 @@ export async function resetStaleSyncing(): Promise<number> {
     n += 1;
   }
   return n;
+}
+
+/** Изтрива чакащи мутации за видове, които вече не се ползват offline (исторически записи). */
+export async function purgeObsoleteQueueMutations(): Promise<number> {
+  try {
+    const all = await idbGetAll<QueuedMutation & { kind: string }>("mutation_queue");
+    let n = 0;
+    for (const m of all) {
+      if (isSupportedOfflineKind(m.kind)) continue;
+      if (m.id == null) continue;
+      await idbDelete("mutation_queue", m.id);
+      n += 1;
+    }
+    return n;
+  } catch {
+    return 0;
+  }
 }
 
 /** Helper за SW: достъп до сурова база, ако трябва (rare). */
