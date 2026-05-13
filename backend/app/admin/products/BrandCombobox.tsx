@@ -207,7 +207,7 @@ export function BrandCombobox({
   return (
     <div ref={wrapperRef} className="relative">
       <div
-        className={`relative flex items-center gap-1.5 rounded-lg border bg-white transition-colors ${
+          className={`relative flex items-center gap-1 max-md:gap-1 rounded-md md:rounded-lg border bg-white transition-colors ${
           aiHighlighted
             ? "border-emerald-300 bg-emerald-50/40"
             : open
@@ -241,7 +241,7 @@ export function BrandCombobox({
           placeholder={placeholder}
           autoComplete="off"
           spellCheck={false}
-          className="flex-1 min-w-0 bg-transparent px-1 py-2 text-sm text-slate-800 placeholder:text-slate-400 outline-none disabled:cursor-not-allowed"
+          className="flex-1 min-w-0 bg-transparent px-1 py-1.5 max-md:py-1 text-sm max-md:text-[13px] text-slate-800 placeholder:text-slate-400 outline-none disabled:cursor-not-allowed"
         />
         {creating && (
           <Loader2 className="w-4 h-4 text-brand-blue-500 animate-spin mr-1.5 shrink-0" />

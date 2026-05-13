@@ -23,8 +23,8 @@ export function InfoBadge({ text }: { text: string }) {
 
 export function SectionTitle({ title, hint }: { title: string; hint?: string }) {
   return (
-    <div className="inline-flex items-center gap-1.5">
-      <span className="text-slate-900 font-bold text-base leading-snug">{title}</span>
+    <div className="inline-flex items-center gap-1.5 max-w-full min-w-0">
+      <span className="text-slate-900 font-bold text-sm md:text-base leading-snug">{title}</span>
       {hint && <InfoDot text={hint} />}
     </div>
   );
@@ -88,9 +88,9 @@ export function Button({
   };
   
   const sizes = {
-    sm: "px-2 py-1.5 text-xs",
-    md: "px-3 py-2 text-sm",
-    lg: "px-3.5 py-2 text-sm",
+    sm: "px-2 py-1.5 text-xs max-md:px-1.5 max-md:py-1 max-md:text-[11px]",
+    md: "px-3 py-2 text-sm max-md:px-2.5 max-md:py-1.5 max-md:text-[13px]",
+    lg: "px-3.5 py-2 text-sm max-md:px-3 max-md:py-2 max-md:text-[13px]",
   };
 
   return (
@@ -106,7 +106,7 @@ export function Button({
 export function Input({ className = "", ...props }: ComponentProps<"input">) {
   return (
     <input 
-      className={`w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-brand-orange-500 focus:ring-2 focus:ring-brand-orange-500/20 transition-shadow ${className}`}
+      className={`w-full px-3 py-2 max-md:px-2.5 max-md:py-1.5 bg-white border border-slate-300 rounded-lg max-md:rounded-md text-sm max-md:text-[13px] max-md:leading-snug text-slate-900 placeholder-slate-400 focus:outline-none focus:border-brand-orange-500 focus:ring-2 focus:ring-brand-orange-500/20 transition-shadow ${className}`}
       {...props}
     />
   );
@@ -115,7 +115,7 @@ export function Input({ className = "", ...props }: ComponentProps<"input">) {
 export function Select({ className = "", children, ...props }: ComponentProps<"select">) {
   return (
     <select 
-      className={`w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-brand-orange-500 focus:ring-2 focus:ring-brand-orange-500/20 transition-shadow appearance-none ${className}`}
+      className={`w-full px-3 py-2 max-md:px-2.5 max-md:py-1.5 bg-white border border-slate-300 rounded-lg max-md:rounded-md text-sm max-md:text-[13px] max-md:leading-snug text-slate-900 focus:outline-none focus:border-brand-orange-500 focus:ring-2 focus:ring-brand-orange-500/20 transition-shadow appearance-none ${className}`}
       {...props}
     >
       {children}
@@ -126,7 +126,7 @@ export function Select({ className = "", children, ...props }: ComponentProps<"s
 export function Textarea({ className = "", ...props }: ComponentProps<"textarea">) {
   return (
     <textarea 
-      className={`w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-brand-orange-500 focus:ring-2 focus:ring-brand-orange-500/20 transition-shadow resize-y min-h-[3rem] ${className}`}
+      className={`w-full px-3 py-2 max-md:px-2.5 max-md:py-1.5 bg-white border border-slate-300 rounded-lg max-md:rounded-md text-sm max-md:text-[13px] max-md:leading-snug text-slate-900 placeholder-slate-400 focus:outline-none focus:border-brand-orange-500 focus:ring-2 focus:ring-brand-orange-500/20 transition-shadow resize-y min-h-[3rem] max-md:min-h-[2.5rem] ${className}`}
       {...props}
     />
   );

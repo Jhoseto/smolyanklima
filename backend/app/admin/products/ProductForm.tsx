@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import Link from "next/link";
 import { Input, Select, Textarea, Button } from "../ui";
-import { AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, Sparkles, Wand2, X, ExternalLink, Loader2 } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, Sparkles, Wand2, X, ExternalLink, Loader2, Info } from "lucide-react";
 import { useDebounce } from "@/lib/hooks/useDebounce";
 import { normalizeProductStockLocation, type ProductStockLocation } from "@/lib/admin/productStockLocation";
 import { normalizeProductRegion, type ProductRegion } from "@/lib/admin/productRegion";
@@ -283,12 +283,22 @@ function matchBrandByModelPrefix(
 
 function FieldTitle({ label, info, ai }: { label: string; info: string; ai?: boolean }) {
   return (
-    <div className="mb-1 leading-tight">
-      <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1">
-        <span>{label}</span>
-        {ai && <AiBadge />}
+    <div className="mb-0.5 md:mb-1 leading-tight" title={info}>
+      <div className="flex items-start justify-between gap-1.5">
+        <div className="text-[10px] md:text-[11px] font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1 min-w-0 flex-1">
+          <span className="truncate">{label}</span>
+          {ai && <AiBadge />}
+        </div>
+        <span
+          className="md:hidden shrink-0 text-slate-400 p-0.5 -mr-0.5 -mt-0.5 rounded-md"
+          title={info}
+          aria-label={info}
+          role="img"
+        >
+          <Info className="w-3.5 h-3.5" />
+        </span>
       </div>
-      <div className="text-[10px] text-slate-400 truncate" title={info}>{info}</div>
+      <div className="hidden md:block text-[10px] text-slate-400 truncate">{info}</div>
     </div>
   );
 }
@@ -516,11 +526,11 @@ function CollapsibleSection({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="border-t border-slate-200 pt-2.5 md:pt-4">
+    <div className="border-t border-slate-200 pt-2 md:pt-4">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between gap-2 mb-1.5 md:mb-2 group min-h-[2.25rem] md:min-h-0"
+        className="w-full flex items-center justify-between gap-2 mb-1 md:mb-2 group min-h-[2rem] md:min-h-0 py-0.5"
       >
         <div className="flex items-center gap-2 min-w-0 text-left">
           <h2 className="text-[13px] md:text-base font-bold text-slate-900 leading-tight">{title}</h2>
@@ -1336,13 +1346,13 @@ export function ProductFormFields({
   // (Legacy single-file uploader е премахнат в полза на ProductPhotoUploader.)
 
   return (
-    <div className="grid gap-3 md:gap-5">
+    <div className="grid gap-2 md:gap-5 max-md:text-[13px] max-md:leading-snug">
       {ro && (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 leading-snug">
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 max-md:text-xs md:px-3 md:py-2.5 text-sm text-slate-700 leading-snug">
           <strong>Сервизен преглед:</strong> полетата са само за четене. За промени по този продукт обърнете се към офис или главен администратор.
         </div>
       )}
-      <fieldset disabled={ro} className="min-w-0 border-0 p-0 m-0 w-full grid gap-3 md:gap-5">
+      <fieldset disabled={ro} className="min-w-0 border-0 p-0 m-0 w-full grid gap-2 md:gap-5">
       <datalist id="energy-class-options">{ENERGY_CLASS_OPTIONS.map((v) => <option key={v} value={v} />)}</datalist>
       <datalist id="refrigerant-options">{REFRIGERANT_OPTIONS.map((v) => <option key={v} value={v} />)}</datalist>
       <datalist id="warranty-months-options">{WARRANTY_MONTHS_OPTIONS.map((v) => <option key={v} value={v} />)}</datalist>
@@ -1358,26 +1368,26 @@ export function ProductFormFields({
       {/* Multi-photo: бутоните може да се ползват многократно; повторен скан */}
       {/* допълва само празните полета (никога не презаписва ръчни стойности). */}
       {/* ===================================================================== */}
-      <section className="rounded-xl md:rounded-2xl border-2 border-dashed border-brand-blue-200 bg-gradient-to-br from-brand-blue-50/70 via-white to-brand-orange-50/40 p-2.5 sm:p-4">
-        <div className="flex items-start sm:items-center justify-between gap-2 sm:gap-3 mb-2 sm:mb-3">
+      <section className="rounded-lg max-md:border max-md:border-brand-blue-200 md:rounded-2xl border-2 border-dashed border-brand-blue-200 bg-gradient-to-br from-brand-blue-50/70 via-white to-brand-orange-50/40 p-2 max-md:py-2.5 sm:p-4">
+        <div className="flex items-start sm:items-center justify-between gap-2 sm:gap-3 mb-1.5 sm:mb-3">
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <div className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-brand-blue-500 text-white shadow-sm">
-                <Sparkles className="w-4 h-4" />
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="inline-flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-md sm:rounded-lg bg-brand-blue-500 text-white shadow-sm shrink-0">
+                <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </div>
-              <h2 className="text-sm sm:text-base font-bold text-slate-900 leading-tight">
+              <h2 className="text-xs sm:text-base font-bold text-slate-900 leading-tight">
                 Бърз старт от снимка{" "}
-                <span className="text-[11px] text-slate-500 font-normal hidden sm:inline">
+                <span className="text-[10px] text-slate-500 font-normal hidden sm:inline">
                   (камера или галерия → AI auto-попълване)
                 </span>
               </h2>
             </div>
-            <p className="text-[11px] sm:text-xs text-slate-600 mt-1 ml-9 leading-snug">
+            <p className="text-[10px] sm:text-xs text-slate-600 mt-0.5 sm:mt-1 ml-7 sm:ml-9 leading-snug">
               Снимай или избери готова снимка на етикета — AI чете серийния номер, разпознава модела и попълва пълните технически данни. Може да повториш многократно за различни тела или ъгли.
             </p>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:gap-3">
+        <div className="grid grid-cols-2 gap-1.5 sm:gap-3">
           <LabelScanButton
             whichUnit="indoor"
             knownBrand={brands.find((b) => b.id === form.brandId)?.name}
@@ -1398,7 +1408,7 @@ export function ProductFormFields({
         </p>
         {aiToast && (
           <div
-            className={`mt-3 rounded-xl border-2 px-3.5 py-3 text-[13px] font-semibold leading-snug flex items-start gap-2.5 shadow-sm relative ${
+            className={`mt-2 max-md:mt-1.5 rounded-lg md:rounded-xl border px-2.5 py-2 max-md:py-1.5 text-xs md:text-[13px] font-semibold leading-snug flex items-start gap-2 shadow-sm relative ${
               aiToast.kind === "ok"
                 ? "border-emerald-300 bg-emerald-50 text-emerald-900"
                 : "border-amber-300 bg-amber-50 text-amber-900"
@@ -1407,9 +1417,9 @@ export function ProductFormFields({
             aria-live="polite"
           >
             {aiToast.kind === "ok" ? (
-              <CheckCircle2 className="w-5 h-5 mt-0.5 shrink-0 text-emerald-600" />
+              <CheckCircle2 className="w-4 h-4 md:w-5 md:h-5 mt-0.5 shrink-0 text-emerald-600" />
             ) : (
-              <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0 text-amber-600" />
+              <AlertTriangle className="w-4 h-4 md:w-5 md:h-5 mt-0.5 shrink-0 text-amber-600" />
             )}
             <div className="min-w-0 flex-1 pr-6">
               <div>{aiToast.text}</div>
@@ -1447,10 +1457,10 @@ export function ProductFormFields({
       </section>
 
       {/* Двуколоновъ layout на desktop: основни полета (2/3) + страничен панел „Каталог & наличност" (1/3). */}
-      <div className="grid gap-3 md:gap-4 lg:grid-cols-3 lg:gap-x-5">
-        <div className="lg:col-span-2 grid gap-3 md:gap-4">
+      <div className="grid gap-2 md:gap-4 lg:grid-cols-3 lg:gap-x-5">
+        <div className="lg:col-span-2 grid gap-2 md:gap-4">
           {/* НАЙ-ГОРЕ: Марка + Модел — техническата идентификация. */}
-          <div className="grid gap-3 md:gap-4 md:grid-cols-12">
+          <div className="grid gap-2 md:gap-4 md:grid-cols-12">
             <label className="block md:col-span-5">
               <FieldTitle
                 label="Марка"
@@ -1494,7 +1504,7 @@ export function ProductFormFields({
           </div>
 
           {/* СЛЕД МАРКА+МОДЕЛ: Slug + Име в клиентския каталог. */}
-          <div className="grid gap-3 md:gap-4 md:grid-cols-12">
+          <div className="grid gap-2 md:gap-4 md:grid-cols-12">
             <label className="block md:col-span-5">
               <div className="flex items-center justify-between gap-2 mb-1">
                 <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">Slug (по избор)</div>
@@ -1513,7 +1523,7 @@ export function ProductFormFields({
                 </Button>
               </div>
               <Input value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} placeholder="auto от името" />
-              <div className="text-[10px] text-slate-400 mt-0.5 leading-snug">
+              <div className="text-[10px] text-slate-400 mt-0.5 leading-snug hidden md:block">
                 По избор. Ползва се за URL и за папка при качване на снимки (мин. 2 знака).
               </div>
             </label>
@@ -1522,7 +1532,7 @@ export function ProductFormFields({
               <div className="flex items-center justify-between gap-2 mb-1 leading-tight">
                 <div>
                   <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">Име в клиентския каталог</div>
-                  <div className="text-[10px] text-slate-400 truncate" title="Това вижда клиентът. Обикновено: марка + модел + kW.">
+                  <div className="hidden md:block text-[10px] text-slate-400 truncate" title="Това вижда клиентът. Обикновено: марка + модел + kW.">
                     Това вижда клиентът. Обикновено: марка + модел + kW.
                   </div>
                 </div>
@@ -1620,12 +1630,12 @@ export function ProductFormFields({
                 <Wand2 className="w-3.5 h-3.5" /> {aiBusy ? "AI..." : "AI чернова"}
               </Button>
             </div>
-            <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={4} />
+            <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} className="max-md:min-h-[5.5rem] md:min-h-[7rem]" />
           </label>
         </div>
 
         {/* Страничен панел: Каталог & наличност */}
-        <aside className="lg:col-span-1 grid gap-2.5 md:gap-3 rounded-xl md:rounded-2xl border border-slate-200 bg-slate-50/60 p-3 md:p-4 lg:sticky lg:top-4 lg:self-start order-first lg:order-none">
+        <aside className="lg:col-span-1 grid gap-2 md:gap-3 rounded-lg md:rounded-2xl border border-slate-200 bg-slate-50/60 p-2.5 md:p-4 lg:sticky lg:top-4 lg:self-start order-first lg:order-none">
           <div className="flex items-center justify-between border-b border-slate-200 pb-1.5 md:pb-2">
             <div className="text-[11px] md:text-xs font-bold uppercase tracking-wider text-slate-700">Каталог &amp; наличност</div>
             <span className="text-[10px] text-slate-400">витрина / склад</span>
@@ -1740,9 +1750,9 @@ export function ProductFormFields({
             )}
           </label>
 
-          <label className="flex items-center gap-2.5 cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 mt-1">
-            <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-brand-blue-500 focus:ring-brand-blue-500" checked={form.isFeatured} onChange={(e) => setForm({ ...form, isFeatured: e.target.checked })} />
-            <span className="text-sm font-semibold text-slate-700">Избран <span className="text-slate-400 font-normal text-[11px]">(подчертава в каталога)</span></span>
+          <label className="flex items-center gap-2 cursor-pointer rounded-md md:rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 md:px-3 md:py-2 mt-0.5 md:mt-1">
+            <input type="checkbox" className="w-4 h-4 max-md:w-3.5 max-md:h-3.5 rounded border-slate-300 text-brand-blue-500 focus:ring-brand-blue-500" checked={form.isFeatured} onChange={(e) => setForm({ ...form, isFeatured: e.target.checked })} />
+            <span className="text-xs md:text-sm font-semibold text-slate-700">Избран <span className="text-slate-400 font-normal text-[10px] md:text-[11px]">(подчертава в каталога)</span></span>
           </label>
         </aside>
       </div>
@@ -1904,9 +1914,9 @@ export function ProductFormFields({
             <FieldTitle label="Гаранция (месеци)" info="Напр. 36 = 3 години." ai={isAiField("specs.warranty_months")} />
             <Input value={form.specs.warranty_months} onChange={(e) => setSpec("warranty_months", e.target.value)} list="warranty-months-options" placeholder="36" className={aiHl("specs.warranty_months")} />
           </label>
-          <label className={`flex items-center gap-2.5 cursor-pointer rounded-lg border px-3 py-2 self-end sm:col-span-2 lg:col-span-1 ${isAiField("specs.wifi") ? "border-emerald-300 bg-emerald-50/50" : "border-slate-200 bg-slate-50"}`}>
-            <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-brand-blue-500 focus:ring-brand-blue-500" checked={form.specs.wifi} onChange={(e) => setSpec("wifi", e.target.checked)} />
-            <span className="text-sm font-semibold text-slate-700 flex items-center gap-1">WiFi <span className="text-slate-400 font-normal text-[11px]">(вграден модул)</span>{isAiField("specs.wifi") && <AiBadge />}</span>
+          <label className={`flex items-center gap-2 cursor-pointer rounded-md md:rounded-lg border px-2.5 py-1.5 md:px-3 md:py-2 self-end sm:col-span-2 lg:col-span-1 ${isAiField("specs.wifi") ? "border-emerald-300 bg-emerald-50/50" : "border-slate-200 bg-slate-50"}`}>
+            <input type="checkbox" className="w-3.5 h-3.5 md:w-4 md:h-4 rounded border-slate-300 text-brand-blue-500 focus:ring-brand-blue-500" checked={form.specs.wifi} onChange={(e) => setSpec("wifi", e.target.checked)} />
+            <span className="text-xs md:text-sm font-semibold text-slate-700 flex items-center gap-1">WiFi <span className="text-slate-400 font-normal text-[10px] md:text-[11px]">(модул)</span>{isAiField("specs.wifi") && <AiBadge />}</span>
           </label>
         </div>
       </CollapsibleSection>

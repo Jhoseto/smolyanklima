@@ -242,7 +242,7 @@ export function LabelScanButton({
         type="button"
         onClick={openCamera}
         disabled={disabled || isBusy}
-        className={`flex flex-col items-center justify-center gap-1.5 p-3 sm:p-4 rounded-2xl border-2 transition-all w-full text-center ${
+        className={`flex flex-col items-center justify-center gap-1 max-md:gap-0.5 p-2.5 max-md:py-2 sm:p-4 rounded-xl max-md:rounded-lg border-2 transition-all w-full text-center ${
           disabled
             ? "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed"
             : phase === "success"
@@ -257,7 +257,7 @@ export function LabelScanButton({
         }`}
       >
         <div
-          className={`flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-xl text-white shadow-sm ${
+          className={`flex h-9 w-9 sm:h-12 sm:w-12 items-center justify-center rounded-lg sm:rounded-xl text-white shadow-sm ${
             disabled
               ? "bg-slate-300"
               : phase === "success"
@@ -281,7 +281,7 @@ export function LabelScanButton({
             <Camera className="w-5 h-5 sm:w-6 sm:h-6" />
           )}
         </div>
-        <div className="text-sm sm:text-base font-bold leading-tight">
+        <div className="text-xs sm:text-base font-bold leading-tight">
           {phase === "success"
             ? "Готово!"
             : phase === "error"
@@ -296,7 +296,7 @@ export function LabelScanButton({
                   ? "Етикет вътрешно тяло"
                   : "Етикет външно тяло"}
         </div>
-        <div className="text-[11px] sm:text-xs font-normal opacity-80 leading-tight">
+        <div className="text-[10px] sm:text-xs font-normal opacity-80 leading-tight px-0.5">
           {phase === "success" && lastConfidence
             ? confidenceLabel(lastConfidence)
             : phase === "error"

@@ -170,7 +170,7 @@ export default function EditProductPage() {
         </div>
       )}
 
-      <Card className="p-3 sm:p-4 md:p-6 shadow-sm border-slate-200/90">
+      <Card className="p-2 sm:p-3 md:p-6 shadow-sm border-slate-200/90 max-md:rounded-lg">
         <ProductFormFields
           brands={brands}
           types={types}

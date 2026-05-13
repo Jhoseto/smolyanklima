@@ -427,32 +427,32 @@ export function ProductPhotoUploader({
   const showReusePanel = reusableImages && reusableImages.length > 0 && pending.length === 0;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2 md:space-y-3">
       {/* Re-use панел: показва се над uploader-а, ако имаме готов модел и
           вече има снимки за същия (brand, model_code) в каталога. */}
       {showReusePanel && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 flex items-start gap-3">
-          <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500 text-white shadow-sm shrink-0">
-            <Sparkles className="w-4 h-4" />
+        <div className="rounded-lg md:rounded-xl border border-emerald-200 bg-emerald-50/70 p-2.5 max-md:p-2 flex items-start gap-2 max-md:gap-2 md:gap-3">
+          <div className="inline-flex h-7 w-7 md:h-8 md:w-8 items-center justify-center rounded-md md:rounded-lg bg-emerald-500 text-white shadow-sm shrink-0">
+            <Sparkles className="w-3.5 h-3.5 md:w-4 md:h-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-bold text-emerald-900 leading-tight">
+            <div className="text-xs md:text-sm font-bold text-emerald-900 leading-tight">
               Този модел вече има {reusableImages!.length}{" "}
               {reusableImages!.length === 1 ? "снимка" : "снимки"} в каталога
             </div>
-            <p className="text-[12px] text-emerald-800 leading-snug mt-0.5">
+            <p className="text-[11px] md:text-[12px] text-emerald-800 leading-snug mt-0.5">
               {reusableFromName
                 ? <>От продукта „<strong>{reusableFromName}</strong>“. </>
                 : null}
               Няма нужда да качваш нови — можеш да ползваш същите снимки.
             </p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
+            <div className="mt-1.5 md:mt-2 flex flex-wrap gap-1 md:gap-1.5">
               {reusableImages!.slice(0, 4).map((img, i) => (
                 <button
                   key={i}
                   type="button"
                   onClick={() => setLightbox({ source: "reuse", index: i })}
-                  className="h-12 w-12 rounded-md overflow-hidden border border-emerald-200 bg-white cursor-zoom-in hover:ring-2 hover:ring-emerald-400 transition-all"
+                  className="h-10 w-10 md:h-12 md:w-12 rounded-md overflow-hidden border border-emerald-200 bg-white cursor-zoom-in hover:ring-2 hover:ring-emerald-400 transition-all"
                   title="Кликни за уголемяване"
                 >
                   <img
@@ -468,7 +468,7 @@ export function ProductPhotoUploader({
                 type="button"
                 onClick={onLinkReusable}
                 disabled={uploading}
-                className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition-colors disabled:opacity-60"
+                className="mt-1.5 md:mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 max-md:py-1 rounded-md md:rounded-lg bg-emerald-600 text-white text-[11px] font-bold hover:bg-emerald-700 transition-colors disabled:opacity-60"
               >
                 <Link2 className="w-3.5 h-3.5" />
                 Линкни тези снимки към новия продукт
@@ -496,17 +496,17 @@ export function ProductPhotoUploader({
         type="button"
         onClick={openPicker}
         disabled={!canAddMore}
-        className={`flex flex-col items-center justify-center gap-1.5 p-4 rounded-2xl border-2 w-full text-center transition-all ${
+        className={`flex flex-col items-center justify-center gap-1 max-md:gap-0.5 p-3 max-md:p-2.5 rounded-xl max-md:rounded-lg border-2 w-full text-center transition-all ${
           !canAddMore
             ? "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed"
             : "bg-gradient-to-br from-brand-blue-50 to-brand-orange-50/60 border-dashed border-brand-blue-300 text-brand-blue-900 hover:from-brand-blue-100 hover:border-brand-blue-400 hover:shadow-md active:scale-[0.99]"
         }`}
       >
-        <div className={`flex h-11 w-11 items-center justify-center rounded-xl shadow-sm ${canAddMore ? "bg-brand-blue-500 text-white" : "bg-slate-300 text-white"}`}>
-          <ImagePlus className="w-5 h-5" />
+        <div className={`flex h-9 w-9 sm:h-11 sm:w-11 items-center justify-center rounded-lg shadow-sm ${canAddMore ? "bg-brand-blue-500 text-white" : "bg-slate-300 text-white"}`}>
+          <ImagePlus className="w-4 h-4 sm:w-5 sm:h-5" />
         </div>
-        <div className="text-sm sm:text-base font-bold leading-tight">Снимай или избери снимки</div>
-        <div className="text-[11px] sm:text-xs font-normal opacity-80 leading-tight">
+        <div className="text-xs sm:text-base font-bold leading-tight px-1">Снимай или избери снимки</div>
+        <div className="text-[10px] sm:text-xs font-normal opacity-80 leading-tight px-1">
           {canAddMore
             ? `Можеш да добавиш още ${remainingAfterPending} ${remainingAfterPending === 1 ? "снимка" : "снимки"} (макс. ${MAX_PRODUCT_IMAGES} общо)`
             : `Достигнат е лимитът от ${MAX_PRODUCT_IMAGES} снимки`}
@@ -543,7 +543,7 @@ export function ProductPhotoUploader({
               }
               setAiFinderOpen(true);
             }}
-            className={`group flex items-center gap-3 p-3 rounded-xl border w-full text-left transition-all ${
+            className={`group flex items-center gap-2 max-md:gap-2 p-2.5 max-md:py-2 rounded-lg md:rounded-xl border w-full text-left transition-all ${
               aiSearchReady
                 ? "bg-gradient-to-br from-violet-50 to-fuchsia-50/60 border-violet-200 hover:border-violet-400 hover:shadow-sm active:scale-[0.99]"
                 : "bg-slate-50 border-slate-200 cursor-help"
@@ -562,10 +562,10 @@ export function ProductPhotoUploader({
               <Search className="w-4 h-4" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className={`text-[13px] font-bold leading-tight ${aiSearchReady ? "text-violet-900" : "text-slate-500"}`}>
+              <div className={`text-[12px] md:text-[13px] font-bold leading-tight ${aiSearchReady ? "text-violet-900" : "text-slate-500"}`}>
                 AI намери официални снимки от интернет
               </div>
-              <p className={`text-[11px] leading-snug mt-0.5 ${aiSearchReady ? "text-violet-800" : "text-slate-400"}`}>
+              <p className={`text-[10px] md:text-[11px] leading-snug mt-0.5 ${aiSearchReady ? "text-violet-800" : "text-slate-400"}`}>
                 {aiSearchReady ? (
                   <>
                     Когато не можеш да снимаш. AI търси на{" "}
@@ -582,7 +582,7 @@ export function ProductPhotoUploader({
 
       {/* Preview grid + контроли */}
       {pending.length > 0 && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50/40 p-3 space-y-3">
+        <div className="rounded-xl max-md:rounded-lg border border-amber-200 bg-amber-50/40 p-2.5 max-md:py-2 space-y-2 max-md:space-y-2 md:space-y-3">
           <div className="flex items-start sm:items-center justify-between gap-2 flex-wrap">
             <div className="text-[12px] font-semibold text-amber-900 leading-snug">
               <AlertTriangle className="inline w-3.5 h-3.5 mb-0.5 mr-1 text-amber-600" />
@@ -608,15 +608,15 @@ export function ProductPhotoUploader({
             const aiDoneCount = pending.filter((p) => p.aiStatus === "done").length;
             if (pending.length === 0) return null;
             return (
-              <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 to-fuchsia-50/60 p-2.5 flex items-start gap-2.5">
-                <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500 text-white shadow-sm shrink-0">
-                  <Wand2 className="w-4 h-4" />
+              <div className="rounded-lg md:rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 to-fuchsia-50/60 p-2 max-md:p-2 flex items-start gap-2 md:gap-2.5">
+                <div className="inline-flex h-7 w-7 md:h-8 md:w-8 items-center justify-center rounded-md md:rounded-lg bg-violet-500 text-white shadow-sm shrink-0">
+                  <Wand2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-[12px] font-bold text-violet-900 leading-tight">
+                  <div className="text-[11px] md:text-[12px] font-bold text-violet-900 leading-tight">
                     AI „професионален каталог“ вид
                   </div>
-                  <p className="text-[11px] text-violet-800 leading-snug mt-0.5">
+                  <p className="text-[10px] md:text-[11px] text-violet-800 leading-snug mt-0.5">
                     Бял фон + soft shadow + балансирано осветление. Запазва
                     всеки детайл на продукта. Цена: <strong>~{AI_ENHANCE_PRICE_DISPLAY}/снимка</strong>{" "}
                     (Gemini Nano Banana).
@@ -769,7 +769,7 @@ export function ProductPhotoUploader({
             type="button"
             onClick={() => void uploadAll()}
             disabled={uploading || pending.length === 0}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-brand-blue-600 text-white text-sm font-bold shadow-sm hover:bg-brand-blue-700 active:scale-[0.99] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 max-md:py-2 rounded-lg md:rounded-xl bg-brand-blue-600 text-white text-xs max-md:text-[13px] md:text-sm font-bold shadow-sm hover:bg-brand-blue-700 active:scale-[0.99] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {uploading ? (
               <>
@@ -788,13 +788,13 @@ export function ProductPhotoUploader({
 
       {/* Глобален error и success notice. */}
       {globalError && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-medium text-red-800 flex items-start gap-2">
+        <div className="rounded-lg md:rounded-xl border border-red-200 bg-red-50 px-2.5 py-1.5 md:px-3 md:py-2 text-[11px] md:text-[12px] font-medium text-red-800 flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-red-600" />
           <span className="flex-1">{globalError}</span>
           <button
             type="button"
             onClick={() => setGlobalError(null)}
-            className="shrink-0 text-red-500 hover:text-red-800 font-bold text-sm leading-none px-1"
+            className="shrink-0 text-red-500 hover:text-red-800 font-bold text-xs md:text-sm leading-none px-1"
             aria-label="Затвори"
           >
             ×
@@ -802,7 +802,7 @@ export function ProductPhotoUploader({
         </div>
       )}
       {successNote && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] font-medium text-emerald-800 flex items-start gap-2">
+        <div className="rounded-lg md:rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 md:px-3 md:py-2 text-[11px] md:text-[12px] font-medium text-emerald-800 flex items-start gap-2">
           <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-emerald-600" />
           <span>{successNote}</span>
         </div>
