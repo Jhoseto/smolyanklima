@@ -19,6 +19,33 @@ const ChatRequestSchema = z.object({
   maxOutputTokens: z.number().int().min(1).max(8192).optional(),
 });
 
+/** Trim oversized payloads (production catalog + long AI replies often exceed Zod limits). */
+function normalizeChatBody(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object") return raw;
+  const body = raw as Record<string, unknown>;
+  const out: Record<string, unknown> = { ...body };
+
+  if (Array.isArray(body.messages)) {
+    out.messages = body.messages
+      .filter(
+        (m): m is { role: unknown; content: unknown } =>
+          !!m && typeof m === "object" && "role" in m && "content" in m,
+      )
+      .map((m) => ({
+        role: m.role,
+        content: typeof m.content === "string" ? m.content.trim().slice(0, 2000) : "",
+      }))
+      .filter((m) => m.content.length > 0 && (m.role === "user" || m.role === "assistant"))
+      .slice(-20);
+  }
+
+  if (typeof body.systemPrompt === "string") {
+    out.systemPrompt = body.systemPrompt.slice(0, 24000);
+  }
+
+  return out;
+}
+
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 
 function toGeminiContents(messages: Array<z.infer<typeof GeminiMessageSchema>>) {
@@ -47,7 +74,7 @@ async function postImpl(req: NextRequest) {
   }
 
   const json = await req.json().catch(() => null);
-  const parsed = ChatRequestSchema.safeParse(json);
+  const parsed = ChatRequestSchema.safeParse(normalizeChatBody(json));
   if (!parsed.success) {
     return withCors(req, NextResponse.json({ error: "INVALID_REQUEST", details: parsed.error.flatten() }, { status: 400 }));
   }

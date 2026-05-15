@@ -184,9 +184,18 @@ class PromptBuilder {
       'НАЛИЧНИ ПРОДУКТИ (ползвай само тези данни):',
     ];
 
-    products.forEach((product, index) => {
-      parts.push(`
-${index + 1}. ${product.name} (${product.brand})
+    // Production каталогът е много по-голям от локалния — пълният списък надхвърля лимита на API (~24k).
+    const MAX_PRODUCT_SECTION_CHARS = 14_000;
+    let usedChars = parts.join('\n').length;
+    let included = 0;
+    const sorted = [...products].sort((a, b) => {
+      if (a.inStock !== b.inStock) return a.inStock ? -1 : 1;
+      return a.price - b.price;
+    });
+
+    for (const product of sorted) {
+      const block = `
+${included + 1}. ${product.name} (${product.brand})
    - Цена: ${product.price} €${product.oldPrice ? ` (стара: ${product.oldPrice} €)` : ''}
    - Мощност: ${product.specs.power}
    - Квадратура: ${product.specs.coverage} кв.м.
@@ -195,8 +204,18 @@ ${index + 1}. ${product.name} (${product.brand})
    - Наличност: ${product.inStock ? 'В наличност' : 'Изчерпано'}
    - Гаранция: ${product.warranty.years} години
    - Особености: ${product.features.join(', ')}
-      `.trim());
-    });
+      `.trim();
+      if (usedChars + block.length + 2 > MAX_PRODUCT_SECTION_CHARS) break;
+      parts.push(block);
+      usedChars += block.length + 1;
+      included += 1;
+    }
+
+    if (included < products.length) {
+      parts.push(
+        `\n(Показани ${included} от ${products.length} модела. При нужда от друг модел — попитай за мощност/бюджет или предложи контакт с консултант.)`,
+      );
+    }
 
     parts.push('\nВАЖНО: Използвай САМО тези продукти и цени. НЕ измисляй други.');
     parts.push('\nКогато препоръчваш продукти, винаги споменавай ПЪЛНОТО ИМЕ на продукта (напр. "Daikin Perfera FTXF35D") за да могат да се покажат клиенту.');

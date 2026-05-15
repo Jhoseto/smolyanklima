@@ -130,22 +130,12 @@ class ComparisonAIService {
   }
 
   private async callBackendAI(prompt: string): Promise<string> {
-    const res = await fetch('/api/ai/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: [{ role: 'user', content: prompt }],
-        systemPrompt: this.getSystemPrompt(),
-        maxOutputTokens: 8192,
-      }),
-    });
-
-    if (!res.ok) {
-      throw new Error('AI comparison request failed');
-    }
-
-    const data = (await res.json()) as { content?: string };
-    return data.content ?? '';
+    const { callBackendAIChat } = await import('../lib/aiChatApi');
+    const { content } = await callBackendAIChat(
+      [{ role: 'user', content: prompt }],
+      this.getSystemPrompt(),
+    );
+    return content;
   }
 }
 

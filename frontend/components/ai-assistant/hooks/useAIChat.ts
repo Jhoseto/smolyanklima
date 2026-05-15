@@ -28,6 +28,7 @@ import {
   chatStateDiffers,
   CHAT_STATE_STORAGE_KEY,
 } from '../lib/chatPersistence';
+import { callBackendAIChat } from '../lib/aiChatApi';
 
 const MAX_USER_MESSAGE_CHARS = 1000;
 
@@ -348,8 +349,10 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
         emotion: emotionDetection.confidence > 0.3 ? emotionDetection.emotion : undefined,
       });
 
-      // Call Gemini API
-      const response = await callBackendAIChat(updatedMessages, systemPrompt);
+      const response = await callBackendAIChat(
+        updatedMessages.map((m) => ({ role: m.role, content: m.content })),
+        systemPrompt,
+      );
 
       // Validate response with hallucination guard
       const validationResult = hallucinationGuard.current.validateResponse(response.content);
@@ -545,24 +548,3 @@ function extractProductsFromResponse(response: string, products: Product[]): Pro
 
 export default useAIChat;
 
-async function callBackendAIChat(messages: Message[], systemPrompt?: string): Promise<{ content: string }> {
-  const res = await fetch('/api/ai/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      messages: messages.map((m) => ({ role: m.role, content: m.content })),
-      systemPrompt,
-    }),
-  });
-
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    const err: any = new Error('AI request failed');
-    err.code = res.status === 429 ? 'RATE_LIMIT_EXCEEDED' : `HTTP_${res.status}`;
-    err.details = body;
-    throw err;
-  }
-
-  const data = (await res.json()) as { content?: string };
-  return { content: data.content ?? '' };
-}
