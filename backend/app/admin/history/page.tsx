@@ -11,7 +11,8 @@ type EventCode =
   | "service_installation"
   | "service_maintenance"
   | "service_on_site"
-  | "service_in_shop";
+  | "service_in_shop"
+  | "consultation";
 
 type WorkRow = {
   id: string;

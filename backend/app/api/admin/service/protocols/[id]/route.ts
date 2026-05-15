@@ -2,6 +2,12 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
+import {
+  combineUnitSerials,
+  optionalProtocolEmail,
+  optionalProtocolPhone,
+  optionalUnitSerial,
+} from "@/lib/protocol-contact-fields";
 
 const MaterialSchema = z.object({
   id:   z.string(),
@@ -14,11 +20,13 @@ const UpdateSchema = z.object({
   date:             z.string().optional(),
   client_name:      z.string().max(200).optional().nullable(),
   ac_model:         z.string().max(200).optional().nullable(),
-  serial_number:    z.string().max(100).optional().nullable(),
+  serial_number:       z.string().max(100).optional().nullable(),
+  indoor_unit_serial:  optionalUnitSerial,
+  outdoor_unit_serial: optionalUnitSerial,
   address:          z.string().max(500).optional().nullable(),
   paid_amount:      z.number().nonnegative().optional().nullable(),
-  client_email:     z.string().max(200).optional().nullable().transform(v => v?.trim() || null),
-  client_phone:     z.string().max(30).optional().nullable(),
+  client_email:     optionalProtocolEmail,
+  client_phone:     optionalProtocolPhone,
   mount_types:      z.array(z.string()).optional(),
   materials:        z.array(MaterialSchema).optional(),
   cable_channels_m: z.number().nonnegative().optional(),
@@ -93,6 +101,15 @@ export async function PUT(
   }
 
   const update: Record<string, unknown> = { ...parsed.data };
+  if (
+    parsed.data.indoor_unit_serial !== undefined ||
+    parsed.data.outdoor_unit_serial !== undefined
+  ) {
+    update.serial_number = combineUnitSerials(
+      parsed.data.indoor_unit_serial,
+      parsed.data.outdoor_unit_serial,
+    );
+  }
 
   // Автоматичен workflow на статуси (само ако клиентът не подава явно status):
   //   prepared    → in_progress : при поява на техническо съдържание (начин на монтаж, материали и т.н.)

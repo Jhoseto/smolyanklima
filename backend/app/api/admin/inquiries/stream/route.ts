@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { adminDb } from "@/lib/admin/db";
+import { fetchNewInquiriesCount } from "@/lib/admin/inquiries-new-count";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,16 @@ export async function GET(req: NextRequest) {
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
-      controller.enqueue(encoder.encode(`event: ready\ndata: ${JSON.stringify({ ok: true })}\n\n`));
+      void (async () => {
+        try {
+          const newCount = await fetchNewInquiriesCount(supabase);
+          controller.enqueue(
+            encoder.encode(`event: ready\ndata: ${JSON.stringify({ ok: true, newCount })}\n\n`),
+          );
+        } catch {
+          controller.enqueue(encoder.encode(`event: ready\ndata: ${JSON.stringify({ ok: true })}\n\n`));
+        }
+      })();
 
       const timer = setInterval(async () => {
         if (req.signal.aborted) return;
@@ -27,8 +37,11 @@ export async function GET(req: NextRequest) {
           const nextSignature = await getInquiriesSignature(supabase);
           if (nextSignature !== lastSignature) {
             lastSignature = nextSignature;
+            const newCount = await fetchNewInquiriesCount(supabase);
             controller.enqueue(
-              encoder.encode(`event: changed\ndata: ${JSON.stringify({ signature: nextSignature, at: new Date().toISOString() })}\n\n`),
+              encoder.encode(
+                `event: changed\ndata: ${JSON.stringify({ signature: nextSignature, at: new Date().toISOString(), newCount })}\n\n`,
+              ),
             );
           } else {
             controller.enqueue(encoder.encode(`: ping ${Date.now()}\n\n`));

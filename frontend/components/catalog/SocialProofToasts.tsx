@@ -15,7 +15,7 @@ const ALL_MESSAGES = [
   { text: "Топ оценка: 4.9★ от 127 клиента", icon: Star, type: 'rating' },
   { text: "Петър от Девин поръча климатик с монтаж", icon: ShoppingCart, type: 'purchase' },
   { text: "Гаранция 3 години на всички модели", icon: CheckCircle2, type: 'service' },
-  { text: "1500+ успешни монтажа в региона", icon: TrendingUp, type: 'social' },
+  { text: "3000+ успешни монтажа в региона", icon: TrendingUp, type: 'social' },
   { text: "25+ години опит в климатичната техника", icon: Star, type: 'social' },
   { text: "Работим с всички марки: Daikin, Mitsubishi, Gree", icon: Package, type: 'brands' },
 ];

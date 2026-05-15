@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { Article } from '../../data/blog';
-import { formatDate } from '../../data/blog';
-import { ArrowRight, Clock, Eye } from 'lucide-react';
+import { formatDate, getCategoryBySlug } from '../../data/blog';
+import { ArrowRight, Clock, Eye, ImageIcon } from 'lucide-react';
 
 interface RelatedArticlesProps {
   currentArticle: Article;
@@ -10,115 +10,104 @@ interface RelatedArticlesProps {
   maxCount?: number;
 }
 
-export const RelatedArticles: React.FC<RelatedArticlesProps> = ({ 
-  currentArticle, 
+function RelatedThumb({ src, alt }: { src: string; alt: string }) {
+  const [error, setError] = useState(false);
+  if (error) {
+    return (
+      <div className="w-full h-full bg-gradient-to-br from-[#00B4D8]/15 to-[#FF4D00]/15 flex items-center justify-center">
+        <ImageIcon className="w-6 h-6 text-gray-400" aria-hidden />
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+      loading="lazy"
+      onError={() => setError(true)}
+    />
+  );
+}
+
+export const RelatedArticles: React.FC<RelatedArticlesProps> = ({
+  currentArticle,
   articles,
-  maxCount = 3
+  maxCount = 3,
 }) => {
-  // Find related articles based on:
-  // 1. Same category (highest priority)
-  // 2. Shared tags
-  // 3. Exclude current article
   const related = articles
-    .filter(article => article.id !== currentArticle.id)
-    .map(article => {
+    .filter((article) => article.id !== currentArticle.id)
+    .map((article) => {
       let score = 0;
-      
-      // Same category = +10 points
-      if (article.category === currentArticle.category) {
-        score += 10;
-      }
-      
-      // Shared tags = +3 points each
-      const sharedTags = article.tags.filter(tag => 
-        currentArticle.tags.includes(tag)
-      );
+      if (article.category === currentArticle.category) score += 10;
+      const sharedTags = article.tags.filter((tag) => currentArticle.tags.includes(tag));
       score += sharedTags.length * 3;
-      
-      // Featured articles get slight boost
-      if (article.featured) {
-        score += 2;
-      }
-      
+      if (article.featured) score += 2;
       return { article, score };
     })
     .sort((a, b) => b.score - a.score)
     .slice(0, maxCount)
-    .map(item => item.article);
+    .map((item) => item.article);
 
   if (related.length === 0) return null;
 
   return (
-    <section className="mt-12 pt-8 border-t border-gray-200">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-xl font-bold text-gray-900">
-          Свързани статии
-        </h3>
-        <Link 
+    <section className="bg-white rounded-2xl p-6 shadow-lg">
+      <div className="flex items-center justify-between gap-3 mb-5">
+        <h3 className="text-lg font-bold text-gray-900">Свързани статии</h3>
+        <Link
           to="/blog"
-          className="text-[#FF4D00] text-sm font-medium hover:underline flex items-center gap-1"
+          className="text-[#FF4D00] text-sm font-medium hover:underline flex items-center gap-1 shrink-0"
         >
-          Всички статии
+          Всички
           <ArrowRight className="w-4 h-4" />
         </Link>
       </div>
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {related.map(article => (
-          <article 
-            key={article.id}
-            className="group bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow overflow-hidden border border-gray-100"
-          >
-            <Link to={`/blog/${article.slug}`} className="block">
-              {/* Image */}
-              <div className="aspect-video relative overflow-hidden">
-                <img
-                  src={article.featuredImage}
-                  alt={article.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  loading="lazy"
-                />
-                <div className="absolute top-3 left-3">
-                  <span className="px-3 py-1 bg-white/90 backdrop-blur-sm rounded-full text-xs font-medium text-gray-700">
-                    {article.category === 'saveti-pri-izbor' && 'Съвети'}
-                    {article.category === 'remont' && 'Ремонт'}
-                    {article.category === 'montaj' && 'Монтаж'}
-                    {article.category === 'energiya' && 'Енергия'}
-                    {article.category === 'profilaktika' && 'Поддръжка'}
-                    {article.category === 'sravneniya' && 'Сравнения'}
-                    {article.category === 'novini' && 'Новини'}
-                    {article.category === 'regionalni' && 'Регионални'}
-                  </span>
+      <ul className="space-y-4">
+        {related.map((article) => {
+          const category = getCategoryBySlug(article.category);
+          return (
+            <li key={article.id}>
+              <Link
+                to={`/blog/${article.slug}`}
+                className="group flex gap-3 rounded-xl border border-gray-100 p-2 hover:border-[#00B4D8]/30 hover:bg-[#FAFAFA] transition-colors"
+              >
+                <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden shrink-0 bg-gray-100">
+                  <RelatedThumb src={article.featuredImage} alt={article.title} />
+                  {category && (
+                    <span
+                      className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold text-white leading-tight max-w-[90%] truncate"
+                      style={{ backgroundColor: category.color }}
+                    >
+                      {category.name}
+                    </span>
+                  )}
                 </div>
-              </div>
-
-              {/* Content */}
-              <div className="p-4">
-                <h4 className="font-semibold text-gray-900 group-hover:text-[#FF4D00] transition-colors line-clamp-2 mb-2">
-                  {article.title}
-                </h4>
-                
-                <p className="text-sm text-gray-600 line-clamp-2 mb-3">
-                  {article.excerpt}
-                </p>
-
-                {/* Meta */}
-                <div className="flex items-center gap-4 text-xs text-gray-500">
-                  <span className="flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {article.readingTime} мин
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Eye className="w-3 h-3" />
-                    {article.viewCount.toLocaleString()}
-                  </span>
-                  <span>{formatDate(article.publishedAt)}</span>
+                <div className="flex-1 min-w-0 py-0.5">
+                  <h4 className="font-semibold text-gray-900 text-sm leading-snug group-hover:text-[#FF4D00] transition-colors line-clamp-2 mb-1.5">
+                    {article.title}
+                  </h4>
+                  <p className="text-xs text-gray-500 line-clamp-2 mb-2 leading-relaxed">
+                    {article.excerpt}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500">
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3 h-3 shrink-0" />
+                      {article.readingTime} мин
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Eye className="w-3 h-3 shrink-0" />
+                      {article.viewCount.toLocaleString('bg-BG')}
+                    </span>
+                    <span className="hidden sm:inline">{formatDate(article.publishedAt)}</span>
+                  </div>
                 </div>
-              </div>
-            </Link>
-          </article>
-        ))}
-      </div>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 };

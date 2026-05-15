@@ -1,6 +1,29 @@
 import type { ReactNode, ComponentProps } from "react";
 import { Info } from "lucide-react";
 
+/** Кратко обяснение при hover/focus върху иконки и компактни бутони. */
+export function HoverTip({
+  tip,
+  children,
+  className = "",
+}: {
+  tip: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <span className={`group/hovertip relative inline-flex ${className}`} title={tip}>
+      {children}
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute bottom-[calc(100%+4px)] left-1/2 z-[80] hidden w-max max-w-[14rem] -translate-x-1/2 rounded-lg bg-slate-900 px-2.5 py-1.5 text-center text-[11px] font-semibold leading-snug text-white shadow-lg group-hover/hovertip:block group-focus-within/hovertip:block"
+      >
+        {tip}
+      </span>
+    </span>
+  );
+}
+
 export function InfoDot({ text }: { text: string }) {
   return (
     <span

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import type { AdminRole } from "@/lib/admin/db";
 import type { LucideIcon } from "lucide-react";
+import { useInquiriesNewCount } from "@/lib/admin/useInquiriesNewCount";
 
 type DrawerSection = {
   title: string;
@@ -82,6 +83,7 @@ export function MobileNav({ role }: { role: AdminRole }) {
 
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const inquiriesNewCount = useInquiriesNewCount();
 
   function isActive(href: string, exact = false) {
     if (exact) return pathname === href;
@@ -177,6 +179,8 @@ export function MobileNav({ role }: { role: AdminRole }) {
           {primaryLinks.map((link) => {
             const Icon = link.icon;
             const active = isActive(link.href, link.exact);
+            const showInquiriesBadge =
+              link.href === "/admin/inquiries" && inquiriesNewCount > 0 && !active;
             return (
               <Link
                 key={link.href}
@@ -186,7 +190,7 @@ export function MobileNav({ role }: { role: AdminRole }) {
                 }`}
               >
                 <div
-                  className={`w-10 h-7 rounded-xl flex items-center justify-center transition-all duration-200 ${
+                  className={`relative w-10 h-7 rounded-xl flex items-center justify-center transition-all duration-200 ${
                     active ? "bg-brand-orange-100" : ""
                   }`}
                 >
@@ -194,6 +198,11 @@ export function MobileNav({ role }: { role: AdminRole }) {
                     className="w-5 h-5"
                     strokeWidth={active ? 2.5 : 1.75}
                   />
+                  {showInquiriesBadge && (
+                    <span className="absolute -top-0.5 -right-1 min-w-[1rem] h-4 px-0.5 rounded-full bg-orange-500 text-white text-[8px] font-black flex items-center justify-center leading-none">
+                      {inquiriesNewCount > 9 ? "9+" : inquiriesNewCount}
+                    </span>
+                  )}
                 </div>
                 <span
                   className={`text-[10px] font-semibold tracking-wide leading-none ${

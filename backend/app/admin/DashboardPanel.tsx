@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { X } from "lucide-react";
-import { Card, Button } from "./ui";
+import { CheckCircle2, ChevronRight, X } from "lucide-react";
+import { Card, Button, HoverTip } from "./ui";
 import { ProductQuickViewButton } from "./ProductQuickView";
 
 type DashboardDetail = {
@@ -12,12 +12,67 @@ type DashboardDetail = {
   fields: Array<{ label: string; value?: string | number | null }>;
 };
 
+export type FollowUpStatusKind = "waiting" | "done";
+
+const PANEL_TIPS = {
+  openInquiry: "Отвори запитването в пълния списък",
+  completeConsultation: "Маркирай консултацията като завършена",
+  viewDetails: "Виж подробности за обаждането",
+  openAll: "Отвори пълния списък в CRM",
+  close: "Затвори",
+} as const;
+
 export type DashboardPanelItem = {
+  id?: string;
   title: string;
   meta?: string;
+  /** Badge „Чака“ / „Завършено“ в панела за обаждания. */
+  statusKind?: FollowUpStatusKind;
+  /** Ново клиентско запитване — отваря /admin/inquiries?id=… */
+  inquiryId?: string;
+  /** Чакаща консултация — бутон „Завърши“ в CRM панела. */
+  consultationWorkItemId?: string;
+  consultationDueDate?: string | null;
+  consultationCustomerName?: string | null;
+  consultationCustomerPhone?: string | null;
   detail: DashboardDetail;
   productId?: string | null;
 };
+
+export function FollowUpStatusBadge({ kind }: { kind: FollowUpStatusKind }) {
+  const base = "inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide";
+  if (kind === "done") {
+    return <span className={`${base} border-green-300 bg-green-100 text-green-800`}>Завършено</span>;
+  }
+  return <span className={`${base} border-amber-300 bg-amber-100 text-amber-900`}>Чака</span>;
+}
+
+const TONE_STYLES = {
+  neutral: {
+    accent: "border-l-slate-400",
+    header: "bg-slate-50/80",
+    badge: "bg-slate-100 text-slate-700 border-slate-200",
+    itemHover: "hover:border-slate-300 hover:bg-white",
+  },
+  info: {
+    accent: "border-l-brand-blue-500",
+    header: "bg-brand-blue-50/50",
+    badge: "bg-brand-blue-50 text-brand-blue-800 border-brand-blue-200",
+    itemHover: "hover:border-brand-blue-200 hover:bg-brand-blue-50/30",
+  },
+  warning: {
+    accent: "border-l-amber-500",
+    header: "bg-amber-50/60",
+    badge: "bg-amber-50 text-amber-900 border-amber-200",
+    itemHover: "hover:border-amber-300 hover:bg-amber-50/40",
+  },
+  danger: {
+    accent: "border-l-red-500",
+    header: "bg-red-50/50",
+    badge: "bg-red-50 text-red-800 border-red-200",
+    itemHover: "hover:border-red-300 hover:bg-red-50/40",
+  },
+} as const;
 
 export function DashboardPanel({
   title,
@@ -28,6 +83,9 @@ export function DashboardPanel({
   items,
   tone = "neutral",
   readOnly = false,
+  onRequestCompleteConsultation,
+  completingConsultationId = null,
+  onOpenInquiry,
 }: {
   title: string;
   description: string;
@@ -36,74 +94,150 @@ export function DashboardPanel({
   badge: number;
   items: DashboardPanelItem[];
   tone?: "neutral" | "info" | "warning" | "danger";
-  /** Сервиз: само преглед, без линк към пълните списъци и без бърз преглед на продукт. */
   readOnly?: boolean;
+  onRequestCompleteConsultation?: (item: DashboardPanelItem) => void;
+  completingConsultationId?: string | null;
+  onOpenInquiry?: (inquiryId: string) => void;
 }) {
   const [selected, setSelected] = useState<DashboardDetail | null>(null);
-  const badgeClass = {
-    neutral: "bg-slate-100 text-slate-700 border-slate-200",
-    info: "bg-brand-blue-50 text-brand-blue-700 border-brand-blue-200",
-    warning: "bg-amber-50 text-amber-800 border-amber-200",
-    danger: "bg-red-50 text-red-700 border-red-200",
-  }[tone];
+  const styles = TONE_STYLES[tone];
 
   return (
     <>
-      <Card className="p-4 min-h-[220px]">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="text-sm font-bold text-slate-900">{title}</div>
-            <div className="mt-1 text-xs leading-5 text-slate-500">{description}</div>
+      <Card
+        className={`flex h-full min-h-[280px] flex-col overflow-hidden border-l-4 p-0 shadow-sm ring-1 ring-slate-200/70 ${styles.accent}`}
+      >
+        <div className={`shrink-0 border-b border-slate-100 px-4 py-3 ${styles.header}`}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-bold text-slate-900">{title}</div>
+              <p className="mt-1 text-xs leading-relaxed text-slate-600">{description}</p>
+            </div>
+            <span
+              className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-bold tabular-nums ${styles.badge}`}
+            >
+              {badge}
+            </span>
           </div>
-          <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${badgeClass}`}>{badge}</span>
         </div>
-        <div className="mt-3 grid gap-2">
-          {items.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-200 px-3 py-6 text-center text-sm text-slate-500">{empty}</div>
-          ) : (
-            items.map((item, idx) => (
-              <div
-                key={`${item.title}-${idx}`}
-                className="group rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-2 text-left transition-all hover:border-brand-blue-200 hover:bg-white hover:shadow-sm"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-slate-900">
-                      {item.productId && !readOnly ? (
-                        <ProductQuickViewButton productId={item.productId} productName={item.title} />
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setSelected(item.detail)}
-                          className="truncate text-left font-semibold text-slate-900 transition-colors hover:text-brand-blue-700 focus:outline-none focus:ring-2 focus:ring-brand-blue-200 rounded"
-                        >
-                          {item.title}
-                        </button>
+
+        <div className="flex min-h-0 flex-1 flex-col px-3 py-3">
+          <div className="min-h-0 flex-1 space-y-2">
+            {items.length === 0 ? (
+              <div className="flex h-full min-h-[120px] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50 px-4 py-6 text-center text-sm text-slate-500">
+                {empty}
+              </div>
+            ) : (
+              items.map((item, idx) => (
+                <div
+                  key={item.id ?? `${item.title}-${idx}`}
+                  className={`rounded-xl border shadow-sm transition-colors ${
+                    item.statusKind === "done"
+                      ? "border-green-200/90 bg-green-50/60 hover:border-green-300 hover:bg-green-50"
+                      : `border-slate-200/80 bg-white ${styles.itemHover}`
+                  }`}
+                >
+                  {item.productId && !readOnly ? (
+                    <div className="px-3 py-2.5">
+                      <div className="min-w-0">
+                        <ProductQuickViewButton
+                          productId={item.productId}
+                          productName={item.title}
+                          className="line-clamp-2 text-sm leading-snug"
+                        />
+                      </div>
+                      {item.meta && (
+                        <p className="mt-1.5 text-xs leading-relaxed text-slate-500 line-clamp-3">{item.meta}</p>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => setSelected(item.detail)}
+                        className="mt-2 inline-flex items-center gap-0.5 text-[11px] font-semibold text-brand-blue-700 hover:text-brand-blue-800"
+                      >
+                        Оперативни детайли
+                        <ChevronRight className="h-3 w-3" />
+                      </button>
                     </div>
-                    {item.meta && <div className="mt-0.5 truncate text-xs text-slate-500">{item.meta}</div>}
-                  </div>
-                  {(!item.productId || readOnly) && (
+                  ) : item.inquiryId && onOpenInquiry ? (
                     <button
                       type="button"
-                      onClick={() => setSelected(item.detail)}
-                      className="shrink-0 text-[11px] font-bold text-brand-blue-700 opacity-80 group-hover:opacity-100"
+                      title={PANEL_TIPS.openInquiry}
+                      onClick={() => onOpenInquiry(item.inquiryId!)}
+                      className="w-full px-3 py-2.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue-200 focus-visible:ring-offset-1 rounded-xl"
                     >
-                      Детайли
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="min-w-0 flex-1 text-sm font-semibold leading-snug text-slate-900 line-clamp-2">{item.title}</p>
+                        {item.statusKind ? <FollowUpStatusBadge kind={item.statusKind} /> : null}
+                      </div>
+                      {item.meta && (
+                        <p className="mt-1.5 text-xs leading-relaxed text-slate-500 line-clamp-3">{item.meta}</p>
+                      )}
+                      <span className="mt-2 inline-flex items-center gap-0.5 text-[11px] font-semibold text-brand-blue-700">
+                        Отвори запитване
+                        <ChevronRight className="h-3 w-3" />
+                      </span>
                     </button>
+                  ) : (
+                    <div className="px-3 py-2.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="min-w-0 flex-1 text-sm font-semibold leading-snug text-slate-900 line-clamp-2">{item.title}</p>
+                        {item.statusKind ? <FollowUpStatusBadge kind={item.statusKind} /> : null}
+                      </div>
+                      {item.meta && (
+                        <p className="mt-1.5 text-xs leading-relaxed text-slate-500 line-clamp-3">{item.meta}</p>
+                      )}
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        {item.consultationWorkItemId &&
+                          item.statusKind === "waiting" &&
+                          !readOnly &&
+                          onRequestCompleteConsultation && (
+                            <HoverTip tip={PANEL_TIPS.completeConsultation}>
+                              <button
+                                type="button"
+                                aria-label={PANEL_TIPS.completeConsultation}
+                                onClick={() => onRequestCompleteConsultation(item)}
+                                disabled={completingConsultationId === item.consultationWorkItemId}
+                                className="inline-flex items-center gap-1 rounded-lg border border-green-700 bg-green-600 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-green-700 disabled:opacity-50"
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                {completingConsultationId === item.consultationWorkItemId ? "Запис..." : "Завърши"}
+                              </button>
+                            </HoverTip>
+                          )}
+                        <HoverTip tip={PANEL_TIPS.viewDetails}>
+                          <button
+                            type="button"
+                            aria-label={PANEL_TIPS.viewDetails}
+                            onClick={() => setSelected(item.detail)}
+                            className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-brand-blue-700 hover:text-brand-blue-800"
+                          >
+                            Виж детайли
+                            <ChevronRight className="h-3 w-3" />
+                          </button>
+                        </HoverTip>
+                      </div>
+                    </div>
                   )}
                 </div>
-              </div>
-            ))
-          )}
+              ))
+            )}
+          </div>
+
+          <div className="mt-3 shrink-0 border-t border-slate-100 pt-3">
+            {readOnly ? (
+              <p className="text-xs text-slate-400">Пълният списък е достъпен за офис и администратор.</p>
+            ) : (
+              <Link
+                href={href}
+                title={PANEL_TIPS.openAll}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-brand-blue-700 hover:text-brand-blue-800"
+              >
+                Отвори всички
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Link>
+            )}
+          </div>
         </div>
-        {readOnly ? (
-          <p className="mt-3 text-xs text-slate-400">Пълният списък е достъпен за офис и администратор.</p>
-        ) : (
-          <Link href={href} className="mt-3 inline-flex text-xs font-semibold text-brand-blue-700 hover:text-brand-blue-700">
-            Отвори всички →
-          </Link>
-        )}
       </Card>
 
       {selected && (
@@ -116,18 +250,24 @@ export function DashboardPanel({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="relative border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#ffffff_42%,#f8fafc_100%)] px-6 py-5">
+              <HoverTip tip={PANEL_TIPS.close}>
               <button
                 type="button"
                 onClick={() => setSelected(null)}
                 className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white/80 text-slate-500 shadow-sm transition-colors hover:bg-white hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-blue-200"
-                aria-label="Затвори детайли"
+                aria-label={PANEL_TIPS.close}
               >
                 <X className="h-4 w-4" />
               </button>
+              </HoverTip>
               <div className="pr-10">
-                <div className="text-xs font-bold uppercase tracking-[0.24em] text-brand-blue-700">Оперативни детайли</div>
+                <div className="text-xs font-bold uppercase tracking-[0.24em] text-brand-blue-700">
+                  Оперативни детайли
+                </div>
                 <div className="mt-1 text-2xl font-black leading-tight text-slate-950">{selected.title}</div>
-                {selected.subtitle && <div className="mt-1 text-sm font-medium text-slate-500">{selected.subtitle}</div>}
+                {selected.subtitle && (
+                  <div className="mt-1 text-sm font-medium text-slate-500">{selected.subtitle}</div>
+                )}
               </div>
             </div>
 
@@ -137,7 +277,9 @@ export function DashboardPanel({
                 .map((field) => (
                   <div key={field.label} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
                     <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{field.label}</div>
-                    <div className="mt-1 whitespace-pre-wrap text-sm font-semibold leading-6 text-slate-900">{field.value}</div>
+                    <div className="mt-1 whitespace-pre-wrap text-sm font-semibold leading-6 text-slate-900">
+                      {field.value}
+                    </div>
                   </div>
                 ))}
             </div>

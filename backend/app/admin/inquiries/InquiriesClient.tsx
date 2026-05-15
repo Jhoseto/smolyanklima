@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { HelpRow, InfoDot, SectionTitle, HelpCard, Card, Input, Select, Button, Table, Th, Td, Textarea } from "../ui";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { HelpRow, InfoDot, SectionTitle, HelpCard, Card, Input, Select, Button, Table, Th, Td, Textarea, HoverTip } from "../ui";
 import { RefreshCw, MessageSquare, PlayCircle, CheckCircle, ShieldAlert, StickyNote, Sparkles, X, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
 import { useDebounce } from "@/lib/hooks/useDebounce";
 import { assertNoContactPrimaryPhoneDuplicate } from "@/lib/admin/contactPhoneConflictClient";
+import { notifyInquiriesChanged } from "@/lib/admin/inquiries-count-events";
 
 function Badge({ label, colorClass }: { label: string; colorClass: string }) {
   return (
@@ -21,6 +23,23 @@ function statusLabel(status: string) {
   if (status === "spam") return { label: "Спам", colorClass: "bg-red-100 border-red-200 text-red-800" };
   return { label: status || "—", colorClass: "bg-slate-100 border-slate-200 text-slate-600" };
 }
+
+const INQUIRY_TIPS = {
+  details: "Пълен преглед на запитването",
+  notes: "Вътрешни бележки — клиентът не ги вижда",
+  inProgress: "Маркирай като „В работа“",
+  contact: "Създай CRM контакт с планирано обаждане",
+  inspection: "Създай задача за оглед в календара",
+  ai: "Генерирай AI чернова за отговор",
+  done: "Приключи — запитването е обработено",
+  spam: "Маркирай като спам",
+  refresh: "Презареди списъка",
+  prevPage: "Предишна страница",
+  nextPage: "Следваща страница",
+  close: "Затвори",
+  saveNotes: "Запази вътрешните бележки",
+  saveAi: "Запиши AI черновата в бележките",
+} as const;
 
 function priorityLabel(priority: string) {
   if (priority === "high") return { label: "Висок", colorClass: "bg-red-100 border-red-200 text-red-800" };
@@ -66,6 +85,9 @@ type AiReplyDraft = {
 };
 
 export function InquiriesClient() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const openedFromUrlRef = useRef<string | null>(null);
   const [items, setItems] = useState<Inquiry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -115,12 +137,61 @@ export function InquiriesClient() {
 
   useEffect(() => { void load(); }, [load]);
 
+  const closeInquiryDetail = useCallback(() => {
+    setSelectedInquiry(null);
+    if (searchParams.get("id")) router.replace("/admin/inquiries");
+  }, [router, searchParams]);
+
+  useEffect(() => {
+    const id = searchParams.get("id")?.trim();
+    if (!id) {
+      openedFromUrlRef.current = null;
+      return;
+    }
+    if (openedFromUrlRef.current === id && selectedInquiry?.id === id) return;
+
+    const fromList = items.find((row) => row.id === id);
+    if (fromList) {
+      openedFromUrlRef.current = id;
+      setSelectedInquiry(fromList);
+      return;
+    }
+
+    void (async () => {
+      try {
+        const res = await fetch(`/api/admin/inquiries/${id}`, { credentials: "include" });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Грешка");
+        openedFromUrlRef.current = id;
+        setSelectedInquiry(json.data as Inquiry);
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "Грешка при зареждане на запитването");
+      }
+    })();
+  }, [searchParams, items, selectedInquiry?.id]);
+
   useEffect(() => {
     const events = new EventSource("/api/admin/inquiries/stream");
-    events.addEventListener("ready", () => setLiveConnected(true));
-    events.addEventListener("changed", () => {
+
+    function parseNewCount(data: string): number | undefined {
+      try {
+        const payload = JSON.parse(data) as { newCount?: number };
+        return typeof payload.newCount === "number" ? payload.newCount : undefined;
+      } catch {
+        return undefined;
+      }
+    }
+
+    events.addEventListener("ready", (ev) => {
+      setLiveConnected(true);
+      const newCount = parseNewCount((ev as MessageEvent).data);
+      notifyInquiriesChanged(parseNewCount((ev as MessageEvent).data));
+    });
+    events.addEventListener("changed", (ev) => {
       setLiveConnected(true);
       setLastLiveUpdate(new Date().toLocaleTimeString("bg-BG", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+      const newCount = parseNewCount((ev as MessageEvent).data);
+      notifyInquiriesChanged(newCount);
       void load({ silent: true });
     });
     events.onerror = () => setLiveConnected(false);
@@ -152,6 +223,7 @@ export function InquiriesClient() {
       ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
       ...(patch.adminNotes !== undefined ? { admin_notes: patch.adminNotes } : {}),
     } : prev);
+    if (patch.status !== undefined) notifyInquiriesChanged();
   }
 
   async function createContactFromInquiry(inquiry: Inquiry) {
@@ -256,9 +328,11 @@ export function InquiriesClient() {
     <div className="w-full space-y-3">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <SectionTitle title="Запитвания" hint="Входящи заявки от клиенти с бърза промяна на статус и приоритет." />
-        <Button variant="secondary" onClick={() => void load()} className="gap-2 shadow-sm">
-          <RefreshCw className="w-4 h-4" /><span className="hidden sm:inline">Обнови</span>
-        </Button>
+        <HoverTip tip={INQUIRY_TIPS.refresh}>
+          <Button variant="secondary" onClick={() => void load()} className="gap-2 shadow-sm" aria-label={INQUIRY_TIPS.refresh}>
+            <RefreshCw className="w-4 h-4" /><span className="hidden sm:inline">Обнови</span>
+          </Button>
+        </HoverTip>
       </div>
 
       <HelpCard className="hidden md:block">
@@ -320,7 +394,7 @@ export function InquiriesClient() {
                   return (
                     <tr key={i.id} className="hover:bg-slate-50 transition-colors">
                       <Td className="font-bold text-slate-900">
-                        <button type="button" onClick={() => setSelectedInquiry(i)} className="rounded text-left font-bold text-slate-900 underline-offset-4 transition-colors hover:text-brand-blue-700 hover:underline">{i.customer_name}</button>
+                        <button type="button" onClick={() => setSelectedInquiry(i)} title={INQUIRY_TIPS.details} className="rounded text-left font-bold text-slate-900 underline-offset-4 transition-colors hover:text-brand-blue-700 hover:underline">{i.customer_name}</button>
                       </Td>
                       <Td>
                         <div className="font-medium text-slate-700">{i.customer_phone}</div>
@@ -332,16 +406,32 @@ export function InquiriesClient() {
                       <Td className="text-xs text-slate-500 font-medium">{new Date(i.created_at).toLocaleString()}</Td>
                       <Td>
                         <div className="flex flex-wrap gap-1.5 items-center">
-                          <Button variant="secondary" size="sm" onClick={() => setSelectedInquiry(i)} className="gap-1.5 !py-1 !px-2.5 !text-xs border-brand-blue-200 bg-brand-blue-50 text-brand-blue-700">Детайли</Button>
-                          <Button variant="secondary" size="sm" onClick={() => setNotesForId(i.id)} className={`gap-1 !py-1 !px-2.5 !text-xs ${i.admin_notes ? "border-brand-blue-300 bg-brand-blue-50 text-brand-blue-700" : ""}`}>
-                            <StickyNote className="w-3.5 h-3.5" />{i.admin_notes ? " ●" : ""}
-                          </Button>
-                          <Button variant="secondary" size="sm" onClick={() => quickUpdate(i.id, { status: "in_progress" })} className="!py-1 !px-2.5 !text-xs"><PlayCircle className="w-3.5 h-3.5 text-brand-blue-500" /></Button>
-                          <Button variant="secondary" size="sm" disabled={actionBusy === `contact:${i.id}`} onClick={() => void createContactFromInquiry(i)} className="!py-1 !px-2.5 !text-xs">Контакт</Button>
-                          <Button variant="secondary" size="sm" disabled={actionBusy === `work:${i.id}`} onClick={() => void createInspectionFromInquiry(i)} className="!py-1 !px-2.5 !text-xs">Оглед</Button>
-                          <Button variant="secondary" size="sm" disabled={actionBusy === `ai:${i.id}`} onClick={() => void generateAiReply(i)} className="!py-1 !px-2.5 !text-xs">AI</Button>
-                          <Button variant="secondary" size="sm" onClick={() => quickUpdate(i.id, { status: "done" })} className="!py-1 !px-2.5 !text-xs"><CheckCircle className="w-3.5 h-3.5 text-green-500" /></Button>
-                          <Button variant="danger" size="sm" onClick={() => quickUpdate(i.id, { status: "spam" })} className="!py-1 !px-2 !text-xs"><ShieldAlert className="w-3.5 h-3.5" /></Button>
+                          <HoverTip tip={INQUIRY_TIPS.details}>
+                            <Button variant="secondary" size="sm" onClick={() => setSelectedInquiry(i)} aria-label={INQUIRY_TIPS.details} className="gap-1.5 !py-1 !px-2.5 !text-xs border-brand-blue-200 bg-brand-blue-50 text-brand-blue-700">Детайли</Button>
+                          </HoverTip>
+                          <HoverTip tip={INQUIRY_TIPS.notes}>
+                            <Button variant="secondary" size="sm" onClick={() => setNotesForId(i.id)} aria-label={INQUIRY_TIPS.notes} className={`gap-1 !py-1 !px-2.5 !text-xs ${i.admin_notes ? "border-brand-blue-300 bg-brand-blue-50 text-brand-blue-700" : ""}`}>
+                              <StickyNote className="w-3.5 h-3.5" />{i.admin_notes ? " ●" : ""}
+                            </Button>
+                          </HoverTip>
+                          <HoverTip tip={INQUIRY_TIPS.inProgress}>
+                            <Button variant="secondary" size="sm" onClick={() => quickUpdate(i.id, { status: "in_progress" })} aria-label={INQUIRY_TIPS.inProgress} className="!py-1 !px-2.5 !text-xs"><PlayCircle className="w-3.5 h-3.5 text-brand-blue-500" /></Button>
+                          </HoverTip>
+                          <HoverTip tip={INQUIRY_TIPS.contact}>
+                            <Button variant="secondary" size="sm" disabled={actionBusy === `contact:${i.id}`} onClick={() => void createContactFromInquiry(i)} aria-label={INQUIRY_TIPS.contact} className="!py-1 !px-2.5 !text-xs">Контакт</Button>
+                          </HoverTip>
+                          <HoverTip tip={INQUIRY_TIPS.inspection}>
+                            <Button variant="secondary" size="sm" disabled={actionBusy === `work:${i.id}`} onClick={() => void createInspectionFromInquiry(i)} aria-label={INQUIRY_TIPS.inspection} className="!py-1 !px-2.5 !text-xs">Оглед</Button>
+                          </HoverTip>
+                          <HoverTip tip={INQUIRY_TIPS.ai}>
+                            <Button variant="secondary" size="sm" disabled={actionBusy === `ai:${i.id}`} onClick={() => void generateAiReply(i)} aria-label={INQUIRY_TIPS.ai} className="!py-1 !px-2.5 !text-xs">AI</Button>
+                          </HoverTip>
+                          <HoverTip tip={INQUIRY_TIPS.done}>
+                            <Button variant="secondary" size="sm" onClick={() => quickUpdate(i.id, { status: "done" })} aria-label={INQUIRY_TIPS.done} className="!py-1 !px-2.5 !text-xs"><CheckCircle className="w-3.5 h-3.5 text-green-500" /></Button>
+                          </HoverTip>
+                          <HoverTip tip={INQUIRY_TIPS.spam}>
+                            <Button variant="danger" size="sm" onClick={() => quickUpdate(i.id, { status: "spam" })} aria-label={INQUIRY_TIPS.spam} className="!py-1 !px-2 !text-xs"><ShieldAlert className="w-3.5 h-3.5" /></Button>
+                          </HoverTip>
                         </div>
                       </Td>
                     </tr>
@@ -378,13 +468,13 @@ export function InquiriesClient() {
                     </div>
                   </button>
                   <div className="flex border-t border-slate-100 divide-x divide-slate-100">
-                    <button type="button" onClick={() => quickUpdate(i.id, { status: "in_progress" })} className="flex-1 py-3 flex items-center justify-center gap-1 text-xs font-semibold text-brand-blue-700 hover:bg-brand-blue-50 active:bg-brand-blue-100 transition-colors">
+                    <button type="button" title={INQUIRY_TIPS.inProgress} onClick={() => quickUpdate(i.id, { status: "in_progress" })} className="flex-1 py-3 flex items-center justify-center gap-1 text-xs font-semibold text-brand-blue-700 hover:bg-brand-blue-50 active:bg-brand-blue-100 transition-colors">
                       <PlayCircle className="w-4 h-4" /> В работа
                     </button>
-                    <button type="button" onClick={() => quickUpdate(i.id, { status: "done" })} className="flex-1 py-3 flex items-center justify-center gap-1 text-xs font-semibold text-green-700 hover:bg-green-50 active:bg-green-100 transition-colors">
+                    <button type="button" title={INQUIRY_TIPS.done} onClick={() => quickUpdate(i.id, { status: "done" })} className="flex-1 py-3 flex items-center justify-center gap-1 text-xs font-semibold text-green-700 hover:bg-green-50 active:bg-green-100 transition-colors">
                       <CheckCircle className="w-4 h-4" /> Приключи
                     </button>
-                    <button type="button" onClick={() => setSelectedInquiry(i)} className="flex-1 py-3 flex items-center justify-center gap-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 active:bg-slate-100 transition-colors">
+                    <button type="button" title={INQUIRY_TIPS.details} onClick={() => setSelectedInquiry(i)} className="flex-1 py-3 flex items-center justify-center gap-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 active:bg-slate-100 transition-colors">
                       Детайли
                     </button>
                   </div>
@@ -398,8 +488,12 @@ export function InquiriesClient() {
             <div className="flex items-center justify-between pt-2">
               <span className="text-xs text-slate-400">{(inqPage - 1) * INQ_PER_PAGE + 1}–{Math.min(inqPage * INQ_PER_PAGE, inqTotal)} от {inqTotal}</span>
               <div className="flex gap-1">
-                <button onClick={() => setInqPage(p => Math.max(1, p - 1))} disabled={inqPage === 1} className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"><ChevronLeft className="w-3.5 h-3.5" /></button>
-                <button onClick={() => setInqPage(p => p + 1)} disabled={inqPage * INQ_PER_PAGE >= inqTotal} className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"><ChevronRight className="w-3.5 h-3.5" /></button>
+                <HoverTip tip={INQUIRY_TIPS.prevPage}>
+                  <button type="button" aria-label={INQUIRY_TIPS.prevPage} onClick={() => setInqPage(p => Math.max(1, p - 1))} disabled={inqPage === 1} className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"><ChevronLeft className="w-3.5 h-3.5" /></button>
+                </HoverTip>
+                <HoverTip tip={INQUIRY_TIPS.nextPage}>
+                  <button type="button" aria-label={INQUIRY_TIPS.nextPage} onClick={() => setInqPage(p => p + 1)} disabled={inqPage * INQ_PER_PAGE >= inqTotal} className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"><ChevronRight className="w-3.5 h-3.5" /></button>
+                </HoverTip>
               </div>
             </div>
           )}
@@ -416,10 +510,12 @@ export function InquiriesClient() {
       )}
 
       {selectedInquiry && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/55 md:p-4 backdrop-blur-md" onClick={() => setSelectedInquiry(null)}>
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/55 md:p-4 backdrop-blur-md" onClick={closeInquiryDetail}>
           <div className="w-full max-w-4xl max-h-[96vh] md:max-h-[calc(100vh-2rem)] overflow-hidden rounded-t-3xl md:rounded-3xl border border-white/70 bg-white shadow-[0_-8px_60px_rgba(15,23,42,0.35)] md:shadow-[0_30px_90px_rgba(15,23,42,0.35)]" onClick={e => e.stopPropagation()}>
             <div className="relative border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#ffffff_42%,#f8fafc_100%)] px-6 py-5">
-              <button type="button" onClick={() => setSelectedInquiry(null)} className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white/80 text-slate-500 shadow-sm hover:bg-white hover:text-slate-900"><X className="h-4 w-4" /></button>
+              <HoverTip tip={INQUIRY_TIPS.close}>
+                <button type="button" aria-label={INQUIRY_TIPS.close} onClick={closeInquiryDetail} className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white/80 text-slate-500 shadow-sm hover:bg-white hover:text-slate-900"><X className="h-4 w-4" /></button>
+              </HoverTip>
               <div className="flex items-center gap-3 pr-10">
                 <div className={`flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-lg ${selectedInquiry.source === "wizard" ? "bg-violet-600 shadow-violet-600/25" : "bg-brand-blue-500 shadow-brand-blue-500/25"}`}>
                   <MessageSquare className="h-5 w-5" />
@@ -461,13 +557,27 @@ export function InquiriesClient() {
                     <Badge label={priorityLabel(selectedInquiry.priority).label} colorClass={priorityLabel(selectedInquiry.priority).colorClass} />
                   </div>
                 </div>
-                <Button variant="secondary" className="w-full justify-center gap-2" onClick={() => setNotesForId(selectedInquiry.id)}><StickyNote className="h-4 w-4" /> Бележки</Button>
-                <Button variant="secondary" className="w-full justify-center gap-2" onClick={() => void quickUpdate(selectedInquiry.id, { status: "in_progress" })}><PlayCircle className="h-4 w-4 text-brand-blue-500" /> Маркирай в работа</Button>
-                <Button variant="secondary" className="w-full justify-center" disabled={actionBusy === `contact:${selectedInquiry.id}`} onClick={() => void createContactFromInquiry(selectedInquiry)}>Създай контакт</Button>
-                <Button variant="secondary" className="w-full justify-center" disabled={actionBusy === `work:${selectedInquiry.id}`} onClick={() => void createInspectionFromInquiry(selectedInquiry)}>Създай оглед</Button>
-                <Button variant="secondary" className="w-full justify-center gap-2" disabled={actionBusy === `ai:${selectedInquiry.id}`} onClick={() => void generateAiReply(selectedInquiry)}><Sparkles className="h-4 w-4 text-brand-blue-500" /> AI чернова</Button>
-                <Button variant="primary" className="w-full justify-center gap-2" onClick={() => void quickUpdate(selectedInquiry.id, { status: "done" })}><CheckCircle className="h-4 w-4" /> Приключи</Button>
-                <Button variant="danger" className="w-full justify-center gap-2" onClick={() => void quickUpdate(selectedInquiry.id, { status: "spam" })}><ShieldAlert className="h-4 w-4" /> Спам</Button>
+                <HoverTip tip={INQUIRY_TIPS.notes} className="w-full">
+                  <Button variant="secondary" className="w-full justify-center gap-2" aria-label={INQUIRY_TIPS.notes} onClick={() => setNotesForId(selectedInquiry.id)}><StickyNote className="h-4 w-4" /> Бележки</Button>
+                </HoverTip>
+                <HoverTip tip={INQUIRY_TIPS.inProgress} className="w-full">
+                  <Button variant="secondary" className="w-full justify-center gap-2" aria-label={INQUIRY_TIPS.inProgress} onClick={() => void quickUpdate(selectedInquiry.id, { status: "in_progress" })}><PlayCircle className="h-4 w-4 text-brand-blue-500" /> Маркирай в работа</Button>
+                </HoverTip>
+                <HoverTip tip={INQUIRY_TIPS.contact} className="w-full">
+                  <Button variant="secondary" className="w-full justify-center" aria-label={INQUIRY_TIPS.contact} disabled={actionBusy === `contact:${selectedInquiry.id}`} onClick={() => void createContactFromInquiry(selectedInquiry)}>Създай контакт</Button>
+                </HoverTip>
+                <HoverTip tip={INQUIRY_TIPS.inspection} className="w-full">
+                  <Button variant="secondary" className="w-full justify-center" aria-label={INQUIRY_TIPS.inspection} disabled={actionBusy === `work:${selectedInquiry.id}`} onClick={() => void createInspectionFromInquiry(selectedInquiry)}>Създай оглед</Button>
+                </HoverTip>
+                <HoverTip tip={INQUIRY_TIPS.ai} className="w-full">
+                  <Button variant="secondary" className="w-full justify-center gap-2" aria-label={INQUIRY_TIPS.ai} disabled={actionBusy === `ai:${selectedInquiry.id}`} onClick={() => void generateAiReply(selectedInquiry)}><Sparkles className="h-4 w-4 text-brand-blue-500" /> AI чернова</Button>
+                </HoverTip>
+                <HoverTip tip={INQUIRY_TIPS.done} className="w-full">
+                  <Button variant="primary" className="w-full justify-center gap-2" aria-label={INQUIRY_TIPS.done} onClick={() => void quickUpdate(selectedInquiry.id, { status: "done" })}><CheckCircle className="h-4 w-4" /> Приключи</Button>
+                </HoverTip>
+                <HoverTip tip={INQUIRY_TIPS.spam} className="w-full">
+                  <Button variant="danger" className="w-full justify-center gap-2" aria-label={INQUIRY_TIPS.spam} onClick={() => void quickUpdate(selectedInquiry.id, { status: "spam" })}><ShieldAlert className="h-4 w-4" /> Спам</Button>
+                </HoverTip>
               </div>
             </div>
           </div>
@@ -478,7 +588,9 @@ export function InquiriesClient() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-md" onClick={() => setAiReplyDraft(null)}>
           <div className="w-full max-w-2xl overflow-hidden rounded-3xl border border-white/70 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)]" onClick={e => e.stopPropagation()}>
             <div className="relative border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#ffffff_42%,#f8fafc_100%)] px-6 py-5">
-              <button type="button" onClick={() => setAiReplyDraft(null)} className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white/80 text-slate-500 shadow-sm hover:bg-white hover:text-slate-900"><X className="h-4 w-4" /></button>
+              <HoverTip tip={INQUIRY_TIPS.close}>
+                <button type="button" aria-label={INQUIRY_TIPS.close} onClick={() => setAiReplyDraft(null)} className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white/80 text-slate-500 shadow-sm hover:bg-white hover:text-slate-900"><X className="h-4 w-4" /></button>
+              </HoverTip>
               <div className="flex items-center gap-3 pr-10">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-blue-500 text-white shadow-lg shadow-brand-blue-500/25"><Sparkles className="h-5 w-5" /></div>
                 <div>
@@ -511,7 +623,9 @@ export function InquiriesClient() {
             </div>
             <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50 px-6 py-4 sm:flex-row sm:justify-end">
               <Button variant="secondary" onClick={() => setAiReplyDraft(null)} className="justify-center">Затвори</Button>
-              <Button onClick={() => void saveAiReplyDraft()} className="justify-center gap-2 shadow-lg shadow-brand-blue-500/20"><CheckCircle2 className="h-4 w-4" />Запиши в бележките</Button>
+              <HoverTip tip={INQUIRY_TIPS.saveAi}>
+                <Button onClick={() => void saveAiReplyDraft()} aria-label={INQUIRY_TIPS.saveAi} className="justify-center gap-2 shadow-lg shadow-brand-blue-500/20"><CheckCircle2 className="h-4 w-4" />Запиши в бележките</Button>
+              </HoverTip>
             </div>
           </div>
         </div>
@@ -558,8 +672,8 @@ function InquiryNotesModal({ inquiryId, initialNotes, onClose, onSave }: {
         <p className="text-[10px] text-slate-500 mb-2 font-mono">ID: {inquiryId}</p>
         <Textarea value={text} onChange={e => setText(e.target.value)} rows={5} placeholder="Бележки само за екипа…" className="mb-2" />
         <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose} disabled={saving}>Отказ</Button>
-          <Button variant="primary" disabled={saving} onClick={async () => {
+          <Button variant="secondary" title="Затвори без запис" onClick={onClose} disabled={saving}>Отказ</Button>
+          <Button variant="primary" title={INQUIRY_TIPS.saveNotes} disabled={saving} onClick={async () => {
             setSaving(true);
             try { await onSave(text.trim() || null); } finally { setSaving(false); }
           }}>{saving ? "Запис…" : "Запази"}</Button>

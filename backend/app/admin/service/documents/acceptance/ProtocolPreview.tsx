@@ -29,6 +29,8 @@ interface ProtocolRow {
   client_name: string | null;
   ac_model: string | null;
   serial_number: string | null;
+  indoor_unit_serial: string | null;
+  outdoor_unit_serial: string | null;
   address: string | null;
   paid_amount: number | null;
   client_email: string | null;
@@ -284,7 +286,8 @@ export function ProtocolPreview({
                   <div className="space-y-2">
                     <PreviewField label="Клиент" value={row.client_name} />
                     <PreviewField label="Модел климатик" value={row.ac_model} />
-                    <PreviewField label="Сериен №" value={row.serial_number} />
+                    <PreviewField label="Сериен № вътр." value={row.indoor_unit_serial ?? row.serial_number} />
+                    <PreviewField label="Сериен № външ." value={row.outdoor_unit_serial} />
                     <div className="flex flex-wrap items-end gap-2">
                       <div className="flex-1 min-w-[140px]">
                         <PreviewField label="Адрес" value={row.address} />

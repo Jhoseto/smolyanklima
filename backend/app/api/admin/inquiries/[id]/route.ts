@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminDb } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
+import { clearContactFollowUpWhenInquiryResolved } from "@/lib/admin/inquiry-contact-sync";
 
 const UpdateSchema = z.object({
   status: z.string().optional(),
@@ -47,10 +48,23 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     .from("inquiries")
     .update(patch)
     .eq("id", id)
-    .select("id,status,priority,assigned_to,admin_notes")
+    .select("id,status,priority,assigned_to,admin_notes,customer_phone")
     .maybeSingle();
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   if (!data) return withCors(req, NextResponse.json({ error: "Не е намерено" }, { status: 404 }));
+
+  if (parsed.data.status !== undefined && parsed.data.status !== "new") {
+    try {
+      await clearContactFollowUpWhenInquiryResolved(
+        supabase,
+        String(data.customer_phone ?? ""),
+        data.status,
+      );
+    } catch {
+      /* не блокираме записа на запитването */
+    }
+  }
+
   await logAdminActivity({
     action: "inquiry.update",
     entityType: "inquiry",

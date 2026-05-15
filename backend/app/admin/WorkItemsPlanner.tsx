@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Card, Button, Select, Input, Textarea } from "./ui";
 import { ContactPersonPicker } from "./ContactPersonPicker";
 import { InstallationMountDetailModal } from "./InstallationMountDetailModal";
-import { CalendarDays, List } from "lucide-react";
+import { CalendarDays, CheckCircle2, List } from "lucide-react";
+import { notifyFollowUpCallsChanged } from "@/lib/admin/follow-up-calls-events";
 
 type EventCode =
   | "item_added"
@@ -13,7 +14,8 @@ type EventCode =
   | "service_installation"
   | "service_maintenance"
   | "service_on_site"
-  | "service_in_shop";
+  | "service_in_shop"
+  | "consultation";
 
 type WorkItem = {
   id: string;
@@ -78,6 +80,7 @@ const PLANNER_CREATABLE_EVENT_OPTIONS: Array<{ id: EventCode; label: string; typ
   { id: "service_maintenance", label: "Профилактика", type: "service" },
   { id: "service_on_site", label: "Сервиз на терен", type: "service" },
   { id: "service_in_shop", label: "Сервиз в склад", type: "service" },
+  { id: "consultation", label: "Консултация", type: "task" },
 ];
 
 function createDefaultForm(date = ""): WorkForm {
@@ -162,8 +165,10 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
     | "service_maintenance"
     | "service_on_site"
     | "service_in_shop"
+    | "consultation"
   >("all");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmCompleteItem, setConfirmCompleteItem] = useState<WorkItem | null>(null);
   const [displayMode, setDisplayMode] = useState<"calendar" | "agenda">("calendar");
   const [mountDetailId, setMountDetailId] = useState<string | null>(null);
 
@@ -264,7 +269,12 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
   const selectedItems = selectedDate ? (byDate.get(selectedDate) ?? []).filter(matchesViewMode) : [];
 
   async function createFromForm(localForm: WorkForm) {
-    if (!localForm.title.trim() || !localForm.dueDate) return false;
+    const title =
+      localForm.title.trim() ||
+      (localForm.eventCode === "consultation" && localForm.customerName.trim()
+        ? `Консултация: ${localForm.customerName.trim()}`
+        : "");
+    if (!title || !localForm.dueDate) return false;
     if (localForm.eventCode === "sale" || localForm.type === "sale") {
       setError("Продажбите се записват от панела „Продажби“ (каталог → Продажба), не от оперативния календар.");
       return false;
@@ -284,7 +294,7 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(toPayload(localForm)),
+      body: JSON.stringify(toPayload({ ...localForm, title })),
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -302,6 +312,7 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
       if (!ok) return;
       setAddForm(createDefaultForm(selectedDate ?? ""));
       await load();
+      notifyFollowUpCallsChanged();
     } finally {
       setSavingBusy(false);
     }
@@ -340,7 +351,12 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
   }
 
   async function saveEdit(itemId: string) {
-    if (!editForm.title.trim() || !editForm.dueDate) return;
+    const title =
+      editForm.title.trim() ||
+      (editForm.eventCode === "consultation" && editForm.customerName.trim()
+        ? `Консултация: ${editForm.customerName.trim()}`
+        : "");
+    if (!title || !editForm.dueDate) return;
     const catalogStock =
       editForm.eventCode === "item_added" || editForm.eventCode === "item_removed";
     if (!catalogStock) {
@@ -357,7 +373,7 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
         method: "PUT",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(toPayload(editForm)),
+        body: JSON.stringify(toPayload({ ...editForm, title })),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -366,6 +382,31 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
       }
       setEditingId(null);
       await load();
+      notifyFollowUpCallsChanged();
+    } finally {
+      setSavingBusy(false);
+    }
+  }
+
+  async function markWorkItemDone(item: WorkItem) {
+    if (readOnly || item.status === "done" || item.status === "cancelled") return;
+    setSavingBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/work-items/${item.id}`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "done" }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError((json as any).error || "Грешка при маркиране като изпълнено");
+        return;
+      }
+      await load();
+      setConfirmCompleteItem(null);
+      if (item.event_code === "consultation") notifyFollowUpCallsChanged();
     } finally {
       setSavingBusy(false);
     }
@@ -391,6 +432,7 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
       setConfirmDeleteId(null);
       if (editingId === itemId) setEditingId(null);
       await load();
+      notifyFollowUpCallsChanged();
     } finally {
       setSavingBusy(false);
     }
@@ -439,6 +481,7 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
             { id: "service_maintenance" as const, label: "Профилактика" },
             { id: "service_on_site" as const, label: "Сервиз на терен" },
             { id: "service_in_shop" as const, label: "Сервиз в склад" },
+            { id: "consultation" as const, label: "Консултация" },
           ] as const
         ).map((m) => (
           <button
@@ -492,7 +535,7 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
                           key={item.id}
                           className="text-[9px] font-medium leading-tight border-l-2 pl-1 text-slate-800 truncate opacity-90"
                           style={{ borderLeftColor: eventColor(item) }}
-                          title={`${eventCodeLabel(item)} (${statusLabel(item.status)})`}
+                          title={`${eventCodeLabel(item)} (${statusLabel(item.status, item.event_code)})`}
                         >
                           {eventCodeLabel(item)}
                         </div>
@@ -513,6 +556,7 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-teal-500 shrink-0" /> Профилактика</span>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" /> Сервиз на терен</span>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-500 shrink-0" /> Сервиз в склад</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-pink-500 shrink-0" /> Консултация</span>
         </div>
       </div>
 
@@ -544,7 +588,11 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
                         <button
                           type="button"
                           onClick={() => openDay(dateKey)}
-                          className="flex-1 text-left bg-white rounded-xl border border-slate-200 px-3 py-3 flex items-start gap-3 hover:border-brand-blue-200 active:bg-slate-50 transition-colors shadow-sm"
+                          className={`flex-1 text-left rounded-xl border px-3 py-3 flex items-start gap-3 transition-colors shadow-sm ${
+                            item.status === "done"
+                              ? "border-green-200 bg-green-50 hover:border-green-300"
+                              : "border-slate-200 bg-white hover:border-brand-blue-200 active:bg-slate-50"
+                          }`}
                         >
                           <div className="w-1 self-stretch rounded-full shrink-0" style={{ backgroundColor: eventColor(item) }} />
                           <div className="min-w-0 flex-1">
@@ -556,8 +604,15 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
                               </div>
                             )}
                           </div>
-                          <span className={statusPillClass(item.status)}>{statusLabel(item.status)}</span>
+                          <span className={workItemStatusPillClass(item)}>{statusLabel(item.status, item.event_code)}</span>
                         </button>
+                        <WorkItemCompleteControl
+                          item={item}
+                          readOnly={readOnly}
+                          savingBusy={savingBusy}
+                          variant="compact"
+                          onRequestComplete={() => setConfirmCompleteItem(item)}
+                        />
                         {item.event_code === "service_installation" && (
                           <button
                             type="button"
@@ -621,7 +676,11 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
                   {selectedItems.map((item) => (
                     <div
                       key={item.id}
-                      className="rounded-lg border border-slate-200 border-l-[3px] bg-white p-4 transition-colors hover:border-slate-300"
+                      className={`rounded-lg border border-l-[3px] p-4 transition-colors ${
+                        item.status === "done"
+                          ? "border-green-200 bg-green-50/90 hover:border-green-300"
+                          : "border-slate-200 bg-white hover:border-slate-300"
+                      }`}
                       style={{ borderLeftColor: eventColor(item) }}
                     >
                       <div className="flex justify-between items-start gap-3">
@@ -630,7 +689,14 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
                           <div className="mt-0.5 text-base font-semibold text-slate-900">{item.title}</div>
                         </div>
                         <div className="flex shrink-0 flex-wrap justify-end gap-2">
-                          <span className={statusPillClass(item.status)}>{statusLabel(item.status)}</span>
+                          <span className={workItemStatusPillClass(item)}>{statusLabel(item.status, item.event_code)}</span>
+                          <WorkItemCompleteControl
+                            item={item}
+                            readOnly={readOnly}
+                            savingBusy={savingBusy}
+                            variant="full"
+                            onRequestComplete={() => setConfirmCompleteItem(item)}
+                          />
                           {item.event_code === "service_installation" && (
                             <Button
                               variant="secondary"
@@ -761,6 +827,15 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
         onCompleted={() => void load()}
       />
 
+      {confirmCompleteItem && (
+        <WorkItemCompleteConfirmModal
+          item={confirmCompleteItem}
+          savingBusy={savingBusy}
+          onCancel={() => setConfirmCompleteItem(null)}
+          onConfirm={() => void markWorkItemDone(confirmCompleteItem)}
+        />
+      )}
+
       {confirmDeleteId && (
         <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center md:p-4 bg-slate-950/55 backdrop-blur-md" onClick={() => setConfirmDeleteId(null)}>
           <div className="w-full md:max-w-lg rounded-t-3xl md:rounded-3xl border border-white/70 bg-white p-6 shadow-[0_-8px_40px_rgba(15,23,42,0.25)]" onClick={(e) => e.stopPropagation()}>
@@ -816,7 +891,16 @@ function EventSelect({
       onChange={(e) => {
         const eventCode = e.target.value as EventCode;
         const matched = PLANNER_CREATABLE_EVENT_OPTIONS.find((x) => x.id === eventCode);
-        setForm((f) => ({ ...f, eventCode, type: matched?.type ?? f.type }));
+        setForm((f) => {
+          const next: WorkForm = { ...f, eventCode, type: matched?.type ?? f.type };
+          if (eventCode === "consultation") {
+            next.status = "planned";
+            if (!next.title.trim() && next.customerName.trim()) {
+              next.title = `Консултация: ${next.customerName.trim()}`;
+            }
+          }
+          return next;
+        });
       }}
     >
       {PLANNER_CREATABLE_EVENT_OPTIONS.map((opt) => (
@@ -829,6 +913,14 @@ function EventSelect({
 }
 
 function StatusSelect({ form, setForm }: { form: WorkForm; setForm: React.Dispatch<React.SetStateAction<WorkForm>> }) {
+  if (form.eventCode === "consultation") {
+    return (
+      <Select value={form.status === "done" ? "done" : "planned"} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as WorkItem["status"] }))}>
+        <option value="planned">Чака</option>
+        <option value="done">Завършено</option>
+      </Select>
+    );
+  }
   return (
     <Select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as WorkItem["status"] }))}>
       <option value="planned">Чака</option>
@@ -902,16 +994,236 @@ function eventCodeLabel(item: WorkItem): string {
       return "Сервиз на терен";
     case "service_in_shop":
       return "Сервиз в склад";
+    case "consultation":
+      return "Консултация";
     default:
       return `${TYPE_LABEL[item.type]}: ${item.title}`;
   }
 }
 
-function statusLabel(status: WorkItem["status"]): string {
+function statusLabel(status: WorkItem["status"], eventCode?: EventCode | null): string {
+  if (eventCode === "consultation") {
+    if (status === "done") return "Завършено";
+    return "Чака";
+  }
   if (status === "done") return "Изпълнена";
   if (status === "in_progress") return "В процес";
   if (status === "cancelled") return "Отказана";
   return "Чака";
+}
+
+function completeActionLabel(eventCode: EventCode | null | undefined, done: boolean): string {
+  if (eventCode === "consultation") return done ? "Завършено" : "Завърши";
+  return done ? "Изпълнено" : "Изпълни";
+}
+
+function formatDueDateBg(due: string | null | undefined): string {
+  if (!due) return "без дата";
+  return new Date(`${String(due).slice(0, 10)}T00:00:00`).toLocaleDateString("bg-BG");
+}
+
+function completeConfirmContent(item: WorkItem): {
+  title: string;
+  description: string;
+  confirmLabel: string;
+} {
+  const eventName = eventCodeLabel(item);
+  const who = item.customer_name?.trim() || "контакта";
+  const phone = item.customer_phone?.trim();
+  const when = formatDueDateBg(item.due_date);
+  const contactLine = phone ? `${who} (${phone})` : who;
+
+  switch (item.event_code) {
+    case "consultation":
+      return {
+        title: "Завършване на консултация",
+        description: `Ще маркирате обаждането за консултация с ${contactLine} на ${when} като завършено. Събитието излиза от чакащите обаждания; планираното CRM follow-up се нулира.`,
+        confirmLabel: "Завърши",
+      };
+    case "service_installation":
+      return {
+        title: "Потвърждение: монтаж изпълнен",
+        description: `Ще маркирате монтажа „${item.title}“ за ${contactLine} на ${when} като изпълнен. Събитието ще се покаже в зелено и няма да се брои като чакащо.`,
+        confirmLabel: "Изпълни",
+      };
+    case "service_maintenance":
+      return {
+        title: "Потвърждение: профилактика изпълнена",
+        description: `Ще маркирате профилактиката „${item.title}“ за ${contactLine} на ${when} като изпълнена.`,
+        confirmLabel: "Изпълни",
+      };
+    case "service_on_site":
+      return {
+        title: "Потвърждение: сервиз на терен изпълнен",
+        description: `Ще маркирате сервиза на терен „${item.title}“ за ${contactLine} на ${when} като изпълнен.`,
+        confirmLabel: "Изпълни",
+      };
+    case "service_in_shop":
+      return {
+        title: "Потвърждение: сервиз в склад изпълнен",
+        description: `Ще маркирате сервиза в склад „${item.title}“ за ${contactLine} на ${when} като изпълнен.`,
+        confirmLabel: "Изпълни",
+      };
+    case "item_added":
+      return {
+        title: "Потвърждение: добавяне на продукт",
+        description: `Ще маркирате събитието „${item.title}“ (${eventName}) на ${when} като изпълнено — операцията по каталога се счита за приключена.`,
+        confirmLabel: "Изпълни",
+      };
+    case "item_removed":
+      return {
+        title: "Потвърждение: премахване на продукт",
+        description: `Ще маркирате събитието „${item.title}“ (${eventName}) на ${when} като изпълнено — операцията по каталога се счита за приключена.`,
+        confirmLabel: "Изпълни",
+      };
+    default:
+      return {
+        title: "Потвърждение за изпълнение",
+        description: `Ще маркирате „${item.title}“ (${eventName}) за ${contactLine} на ${when} като изпълнено.`,
+        confirmLabel: "Изпълни",
+      };
+  }
+}
+
+function WorkItemCompleteConfirmModal({
+  item,
+  savingBusy,
+  onCancel,
+  onConfirm,
+}: {
+  item: WorkItem;
+  savingBusy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const copy = completeConfirmContent(item);
+  const who = item.customer_name?.trim();
+  const phone = item.customer_phone?.trim();
+
+  return (
+    <div
+      className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-950/55 p-4 backdrop-blur-md md:items-center"
+      onClick={() => !savingBusy && onCancel()}
+    >
+      <div
+        className="w-full max-w-lg rounded-t-3xl border border-white/70 bg-white p-6 shadow-[0_-8px_40px_rgba(15,23,42,0.25)] md:rounded-3xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex justify-center md:hidden">
+          <div className="h-1 w-10 rounded-full bg-slate-200" />
+        </div>
+        <div className="text-xs font-bold uppercase tracking-wide text-green-700">Маркиране като изпълнено</div>
+        <div className="mt-1 text-xl font-black text-slate-950">{copy.title}</div>
+        <p className="mt-3 text-sm leading-relaxed text-slate-600">{copy.description}</p>
+        <div className="mt-4 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+          <div>
+            <span className="font-semibold text-slate-500">Събитие: </span>
+            <span className="font-semibold text-slate-900">{eventCodeLabel(item)}</span>
+          </div>
+          <div>
+            <span className="font-semibold text-slate-500">Заглавие: </span>
+            <span className="font-semibold text-slate-900">{item.title}</span>
+          </div>
+          {who && (
+            <div>
+              <span className="font-semibold text-slate-500">Клиент: </span>
+              <span className="font-semibold text-slate-900">{who}</span>
+              {phone ? <span className="text-slate-600"> · {phone}</span> : null}
+            </div>
+          )}
+          <div>
+            <span className="font-semibold text-slate-500">Дата: </span>
+            <span className="font-semibold text-slate-900">{formatDueDateBg(item.due_date)}</span>
+          </div>
+        </div>
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="secondary" onClick={onCancel} disabled={savingBusy}>
+            Отказ
+          </Button>
+          <Button
+            variant="primary"
+            className="!border-green-700 !bg-green-600 hover:!bg-green-700"
+            onClick={onConfirm}
+            disabled={savingBusy}
+          >
+            {savingBusy ? "Запис..." : copy.confirmLabel}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WorkItemCompleteControl({
+  item,
+  readOnly,
+  savingBusy,
+  variant,
+  onRequestComplete,
+}: {
+  item: WorkItem;
+  readOnly: boolean;
+  savingBusy: boolean;
+  variant: "compact" | "full";
+  onRequestComplete: () => void;
+}) {
+  if (readOnly || item.status === "cancelled") return null;
+
+  const done = item.status === "done";
+  const label = completeActionLabel(item.event_code, done);
+
+  if (done) {
+    const badgeClass =
+      "inline-flex shrink-0 items-center gap-1 rounded-lg border border-green-400 bg-green-100 px-2.5 py-1.5 text-[10px] font-bold text-green-900";
+    return (
+      <span className={badgeClass} title={label}>
+        <CheckCircle2 className="h-3.5 w-3.5" />
+        {label}
+      </span>
+    );
+  }
+
+  if (variant === "compact") {
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onRequestComplete();
+        }}
+        disabled={savingBusy}
+        className="shrink-0 self-center inline-flex items-center gap-1 rounded-lg border border-green-700 bg-green-600 px-2.5 py-2 text-[10px] font-bold text-white hover:bg-green-700 disabled:opacity-50"
+      >
+        <CheckCircle2 className="h-3.5 w-3.5" />
+        {label}
+      </button>
+    );
+  }
+
+  return (
+    <Button
+      variant="primary"
+      size="sm"
+      type="button"
+      className="!border-green-700 !bg-green-600 hover:!bg-green-700"
+      onClick={onRequestComplete}
+      disabled={savingBusy}
+    >
+      <CheckCircle2 className="mr-1 inline h-3.5 w-3.5" />
+      {label}
+    </Button>
+  );
+}
+
+function workItemStatusPillClass(item: WorkItem): string {
+  const base = "rounded-full px-2 py-0.5 text-xs font-bold whitespace-nowrap border";
+  if (item.status === "done") {
+    return `${base} bg-green-200 border-green-400 text-green-900`;
+  }
+  if (item.event_code === "consultation" || item.status === "planned") {
+    return `${base} bg-amber-100 border-amber-300 text-amber-900`;
+  }
+  return statusPillClass(item.status);
 }
 
 function statusPillClass(status: WorkItem["status"]): string {
@@ -930,5 +1242,7 @@ function eventColor(item: WorkItem): string {
   if (item.event_code === "service_maintenance") return "#14b8a6";
   if (item.event_code === "service_on_site") return "#6366f1";
   if (item.event_code === "service_in_shop") return "#a855f7";
+  if (item.status === "done") return "#22c55e";
+  if (item.event_code === "consultation") return "#ec4899";
   return TYPE_COLOR[item.type];
 }

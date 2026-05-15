@@ -14,6 +14,11 @@ import { SignatureCanvas } from "./SignatureCanvas";
 import { ProductAutocomplete } from "./ProductAutocomplete";
 import { offlineSend, offlineGet, newLocalId, isLocalId } from "@/lib/offline/offlineFetch";
 import { useOnlineStatus } from "@/lib/hooks/useOnlineStatus";
+import {
+  digitsOnlyPhoneInput,
+  validateProtocolEmail,
+  validateProtocolPhone,
+} from "@/lib/protocol-contact-validation";
 
 // ─── Типове ──────────────────────────────────────────────────────────────────
 
@@ -22,7 +27,8 @@ interface FormData {
   date:             string;
   client_name:      string;
   ac_model:         string;
-  serial_number:    string;
+  indoor_unit_serial:  string;
+  outdoor_unit_serial: string;
   address:          string;
   paid_amount:      string;
   client_email:     string;
@@ -48,7 +54,8 @@ const defaultForm = (): FormData => ({
   date:             new Date().toISOString().slice(0, 10),
   client_name:      "",
   ac_model:         "",
-  serial_number:    "",
+  indoor_unit_serial:  "",
+  outdoor_unit_serial: "",
   address:          "",
   paid_amount:      "",
   client_email:     "",
@@ -101,6 +108,7 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
   const [sending, setSending] = useState(false);
   const [sent, setSent]      = useState(false);
   const [error, setError]    = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Зареждане на initial data при отваряне на съществуващ протокол ─────────
@@ -144,7 +152,8 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
       date:             (data.date as string) ?? prev.date,
       client_name:      (data.client_name as string) ?? "",
       ac_model:         (data.ac_model as string) ?? "",
-      serial_number:    (data.serial_number as string) ?? "",
+      indoor_unit_serial:  (data.indoor_unit_serial as string) ?? (data.serial_number as string) ?? "",
+      outdoor_unit_serial: (data.outdoor_unit_serial as string) ?? "",
       address:          (data.address as string) ?? "",
       paid_amount:      data.paid_amount != null ? String(data.paid_amount) : "",
       client_email:     (data.client_email as string) ?? "",
@@ -178,7 +187,7 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
   // Автоматично запазване при смяна на данните
   // Не стартира auto-save ако формулярът е все още напълно празен (нищо не е въведено)
   const autoSave = useCallback(async (data: FormData, id: string | null) => {
-    const hasContent = data.client_name || data.ac_model || data.serial_number ||
+    const hasContent = data.client_name || data.ac_model || data.indoor_unit_serial || data.outdoor_unit_serial ||
       data.address || data.paid_amount || data.client_phone || data.client_email ||
       data.mount_types.length > 0 || Object.values(data.materials).some(v => v > 0);
     if (!hasContent && !id) return; // Не запазвай напълно празен протокол
@@ -231,7 +240,8 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
         date:             data.date || new Date().toISOString().slice(0, 10),
         client_name:      data.client_name || null,
         ac_model:         data.ac_model || null,
-        serial_number:    data.serial_number || null,
+        indoor_unit_serial:  data.indoor_unit_serial || null,
+        outdoor_unit_serial: data.outdoor_unit_serial || null,
         address:          data.address || null,
         paid_amount:      data.paid_amount ? parseFloat(data.paid_amount) : null,
         client_email:     data.client_email || null,
@@ -309,6 +319,11 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
   // Изпращане на имейл
   const doSendEmail = async () => {
     if (!savedId || !emailInput) return;
+    const emailErr = validateProtocolEmail(emailInput);
+    if (emailErr) {
+      setError(emailErr);
+      return;
+    }
     setSending(true);
     setError(null);
     try {
@@ -335,6 +350,29 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
 
   const isLastStep = step === STEPS.length - 1;
   const isSigned   = form.status === "signed";
+
+  const validateStep0 = useCallback((data: FormData): Record<string, string> => {
+    const errs: Record<string, string> = {};
+    const phoneErr = validateProtocolPhone(data.client_phone);
+    if (phoneErr) errs.client_phone = phoneErr;
+    const emailErr = validateProtocolEmail(data.client_email);
+    if (emailErr) errs.client_email = emailErr;
+    return errs;
+  }, []);
+
+  const goNext = () => {
+    if (step === 0) {
+      const errs = validateStep0(form);
+      if (Object.keys(errs).length > 0) {
+        setFieldErrors(errs);
+        setError("Поправете полетата с грешки, преди да продължите.");
+        return;
+      }
+    }
+    setFieldErrors({});
+    setError(null);
+    setStep((s) => s + 1);
+  };
 
   // ─── Рендер стъпка ────────────────────────────────────────────────────────
 
@@ -401,10 +439,21 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
                 placeholder="Daikin FTXM25N..."
                 onChange={(name) => update("ac_model", name)}
               />
-              <Field label="Сериен номер">
+              <Field label="Сериен № — вътрешно тяло" error={fieldErrors.indoor_unit_serial}>
                 <input
-                  type="text" value={form.serial_number}
-                  onChange={e => update("serial_number", e.target.value)}
+                  type="text"
+                  value={form.indoor_unit_serial}
+                  onChange={e => update("indoor_unit_serial", e.target.value)}
+                  placeholder="Серийният номер от табелката на вътрешното тяло"
+                  className="w-full text-base border-b-2 border-slate-300 focus:border-blue-500 outline-none py-2 bg-transparent"
+                />
+              </Field>
+              <Field label="Сериен № — външно тяло" error={fieldErrors.outdoor_unit_serial}>
+                <input
+                  type="text"
+                  value={form.outdoor_unit_serial}
+                  onChange={e => update("outdoor_unit_serial", e.target.value)}
+                  placeholder="Серийният номер от табелката на външното тяло"
                   className="w-full text-base border-b-2 border-slate-300 focus:border-blue-500 outline-none py-2 bg-transparent"
                 />
               </Field>
@@ -422,18 +471,54 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
                   className="w-full text-base border-b-2 border-slate-300 focus:border-blue-500 outline-none py-2 bg-transparent"
                 />
               </Field>
-              <Field label="Телефон на клиента">
+              <Field label="Телефон на клиента" error={fieldErrors.client_phone}>
                 <input
-                  type="tel" value={form.client_phone} placeholder="0888 123 456"
-                  onChange={e => update("client_phone", e.target.value)}
-                  className="w-full text-base border-b-2 border-slate-300 focus:border-blue-500 outline-none py-2 bg-transparent"
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel"
+                  value={form.client_phone}
+                  placeholder="0888123456"
+                  onChange={e => {
+                    update("client_phone", digitsOnlyPhoneInput(e.target.value));
+                    if (fieldErrors.client_phone) {
+                      setFieldErrors((prev) => {
+                        const next = { ...prev };
+                        delete next.client_phone;
+                        return next;
+                      });
+                    }
+                  }}
+                  className={`w-full text-base border-b-2 outline-none py-2 bg-transparent ${
+                    fieldErrors.client_phone
+                      ? "border-red-400 focus:border-red-500"
+                      : "border-slate-300 focus:border-blue-500"
+                  }`}
                 />
               </Field>
-              <Field label="Имейл на клиента (за изпращане)">
+              <Field label="Имейл на клиента (за изпращане)" error={fieldErrors.client_email}>
                 <input
-                  type="email" value={form.client_email} placeholder="client@example.com"
-                  onChange={e => { update("client_email", e.target.value); setEmailInput(e.target.value); }}
-                  className="w-full text-base border-b-2 border-slate-300 focus:border-blue-500 outline-none py-2 bg-transparent"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  value={form.client_email}
+                  placeholder="client@example.com"
+                  onChange={e => {
+                    const v = e.target.value;
+                    update("client_email", v);
+                    setEmailInput(v);
+                    if (fieldErrors.client_email) {
+                      setFieldErrors((prev) => {
+                        const next = { ...prev };
+                        delete next.client_email;
+                        return next;
+                      });
+                    }
+                  }}
+                  className={`w-full text-base border-b-2 outline-none py-2 bg-transparent ${
+                    fieldErrors.client_email
+                      ? "border-red-400 focus:border-red-500"
+                      : "border-slate-300 focus:border-blue-500"
+                  }`}
                 />
               </Field>
             </div>
@@ -599,7 +684,7 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
       {/* ── Навигация Назад / Напред ── */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-3 flex gap-3 safe-bottom">
         <button
-          onClick={() => { setStep(s => s - 1); setError(null); }}
+          onClick={() => { setStep(s => s - 1); setError(null); setFieldErrors({}); }}
           disabled={step === 0}
           className="flex items-center gap-1.5 px-4 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold text-sm disabled:opacity-30"
         >
@@ -624,7 +709,7 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
           </button>
         ) : (
           <button
-            onClick={() => { setStep(s => s + 1); setError(null); }}
+            onClick={goNext}
             className="flex items-center gap-1.5 px-5 py-3 rounded-xl bg-blue-600 text-white font-semibold text-sm active:bg-blue-700"
           >
             Напред
@@ -652,13 +737,22 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
 
 // ─── Малки помощни компоненти ─────────────────────────────────────────────────
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+  error,
+}: {
+  label: string;
+  children: React.ReactNode;
+  error?: string;
+}) {
   return (
     <div>
       <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">
         {label}
       </label>
       {children}
+      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
     </div>
   );
 }

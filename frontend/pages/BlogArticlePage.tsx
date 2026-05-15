@@ -1,7 +1,7 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Clock, Calendar, ChevronLeft, Share2, ImageIcon } from 'lucide-react';
+import { Clock, Calendar, ChevronLeft, ImageIcon } from 'lucide-react';
 import { Breadcrumb, SchemaMarkup, SEOMetaTags, ArticleContent, RelatedArticles, SocialShare } from '../components/blog';
 import { getAuthorBySlug, getCategoryBySlug, formatDate } from '../data/blog';
 import { fetchArticleBySlug, fetchArticles } from '../data/blogService';
@@ -12,6 +12,7 @@ export default function BlogArticlePage() {
   const [article, setArticle] = React.useState<Article | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [allArticles, setAllArticles] = React.useState<Article[]>([]);
+  const [featuredImageError, setFeaturedImageError] = useState(false);
   
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -20,6 +21,7 @@ export default function BlogArticlePage() {
   useEffect(() => {
     const run = async () => {
       setLoading(true);
+      setFeaturedImageError(false);
       const a = slug ? await fetchArticleBySlug(slug) : undefined;
       setArticle(a ?? null);
       const list = await fetchArticles({ page: 1, perPage: 50 });
@@ -167,22 +169,20 @@ export default function BlogArticlePage() {
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.2 }}
-          className="relative aspect-[21/9] rounded-2xl overflow-hidden mb-12 bg-gradient-to-br from-[#00B4D8]/20 to-[#FF4D00]/20"
+          className="relative aspect-[21/9] rounded-2xl overflow-hidden mb-12 bg-gradient-to-br from-[#00B4D8]/20 to-[#FF4D00]/20 flex items-center justify-center"
         >
-          <img 
-            src={article.featuredImage} 
-            alt={`${article.title} - Смолян Клима`}
-            className="w-full h-full object-cover"
-            loading="eager"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-              e.currentTarget.parentElement?.classList.add('flex', 'items-center', 'justify-center');
-              const icon = document.createElement('div');
-              icon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>';
-              e.currentTarget.parentElement?.appendChild(icon.firstChild!);
-            }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
+          {!featuredImageError ? (
+            <img 
+              src={article.featuredImage} 
+              alt={`${article.title} - Смолян Клима`}
+              className="absolute inset-0 w-full h-full object-cover"
+              loading="eager"
+              onError={() => setFeaturedImageError(true)}
+            />
+          ) : (
+            <ImageIcon className="w-16 h-16 text-gray-400 relative z-10" aria-hidden />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent pointer-events-none" />
           
           {/* Last Updated Badge */}
           {article.modifiedAt !== article.publishedAt && (
@@ -249,27 +249,25 @@ export default function BlogArticlePage() {
           </motion.article>
 
           {/* Sidebar */}
-          <aside className="lg:col-span-4 space-y-8">
-            {/* CTA */}
-            <div className="bg-gradient-to-br from-[#FF4D00] to-[#FF4D00]/80 rounded-2xl p-6 text-white sticky top-24">
-              <h3 className="text-xl font-bold mb-2">Готови ли сте?</h3>
-              <p className="text-white/90 text-sm mb-4">
-                Свържете се с нас за безплатна консултация и оферта.
-              </p>
-              <a 
-                href="/contact" 
-                className="block w-full text-center px-6 py-3 bg-white text-[#FF4D00] rounded-full font-semibold text-sm hover:bg-gray-100 transition-colors"
-              >
-                Заяви оферта
-              </a>
-            </div>
-
-            {/* Related Articles - Smart Component */}
+          <aside className="lg:col-span-4 space-y-6 lg:sticky lg:top-24 lg:self-start">
             <RelatedArticles 
               currentArticle={article}
               articles={allArticles}
               maxCount={3}
             />
+
+            <div className="bg-gradient-to-br from-[#FF4D00] to-[#FF4D00]/80 rounded-2xl p-6 text-white shadow-lg">
+              <h3 className="text-xl font-bold mb-2">Готови ли сте?</h3>
+              <p className="text-white/90 text-sm mb-4">
+                Свържете се с нас за безплатна консултация и оферта.
+              </p>
+              <Link 
+                to="/contact" 
+                className="block w-full text-center px-6 py-3 bg-white text-[#FF4D00] rounded-full font-semibold text-sm hover:bg-gray-100 transition-colors"
+              >
+                Заяви оферта
+              </Link>
+            </div>
           </aside>
         </div>
 

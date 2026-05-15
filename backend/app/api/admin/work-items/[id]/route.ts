@@ -3,21 +3,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
+import { syncConsultationContactFollowUp } from "@/lib/work-items/consultation-contact";
+
+const WORK_ITEM_EVENT_CODES = [
+  "item_added",
+  "item_removed",
+  "sale",
+  "service_installation",
+  "service_maintenance",
+  "service_on_site",
+  "service_in_shop",
+  "consultation",
+] as const;
 
 const UpdateSchema = z.object({
   type: z.enum(["sale", "service", "stock_in", "stock_out", "task"]).optional(),
-  eventCode: z
-    .enum([
-      "item_added",
-      "item_removed",
-      "sale",
-      "service_installation",
-      "service_maintenance",
-      "service_on_site",
-      "service_in_shop",
-    ])
-    .nullable()
-    .optional(),
+  eventCode: z.enum(WORK_ITEM_EVENT_CODES).nullable().optional(),
   title: z.string().min(2).max(240).optional(),
   notes: z.string().max(8000).optional().nullable(),
   status: z.enum(["planned", "in_progress", "done", "cancelled"]).optional(),
@@ -278,6 +279,13 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       );
     }
   }
+  await syncConsultationContactFollowUp(supabase, {
+    contactId: (parsed.data.contactId ?? data.contact_id) as string | null,
+    dueDate: (parsed.data.dueDate ?? data.due_date) as string | null,
+    status: String(parsed.data.status ?? data.status),
+    eventCode: (parsed.data.eventCode ?? data.event_code) as string | null,
+  });
+
   await logAdminActivity({
     action: "work_item.update",
     entityType: "work_item",

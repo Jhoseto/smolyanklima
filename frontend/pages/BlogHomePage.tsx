@@ -9,7 +9,7 @@ import {
   SEOMetaTags,
   SchemaMarkup
 } from '../components/blog';
-import { getCategoryBySlug } from '../data/blog';
+import { categories, getCategoryBySlug } from '../data/blog';
 import { fetchArticles } from '../data/blogService';
 import type { Article } from '../data/blog/types';
 
@@ -173,15 +173,29 @@ export default function BlogHomePage() {
           <aside className="lg:col-span-4 space-y-8">
             {/* Trending Section */}
             <div className="bg-white rounded-2xl p-6 shadow-lg">
-              <TrendingSection />
+              <TrendingSection variant="sidebar" />
             </div>
 
             {/* Categories List */}
             <div className="bg-white rounded-2xl p-6 shadow-lg">
               <h3 className="text-lg font-bold text-gray-900 mb-4">Категории</h3>
-              <div className="space-y-3">
-                {/* Will be populated from data */}
-              </div>
+              <ul className="space-y-2">
+                {categories.map((cat) => (
+                  <li key={cat.slug}>
+                    <a
+                      href={`/blog/kategoria/${cat.slug}`}
+                      className="flex items-center gap-2 text-sm text-gray-600 hover:text-[#FF4D00] transition-colors py-1"
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ backgroundColor: cat.color }}
+                        aria-hidden
+                      />
+                      {cat.name}
+                    </a>
+                  </li>
+                ))}
+              </ul>
             </div>
 
             {/* CTA Box */}

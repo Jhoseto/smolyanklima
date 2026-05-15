@@ -5,6 +5,7 @@ import { adminSession, type AdminRole } from "@/lib/admin/db";
 import { MobileNav } from "./MobileNav";
 import { SplashScreen } from "./SplashScreen";
 import { ChatNavBadge } from "./chat/ChatNavBadge";
+import { InquiriesNavBadge } from "./inquiries/InquiriesNavBadge";
 import { AdminPushBanner } from "./AdminPushBanner";
 import { OfflineBootstrap } from "./OfflineBootstrap";
 import { OfflineExplainerCard } from "./OfflineExplainerCard";
@@ -12,7 +13,7 @@ import { AdminLogo } from "./AdminLogo";
 import {
   LayoutDashboard, Package, Users, FileText, Star,
   Activity, Settings, LogOut,
-  ShieldCheck, FolderOpen, MessageSquare, Receipt,
+  ShieldCheck, FolderOpen, Receipt,
   UserCircle,
 } from "lucide-react";
 
@@ -99,7 +100,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                 <SectionLabel label="Офис" />
                 <NavLink href="/admin/contacts" label="Контакти" icon={<Users className="w-4 h-4" />} />
                 <ChatNavBadge />
-                <NavLink href="/admin/inquiries" label="Запитвания" icon={<MessageSquare className="w-4 h-4" />} />
+                <InquiriesNavBadge />
                 <NavLink href="/admin/products" label="Продукти" icon={<Package className="w-4 h-4" />} />
                 {showSales && (
                   <NavLink href="/admin/history" label="Продажби" icon={<Receipt className="w-4 h-4" />} />

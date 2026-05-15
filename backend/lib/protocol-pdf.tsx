@@ -356,6 +356,8 @@ export interface ProtocolData {
   client_name?: string | null;
   ac_model?: string | null;
   serial_number?: string | null;
+  indoor_unit_serial?: string | null;
+  outdoor_unit_serial?: string | null;
   address?: string | null;
   travel_km?: string | null;
   paid_amount?: number | null;
@@ -433,8 +435,12 @@ export function ProtocolPDF({ data }: { data: ProtocolData }) {
                 <Text style={s.ulLine}>{dash(data.ac_model)}</Text>
               </View>
               <View style={s.underlineRow}>
-                <Text style={s.ulLabel}>Сериен №</Text>
-                <Text style={s.ulLine}>{dash(data.serial_number)}</Text>
+                <Text style={s.ulLabel}>Сериен № вътр.</Text>
+                <Text style={s.ulLine}>{dash(data.indoor_unit_serial ?? data.serial_number)}</Text>
+              </View>
+              <View style={s.underlineRow}>
+                <Text style={s.ulLabel}>Сериен № външ.</Text>
+                <Text style={s.ulLine}>{dash(data.outdoor_unit_serial)}</Text>
               </View>
               <View style={s.underlineRow}>
                 <Text style={s.ulLabel}>Адрес</Text>

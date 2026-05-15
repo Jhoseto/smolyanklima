@@ -1,9 +1,10 @@
 import { adminSession } from "@/lib/admin/db";
-import { PUBLIC_CATALOG_STOCK_STATUSES } from "@/lib/catalog/publicProductVisibility";
 import { EmailOutboxDrain } from "./EmailOutboxDrain";
 import { SectionTitle, Card } from "./ui";
 import { DashboardPanel } from "./DashboardPanel";
+import { CallFollowUpsPanel } from "./CallFollowUpsPanel";
 import { WorkItemsPlanner } from "./WorkItemsPlanner";
+import { fetchCallFollowUpPanelItems } from "@/lib/admin/call-follow-up-items";
 
 export const dynamic = "force-dynamic";
 
@@ -13,27 +14,20 @@ export default async function AdminDashboardPage() {
   const readOnlyDashboard = session.role === "service_staff";
   const today = formatDateKey(new Date());
 
-  const lowStockSetting = await supabase.from("settings").select("value").eq("key", "inventory.low_stock_threshold").maybeSingle();
-  const lowStockThreshold = parsePositiveInt(lowStockSetting.data?.value, 2);
-
   const [
     products,
-    articles,
     inquiriesNew,
     outboxPending,
     outboxFailed,
     workToday,
     workOverdue,
-    lowStock,
     latestInquiries,
     todaysItems,
     overdueItems,
-    lowStockItems,
     failedEmails,
-    followUpContacts,
+    callPanelItems,
   ] = await Promise.all([
     supabase.from("products").select("id", { count: "exact", head: true }),
-    supabase.from("articles").select("id", { count: "exact", head: true }).eq("is_published", true),
     supabase.from("inquiries").select("id", { count: "exact", head: true }).eq("status", "new"),
     supabase.from("email_outbox").select("id", { count: "exact", head: true }).eq("status", "pending"),
     supabase.from("email_outbox").select("id", { count: "exact", head: true }).eq("status", "failed"),
@@ -47,11 +41,6 @@ export default async function AdminDashboardPage() {
       .select("id", { count: "exact", head: true })
       .lt("due_date", today)
       .in("status", ["planned", "in_progress"]),
-    supabase
-      .from("products")
-      .select("id", { count: "exact", head: true })
-      .in("stock_status", PUBLIC_CATALOG_STOCK_STATUSES as unknown as string[])
-      .lte("stock_quantity", lowStockThreshold),
     supabase
       .from("inquiries")
       .select("id,customer_name,customer_phone,service_type,created_at")
@@ -74,37 +63,20 @@ export default async function AdminDashboardPage() {
       .order("due_date", { ascending: true })
       .limit(6),
     supabase
-      .from("products")
-      .select("id,name,stock_quantity,stock_status")
-      .in("stock_status", PUBLIC_CATALOG_STOCK_STATUSES as unknown as string[])
-      .lte("stock_quantity", lowStockThreshold)
-      .order("stock_quantity", { ascending: true })
-      .order("name", { ascending: true })
-      .limit(6),
-    supabase
       .from("email_outbox")
       .select("id,to_email,subject,last_error,created_at")
       .eq("status", "failed")
       .order("created_at", { ascending: false })
       .limit(4),
-    supabase
-      .from("contacts")
-      .select("id,full_name,phone,customer_status,next_follow_up_at,last_contacted_at")
-      .not("next_follow_up_at", "is", null)
-      .lte("next_follow_up_at", today)
-      .neq("customer_status", "lost")
-      .order("next_follow_up_at", { ascending: true })
-      .limit(6),
+    fetchCallFollowUpPanelItems(supabase, today),
   ]);
 
   const nProducts = products.count ?? 0;
-  const nArticles = articles.count ?? 0;
   const nInquiries = inquiriesNew.count ?? 0;
   const nOutbox = outboxPending.count ?? 0;
   const nFailedEmails = outboxFailed.count ?? 0;
   const nWorkToday = workToday.count ?? 0;
   const nWorkOverdue = workOverdue.count ?? 0;
-  const nLowStock = lowStock.count ?? 0;
 
   return (
     <div className="w-full space-y-3">
@@ -129,21 +101,20 @@ export default async function AdminDashboardPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-2 md:gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
           { label: "Продукти", value: String(nProducts) },
-          { label: "Публ. статии", value: String(nArticles) },
           { label: "Нови запитвания", value: String(nInquiries) },
           { label: "Днес / просрочени", value: `${nWorkToday} / ${nWorkOverdue}` },
         ].map((card) => (
-          <Card key={card.label} className="p-3 md:p-4">
+          <Card key={card.label} className="p-4 shadow-sm ring-1 ring-slate-200/70 bg-white">
             <div className="text-[10px] md:text-xs font-semibold text-slate-500 uppercase tracking-wider leading-tight">{card.label}</div>
             <div className="text-2xl md:text-3xl font-bold text-slate-900 mt-1 md:mt-2 tabular-nums">{card.value}</div>
           </Card>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 items-stretch">
         <DashboardPanel
           title="Днес"
           description="Задачи и събития, които трябва да се обработят днес."
@@ -194,29 +165,6 @@ export default async function AdminDashboardPage() {
           }))}
         />
         <DashboardPanel
-          title="Ниска наличност"
-          description={`Активни продукти с наличност ${lowStockThreshold} бр. или по-малко.`}
-          href="/admin/products"
-          empty={`Няма артикули под ${lowStockThreshold} бр.`}
-          badge={nLowStock}
-          tone={nLowStock > 0 ? "warning" : "neutral"}
-          readOnly={readOnlyDashboard}
-          items={(lowStockItems.data ?? []).map((item) => ({
-            title: item.name,
-            productId: item.id,
-            meta: `Наличност: ${item.stock_quantity} бр. · ${stockStatusLabel(item.stock_status)}`,
-            detail: {
-              title: item.name,
-              subtitle: "Продукт с ниска наличност",
-              fields: [
-                { label: "Налични бройки", value: `${item.stock_quantity} бр.` },
-                { label: "Складов статус", value: stockStatusLabel(item.stock_status) },
-                { label: "Какво означава", value: "Провери дали трябва зареждане, скриване от каталога или промяна на статуса." },
-              ],
-            },
-          }))}
-        />
-        <DashboardPanel
           title="Нови заявки"
           description="Нови клиентски запитвания от сайта, които чакат обработка."
           href="/admin/inquiries"
@@ -241,31 +189,7 @@ export default async function AdminDashboardPage() {
         />
       </div>
 
-      <DashboardPanel
-        title="Контакти за обаждане"
-        description="CRM контакти с планирано обаждане до днес."
-        href="/admin/contacts"
-        empty="Няма планирани обаждания за днес."
-        badge={(followUpContacts.data ?? []).length}
-        tone={(followUpContacts.data ?? []).length > 0 ? "info" : "neutral"}
-        readOnly={readOnlyDashboard}
-        items={(followUpContacts.data ?? []).map((contact) => ({
-          title: contact.full_name,
-          meta: [contact.phone, customerStatusLabel(contact.customer_status), formatBgDate(contact.next_follow_up_at)]
-            .filter(Boolean)
-            .join(" · "),
-          detail: {
-            title: contact.full_name,
-            subtitle: "Контакт за обаждане",
-            fields: [
-              { label: "Телефон", value: contact.phone },
-              { label: "CRM статус", value: customerStatusLabel(contact.customer_status) },
-              { label: "Планирано обаждане", value: formatBgDate(contact.next_follow_up_at) },
-              { label: "Последен контакт", value: formatBgDate(contact.last_contacted_at) },
-            ],
-          },
-        }))}
-      />
+      <CallFollowUpsPanel initialItems={callPanelItems} readOnly={readOnlyDashboard} />
 
       {!readOnlyDashboard && (nOutbox > 0 || nFailedEmails > 0) && (
         <Card className="p-4">
@@ -297,11 +221,6 @@ export default async function AdminDashboardPage() {
   );
 }
 
-function parsePositiveInt(value: string | null | undefined, fallback: number) {
-  const parsed = Number.parseInt(String(value ?? ""), 10);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
-}
-
 function formatDateKey(d: Date) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -319,19 +238,6 @@ function formatBgDateTime(value: string | null | undefined) {
   return new Date(value).toLocaleString("bg-BG", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
-function stockStatusLabel(value: string | null | undefined) {
-  if (value === "out_of_stock") return "изчерпан";
-  if (value === "on_order") return "поръчан";
-  return "в наличност";
-}
-
-function customerStatusLabel(value: string | null | undefined) {
-  if (value === "vip") return "VIP";
-  if (value === "active") return "Активен";
-  if (value === "lost") return "Загубен";
-  return "Нов";
-}
-
 function eventLabel(value: string | null | undefined) {
   if (value === "sale") return "Продажба";
   if (value === "item_added") return "Добавяне на продукт";
@@ -340,6 +246,7 @@ function eventLabel(value: string | null | undefined) {
   if (value === "service_maintenance") return "Профилактика";
   if (value === "service_on_site") return "Сервиз на терен";
   if (value === "service_in_shop") return "Сервиз в склад";
+  if (value === "consultation") return "Консултация";
   return "Задача";
 }
 

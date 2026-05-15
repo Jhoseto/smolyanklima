@@ -4,22 +4,24 @@ import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminDb, adminSession, requireRole } from "@/lib/admin/db";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { logAdminActivity } from "@/lib/admin/audit";
+import { syncConsultationContactFollowUp } from "@/lib/work-items/consultation-contact";
+
+const WORK_ITEM_EVENT_CODES = [
+  "item_added",
+  "item_removed",
+  "sale",
+  "service_installation",
+  "service_maintenance",
+  "service_on_site",
+  "service_in_shop",
+  "consultation",
+] as const;
 
 const QuerySchema = z.object({
   from: z.string().optional(),
   to: z.string().optional(),
   q: z.string().optional(),
-  eventCode: z
-    .enum([
-      "item_added",
-      "item_removed",
-      "sale",
-      "service_installation",
-      "service_maintenance",
-      "service_on_site",
-      "service_in_shop",
-    ])
-    .optional(),
+  eventCode: z.enum(WORK_ITEM_EVENT_CODES).optional(),
   type: z.enum(["sale", "service", "stock_in", "stock_out", "task"]).optional(),
   status: z.enum(["planned", "in_progress", "done", "cancelled"]).optional(),
   /** Филтър за панела „Продажби“: чака монтаж / завършен. */
@@ -44,18 +46,7 @@ const BodySchema = z.object({
   customerPhone: z.string().max(80).optional().nullable(),
   customerAddress: z.string().max(500).optional().nullable(),
   assignedTo: z.string().uuid().optional().nullable(),
-  eventCode: z
-    .enum([
-      "item_added",
-      "item_removed",
-      "sale",
-      "service_installation",
-      "service_maintenance",
-      "service_on_site",
-      "service_in_shop",
-    ])
-    .optional()
-    .nullable(),
+  eventCode: z.enum(WORK_ITEM_EVENT_CODES).optional().nullable(),
   quantity: z.number().int().positive().optional().default(1),
   unitPrice: z.number().nonnegative().optional().nullable(),
   totalAmount: z.number().nonnegative().optional().nullable(),
@@ -193,6 +184,14 @@ export async function POST(req: NextRequest) {
 
   const { data, error } = await supabase.from("work_items").insert(payload).select("*").single();
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
+
+  await syncConsultationContactFollowUp(supabase, {
+    contactId: parsed.data.contactId,
+    dueDate: parsed.data.dueDate,
+    status: parsed.data.status,
+    eventCode: parsed.data.eventCode,
+  });
+
   await logAdminActivity({
     action: "work_item.create",
     entityType: "work_item",

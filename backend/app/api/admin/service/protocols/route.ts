@@ -2,6 +2,12 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
+import {
+  combineUnitSerials,
+  optionalProtocolEmail,
+  optionalProtocolPhone,
+  optionalUnitSerial,
+} from "@/lib/protocol-contact-fields";
 
 const QuerySchema = z.object({
   page:    z.coerce.number().int().min(1).optional().default(1),
@@ -22,11 +28,13 @@ const CreateSchema = z.object({
   date:             z.string().optional(),
   client_name:      z.string().max(200).optional().nullable(),
   ac_model:         z.string().max(200).optional().nullable(),
-  serial_number:    z.string().max(100).optional().nullable(),
+  serial_number:       z.string().max(100).optional().nullable(),
+  indoor_unit_serial:  optionalUnitSerial,
+  outdoor_unit_serial: optionalUnitSerial,
   address:          z.string().max(500).optional().nullable(),
   paid_amount:      z.number().nonnegative().optional().nullable(),
-  client_email:     z.string().max(200).optional().nullable().transform(v => v?.trim() || null),
-  client_phone:     z.string().max(30).optional().nullable(),
+  client_email:     optionalProtocolEmail,
+  client_phone:     optionalProtocolPhone,
   mount_types:      z.array(z.string()).optional().default([]),
   materials:        z.array(MaterialSchema).optional().default([]),
   cable_channels_m: z.number().nonnegative().optional().default(0),
@@ -134,7 +142,9 @@ export async function POST(req: NextRequest) {
     work_item_id:     d.work_item_id ?? null,
     client_name:      d.client_name ?? null,
     ac_model:         d.ac_model ?? null,
-    serial_number:    d.serial_number ?? null,
+    serial_number:       d.serial_number ?? combineUnitSerials(d.indoor_unit_serial, d.outdoor_unit_serial),
+    indoor_unit_serial:  d.indoor_unit_serial ?? null,
+    outdoor_unit_serial: d.outdoor_unit_serial ?? null,
     address:          d.address ?? null,
     paid_amount:      d.paid_amount ?? null,
     client_email:     d.client_email || null,

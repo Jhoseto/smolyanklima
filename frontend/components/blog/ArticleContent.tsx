@@ -8,7 +8,7 @@ interface ArticleContentProps {
 
 export const ArticleContent: React.FC<ArticleContentProps> = ({ content }) => {
   return (
-    <div className="prose prose-lg max-w-none 
+    <div className="prose prose-lg max-w-none overflow-x-auto
       prose-headings:text-gray-900 
       prose-headings:font-bold
       prose-h1:text-3xl

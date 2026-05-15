@@ -171,7 +171,7 @@ export const HeroSection = ({ onFreeConsultationClick }: HeroSectionProps) => {
               <div className="absolute bottom-0 left-0 right-0 bg-black/40 backdrop-blur-md px-8 py-6 rounded-b-[2.5rem] border-t border-white/10">
                 <div className="grid grid-cols-3 divide-x divide-white/20">
                   <div className="text-center">
-                    <div className="text-white text-2xl font-black mb-1">1500+</div>
+                    <div className="text-white text-2xl font-black mb-1">3000+</div>
                     <div className="text-white/80 text-[11px] font-medium uppercase tracking-wider">Монтирани климатика</div>
                   </div>
                   <div className="text-center">
