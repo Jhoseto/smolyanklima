@@ -9,6 +9,7 @@ import { logAdminActivity } from "@/lib/admin/audit";
 import { mapProductDbError } from "@/lib/admin/productDbErrors";
 import { insertProductCatalogStockCalendarEvent } from "@/lib/admin/productCatalogWorkItems";
 import { replaceProductImages, upsertProductSpecs, type ImageInput, type SpecsInput } from "@/lib/admin/syncProductChildren";
+import * as catalogBtu from "@/lib/catalog/productBtu";
 
 const SpecsSchema = z.object({
   coverage_m2: z.number().nonnegative().nullable().optional(),
@@ -43,18 +44,19 @@ const MAX_IMAGES = 4;
  *  `featured_position`+`featured_badge` (0035) — fallback при липсваща колона. */
 const FEATURED_COLS = ",featured_position,featured_badge";
 const ADMIN_PRODUCT_LIST_SELECT_MIN =
-  "id,slug,name,price,purchase_price,product_condition,is_featured,is_active,stock_status,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,model_code,brand_id,brands:brand_id(name),product_types:type_id(name)";
+  "id,slug,name,price,purchase_price,product_condition,is_featured,is_active,show_in_public_catalog,stock_status,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,model_code,brand_id,brands:brand_id(name),product_types:type_id(name)";
 const ADMIN_PRODUCT_LIST_SELECT_WITH_REGION =
-  "id,slug,name,price,purchase_price,product_condition,is_featured,is_active,stock_status,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,product_region,model_code,brand_id,brands:brand_id(name),product_types:type_id(name)";
+  "id,slug,name,price,purchase_price,product_condition,is_featured,is_active,show_in_public_catalog,stock_status,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,product_region,model_code,brand_id,brands:brand_id(name),product_types:type_id(name)";
 const ADMIN_PRODUCT_LIST_SELECT_WITH_LOCATION =
-  "id,slug,name,price,purchase_price,product_condition,is_featured,is_active,stock_status,stock_location,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,model_code,brand_id,brands:brand_id(name),product_types:type_id(name)";
+  "id,slug,name,price,purchase_price,product_condition,is_featured,is_active,show_in_public_catalog,stock_status,stock_location,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,model_code,brand_id,brands:brand_id(name),product_types:type_id(name)";
 const ADMIN_PRODUCT_LIST_SELECT_FULL =
-  "id,slug,name,price,purchase_price,product_condition,is_featured,is_active,stock_status,stock_location,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,product_region,model_code,brand_id,brands:brand_id(name),product_types:type_id(name)";
+  "id,slug,name,price,purchase_price,product_condition,is_featured,is_active,show_in_public_catalog,stock_status,stock_location,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,product_region,model_code,brand_id,brands:brand_id(name),product_types:type_id(name)";
 /** Подмножество без `model_code` — fallback за DB без миграция 0038. */
 const ADMIN_PRODUCT_LIST_SELECT_NO_MODEL_CODE_MIN = ADMIN_PRODUCT_LIST_SELECT_MIN.replace(",model_code", "");
 const ADMIN_PRODUCT_LIST_SELECT_NO_MODEL_CODE_REGION = ADMIN_PRODUCT_LIST_SELECT_WITH_REGION.replace(",model_code", "");
 const ADMIN_PRODUCT_LIST_SELECT_NO_MODEL_CODE_LOCATION = ADMIN_PRODUCT_LIST_SELECT_WITH_LOCATION.replace(",model_code", "");
 const ADMIN_PRODUCT_LIST_SELECT_NO_MODEL_CODE_FULL = ADMIN_PRODUCT_LIST_SELECT_FULL.replace(",model_code", "");
+const stripPublicCatalogCol = (sel: string) => sel.replace(",show_in_public_catalog", "");
 const QuerySchema = z.object({
   q: z.string().optional(),
   condition: z.enum(["new", "used"]).optional(),
@@ -78,6 +80,8 @@ const QuerySchema = z.object({
   // „всичко закупено между X и Y“ — отчетност към счетоводител/доставчик.
   purchasedFrom: z.string().optional(),
   purchasedTo: z.string().optional(),
+  /** Номинал BTU (хиляди): 7, 9, 12, 14, 18, 24… */
+  btu: z.coerce.number().int().positive().optional(),
   // Сортиране по дата (created_at) и филтриране по период по нея
   // съзнателно НЕ се поддържат — всеки климатик е уникален артикул,
   // а не „склад на бройки“, така че подреждане по добавяне не носи смисъл.
@@ -113,6 +117,7 @@ const CreateSchema = z.object({
   supplierInvoiceNumber: z.string().max(120).optional().nullable(),
   purchasePrice: z.number().nonnegative().optional().nullable(),
   isFeatured: z.boolean().optional().default(false),
+  showInPublicCatalog: z.boolean().optional().default(false),
   stockStatus: z.enum(["in_stock", "out_of_stock", "on_order"]).optional().default("in_stock"),
   stockQuantity: z.number().int().nonnegative().optional().default(0),
   soldQuantity: z.number().int().nonnegative().optional().default(0),
@@ -147,15 +152,32 @@ export async function GET(req: NextRequest) {
     hasPurchasePrice,
     purchasedFrom,
     purchasedTo,
+    btu: btuRaw,
     sortBy,
     sortDir,
     page,
     perPage,
   } = parsed.data;
+  const btuFilter = catalogBtu.parseBtuQueryParam(btuRaw !== undefined ? String(btuRaw) : undefined);
   const supabase = await adminDb();
+
+  let btuProductIds: string[] | null = null;
+  if (btuFilter != null) {
+    btuProductIds = await catalogBtu.resolveProductIdsForBtu(supabase, btuFilter);
+    if (btuProductIds.length === 0) {
+      return withCors(
+        req,
+        NextResponse.json({
+          data: [],
+          meta: { page, perPage, total: 0 },
+        }),
+      );
+    }
+  }
 
   const runList = (selectCols: string, applyStockLocationFilter: boolean, applyRegionFilter: boolean) => {
     let query = supabase.from("products").select(selectCols, { count: "exact" });
+    if (btuProductIds) query = query.in("id", btuProductIds);
     if (q?.trim()) {
       // Универсално търсене: име, slug, серийни номера (вътрешен/външен
       // блок) и номер на фактура от доставчик. Запетайките в `q` се
@@ -227,6 +249,11 @@ export async function GET(req: NextRequest) {
     [ADMIN_PRODUCT_LIST_SELECT_NO_MODEL_CODE_REGION, false, Boolean(regionFilter)],
     [ADMIN_PRODUCT_LIST_SELECT_NO_MODEL_CODE_LOCATION, true, false],
     [ADMIN_PRODUCT_LIST_SELECT_NO_MODEL_CODE_MIN, false, false],
+    // Fallback без `show_in_public_catalog` — DB без миграция 0051.
+    [stripPublicCatalogCol(ADMIN_PRODUCT_LIST_SELECT_FULL + FEATURED_COLS), true, Boolean(regionFilter)],
+    [stripPublicCatalogCol(ADMIN_PRODUCT_LIST_SELECT_MIN + FEATURED_COLS), false, false],
+    [stripPublicCatalogCol(ADMIN_PRODUCT_LIST_SELECT_FULL), true, Boolean(regionFilter)],
+    [stripPublicCatalogCol(ADMIN_PRODUCT_LIST_SELECT_MIN), false, false],
   ];
 
   let data: unknown[] | null = null;
@@ -301,6 +328,7 @@ export async function POST(req: NextRequest) {
     purchase_price: parsed.data.purchasePrice ?? null,
     is_active: true,
     is_featured: parsed.data.isFeatured,
+    show_in_public_catalog: parsed.data.showInPublicCatalog,
     stock_status: parsed.data.stockStatus,
     stock_quantity: parsed.data.stockQuantity,
     sold_quantity: parsed.data.soldQuantity,

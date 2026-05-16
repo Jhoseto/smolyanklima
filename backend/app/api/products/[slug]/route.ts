@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { optimizeImageRowUrls } from "@/lib/services/cloudinaryService";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
-import { PUBLIC_CATALOG_STOCK_STATUSES } from "@/lib/catalog/publicProductVisibility";
+import { applyPublicCatalogFilter } from "@/lib/catalog/publicProductVisibility";
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflight(req);
@@ -19,15 +19,13 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
   const supabase = createSupabaseServiceRoleClient();
 
   const SELECT_WITH_CONDITION =
-    "id,slug,name,description,price,price_with_mount,product_condition,is_featured,stock_status,stock_quantity,rating,reviews_count,meta_title,meta_description,brand_id,type_id";
+    "id,slug,name,description,price,price_with_mount,product_condition,is_featured,rating,reviews_count,meta_title,meta_description,brand_id,type_id";
   const SELECT_BASE =
-    "id,slug,name,description,price,price_with_mount,is_featured,stock_status,stock_quantity,rating,reviews_count,meta_title,meta_description,brand_id,type_id";
+    "id,slug,name,description,price,price_with_mount,is_featured,rating,reviews_count,meta_title,meta_description,brand_id,type_id";
 
   const loadProduct = async (includeCondition: boolean) => {
     const selectCols: string = includeCondition ? SELECT_WITH_CONDITION : SELECT_BASE;
-    const q = (supabase.from("products") as any)
-      .select(selectCols)
-      .in("stock_status", PUBLIC_CATALOG_STOCK_STATUSES as unknown as string[]);
+    const q = applyPublicCatalogFilter((supabase.from("products") as any).select(selectCols));
     if (isProductPublicLookupUuid(key)) {
       return q.eq("id", key).maybeSingle();
     }
@@ -99,8 +97,6 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
     price_with_mount: p.price_with_mount,
     product_condition: (p as any).product_condition ?? "new",
     is_featured: p.is_featured,
-    stock_status: p.stock_status,
-    stock_quantity: p.stock_quantity,
     rating: p.rating,
     reviews_count: p.reviews_count,
     meta_title: p.meta_title,

@@ -12,6 +12,7 @@
 
 @layer base {
   html {
+    position: relative;
     scroll-behavior: smooth;
     width: 100%;
     overflow-x: clip;

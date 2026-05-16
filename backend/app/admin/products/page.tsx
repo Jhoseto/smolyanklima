@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { CATALOG_BTU_OPTIONS } from "@/lib/catalog/productBtu";
 import { SectionTitle, Card, Button, Input, Select, Table, Th, Td, Textarea } from "../ui";
 import {
   Plus,
@@ -20,6 +21,8 @@ import {
   ArrowDown,
   ArrowUpDown,
   Settings,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { ShareToChatModal } from "../chat/ShareToChatModal";
 import { ProductQuickViewButton } from "../ProductQuickView";
@@ -47,6 +50,7 @@ type ProductRow = {
   purchase_price?: number | null;
   is_featured: boolean;
   is_active?: boolean | null;
+  show_in_public_catalog?: boolean | null;
   featured_position?: number | null;
   featured_badge?: string | null;
   stock_status: "in_stock" | "out_of_stock" | "on_order" | string;
@@ -112,11 +116,11 @@ function SortableTh({
       <button
         type="button"
         onClick={() => onSort(field)}
-        className={`w-full inline-flex items-center gap-1.5 ${center ? "justify-center" : "text-left"} ${isActive ? "text-brand-blue-700" : "text-slate-600"}`}
+        className={`w-full inline-flex items-center gap-0.5 text-[10px] leading-tight ${center ? "justify-center" : "text-left"} ${isActive ? "text-brand-blue-700" : "text-slate-600"}`}
         title={`Сортирай по „${label}“`}
       >
-        <span>{label}</span>
-        <ArrowIcon className={`w-3 h-3 shrink-0 ${isActive ? "opacity-100" : "opacity-40"}`} />
+        <span className="truncate">{label}</span>
+        <ArrowIcon className={`w-2.5 h-2.5 shrink-0 ${isActive ? "opacity-100" : "opacity-40"}`} />
       </button>
     </Th>
   );
@@ -212,11 +216,22 @@ function fmtPurchaseDate(value: string | null | undefined): string {
   return `${dd}.${mm}.${yyyy}`;
 }
 
-function catalogStockBadgeText(status: string) {
+function catalogStockBadgeText(status: string, compact = false) {
+  if (compact) {
+    if (status === "in_stock") return "Налич.";
+    if (status === "out_of_stock") return "Изчерп.";
+    if (status === "on_order") return "Поръчка";
+    return status || "—";
+  }
   if (status === "in_stock") return "В наличност";
   if (status === "out_of_stock") return "Изчерпан";
   if (status === "on_order") return "По поръчка";
   return status || "—";
+}
+
+function stockLocationLabelCompact(loc: unknown) {
+  const n = normalizeProductStockLocation(loc);
+  return n === "showroom" ? "Маг." : "Скл.";
 }
 
 function catalogStockBadgeClass(status: string) {
@@ -423,6 +438,7 @@ export default function AdminProductsPage() {
   const [stockLocationFilter, setStockLocationFilter] = useState<"" | ProductStockLocation>("");
   const [productRegionFilter, setProductRegionFilter] = useState<"" | ProductRegion>("");
   const [brandId, setBrandId] = useState("");
+  const [btuFilter, setBtuFilter] = useState("");
   const [typeId, setTypeId] = useState("");
   const [supplierId, setSupplierId] = useState("");
   const [priceMin, setPriceMin] = useState("");
@@ -480,6 +496,7 @@ export default function AdminProductsPage() {
     if (stockLocationFilter) sp.set("stockLocation", stockLocationFilter);
     if (productRegionFilter) sp.set("productRegion", productRegionFilter);
     if (brandId) sp.set("brandId", brandId);
+    if (btuFilter) sp.set("btu", btuFilter);
     if (typeId) sp.set("typeId", typeId);
     if (supplierId) sp.set("supplierId", supplierId);
     if (priceMin.trim()) sp.set("priceMin", priceMin.trim());
@@ -501,6 +518,7 @@ export default function AdminProductsPage() {
     stockLocationFilter,
     productRegionFilter,
     brandId,
+    btuFilter,
     typeId,
     supplierId,
     priceMin,
@@ -517,7 +535,7 @@ export default function AdminProductsPage() {
   async function loadMeta() {
     try {
       const [bRes, tRes, sRes, wRes] = await Promise.all([
-        fetch("/api/admin/meta/brands", { credentials: "include" }),
+        fetch("/api/admin/meta/brands?usedInProducts=1", { credentials: "include" }),
         fetch("/api/admin/meta/product-types", { credentials: "include" }),
         fetch("/api/admin/contacts?kind=supplier&perPage=500", { credentials: "include" }),
         fetch("/api/admin/whoami", { credentials: "include" }),
@@ -589,6 +607,7 @@ export default function AdminProductsPage() {
     setStockLocationFilter("");
     setProductRegionFilter("");
     setBrandId("");
+    setBtuFilter("");
     setTypeId("");
     setSupplierId("");
     setPriceMin("");
@@ -637,7 +656,41 @@ export default function AdminProductsPage() {
       return;
     }
     setConfirmBulkDelete(false);
+    setSelected([]);
     await load();
+  }
+
+  async function bulkSetPublicCatalog(visible: boolean) {
+    if (selected.length === 0) return;
+    const res = await fetch("/api/admin/products/bulk", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "set_public_catalog", ids: selected, visible }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError((json as any).error || "Грешка при масова промяна на видимостта");
+      return;
+    }
+    setSelected([]);
+    await load();
+  }
+
+  async function togglePublicCatalog(p: ProductRow) {
+    const next = !p.show_in_public_catalog;
+    const res = await fetch(`/api/admin/products/${p.id}`, {
+      method: "PUT",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ showInPublicCatalog: next }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError((json as any).error || "Грешка при промяна на видимостта");
+      return;
+    }
+    setItems((prev) => prev.map((x) => (x.id === p.id ? { ...x, show_in_public_catalog: next } : x)));
   }
 
   useEffect(() => {
@@ -960,6 +1013,13 @@ export default function AdminProductsPage() {
     });
   }
   if (brandId) activeFilters.push({ key: "brand", label: `Марка: ${brandName ?? "—"}`, onClear: () => setBrandId("") });
+  if (btuFilter) {
+    activeFilters.push({
+      key: "btu",
+      label: `BTU: ${btuFilter} 000`,
+      onClear: () => setBtuFilter(""),
+    });
+  }
   if (typeId) activeFilters.push({ key: "type", label: `Тип: ${typeName ?? "—"}`, onClear: () => setTypeId("") });
   if (supplierId) activeFilters.push({ key: "supplier", label: `Доставчик: ${supplierName ?? "—"}`, onClear: () => setSupplierId("") });
   if (priceMin || priceMax) {
@@ -1136,6 +1196,29 @@ export default function AdminProductsPage() {
           </div>
         </div>
 
+        {/* Мощност (BTU) */}
+        <div className="space-y-1.5 md:space-y-2">
+          <div className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500">Мощност (BTU)</div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <ChipToggle active={!btuFilter} onClick={() => { setPage(1); setBtuFilter(""); }}>
+              Всички
+            </ChipToggle>
+            {CATALOG_BTU_OPTIONS.map((btu) => (
+              <span key={btu} title={`${btu * 1000} BTU`} className="inline-flex">
+                <ChipToggle
+                  active={btuFilter === String(btu)}
+                  onClick={() => {
+                    setPage(1);
+                    setBtuFilter(btuFilter === String(btu) ? "" : String(btu));
+                  }}
+                >
+                  {btu}
+                </ChipToggle>
+              </span>
+            ))}
+          </div>
+        </div>
+
         {/* Класификация: марка / тип / доставчик / място / страна */}
         <div className="space-y-1.5 md:space-y-2">
           <div className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500">Класификация</div>
@@ -1263,6 +1346,12 @@ export default function AdminProductsPage() {
             >
               Откажи избора
             </Button>
+            <Button variant="secondary" size="sm" onClick={() => void bulkSetPublicCatalog(true)} className="gap-1 !py-1.5">
+              <Eye className="w-3.5 h-3.5" /> Видими в каталога
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => void bulkSetPublicCatalog(false)} className="gap-1 !py-1.5">
+              <EyeOff className="w-3.5 h-3.5" /> Скрити от каталога
+            </Button>
             <Button
               variant="danger"
               size="sm"
@@ -1277,13 +1366,35 @@ export default function AdminProductsPage() {
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm font-medium">{error}</div>}
 
-      {/* Desktop table: хоризонтален скрол тук (не вътре в Table), за да работи sticky th с вертикалния скрол на main */}
-      <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <Table className="min-w-[1100px] border-0 rounded-none shadow-none bg-transparent" stickyHeader>
-          <thead className="[&>tr>th]:sticky [&>tr>th]:top-0 [&>tr>th]:z-40 [&>tr>th]:align-middle [&>tr>th]:!bg-slate-50 [&>tr>th]:!py-1.5 [&>tr>th]:shadow-[0_1px_0_0_rgb(226,232,240)]">
+      {/* Desktop table — компактна, table-fixed за ширина на екрана */}
+      <div className="hidden md:block rounded-xl border border-slate-200 bg-white shadow-sm max-w-full overflow-hidden">
+        <Table
+          className="border-0 rounded-none shadow-none bg-transparent w-full table-fixed [&_th]:!px-1 [&_th]:!py-1 [&_th]:!text-[10px] [&_td]:!px-1 [&_td]:!py-0.5 [&_td]:!text-[11px] [&_td]:leading-tight"
+          stickyHeader
+        >
+          <colgroup>
+            {canMutateProductRows && <col className="w-[2%]" />}
+            <col className="w-[11%]" />
+            <col className="w-[2%]" />
+            <col className="w-[6%]" />
+            <col className="w-[5%]" />
+            <col className="w-[4%]" />
+            <col className="w-[5%]" />
+            <col className="w-[5%]" />
+            <col className="w-[4%]" />
+            <col className="w-[4%]" />
+            <col className="w-[4%]" />
+            <col className="w-[4%]" />
+            <col className="w-[4%]" />
+            <col className="w-[4%]" />
+            <col className="w-[3.5%]" />
+            <col className="w-[4%]" />
+            <col className="w-[9%]" />
+          </colgroup>
+          <thead className="[&>tr>th]:sticky [&>tr>th]:top-0 [&>tr>th]:z-40 [&>tr>th]:align-middle [&>tr>th]:!bg-slate-50 [&>tr>th]:shadow-[0_1px_0_0_rgb(226,232,240)]">
             <tr>
               {canMutateProductRows && (
-              <Th className="w-10 text-center align-middle">
+              <Th className="text-center align-middle !px-0.5">
                 <span className="inline-flex w-full justify-center">
                   <input
                     type="checkbox"
@@ -1295,22 +1406,26 @@ export default function AdminProductsPage() {
               </Th>
               )}
               <SortableTh label="Име" field="name" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} center />
+              <Th className="text-center !px-0" title="Публичен каталог">
+                <Eye className="w-3 h-3 opacity-70 mx-auto" />
+              </Th>
+              <Th className="text-center">Статус</Th>
               <Th className="text-center">Марка</Th>
-              <SortableTh label="Състояние" field="product_condition" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} center />
+              <SortableTh label="Съст." field="product_condition" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} center />
               <Th className="text-center">Тип</Th>
-              <Th className="text-center">Доставчик</Th>
-              <SortableTh label="Закупна цена" field="purchase_price" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} center />
-              <SortableTh label="Закупен на" field="purchased_at" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} center />
-              <SortableTh label="Продажна цена" field="price" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} center />
-              <Th className="text-center">Сериен вътрешно</Th>
-              <Th className="text-center">Сериен външно</Th>
-              <Th className="text-center">Фактура доставчик</Th>
-              <Th className="text-center">Страна</Th>
+              <Th className="text-center">Дост.</Th>
+              <SortableTh label="Закуп." field="purchase_price" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} center />
+              <SortableTh label="Дата" field="purchased_at" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} center />
+              <SortableTh label="Прод." field="price" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} center />
+              <Th className="text-center" title="Сериен вътрешен">Сер. в.</Th>
+              <Th className="text-center" title="Сериен външен">Сер. вън.</Th>
+              <Th className="text-center" title="Фактура доставчик">Факт.</Th>
+              <Th className="text-center">Рег.</Th>
               <Th className="text-center">Място</Th>
-              <Th className="text-center min-w-[11rem]">Действия</Th>
+              <Th className="text-center">Действ.</Th>
             </tr>
           </thead>
-          <tbody className="[&>tr>td]:align-middle [&>tr>td]:!py-1.5">
+          <tbody className="[&>tr>td]:align-middle">
             {!loading && items.map((p) => (
               <tr key={p.id} className="hover:bg-slate-50 transition-colors group">
                 {canMutateProductRows && (
@@ -1325,42 +1440,71 @@ export default function AdminProductsPage() {
                   </span>
                 </Td>
                 )}
-                <Td className="font-bold text-slate-900 text-center !align-top max-w-[15rem] min-w-0 py-1.5 whitespace-normal">
+                <Td className="font-semibold text-slate-900 text-center !align-top min-w-0 whitespace-normal">
                   <div className="flex justify-center min-w-0">
                     <ProductQuickViewButton
                       productId={p.id}
                       productName={p.name}
-                      className="block whitespace-normal text-center leading-snug max-w-[15rem] break-words font-bold"
+                      className="block whitespace-normal text-center leading-tight text-[11px] line-clamp-2 break-words font-semibold"
                     />
                   </div>
                 </Td>
-                <Td className="text-center align-middle min-w-0 max-w-[5.5rem] truncate whitespace-nowrap" title={p.brands?.name ?? undefined}>
+                <Td className="text-center align-middle whitespace-nowrap !px-0">
+                  {canMutateProductRows ? (
+                    <button
+                      type="button"
+                      onClick={() => void togglePublicCatalog(p)}
+                      className="inline-flex items-center justify-center p-0.5 rounded hover:bg-slate-100"
+                      title={
+                        p.show_in_public_catalog
+                          ? "Видим в публичния каталог — клик за скриване"
+                          : "Скрит от публичния каталог — клик за показване"
+                      }
+                    >
+                      {p.show_in_public_catalog ? (
+                        <Eye className="w-3.5 h-3.5 text-sky-600" />
+                      ) : (
+                        <EyeOff className="w-3.5 h-3.5 text-slate-400" />
+                      )}
+                    </button>
+                  ) : p.show_in_public_catalog ? (
+                    <Eye className="w-3.5 h-3.5 text-sky-600 inline-block" />
+                  ) : (
+                    <EyeOff className="w-3.5 h-3.5 text-slate-400 inline-block" />
+                  )}
+                </Td>
+                <Td className="text-center align-middle whitespace-nowrap">
+                  <span
+                    className={`inline-flex items-center px-1 py-px rounded text-[10px] font-bold leading-none ${catalogStockBadgeClass(p.stock_status)}`}
+                  >
+                    {catalogStockBadgeText(p.stock_status, true)}
+                  </span>
+                </Td>
+                <Td className="text-center align-middle min-w-0 truncate whitespace-nowrap" title={p.brands?.name ?? undefined}>
                   {p.brands?.name ?? "—"}
                 </Td>
                 <Td className="text-center align-middle whitespace-nowrap">
                   <span
-                    className={`inline-flex shrink-0 items-center justify-center px-1.5 py-0.5 rounded text-[11px] font-medium whitespace-nowrap ${
+                    className={`inline-flex shrink-0 items-center justify-center px-1 py-px rounded text-[10px] font-medium leading-none ${
                       p.product_condition === "used" ? "bg-brand-orange-100 text-brand-orange-700" : "bg-brand-blue-100 text-brand-blue-700"
                     }`}
                   >
-                    {p.product_condition === "used" ? "Втора употр." : "Нови"}
+                    {p.product_condition === "used" ? "Употр." : "Нов"}
                   </span>
                 </Td>
-                <Td className="text-center !align-top min-w-0 max-w-[10rem] whitespace-normal text-sm leading-snug text-slate-800">
+                <Td className="text-center align-middle min-w-0 truncate whitespace-nowrap" title={p.product_types?.name ?? undefined}>
                   {p.product_types?.name ?? "—"}
                 </Td>
-                <Td className="max-w-[9rem] text-center align-middle min-w-0 whitespace-nowrap">
-                  <span className="inline-block max-w-full truncate text-sm text-slate-800" title={supplierLabel(p.supplier_id)}>
-                    {supplierLabel(p.supplier_id)}
-                  </span>
+                <Td className="text-center align-middle min-w-0 truncate whitespace-nowrap" title={supplierLabel(p.supplier_id)}>
+                  <span className="block truncate">{supplierLabel(p.supplier_id)}</span>
                 </Td>
                 <Td
-                  className={`text-sm text-center align-middle min-w-0 ${
+                  className={`text-center align-middle min-w-0 tabular-nums ${
                     editingPurchaseId === p.id && canEditMasterPricesInline ? "whitespace-normal" : "whitespace-nowrap"
                   }`}
                 >
                   {editingPurchaseId === p.id && canEditMasterPricesInline ? (
-                    <div className="flex flex-col gap-1 min-w-[7rem] mx-auto items-center">
+                    <div className="flex flex-col gap-0.5 min-w-[5rem] mx-auto items-center">
                       <Input
                         type="number"
                         min={0}
@@ -1392,14 +1536,14 @@ export default function AdminProductsPage() {
                     <button
                       type="button"
                       onClick={() => startPurchaseEdit(p)}
-                      className="rounded-md px-2 py-1 font-semibold text-slate-900 bg-brand-orange-50/60 hover:bg-brand-orange-100 hover:text-brand-orange-700 focus:outline-none focus:ring-2 focus:ring-brand-orange-300 cursor-pointer transition tabular-nums"
+                      className="rounded px-1 py-0.5 font-semibold text-slate-900 bg-brand-orange-50/60 hover:bg-brand-orange-100 hover:text-brand-orange-700 focus:outline-none focus:ring-1 focus:ring-brand-orange-300 cursor-pointer tabular-nums"
                       title="Клик за редакция на закупна цена"
                     >
                       {fmtEuro(p.purchase_price)}
                     </button>
                   ) : (
                     <span
-                      className="inline-block rounded-md px-2 py-1 font-semibold text-slate-900 tabular-nums"
+                      className="inline-block rounded px-1 py-0.5 font-semibold text-slate-900 tabular-nums"
                       title="Само главен администратор може да променя закупната цена тук"
                     >
                       {fmtEuro(p.purchase_price)}
@@ -1407,16 +1551,16 @@ export default function AdminProductsPage() {
                   )}
                 </Td>
                 {/* Дата на закупуване от доставчик — редактира се от формата на продукта. */}
-                <Td className="whitespace-nowrap text-xs text-slate-600 text-center align-middle tabular-nums">
+                <Td className="whitespace-nowrap text-[10px] text-slate-600 text-center align-middle tabular-nums">
                   {fmtPurchaseDate(p.purchased_at)}
                 </Td>
                 <Td
-                  className={`text-sm font-semibold text-center align-middle min-w-0 ${
+                  className={`font-semibold text-center align-middle min-w-0 tabular-nums ${
                     editingPriceId === p.id && canEditMasterPricesInline ? "whitespace-normal" : "whitespace-nowrap"
                   }`}
                 >
                   {editingPriceId === p.id && canEditMasterPricesInline ? (
-                    <div className="flex flex-col gap-1 min-w-[7rem] mx-auto items-center">
+                    <div className="flex flex-col gap-0.5 min-w-[5rem] mx-auto items-center">
                       <Input type="number" min={0} value={priceDraft} onChange={(e) => setPriceDraft(e.target.value)} className="!text-xs !py-1 text-center" autoFocus />
                       <div className="flex gap-1 justify-center">
                         <Button size="sm" className="!py-0.5 !px-2 !text-[11px]" onClick={() => void savePrice(p)} disabled={priceBusy}>
@@ -1440,69 +1584,65 @@ export default function AdminProductsPage() {
                     <button
                       type="button"
                       onClick={() => startPriceEdit(p)}
-                      className="rounded-md px-2 py-1 text-slate-900 bg-brand-blue-50/60 hover:bg-brand-blue-100 hover:text-brand-blue-700 focus:outline-none focus:ring-2 focus:ring-brand-blue-300 cursor-pointer transition tabular-nums"
+                      className="rounded px-1 py-0.5 text-slate-900 bg-brand-blue-50/60 hover:bg-brand-blue-100 hover:text-brand-blue-700 focus:outline-none focus:ring-1 focus:ring-brand-blue-300 cursor-pointer tabular-nums"
                       title="Клик за редакция на продажна цена"
                     >
                       {fmtEuro(p.price)}
                     </button>
                   ) : (
-                    <span className="inline-block rounded-md px-2 py-1 text-slate-900 tabular-nums" title="Само главен администратор може да променя продажната цена тук">
+                    <span className="inline-block rounded px-1 py-0.5 text-slate-900 tabular-nums" title="Само главен администратор може да променя продажната цена тук">
                       {fmtEuro(p.price)}
                     </span>
                   )}
                 </Td>
-                <Td className="max-w-[5.5rem] text-xs font-mono text-slate-700 text-center align-middle whitespace-nowrap" title={(p.indoor_unit_serial ?? "").trim() || undefined}>
-                  {truncCell(p.indoor_unit_serial, 14)}
+                <Td className="font-mono text-[10px] text-slate-700 text-center align-middle truncate" title={(p.indoor_unit_serial ?? "").trim() || undefined}>
+                  {truncCell(p.indoor_unit_serial, 8)}
                 </Td>
-                <Td className="max-w-[5.5rem] text-xs font-mono text-slate-700 text-center align-middle whitespace-nowrap" title={(p.outdoor_unit_serial ?? "").trim() || undefined}>
-                  {truncCell(p.outdoor_unit_serial, 14)}
+                <Td className="font-mono text-[10px] text-slate-700 text-center align-middle truncate" title={(p.outdoor_unit_serial ?? "").trim() || undefined}>
+                  {truncCell(p.outdoor_unit_serial, 8)}
                 </Td>
-                <Td className="max-w-[6rem] text-xs text-slate-700 text-center align-middle whitespace-nowrap" title={(p.supplier_invoice_number ?? "").trim() || undefined}>
-                  {truncCell(p.supplier_invoice_number, 14)}
+                <Td className="text-[10px] text-slate-700 text-center align-middle truncate" title={(p.supplier_invoice_number ?? "").trim() || undefined}>
+                  {truncCell(p.supplier_invoice_number, 8)}
                 </Td>
-                <Td className="min-w-[6.5rem] text-center align-middle whitespace-nowrap">
-                  <div className="flex justify-center">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold tracking-wide text-slate-700 bg-slate-100">
-                      {productRegionLabel(p.product_region)}
-                    </span>
-                  </div>
+                <Td className="text-center align-middle whitespace-nowrap">
+                  <span className="inline-flex items-center px-1 py-px rounded text-[10px] font-bold text-slate-700 bg-slate-100 leading-none">
+                    {productRegionLabel(p.product_region)}
+                  </span>
                 </Td>
-                <Td className="min-w-[132px] text-center align-middle whitespace-nowrap">
-                  <div className="flex justify-center">
+                <Td className="text-center align-middle whitespace-nowrap">
                   {canMutateProductRows ? (
                   <button
                     type="button"
                     disabled={locationBusyId === p.id}
                     onClick={() => toggleStockLocation(p)}
                     title="Клик за смяна: магазин ↔ склад"
-                    className={`inline-flex w-fit max-w-full items-center justify-center px-2.5 py-1 rounded-md text-xs font-semibold border border-slate-200/80 shadow-sm cursor-pointer transition hover:opacity-90 hover:ring-2 hover:ring-brand-blue-300/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue-500 disabled:cursor-wait disabled:opacity-60 ${productStockLocationBadgeClass(p.stock_location)}`}
+                    className={`inline-flex items-center justify-center px-1 py-px rounded text-[10px] font-semibold border border-slate-200/80 cursor-pointer hover:opacity-90 disabled:opacity-60 ${productStockLocationBadgeClass(p.stock_location)}`}
                   >
-                    {locationBusyId === p.id ? "Запис…" : productStockLocationLabel(p.stock_location)}
+                    {locationBusyId === p.id ? "…" : stockLocationLabelCompact(p.stock_location)}
                   </button>
                   ) : (
                   <span
-                    className={`inline-flex w-fit max-w-full items-center justify-center px-2.5 py-1 rounded-md text-xs font-semibold border border-slate-200/80 ${productStockLocationBadgeClass(p.stock_location)}`}
+                    className={`inline-flex items-center justify-center px-1 py-px rounded text-[10px] font-semibold border border-slate-200/80 ${productStockLocationBadgeClass(p.stock_location)}`}
                   >
-                    {productStockLocationLabel(p.stock_location)}
+                    {stockLocationLabelCompact(p.stock_location)}
                   </span>
                   )}
-                  </div>
                 </Td>
-                <Td className="text-center align-middle whitespace-nowrap">
+                <Td className="text-center align-middle whitespace-nowrap !px-0.5">
                   {canMutateProductRows ? (
-                  <div className="flex flex-nowrap items-center justify-center gap-1 min-w-0">
-                    <Button variant="secondary" size="sm" onClick={() => { setSaleFor(p); setSaleForm(emptySaleModalForm()); setContactQuery(""); setContactResults([]); }} disabled={!canRecordSale(p)} className="!py-0.5 !px-1.5 !text-[11px] font-bold shrink-0">
-                      Продажба
+                  <div className="flex flex-nowrap items-center justify-center gap-0.5 min-w-0">
+                    <Button variant="secondary" size="sm" onClick={() => { setSaleFor(p); setSaleForm(emptySaleModalForm()); setContactQuery(""); setContactResults([]); }} disabled={!canRecordSale(p)} className="!p-1 shrink-0" title="Продажба">
+                      <PackageCheck className="w-3 h-3" />
                     </Button>
-                    <Link href={`/admin/products/${p.id}`} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-brand-blue-50 text-brand-blue-700 hover:bg-brand-blue-100 rounded-lg text-[11px] font-bold transition-colors shrink-0">
-                      <Edit className="w-3 h-3 shrink-0" /> Редакция
+                    <Link href={`/admin/products/${p.id}`} className="inline-flex items-center justify-center p-1 bg-brand-blue-50 text-brand-blue-700 hover:bg-brand-blue-100 rounded shrink-0" title="Редакция">
+                      <Edit className="w-3 h-3 shrink-0" />
                     </Link>
                     <button
                       onClick={() => setShareProduct(p)}
                       title="Сподели в чат"
-                      className="inline-flex items-center justify-center p-1.5 bg-brand-orange-50 text-brand-orange-600 hover:bg-brand-orange-100 rounded-lg shrink-0"
+                      className="inline-flex items-center justify-center p-1 bg-brand-orange-50 text-brand-orange-600 hover:bg-brand-orange-100 rounded shrink-0"
                     >
-                      <MessageCircle className="w-3.5 h-3.5" />
+                      <MessageCircle className="w-3 h-3" />
                     </button>
                     <button
                       onClick={() => setFeaturedFor(p)}
@@ -1511,18 +1651,13 @@ export default function AdminProductsPage() {
                           ? `Топ продукти — позиция #${p.featured_position}`
                           : "Постави в Топ продукти на главната страница"
                       }
-                      className={`relative inline-flex items-center justify-center p-1.5 rounded-lg shrink-0 ${
+                      className={`relative inline-flex items-center justify-center p-1 rounded shrink-0 ${
                         p.featured_position
                           ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
                           : "bg-slate-100 text-slate-500 hover:bg-amber-50 hover:text-amber-600"
                       }`}
                     >
-                      <Star
-                        className={`w-3.5 h-3.5 ${p.featured_position ? "fill-current" : ""}`}
-                      />
-                      {p.featured_position && (
-                        <span className="text-[10px] font-black leading-none">#{p.featured_position}</span>
-                      )}
+                      <Star className={`w-3 h-3 ${p.featured_position ? "fill-current" : ""}`} />
                     </button>
                   </div>
                   ) : (
@@ -1532,7 +1667,7 @@ export default function AdminProductsPage() {
               </tr>
             ))}
             {!loading && items.length === 0 && (
-              <tr><Td colSpan={canMutateProductRows ? 15 : 14} className="text-center py-8 text-slate-500">Няма намерени продукти.</Td></tr>
+              <tr><Td colSpan={canMutateProductRows ? 17 : 16} className="text-center py-8 text-slate-500">Няма намерени продукти.</Td></tr>
             )}
           </tbody>
         </Table>
@@ -1583,9 +1718,22 @@ export default function AdminProductsPage() {
                   >
                     {p.product_condition === "used" ? "Употр." : "Нов"}
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => canMutateProductRows && void togglePublicCatalog(p)}
+                    className={`inline-flex items-center p-0.5 rounded ${canMutateProductRows ? "hover:bg-slate-100" : ""}`}
+                    title={p.show_in_public_catalog ? "Видим в каталога" : "Скрит от каталога"}
+                    disabled={!canMutateProductRows}
+                  >
+                    {p.show_in_public_catalog ? (
+                      <Eye className="w-3.5 h-3.5 text-sky-600" />
+                    ) : (
+                      <EyeOff className="w-3.5 h-3.5 text-slate-400" />
+                    )}
+                  </button>
                   <span
                     className={`inline-flex items-center px-1 py-px rounded text-[10px] font-bold ${catalogStockBadgeClass(p.stock_status)}`}
-                    title="Статус в публичния каталог"
+                    title="Складов статус"
                   >
                     {catalogStockBadgeText(p.stock_status)}
                   </span>

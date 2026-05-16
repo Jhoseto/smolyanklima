@@ -9,6 +9,7 @@ import { FilterSidebar }  from '../components/catalog/FilterSidebar';
 import { ActiveFilters }  from '../components/catalog/ActiveFilters';
 import { ProductCard }    from '../components/catalog/ProductCard';
 import { QuickViewModal } from '../components/catalog/QuickViewModal';
+import { ProductInquiryModal } from '../components/catalog/ProductInquiryModal';
 import { ToastSystem, useToasts, useFavorites } from '../components/catalog/ToastSystem';
 import { RecentlyViewed, useRecentlyViewed } from '../components/catalog/RecentlyViewed';
 import { GuidedBuyingWizard } from '../components/catalog/GuidedBuyingWizard';
@@ -22,6 +23,7 @@ import {
   fetchCatalogPriceBounds,
   fetchCategoryProductCounts,
   fetchCatalogBrandOptions,
+  fetchCatalogBtuOptions,
 } from '../data/productService';
 import { getAllAccessories } from '../data/accessoryService';
 import { postPublicInquiry } from '../data/postInquiry';
@@ -157,10 +159,15 @@ const CatalogPage = () => {
   const [priceMax, setPriceMax] = useState(0);
   const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({ all: 0 });
   const [climateBrandOptions, setClimateBrandOptions] = useState<Array<{ name: string; productCount: number }>>([]);
+  const [climateBtuOptions, setClimateBtuOptions] = useState<Array<{ btu: number; productCount: number }>>([]);
 
   const [search, setSearch] = useState(searchParams.get('q') || '');
   const [category, setCategory] = useState(searchParams.get('cat') || 'all');
   const [brands, setBrands] = useState<string[]>(searchParams.get('b')?.split(',').filter(Boolean) || []);
+  const [btus, setBtus] = useState<number[]>(() => {
+    const raw = searchParams.get('btu')?.split(',').filter(Boolean) ?? [];
+    return raw.map((s) => Number(s)).filter((n) => Number.isFinite(n) && n > 0);
+  });
   const [energyClasses, setEnergyClasses] = useState<string[]>(searchParams.get('e')?.split(',').filter(Boolean) || []);
   const [features, setFeatures] = useState<string[]>(searchParams.get('f')?.split(',').filter(Boolean) || []);
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 0]);
@@ -180,12 +187,13 @@ const CatalogPage = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [quickViewProduct, setQuickViewProduct] = useState<CatalogProduct | null>(null);
+  const [inquiryProduct, setInquiryProduct] = useState<CatalogProduct | null>(null);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [compareList, setCompareList] = useState<CatalogProduct[]>([]);
 
   const { toasts, addToast, dismissToast } = useToasts();
   const { isFavorite, toggle: toggleFavorite } = useFavorites();
-  const { viewedIds, addViewed } = useRecentlyViewed();
+  const { viewedIds, addViewed, pruneViewedIds } = useRecentlyViewed();
 
   const [debouncedSearch, setDebouncedSearch] = useState('');
   useEffect(() => {
@@ -235,24 +243,34 @@ const CatalogPage = () => {
     let cancelled = false;
     (async () => {
       try {
-        const [bounds, counts, brandOptions] = await Promise.all([
+        const [boundsRes, countsRes, brandRes, btuRes] = await Promise.allSettled([
           fetchCatalogPriceBounds(effectiveCondition),
           fetchCategoryProductCounts(effectiveCondition),
           fetchCatalogBrandOptions(effectiveCondition),
+          fetchCatalogBtuOptions(effectiveCondition),
         ]);
         if (cancelled) return;
-        const minP = bounds.min;
-        const maxP = bounds.max;
-        setPriceMin(minP);
-        setPriceMax(maxP);
-        setCategoryCounts(counts);
-        setPriceRange([minP, maxP]);
-        setClimateBrandOptions(brandOptions);
-      } catch {
-        if (!cancelled) {
-          setCategoryCounts({ all: 0 });
+        if (boundsRes.status === 'fulfilled') {
+          const { min: minP, max: maxP } = boundsRes.value;
+          setPriceMin(minP);
+          setPriceMax(maxP);
+          setPriceRange([minP, maxP]);
+        }
+        if (countsRes.status === 'fulfilled') {
+          setCategoryCounts(countsRes.value);
+        }
+        if (brandRes.status === 'fulfilled') {
+          setClimateBrandOptions(brandRes.value);
+        } else {
           setClimateBrandOptions([]);
         }
+        if (btuRes.status === 'fulfilled') {
+          setClimateBtuOptions(btuRes.value);
+        } else {
+          setClimateBtuOptions([]);
+        }
+      } catch {
+        /* отделните заявки се обработват с allSettled */
       }
     })();
     return () => {
@@ -313,6 +331,7 @@ const CatalogPage = () => {
       debouncedSearch,
       category,
       brands,
+      btus,
       energyClasses,
       features,
       priceRange,
@@ -339,6 +358,7 @@ const CatalogPage = () => {
             cat: category,
             cond: effectiveCondition,
             brands,
+            btus,
             energyClasses,
             features,
             min: minQ,
@@ -405,6 +425,7 @@ const CatalogPage = () => {
     allAccessories,
     category,
     brands,
+    btus,
     energyClasses,
     features,
     priceRange,
@@ -422,6 +443,7 @@ const CatalogPage = () => {
     if (search) params.set('q', search);
     if (category !== 'all') params.set('cat', category);
     if (brands.length) params.set('b', brands.join(','));
+    if (activeTab === 'climate' && btus.length) params.set('btu', btus.join(','));
     if (activeTab === 'climate' && energyClasses.length) params.set('e', energyClasses.join(','));
     if (activeTab === 'climate' && features.length) params.set('f', features.join(','));
     if (effectivePriceMax > effectivePriceMin) {
@@ -431,10 +453,14 @@ const CatalogPage = () => {
     if (sortBy !== 'recommended') params.set('s', sortBy);
     if (page > 1) params.set('page', String(page));
     setSearchParams(params, { replace: true });
-  }, [activeTab, effectiveCondition, search, category, brands, energyClasses, features, priceRange, sortBy, effectivePriceMin, effectivePriceMax, page, setSearchParams]);
+  }, [activeTab, effectiveCondition, search, category, brands, btus, energyClasses, features, priceRange, sortBy, effectivePriceMin, effectivePriceMax, page, setSearchParams]);
 
-  // ── Scroll Progress ──────────────────────
-  const { scrollYProgress } = useScroll();
+  // ── Scroll Progress (target = positioned page root for Motion offset) ──
+  const pageRef = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({
+    target: pageRef,
+    offset: ['start start', 'end end'],
+  });
   const scaleX = useSpring(scrollYProgress, { stiffness: 100, damping: 30, restDelta: 0.001 });
 
   // ── Back to top ──────────────────────────
@@ -451,6 +477,7 @@ const CatalogPage = () => {
   const activeFilterCount =
     (showConditionFilters && effectiveCondition ? 1 : 0) +
     brands.length +
+    (showEnergyAndFeatureFilters ? btus.length : 0) +
     (showEnergyAndFeatureFilters ? energyClasses.length : 0) +
     (showEnergyAndFeatureFilters ? features.length : 0) +
     (search.trim() ? 1 : 0) +
@@ -462,6 +489,7 @@ const CatalogPage = () => {
     setCategory('all');
     setSelectedConditions([]);
     setBrands([]);
+    setBtus([]);
     setEnergyClasses([]);
     setFeatures([]);
     setPriceRange([effectivePriceMin, effectivePriceMax]);
@@ -476,6 +504,7 @@ const CatalogPage = () => {
     setCategory('all');
     setSelectedConditions([]);
     setBrands([]);
+    setBtus([]);
     setEnergyClasses([]);
     setFeatures([]);
     setSearch('');
@@ -530,6 +559,7 @@ const CatalogPage = () => {
         message: `Запитване от бърз преглед за: ${productName}`,
         serviceType: 'sale',
         productSlug: meta?.productSlug,
+        productName,
         website: meta?.website ?? '',
       });
       if (r.ok === false) {
@@ -543,6 +573,7 @@ const CatalogPage = () => {
   );
 
   const brandToggle = (b: string) => setBrands(prev => prev.includes(b) ? prev.filter(x => x !== b) : [...prev, b]);
+  const btuToggle = (b: number) => setBtus(prev => prev.includes(b) ? prev.filter(x => x !== b) : [...prev, b]);
   const energyToggle = (e: string) => setEnergyClasses(prev => prev.includes(e) ? prev.filter(x => x !== e) : [...prev, e]);
   const featureToggle = (f: string) => setFeatures(prev => prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f]);
 
@@ -561,7 +592,7 @@ const CatalogPage = () => {
 
   // ── Render ───────────────────────────────
   return (
-    <div className="relative min-h-screen bg-gray-50 font-sans selection:bg-[#FF4D00]/20 selection:text-[#FF4D00]">
+    <div ref={pageRef} className="relative min-h-screen bg-gray-50 font-sans selection:bg-[#FF4D00]/20 selection:text-[#FF4D00]">
       {/* Scroll Progress Bar */}
       <motion.div
         className="fixed top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#00B4D8] to-[#FF4D00] transform-origin-0 z-[1000]"
@@ -592,6 +623,7 @@ const CatalogPage = () => {
             {/* Recently Viewed */}
             <RecentlyViewed
               viewedIds={viewedIds}
+              onPruneViewedIds={pruneViewedIds}
               onQuickView={(p) => {
                 setQuickViewProduct(p);
                 addViewed(p.id);
@@ -676,10 +708,12 @@ const CatalogPage = () => {
         {/* Active Filters */}
         <ActiveFilters
           brands={brands}
+          btus={showEnergyAndFeatureFilters ? btus : []}
           energyClasses={energyClasses}
           features={features}
           search={search}
           onRemoveBrand={(b) => setBrands(prev => prev.filter(x => x !== b))}
+          onRemoveBtu={(b) => setBtus(prev => prev.filter(x => x !== b))}
           onRemoveEnergy={(e) => setEnergyClasses(prev => prev.filter(x => x !== e))}
           onRemoveFeature={(f) => setFeatures(prev => prev.filter(x => x !== f))}
           onClearSearch={() => setSearch('')}
@@ -700,6 +734,10 @@ const CatalogPage = () => {
                 brandsOptions={activeTab === 'climate' ? climateBrandOptions : accessoryBrandOptions}
                 selectedBrands={brands}
                 onBrandToggle={brandToggle}
+                showBtuFilters={showEnergyAndFeatureFilters}
+                btuOptions={climateBtuOptions}
+                selectedBtus={btus}
+                onBtuToggle={btuToggle}
                 selectedEnergy={energyClasses}
                 onEnergyToggle={energyToggle}
                 selectedFeatures={features}
@@ -742,6 +780,10 @@ const CatalogPage = () => {
                       brandsOptions={activeTab === 'climate' ? climateBrandOptions : accessoryBrandOptions}
                       selectedBrands={brands}
                       onBrandToggle={brandToggle}
+                      showBtuFilters={showEnergyAndFeatureFilters}
+                      btuOptions={climateBtuOptions}
+                      selectedBtus={btus}
+                      onBtuToggle={btuToggle}
                       selectedEnergy={energyClasses}
                       onEnergyToggle={energyToggle}
                       selectedFeatures={features}
@@ -817,6 +859,7 @@ const CatalogPage = () => {
                           highlight={debouncedSearch}
                           isCompared={compareList.some(c => c.id === product.id)}
                           onCompareToggle={() => handleCompareToggle(product)}
+                          onInquiry={activeTab === 'climate' ? setInquiryProduct : undefined}
                           viewMode={viewMode}
                         />
                       );
@@ -877,6 +920,13 @@ const CatalogPage = () => {
           onClear={() => setCompareList([])}
         />
       )}
+
+      <ProductInquiryModal
+        product={inquiryProduct}
+        onClose={() => setInquiryProduct(null)}
+        onSuccess={(msg) => addToast(msg, '✅')}
+        onError={(msg) => addToast(msg, '⚠️')}
+      />
 
       {/* Quick View Modal */}
       {activeTab === 'climate' && (

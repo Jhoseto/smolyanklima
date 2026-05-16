@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
-import { PUBLIC_CATALOG_STOCK_STATUSES } from "@/lib/catalog/publicProductVisibility";
+import { applyPublicCatalogFilter } from "@/lib/catalog/publicProductVisibility";
 
 /**
  * Връща списък от активни марки от базата (`brands.is_active = true`),
@@ -27,7 +27,7 @@ const QuerySchema = z.object({
   onlyWithProducts: z
     .enum(["true", "false"])
     .optional()
-    .transform((v) => v === "true"),
+    .transform((v) => v !== "false"),
 });
 
 export async function OPTIONS(req: NextRequest) {
@@ -59,10 +59,7 @@ export async function GET(req: NextRequest) {
 
   // 2) Брояч на публично-видими продукти по марка.
   const buildProductsQuery = (includeCondition: boolean) => {
-    let q = supabase
-      .from("products")
-      .select("brand_id")
-      .in("stock_status", PUBLIC_CATALOG_STOCK_STATUSES as unknown as string[]);
+    let q = applyPublicCatalogFilter(supabase.from("products").select("brand_id"));
     if (includeCondition && cond) q = q.eq("product_condition", cond);
     return q;
   };

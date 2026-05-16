@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { Star, Check, ChevronRight, Heart, Share2 } from 'lucide-react';
@@ -15,6 +15,7 @@ interface ProductCardProps {
   highlight?: string;
   isCompared?: boolean;
   onCompareToggle?: () => void;
+  onInquiry?: (product: CatalogProduct) => void;
   viewMode?: 'grid' | 'list';
   key?: React.Key;
 }
@@ -43,9 +44,14 @@ export const ProductCard = ({
   highlight,
   isCompared = false,
   onCompareToggle,
+  onInquiry,
   viewMode = 'grid',
 }: ProductCardProps) => {
   const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [product.id, product.image]);
 
   // Детерминистични психо-тригери базирани на ID
   const hash = product.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
@@ -78,8 +84,10 @@ export const ProductCard = ({
         onClick={() => onQuickView(product)}
       >
         <img
-          src={imgError ? '/images/hero-ac.jpg' : product.image}
+          src={imgError ? '/images/hero-new.jpg' : product.image}
           alt={product.model}
+          loading="lazy"
+          decoding="async"
           onError={() => setImgError(true)}
           className="w-full h-full object-contain p-3 transition-transform duration-700 group-hover:scale-105"
         />
@@ -198,12 +206,22 @@ export const ProductCard = ({
           </div>
 
           <div className="flex flex-col gap-2">
-            <a
-              href="#contact"
-              className="flex items-center justify-center gap-1.5 bg-[#EBF5FF] text-[#00B4D8] hover:bg-[#00B4D8] hover:text-white transition-all duration-200 px-4 py-2 rounded-full font-bold text-[11px] shadow-sm hover:shadow-md"
-            >
-              Запитване
-            </a>
+            {onInquiry ? (
+              <button
+                type="button"
+                onClick={() => onInquiry(product)}
+                className="flex items-center justify-center gap-1.5 bg-[#EBF5FF] text-[#00B4D8] hover:bg-[#00B4D8] hover:text-white transition-all duration-200 px-4 py-2 rounded-full font-bold text-[11px] shadow-sm hover:shadow-md"
+              >
+                Пусни запитване
+              </button>
+            ) : (
+              <a
+                href="#contact"
+                className="flex items-center justify-center gap-1.5 bg-[#EBF5FF] text-[#00B4D8] hover:bg-[#00B4D8] hover:text-white transition-all duration-200 px-4 py-2 rounded-full font-bold text-[11px] shadow-sm hover:shadow-md"
+              >
+                Запитване
+              </a>
+            )}
             {onCompareToggle && (
               <button
                 onClick={onCompareToggle}

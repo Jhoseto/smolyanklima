@@ -5,7 +5,10 @@ export type PublicInquiryPayload = {
   customerEmail?: string;
   message?: string;
   productSlug?: string;
+  productName?: string;
   serviceType?: "sale" | "installation" | "maintenance" | "repair";
+  /** true = с монтаж, false = само уред */
+  includeInstallation?: boolean;
   /** Honeypot — трябва да е празно. */
   website?: string;
 };
@@ -23,7 +26,9 @@ export async function postPublicInquiry(
       customerEmail: payload.customerEmail,
       message: payload.message,
       productSlug: payload.productSlug,
+      productName: payload.productName,
       serviceType: payload.serviceType,
+      includeInstallation: payload.includeInstallation,
       website: payload.website ?? "",
     }),
   });

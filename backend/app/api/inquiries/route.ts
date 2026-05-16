@@ -5,6 +5,9 @@ import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { getEnv } from "@/lib/env";
 import { allowPublicPost, getClientIdFromRequest } from "@/lib/rate-limit";
 import { sendResendEmail } from "@/lib/email/resend";
+import { buildProductInquiryMessage } from "@/lib/inquiry/inquiryMessage";
+import { attachProductsToInquiries } from "@/lib/inquiry/inquiryProducts";
+import { submitPublicInquiry } from "@/lib/inquiry/submitPublicInquiry";
 
 const BodySchema = z
   .object({
@@ -14,7 +17,9 @@ const BodySchema = z
     customerEmail: z.string().email().optional().or(z.literal("")).transform((v) => (v ? v : undefined)),
     message: z.string().max(2000).optional(),
     productSlug: z.string().min(1).optional(),
+    productName: z.string().min(1).max(200).optional(),
     serviceType: z.enum(["sale", "installation", "maintenance", "repair"]).optional(),
+    includeInstallation: z.boolean().optional(),
     /** Honeypot — must be empty (bots often fill hidden fields). */
     website: z.string().optional(),
   })
@@ -38,44 +43,62 @@ export async function POST(req: NextRequest) {
 
   const supabase = createSupabaseServiceRoleClient();
 
-  let productId: string | null = null;
-  let productName: string | null = null;
-  if (parsed.data.productSlug) {
-    const { data: p } = await supabase
-      .from("products")
-      .select("id,name")
-      .eq("slug", parsed.data.productSlug)
-      .maybeSingle();
-    productId = p?.id ?? null;
-    productName = (p as { name?: string } | null)?.name ?? null;
+  let result: { id: string; created_at: string; status: string; merged: boolean };
+  try {
+    result = await submitPublicInquiry(supabase, {
+      source: parsed.data.source,
+      customerName: parsed.data.customerName,
+      customerPhone: parsed.data.customerPhone,
+      customerEmail: parsed.data.customerEmail,
+      message: parsed.data.message,
+      productSlug: parsed.data.productSlug,
+      productName: parsed.data.productName,
+      serviceType: parsed.data.serviceType,
+      includeInstallation: parsed.data.includeInstallation,
+    });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : "Грешка";
+    return withCors(req, NextResponse.json({ error: msg }, { status: 500 }));
   }
 
-  const { data, error } = await supabase
-    .from("inquiries")
-    .insert({
-      source: parsed.data.source,
-      customer_name: parsed.data.customerName,
-      customer_phone: parsed.data.customerPhone,
-      customer_email: parsed.data.customerEmail,
-      message: parsed.data.message,
-      product_id: productId,
-      service_type: parsed.data.serviceType,
-    })
-    .select("id,created_at,status")
-    .single();
-
-  if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
+  let enriched: Awaited<ReturnType<typeof attachProductsToInquiries>>[number] | undefined;
+  try {
+    const productMessage = buildProductInquiryMessage({
+      productName: parsed.data.productName,
+      includeInstallation: parsed.data.includeInstallation,
+      extraMessage: parsed.data.message,
+    });
+    [enriched] = await attachProductsToInquiries(supabase, [
+      {
+        id: result.id,
+        message: productMessage,
+        product_id: null,
+      },
+    ]);
+  } catch {
+    /* не блокираме успешното запитване */
+  }
 
   try {
     const env = getEnv();
     if (env.NOTIFY_EMAIL_TO && env.NOTIFY_EMAIL_FROM) {
+      const productNames =
+        enriched?.products?.map((p) => p.product_name) ??
+        (parsed.data.productName ? [parsed.data.productName] : []);
       const lines = [
-        `<p><strong>Ново запитване</strong> (${parsed.data.source})</p>`,
+        `<p><strong>Ново запитване</strong> (${parsed.data.source})${result.merged ? " — добавен модел към съществуващ клиент" : ""}</p>`,
         `<p>Име: ${escapeHtml(parsed.data.customerName)}<br/>Телефон: ${escapeHtml(parsed.data.customerPhone)}</p>`,
       ];
       if (parsed.data.customerEmail) lines.push(`<p>Имейл: ${escapeHtml(parsed.data.customerEmail)}</p>`);
+      if (parsed.data.includeInstallation === true) {
+        lines.push("<p>Монтаж: <strong>с монтаж</strong></p>");
+      } else if (parsed.data.includeInstallation === false) {
+        lines.push("<p>Монтаж: <strong>само уред</strong></p>");
+      }
       if (parsed.data.message) lines.push(`<p>Съобщение:<br/>${escapeHtml(parsed.data.message)}</p>`);
-      if (productName) lines.push(`<p>Продукт: ${escapeHtml(productName)}</p>`);
+      if (productNames.length) {
+        lines.push(`<p>Климатици: ${escapeHtml(productNames.join("; "))}</p>`);
+      }
       const html = lines.join("");
       await sendResendEmail({
         to: env.NOTIFY_EMAIL_TO,
@@ -89,7 +112,15 @@ export async function POST(req: NextRequest) {
     // non-blocking
   }
 
-  return withCors(req, NextResponse.json({ data }, { status: 201 }));
+  return withCors(
+    req,
+    NextResponse.json(
+      {
+        data: { id: result.id, created_at: result.created_at, status: result.status, merged: result.merged },
+      },
+      { status: result.merged ? 200 : 201 },
+    ),
+  );
 }
 
 function escapeHtml(s: string) {

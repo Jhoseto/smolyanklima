@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Star, Check, Wifi, ShieldCheck, Zap, Volume2, Wind, ChevronDown, Ruler, Weight } from 'lucide-react';
 import type { CatalogProduct } from '../../data/types/product';
 import { PremiumImageGallery } from '../media/PremiumImageGallery';
-import { rateProduct } from '../../data/productService';
+import { rateProduct, publicProductDescription } from '../../data/productService';
 
 // Мини-Accordion за price breakdown
 const Accordion = ({ title, children, defaultOpen = false }: { title: string, children: React.ReactNode, defaultOpen?: boolean }) => {
@@ -103,6 +103,7 @@ export const QuickViewModal = ({
     setRatingBusy(false);
   };
   const starsToRender = hoverStars ?? votedStars ?? Math.round(currentRating);
+  const descriptionText = publicProductDescription(product?.description);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -202,8 +203,8 @@ export const QuickViewModal = ({
                 {ratingNotice && <p className="text-xs font-semibold text-gray-500 mb-4">{ratingNotice}</p>}
 
                 {/* Description */}
-                {product.description && (
-                  <p className="text-sm text-gray-600 leading-relaxed mb-5">{product.description}</p>
+                {descriptionText && (
+                  <p className="text-sm text-gray-600 leading-relaxed mb-5">{descriptionText}</p>
                 )}
 
                 {/* Tech specs table */}
@@ -334,34 +335,20 @@ export const QuickViewModal = ({
                   ))}
                 </div>
 
-                {/* Price Breakdown + Availability */}
+                {/* Price */}
                 <div className="bg-gray-50 rounded-2xl p-5 mb-6 border border-gray-100">
                   <div className="flex items-baseline gap-3 mb-4">
                     <span className="text-4xl font-extrabold text-gray-900">€{product.price.toLocaleString()}</span>
                   </div>
 
                   <Accordion title="Какво включва цената с монтаж?" defaultOpen={false}>
-                    <div className="space-y-2 text-sm text-gray-600 mb-4">
+                    <div className="space-y-2 text-sm text-gray-600">
                       <div className="flex justify-between"><span>Цена на уреда:</span> <strong>€{product.price.toLocaleString()}</strong></div>
                       <div className="flex justify-between"><span>Стандартен монтаж:</span> <strong>€{(product.priceWithMount - product.price).toLocaleString()}</strong></div>
                       <div className="flex justify-between"><span>Официална гаранция:</span> <strong className="text-green-600">€0 (Включена)</strong></div>
                       <div className="flex justify-between pt-2 border-t border-gray-200 text-base"><span>Общо с монтаж:</span> <strong className="text-gray-900">€{product.priceWithMount.toLocaleString()}</strong></div>
                     </div>
                   </Accordion>
-
-                  <div className="space-y-3 mt-4 border-t border-gray-200 pt-4">
-                    <h4 className="text-xs font-bold text-gray-500 uppercase">Наличност и Доставка</h4>
-                    <div className="flex items-start gap-3">
-                      <div className="relative mt-1">
-                        <div className="w-2.5 h-2.5 bg-green-500 rounded-full"></div>
-                        <div className="absolute inset-0 bg-green-500 rounded-full animate-ping"></div>
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-gray-900">В наличност</p>
-                        <p className="text-xs text-gray-500">Доставка и монтаж до 48 часа за област Смолян.</p>
-                      </div>
-                    </div>
-                  </div>
                 </div>
 
                 {/* ── INQUIRY FORM ────────────────────── */}

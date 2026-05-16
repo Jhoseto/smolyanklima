@@ -4,10 +4,12 @@ import { X } from 'lucide-react';
 
 interface ActiveFiltersProps {
   brands: string[];
+  btus?: number[];
   energyClasses: string[];
   features: string[];
   search: string;
   onRemoveBrand: (b: string) => void;
+  onRemoveBtu?: (b: number) => void;
   onRemoveEnergy: (e: string) => void;
   onRemoveFeature: (f: string) => void;
   onClearSearch: () => void;
@@ -52,16 +54,23 @@ const Chip = ({ label, onRemove, color = 'blue' }: ChipProps) => {
 
 export const ActiveFilters = ({
   brands,
+  btus = [],
   energyClasses,
   features,
   search,
   onRemoveBrand,
+  onRemoveBtu,
   onRemoveEnergy,
   onRemoveFeature,
   onClearSearch,
   onClearAll,
 }: ActiveFiltersProps) => {
-  const hasAny = brands.length > 0 || energyClasses.length > 0 || features.length > 0 || search.trim();
+  const hasAny =
+    brands.length > 0 ||
+    btus.length > 0 ||
+    energyClasses.length > 0 ||
+    features.length > 0 ||
+    search.trim();
 
   if (!hasAny) return null;
 
@@ -75,6 +84,14 @@ export const ActiveFilters = ({
         )}
         {brands.map(b => (
           <Chip key={`brand-${b}`} label={b} onRemove={() => onRemoveBrand(b)} color="blue" />
+        ))}
+        {btus.map(b => (
+          <Chip
+            key={`btu-${b}`}
+            label={`${b} BTU`}
+            onRemove={() => onRemoveBtu?.(b)}
+            color="blue"
+          />
         ))}
         {energyClasses.map(e => (
           <Chip key={`energy-${e}`} label={e} onRemove={() => onRemoveEnergy(e)} color="green" />

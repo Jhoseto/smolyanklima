@@ -11,26 +11,35 @@ interface BeforeInstallPromptEvent extends Event {
 const IOS_DISMISS_KEY = "login-pwa-ios-dismiss";
 
 function isStandalone(): boolean {
+  if (typeof window === "undefined") return false;
   return (
     window.matchMedia("(display-mode: standalone)").matches ||
-    (navigator as Navigator & { standalone?: boolean }).standalone === true
+    (typeof navigator !== "undefined" &&
+      (navigator as Navigator & { standalone?: boolean }).standalone === true)
   );
 }
 
 function isIOSLike(): boolean {
+  if (typeof navigator === "undefined") return false;
   const ua = navigator.userAgent;
   if (/iPad|iPhone|iPod/.test(ua)) return true;
   return navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
 }
 
 export function LoginPWAInstall() {
+  const [mounted, setMounted] = useState(false);
+  const [standalone, setStandalone] = useState(false);
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
   const [chromiumOk, setChromiumOk] = useState(false);
   const [iosVisible, setIosVisible] = useState(false);
   const [iosGuide, setIosGuide] = useState(false);
 
   useEffect(() => {
-    if (typeof window === "undefined" || isStandalone()) return;
+    setMounted(true);
+    if (isStandalone()) {
+      setStandalone(true);
+      return;
+    }
 
     try {
       if (sessionStorage.getItem(IOS_DISMISS_KEY) === "1") return;
@@ -69,7 +78,7 @@ export function LoginPWAInstall() {
     setIosGuide(false);
   }, []);
 
-  if (isStandalone()) return null;
+  if (!mounted || standalone) return null;
 
   const showAndroid = chromiumOk;
   const showIos = iosVisible && !chromiumOk;

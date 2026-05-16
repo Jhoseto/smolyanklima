@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type SpecsInput = {
+  btu?: number | null;
   coverage_m2?: number | null;
   noise_db?: number | null;
   cooling_power_kw?: number | null;
@@ -53,6 +54,7 @@ export async function upsertProductSpecs(
 ): Promise<{ error: { message: string } | null }> {
   const row: Record<string, unknown> = {
     product_id: productId,
+    btu: specs.btu ?? null,
     coverage_m2: specs.coverage_m2 ?? null,
     noise_db: specs.noise_db ?? null,
     cooling_power_kw: specs.cooling_power_kw ?? null,

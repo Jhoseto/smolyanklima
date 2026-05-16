@@ -71,7 +71,7 @@ export function ProductQuickViewButton({
   );
 }
 
-function ProductQuickViewModal({ productId, onClose }: { productId: string; onClose: () => void }) {
+export function ProductQuickViewModal({ productId, onClose }: { productId: string; onClose: () => void }) {
   const [product, setProduct] = useState<ProductQuickViewData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

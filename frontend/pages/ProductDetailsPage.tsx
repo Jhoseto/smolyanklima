@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { ArrowLeft, Star, Phone, ShieldCheck, Clock, Check, Zap, Volume2, Wind, Ruler, Weight } from 'lucide-react';
-import { getAllProducts, getProductById, rateProduct } from '../data/productService';
+import { ArrowLeft, Star, Phone, ShieldCheck, Clock, Check, Zap, Volume2, Wind, Ruler, Weight, ChevronDown } from 'lucide-react';
+import { getAllProducts, getProductById, rateProduct, publicProductDescription } from '../data/productService';
 import type { CatalogProduct } from '../data/types/product';
 import { ProductCard } from '../components/catalog/ProductCard';
 import { PremiumImageGallery } from '../components/media/PremiumImageGallery';
+import { ProductInquiryModal } from '../components/catalog/ProductInquiryModal';
 
 export default function ProductDetailsPage() {
   const { id } = useParams<{ id: string }>();
@@ -18,6 +19,8 @@ export default function ProductDetailsPage() {
   const [alreadyRated, setAlreadyRated] = useState(false);
   const [hoverStars, setHoverStars] = useState<number | null>(null);
   const [votedStars, setVotedStars] = useState<number | null>(null);
+  const [inquiryProduct, setInquiryProduct] = useState<CatalogProduct | null>(null);
+  const [inquiryNotice, setInquiryNotice] = useState<string | null>(null);
 
   useEffect(() => {
     // Scroll to top on mount
@@ -38,6 +41,8 @@ export default function ProductDetailsPage() {
         setRelated(relatedProds);
       }
       setLoading(false);
+      setInquiryProduct(null);
+      setInquiryNotice(null);
     };
 
     fetchProduct();
@@ -99,6 +104,7 @@ export default function ProductDetailsPage() {
   }
 
   const starsToRender = hoverStars ?? votedStars ?? Math.round(product.rating);
+  const descriptionText = publicProductDescription(product.description);
 
   return (
     <div className="min-h-screen bg-white font-sans pt-20">
@@ -167,10 +173,6 @@ export default function ProductDetailsPage() {
             </div>
             {ratingNotice && <p className="text-xs font-semibold text-gray-500 mb-6">{ratingNotice}</p>}
 
-            {product.description && (
-              <p className="text-gray-600 leading-relaxed mb-6">{product.description}</p>
-            )}
-
             {/* Quick Specs Pills */}
             <div className="flex flex-wrap gap-2 mb-6">
               {product.coolingPower && (
@@ -213,14 +215,22 @@ export default function ProductDetailsPage() {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3">
-                <button className="flex-1 bg-gradient-to-r from-[#FF4D00] to-[#FF2A4D] hover:shadow-lg hover:shadow-orange-500/30 hover:scale-[1.02] transition-all text-white font-bold py-3.5 px-6 rounded-xl flex justify-center items-center gap-2">
-                  Поискайте оферта →
+                <button
+                  type="button"
+                  onClick={() => setInquiryProduct(product)}
+                  className="flex-1 bg-gradient-to-r from-[#FF4D00] to-[#FF2A4D] hover:shadow-lg hover:shadow-orange-500/30 hover:scale-[1.02] transition-all text-white font-bold py-3.5 px-6 rounded-xl flex justify-center items-center gap-2"
+                >
+                  Пусни запитване
                 </button>
                 <a href="tel:+359888888888" className="flex-1 bg-white border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all text-gray-800 font-bold py-3.5 px-6 rounded-xl flex justify-center items-center gap-2">
                   <Phone className="w-4 h-4 text-[#00B4D8]" /> Обадете се
                 </a>
               </div>
             </div>
+
+            {inquiryNotice && (
+              <p className="mt-3 text-sm font-semibold text-emerald-700">{inquiryNotice}</p>
+            )}
 
             {/* Guarantees */}
             <div className="flex gap-6 mt-6 ml-2">
@@ -235,6 +245,9 @@ export default function ProductDetailsPage() {
         </div>
 
         <hr className="border-gray-100 my-12" />
+        {descriptionText && (
+          <ProductDescriptionSection key={product.id} text={descriptionText} />
+        )}
 
         {/* ── MIDDLE SECTION: Tech Specs ── */}
         <div className="max-w-3xl mb-16">
@@ -329,6 +342,7 @@ export default function ProductDetailsPage() {
                   isFavorite={false} // Може да се закачи към global state
                   onFavoriteToggle={() => {}} 
                   onShare={() => {}}
+                  onInquiry={setInquiryProduct}
                 />
               ))}
             </div>
@@ -337,7 +351,72 @@ export default function ProductDetailsPage() {
 
       </main>
 
+      <ProductInquiryModal
+        product={inquiryProduct}
+        onClose={() => setInquiryProduct(null)}
+        onSuccess={(msg) => setInquiryNotice(msg)}
+        onError={(msg) => setInquiryNotice(msg)}
+      />
+
     </div>
+  );
+}
+
+function ProductDescriptionSection({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [canExpand, setCanExpand] = useState(false);
+  const textRef = React.useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    setExpanded(false);
+  }, [text]);
+
+  useEffect(() => {
+    if (expanded) return;
+    const el = textRef.current;
+    if (!el) return;
+    const check = () => setCanExpand(el.scrollHeight > el.clientHeight + 2);
+    const id = requestAnimationFrame(check);
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => {
+      cancelAnimationFrame(id);
+      ro.disconnect();
+    };
+  }, [text, expanded]);
+
+  return (
+    <section className="mb-16">
+      <h2 className="text-2xl font-black text-gray-900 mb-6">Описание</h2>
+      <div className="rounded-3xl border border-slate-100 bg-gradient-to-br from-slate-50 via-white to-[#F0F9FF]/40 p-6 sm:p-8 shadow-sm">
+        <div className="relative">
+          <p
+            ref={textRef}
+            className={`text-gray-700 text-base leading-relaxed whitespace-pre-line transition-[max-height] duration-300 ${
+              expanded ? '' : 'line-clamp-5'
+            }`}
+          >
+            {text}
+          </p>
+          {!expanded && canExpand && (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-white via-white/90 to-transparent"
+            />
+          )}
+        </div>
+        {canExpand && (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="mt-4 inline-flex items-center gap-1.5 text-sm font-bold text-[#00B4D8] hover:text-[#0077B6] transition-colors"
+          >
+            {expanded ? 'Скрий' : 'Прочети повече'}
+            <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+          </button>
+        )}
+      </div>
+    </section>
   );
 }
 

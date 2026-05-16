@@ -2,6 +2,13 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminDb } from "@/lib/admin/db";
+import { isPostgrestMissingColumn } from "@/lib/admin/pgMissingColumn";
+import {
+  INQUIRY_ADMIN_SELECT,
+  INQUIRY_ADMIN_SELECT_BASE,
+  withDefaultIncludeInstallation,
+} from "@/lib/inquiry/inquiryAdminSelect";
+import { attachProductsToInquiries } from "@/lib/inquiry/inquiryProducts";
 
 const QuerySchema = z.object({
   status: z.string().optional(),
@@ -21,44 +28,44 @@ export async function GET(req: NextRequest) {
   if (!parsed.success) return withCors(req, NextResponse.json({ error: "Невалидни параметри" }, { status: 400 }));
 
   const supabase = await adminDb();
-  let query = supabase
-    .from("inquiries")
-    .select(
-      "id,source,customer_name,customer_phone,customer_email,message,product_id,service_type,status,priority,assigned_to,admin_notes,created_at,updated_at",
-      { count: "exact" },
-    );
-
-  if (parsed.data.status) query = query.eq("status", parsed.data.status);
-  if (parsed.data.source) query = query.eq("source", parsed.data.source);
-
-  if (parsed.data.q) {
-    // Best-effort search (works without extra indexes)
-    const q = parsed.data.q.trim();
-    if (q) {
-      query = query.or(
-        [
-          `customer_name.ilike.%${q}%`,
-          `customer_phone.ilike.%${q}%`,
-          `customer_email.ilike.%${q}%`,
-          `message.ilike.%${q}%`,
-        ].join(","),
-      );
-    }
-  }
-
   const { page, perPage } = parsed.data;
   const from = (page - 1) * perPage;
   const to = from + perPage - 1;
 
-  const { data, error, count } = await query
-    .order("created_at", { ascending: false })
-    .range(from, to);
+  const runListQuery = (selectFields: string) => {
+    let query = supabase.from("inquiries").select(selectFields, { count: "exact" });
+    if (parsed.data.status) query = query.eq("status", parsed.data.status);
+    if (parsed.data.source) query = query.eq("source", parsed.data.source);
+    if (parsed.data.q) {
+      const q = parsed.data.q.trim();
+      if (q) {
+        query = query.or(
+          [
+            `customer_name.ilike.%${q}%`,
+            `customer_phone.ilike.%${q}%`,
+            `customer_email.ilike.%${q}%`,
+            `message.ilike.%${q}%`,
+          ].join(","),
+        );
+      }
+    }
+    return query.order("created_at", { ascending: false }).range(from, to);
+  };
+
+  let { data, error, count } = await runListQuery(INQUIRY_ADMIN_SELECT);
+  if (error && isPostgrestMissingColumn(error, "include_installation")) {
+    ({ data, error, count } = await runListQuery(INQUIRY_ADMIN_SELECT_BASE));
+    if (data) data = withDefaultIncludeInstallation(data);
+  }
 
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
+
+  const enriched = await attachProductsToInquiries(supabase, data ?? []);
+
   return withCors(
     req,
     NextResponse.json({
-      data: data ?? [],
+      data: enriched,
       meta: { page, perPage, total: count ?? 0 },
     }),
   );

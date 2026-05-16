@@ -201,7 +201,7 @@ ${included + 1}. ${product.name} (${product.brand})
    - Квадратура: ${product.specs.coverage} кв.м.
    - Шум: ${product.specs.noiseLevel} dB
    - Енергиен клас: ${product.energyClass}
-   - Наличност: ${product.inStock ? 'В наличност' : 'Изчерпано'}
+   - За наличност и срок: насочи клиента към запитване (не обещавай складов статус)
    - Гаранция: ${product.warranty.years} години
    - Особености: ${product.features.join(', ')}
       `.trim();

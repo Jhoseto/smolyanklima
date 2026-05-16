@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronDown, RotateCcw } from 'lucide-react';
-import { BRANDS } from '../../data/productService';
 import { EnergyCalculator, PowerCalculator } from './Calculators';
 
 const ENERGY_CLASSES = ['A+++', 'A++', 'A+', 'A'];
@@ -51,6 +50,7 @@ const Accordion = ({ title, children, defaultOpen = true }: AccordionProps) => {
 };
 
 export type BrandOption = { name: string; productCount?: number };
+export type BtuOption = { btu: number; productCount?: number };
 
 interface FilterSidebarProps {
   showConditionFilters?: boolean;
@@ -59,6 +59,10 @@ interface FilterSidebarProps {
   brandsOptions?: Array<string | BrandOption>;
   selectedBrands: string[];
   onBrandToggle: (brand: string) => void;
+  showBtuFilters?: boolean;
+  btuOptions?: BtuOption[];
+  selectedBtus?: number[];
+  onBtuToggle?: (btu: number) => void;
   selectedEnergy: string[];
   onEnergyToggle: (cls: string) => void;
   selectedFeatures: string[];
@@ -80,6 +84,10 @@ export const FilterSidebar = ({
   brandsOptions,
   selectedBrands,
   onBrandToggle,
+  showBtuFilters = false,
+  btuOptions = [],
+  selectedBtus = [],
+  onBtuToggle,
   selectedEnergy,
   onEnergyToggle,
   selectedFeatures,
@@ -93,11 +101,11 @@ export const FilterSidebar = ({
   onReset,
   activeFilterCount,
 }: FilterSidebarProps) => {
-  const rawBrandOptions = brandsOptions ?? BRANDS.map((b) => b.name);
-  const availableBrands: BrandOption[] = rawBrandOptions.map((b) =>
+  const availableBrands: BrandOption[] = (brandsOptions ?? []).map((b) =>
     typeof b === 'string' ? { name: b } : b,
   );
   const brandsAreDynamic = brandsOptions !== undefined;
+  const availableBtus = btuOptions;
   return (
     <aside className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sticky top-[120px] max-h-[calc(100vh-140px)] overflow-y-auto">
 
@@ -201,6 +209,42 @@ export const FilterSidebar = ({
         </div>
         )}
       </Accordion>
+
+      {showBtuFilters && (
+        <Accordion title="Мощност (BTU)">
+          {availableBtus.length === 0 ? (
+            <div className="rounded-lg bg-gray-50 px-3 py-2.5 text-xs font-medium text-gray-500">
+              Няма данни за мощност при текущия избор.
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {availableBtus.map(({ btu, productCount }) => {
+                const isUnavailable = productCount === 0;
+                const isChecked = selectedBtus.includes(btu);
+                return (
+                  <button
+                    key={btu}
+                    type="button"
+                    disabled={isUnavailable && !isChecked}
+                    title={`${btu * 1000} BTU${typeof productCount === 'number' ? ` · ${productCount} продукта` : ''}`}
+                    onClick={() => onBtuToggle?.(btu)}
+                    className={`min-w-[2.25rem] px-2 py-1 rounded-lg text-xs font-bold border transition-all ${
+                      isChecked
+                        ? 'border-[#00B4D8] bg-[#00B4D8] text-white shadow-sm'
+                        : isUnavailable
+                          ? 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed'
+                          : 'border-gray-200 bg-white text-gray-700 hover:border-[#00B4D8]/40'
+                    }`}
+                  >
+                    {btu}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <p className="mt-2 text-[10px] text-gray-400 leading-snug">Числото е в хиляди BTU (напр. 12 = 12 000 BTU).</p>
+        </Accordion>
+      )}
 
       {/* Price Range */}
       <Accordion title="Ценови диапазон">

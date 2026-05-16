@@ -104,6 +104,18 @@ function resolveInstallPrice(product: { type?: string; price: number }): number 
   return product.price + 150; // стенен / default
 }
 
+/** Публично описание без вътрешни „Източник:“ редове от импорт. */
+export function publicProductDescription(description: string | undefined | null): string | undefined {
+  if (!description?.trim()) return undefined;
+  const cut = description.search(/\n\nИзточник:\s*https?:\/\//i);
+  if (cut >= 0) {
+    const trimmed = description.slice(0, cut).trim();
+    return trimmed || undefined;
+  }
+  if (/^Източник:\s*https?:\/\//i.test(description.trim())) return undefined;
+  return description.trim();
+}
+
 // ──────────────────────────────────────
 // MAIN MAPPING FUNCTION
 // ──────────────────────────────────────
@@ -141,6 +153,19 @@ type ApiProduct = {
   product_features?: Array<{ features?: { name?: string } | null }> | null;
 };
 
+const CATALOG_IMAGE_PLACEHOLDER = '/images/hero-new.jpg';
+
+/** Предпочита локални/Cloudinary URL; cnj CDN често връща 404 след импорт. */
+export function pickCatalogImageUrl(urls: string[]): string {
+  if (!urls.length) return CATALOG_IMAGE_PLACEHOLDER;
+  const local = urls.find((u) => u.startsWith('/'));
+  if (local) return local;
+  const cloudinary = urls.find((u) => u.includes('res.cloudinary.com'));
+  if (cloudinary) return cloudinary;
+  const reliable = urls.find((u) => !/img\.cdn-cnj\.si/i.test(u));
+  return reliable ?? urls[0] ?? CATALOG_IMAGE_PLACEHOLDER;
+}
+
 function mapApiToCatalogProduct(raw: ApiProduct): CatalogProduct {
   const brand = raw.brands?.name ?? '—';
   const type = raw.product_types?.name ?? '';
@@ -156,8 +181,7 @@ function mapApiToCatalogProduct(raw: ApiProduct): CatalogProduct {
     .sort((a, b) => (b.is_main ? 1 : 0) - (a.is_main ? 1 : 0) || a.sort_order - b.sort_order)
     .map((im) => im.url)
     .filter(Boolean);
-  // If backend doesn't have images yet, use a known existing local asset (avoid 404 spam).
-  const image = sortedImages[0] ?? `/images/hero-new.jpg`;
+  const image = pickCatalogImageUrl(sortedImages);
 
   const { cardBorder, imgBg } = resolveBorderAndBg(brand);
   const fallback = fakeRating(raw.slug);
@@ -268,11 +292,12 @@ export async function getAllProducts(): Promise<CatalogProduct[]> {
   return all;
 }
 
-/** Един продукт по ID */
+/** Един продукт по slug или UUID (само публично видими). */
 export async function getProductById(id: string): Promise<CatalogProduct | undefined> {
   const res = await fetch(`/api/products/${encodeURIComponent(id)}`);
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error || 'Грешка при зареждане на продукт');
+  if (res.status === 404) return undefined;
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) return undefined;
   if (!json.data) return undefined;
   return mapApiToCatalogProduct(json.data as ApiProduct);
 }
@@ -316,6 +341,8 @@ export interface CatalogListParams {
   cat?: string;
   cond?: "new" | "used";
   brands?: string[];
+  /** Номинали BTU (хиляди): 7, 9, 12… */
+  btus?: number[];
   energyClasses?: string[];
   features?: string[];
   min?: number;
@@ -334,6 +361,7 @@ export async function fetchProductsCatalogPage(
   if (params.cat && params.cat !== "all") sp.set("cat", params.cat);
   if (params.cond) sp.set("cond", params.cond);
   if (params.brands?.length) sp.set("b", params.brands.join(","));
+  if (params.btus?.length) sp.set("btu", params.btus.join(","));
   if (params.energyClasses?.length) sp.set("e", params.energyClasses.join(","));
   if (params.features?.length) sp.set("f", params.features.join(","));
   if (typeof params.min === "number") sp.set("min", String(params.min));
@@ -374,13 +402,28 @@ export async function fetchCatalogBrandOptions(
 ): Promise<Array<{ name: string; productCount: number }>> {
   const sp = new URLSearchParams();
   if (cond) sp.set("cond", cond);
-  if (opts?.onlyWithProducts) sp.set("onlyWithProducts", "true");
+  if (opts?.onlyWithProducts !== false) sp.set("onlyWithProducts", "true");
   const qs = sp.toString();
   const res = await fetch(`/api/catalog/brand-options${qs ? `?${qs}` : ""}`);
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Грешка при зареждане на марките");
   const data = (json.data ?? []) as Array<{ name: string; productCount: number }>;
   return data;
+}
+
+/** Налични номинали BTU в публичния каталог (с брой продукти). */
+export async function fetchCatalogBtuOptions(
+  cond?: "new" | "used",
+  opts?: { onlyWithProducts?: boolean },
+): Promise<Array<{ btu: number; productCount: number }>> {
+  const sp = new URLSearchParams();
+  if (cond) sp.set("cond", cond);
+  if (opts?.onlyWithProducts !== false) sp.set("onlyWithProducts", "true");
+  const qs = sp.toString();
+  const res = await fetch(`/api/catalog/btu-options${qs ? `?${qs}` : ""}`);
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Грешка при зареждане на BTU опции");
+  return (json.data ?? []) as Array<{ btu: number; productCount: number }>;
 }
 
 /** Брой продукти по категория (без други филтри), за чиповете. */

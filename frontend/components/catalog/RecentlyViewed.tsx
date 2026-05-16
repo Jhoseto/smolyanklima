@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Clock } from 'lucide-react';
 import type { CatalogProduct } from '../../data/types/product';
@@ -27,10 +27,27 @@ export function useRecentlyViewed() {
     });
   };
 
-  return { viewedIds, addViewed };
+  const pruneViewedIds = useCallback((validIds: string[]) => {
+    setViewedIds(validIds);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(validIds));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  return { viewedIds, addViewed, pruneViewedIds };
 }
 
-export const RecentlyViewed = ({ viewedIds, onQuickView }: { viewedIds: string[], onQuickView: (p: CatalogProduct) => void }) => {
+export const RecentlyViewed = ({
+  viewedIds,
+  onQuickView,
+  onPruneViewedIds,
+}: {
+  viewedIds: string[];
+  onQuickView: (p: CatalogProduct) => void;
+  onPruneViewedIds?: (validIds: string[]) => void;
+}) => {
   const [products, setProducts] = useState<CatalogProduct[]>([]);
 
   useEffect(() => {
@@ -38,10 +55,22 @@ export const RecentlyViewed = ({ viewedIds, onQuickView }: { viewedIds: string[]
       setProducts([]);
       return;
     }
+    let cancelled = false;
     (async () => {
       const loaded = await Promise.all(viewedIds.map((id) => getProductById(id)));
-      setProducts(loaded.filter(Boolean) as CatalogProduct[]);
-    })().catch(() => setProducts([]));
+      if (cancelled) return;
+      const valid = loaded.filter(Boolean) as CatalogProduct[];
+      const validIds = valid.map((p) => p.id);
+      if (validIds.length !== viewedIds.length) {
+        onPruneViewedIds?.(validIds);
+      }
+      setProducts(valid);
+    })().catch(() => {
+      if (!cancelled) setProducts([]);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [viewedIds]);
 
   if (viewedIds.length === 0) return null;

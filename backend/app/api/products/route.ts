@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { withCloudinaryWebOptimization } from "@/lib/services/cloudinaryService";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
-import { PUBLIC_CATALOG_STOCK_STATUSES } from "@/lib/catalog/publicProductVisibility";
+import { parseBtuCsvParam, resolveProductIdsForBtuList } from "@/lib/catalog/productBtu";
+import { applyPublicCatalogFilter } from "@/lib/catalog/publicProductVisibility";
 
 const QuerySchema = z.object({
   q: z.string().optional(),
@@ -14,6 +15,8 @@ const QuerySchema = z.object({
   min: z.coerce.number().optional(),
   max: z.coerce.number().optional(),
   cond: z.enum(["new", "used"]).optional(),
+  /** Номинали BTU (хиляди), CSV: 7,9,12 */
+  btu: z.string().optional(),
   s: z
     .enum(["recommended", "price-asc", "price-desc", "energy-class", "noise-asc", "rating-desc"])
     .optional(),
@@ -53,10 +56,11 @@ export async function GET(req: NextRequest) {
     return withCors(req, NextResponse.json({ error: "Invalid query" }, { status: 400 }));
   }
 
-  const { q, cat, b, e, f, min, max, cond, s, page = 1, perPage = 24 } = parsed.data;
+  const { q, cat, b, e, f, min, max, cond, btu: btuCsv, s, page = 1, perPage = 24 } = parsed.data;
   const brandNames = splitCsv(b);
   const energyClasses = splitCsv(e);
   const featureTerms = splitCsv(f);
+  const btuFilters = parseBtuCsvParam(btuCsv);
 
   const supabase = createSupabaseServiceRoleClient();
 
@@ -83,11 +87,9 @@ export async function GET(req: NextRequest) {
     });
     let ids: string[] = [];
     if (rpcErr) {
-      const { data: fb, error: fbErr } = await supabase
-        .from("products")
-        .select("id")
-        .in("stock_status", PUBLIC_CATALOG_STOCK_STATUSES as unknown as string[])
-        .or(`name.ilike.%${term}%,description.ilike.%${term}%`);
+      const { data: fb, error: fbErr } = await applyPublicCatalogFilter(
+        supabase.from("products").select("id"),
+      ).or(`name.ilike.%${term}%,description.ilike.%${term}%`);
       if (fbErr) return withCors(req, NextResponse.json({ error: fbErr.message }, { status: 500 }));
       ids = (fb ?? []).map((r: { id: string }) => r.id);
     } else {
@@ -114,11 +116,10 @@ export async function GET(req: NextRequest) {
       } else {
         const { data: types } = await supabase.from("product_types").select("id").in("name", typeNames);
         const typeIds = (types ?? []).map((t: { id: string }) => t.id);
-        const { data: prows } = await supabase
-          .from("products")
-          .select("id")
-          .in("stock_status", PUBLIC_CATALOG_STOCK_STATUSES as unknown as string[])
-          .in("type_id", typeIds);
+        const { data: prows } = await applyPublicCatalogFilter(supabase.from("products").select("id")).in(
+          "type_id",
+          typeIds,
+        );
         mergeProductIds((prows ?? []).map((p: { id: string }) => p.id));
       }
     }
@@ -131,11 +132,23 @@ export async function GET(req: NextRequest) {
     if (brandIds.length === 0) {
       mergeProductIds([]);
     } else {
-      const { data: prows } = await supabase
-        .from("products")
-        .select("id")
-        .in("stock_status", PUBLIC_CATALOG_STOCK_STATUSES as unknown as string[])
-        .in("brand_id", brandIds);
+      const { data: prows } = await applyPublicCatalogFilter(supabase.from("products").select("id")).in(
+        "brand_id",
+        brandIds,
+      );
+      mergeProductIds((prows ?? []).map((p: { id: string }) => p.id));
+    }
+  }
+
+  if (btuFilters.length > 0) {
+    const specIds = await resolveProductIdsForBtuList(supabase, btuFilters);
+    if (specIds.length === 0) {
+      mergeProductIds([]);
+    } else {
+      const { data: prows } = await applyPublicCatalogFilter(supabase.from("products").select("id")).in(
+        "id",
+        specIds,
+      );
       mergeProductIds((prows ?? []).map((p: { id: string }) => p.id));
     }
   }
@@ -194,9 +207,11 @@ export async function GET(req: NextRequest) {
   // ===================================================================
   const dedupSelect = "id,brand_id,model_code,stock_status,price,sold_quantity,created_at,product_condition,is_featured,rating,reviews_count";
   const buildDedupQuery = (includeCondition: boolean) => {
-    let q = (supabase.from("products") as any)
-      .select(includeCondition ? dedupSelect : dedupSelect.replace(",product_condition", ""))
-      .in("stock_status", PUBLIC_CATALOG_STOCK_STATUSES as unknown as string[]);
+    let q = applyPublicCatalogFilter(
+      (supabase.from("products") as any).select(
+        includeCondition ? dedupSelect : dedupSelect.replace(",product_condition", ""),
+      ),
+    );
     if (idRestriction !== null && idRestriction !== "empty") q = q.in("id", idRestriction);
     if (typeof min === "number") q = q.gte("price", min);
     if (typeof max === "number") q = q.lte("price", max);
@@ -242,10 +257,9 @@ export async function GET(req: NextRequest) {
     dedupRes = await buildDedupQuery(false);
     if (dedupRes.error && /model_code/.test(String(dedupRes.error.message ?? ""))) {
       // Като последна резерва — само ID и stock_status, без dedup (legacy DB).
-      dedupRes = await (supabase.from("products") as any)
-        .select("id,stock_status,price")
-        .in("stock_status", PUBLIC_CATALOG_STOCK_STATUSES as unknown as string[])
-        .limit(2000);
+      dedupRes = await applyPublicCatalogFilter(
+        (supabase.from("products") as any).select("id,stock_status,price"),
+      ).limit(2000);
     }
   }
   if (dedupRes.error) {
@@ -282,20 +296,19 @@ export async function GET(req: NextRequest) {
     const selectCols = includeCondition
       ? `
       id, slug, name, description, price, price_with_mount, product_condition,
-      is_featured, stock_status, stock_quantity, rating, reviews_count,
+      is_featured, rating, reviews_count,
       meta_title, meta_description,
       brand_id, type_id
     `
       : `
       id, slug, name, description, price, price_with_mount,
-      is_featured, stock_status, stock_quantity, rating, reviews_count,
+      is_featured, rating, reviews_count,
       meta_title, meta_description,
       brand_id, type_id
     `;
-    let query = (supabase
-      .from("products") as any)
-      .select(selectCols, { count: "exact" })
-      .in("stock_status", PUBLIC_CATALOG_STOCK_STATUSES as unknown as string[]);
+    let query = applyPublicCatalogFilter(
+      (supabase.from("products") as any).select(selectCols, { count: "exact" }),
+    );
     if (idRestriction !== null && idRestriction !== "empty") query = query.in("id", idRestriction);
     if (typeof min === "number") query = query.gte("price", min);
     if (typeof max === "number") query = query.lte("price", max);

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
-import { PUBLIC_CATALOG_STOCK_STATUSES } from "@/lib/catalog/publicProductVisibility";
+import { applyPublicCatalogFilter } from "@/lib/catalog/publicProductVisibility";
 
 function isProductPublicLookupUuid(s: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s.trim());
@@ -40,10 +40,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
   }
 
   const supabase = createSupabaseServiceRoleClient();
-  let q = supabase
-    .from("products")
-    .select("id")
-    .in("stock_status", PUBLIC_CATALOG_STOCK_STATUSES as unknown as string[]);
+  let q = applyPublicCatalogFilter(supabase.from("products").select("id"));
   q = isProductPublicLookupUuid(key) ? q.eq("id", key) : q.eq("slug", key);
   const { data: p, error: pErr } = await q.maybeSingle();
   if (pErr) return withCors(req, NextResponse.json({ error: pErr.message }, { status: 500 }));

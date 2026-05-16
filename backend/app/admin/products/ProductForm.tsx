@@ -67,6 +67,7 @@ export type AdminProductForm = {
   supplierInvoiceNumber: string;
   purchasePrice: string;
   isFeatured: boolean;
+  showInPublicCatalog: boolean;
   stockStatus: "in_stock" | "out_of_stock" | "on_order";
   /** Витрина (магазин) или склад — вътрешно, не е публичният stock_status. */
   stockLocation: ProductStockLocation;
@@ -119,6 +120,7 @@ export function emptyProductForm(): AdminProductForm {
     supplierInvoiceNumber: "",
     purchasePrice: "",
     isFeatured: false,
+    showInPublicCatalog: false,
     stockStatus: "in_stock",
     stockLocation: "warehouse",
     productRegion: "europe",
@@ -374,6 +376,7 @@ export function buildPostBody(form: AdminProductForm) {
     supplierInvoiceNumber: form.supplierInvoiceNumber.trim() || null,
     purchasePrice: pp ?? null,
     isFeatured: form.isFeatured,
+    showInPublicCatalog: form.showInPublicCatalog,
     stockStatus: form.stockStatus,
     stockLocation: form.stockLocation,
     productRegion: form.productRegion,
@@ -411,6 +414,7 @@ export function buildPutBody(form: AdminProductForm) {
     supplierInvoiceNumber: form.supplierInvoiceNumber.trim() || null,
     purchasePrice: pp,
     isFeatured: form.isFeatured,
+    showInPublicCatalog: form.showInPublicCatalog,
     stockStatus: form.stockStatus,
     stockLocation: form.stockLocation,
     productRegion: form.productRegion,
@@ -444,6 +448,7 @@ export function mapLoadedProductToForm(p: {
   supplier_invoice_number?: string | null;
   purchase_price?: number | null;
   is_featured: boolean;
+  show_in_public_catalog?: boolean | null;
   stock_status?: string;
   stock_location?: string | null;
   product_region?: string | null;
@@ -476,6 +481,7 @@ export function mapLoadedProductToForm(p: {
     supplierInvoiceNumber: p.supplier_invoice_number ?? "",
     purchasePrice: p.purchase_price != null ? String(p.purchase_price) : "",
     isFeatured: Boolean(p.is_featured),
+    showInPublicCatalog: Boolean(p.show_in_public_catalog),
     stockStatus:
       p.stock_status === "out_of_stock" || p.stock_status === "on_order" ? p.stock_status : "in_stock",
     stockLocation: normalizeProductStockLocation(p.stock_location),
@@ -1717,6 +1723,19 @@ export function ProductFormFields({
               Попълни марка и модел, за да видиш колко инстанции от същия модел има в каталога.
             </div>
           )}
+
+          <label className="flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50/80 px-2.5 py-2 cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-0.5 rounded border-slate-300"
+              checked={form.showInPublicCatalog}
+              onChange={(e) => setForm({ ...form, showInPublicCatalog: e.target.checked })}
+            />
+            <span className="text-[11px] leading-snug text-slate-700">
+              <span className="font-bold block">Вижда се в публичния каталог</span>
+              <span className="text-slate-500">Клиентите няма да виждат складов статус на сайта.</span>
+            </span>
+          </label>
 
           <label className="block">
             <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-1">Местоположение</div>

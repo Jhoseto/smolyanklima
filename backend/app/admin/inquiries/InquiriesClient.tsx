@@ -7,6 +7,7 @@ import { RefreshCw, MessageSquare, PlayCircle, CheckCircle, ShieldAlert, StickyN
 import { useDebounce } from "@/lib/hooks/useDebounce";
 import { assertNoContactPrimaryPhoneDuplicate } from "@/lib/admin/contactPhoneConflictClient";
 import { notifyInquiriesChanged } from "@/lib/admin/inquiries-count-events";
+import { InquiryProductCards } from "./InquiryProductCards";
 
 function Badge({ label, colorClass }: { label: string; colorClass: string }) {
   return (
@@ -59,6 +60,19 @@ function sourceLabel(source: string): { label: string; colorClass: string } {
   return map[source] ?? { label: source || "—", colorClass: "bg-slate-100 border-slate-200 text-slate-600" };
 }
 
+type InquiryProduct = {
+  id: string;
+  inquiry_id: string;
+  product_id: string | null;
+  product_slug: string | null;
+  product_name: string;
+  created_at: string;
+  image_url?: string | null;
+  price?: number | null;
+  price_with_mount?: number | null;
+  brand_name?: string | null;
+};
+
 type Inquiry = {
   id: string;
   source: string;
@@ -68,11 +82,13 @@ type Inquiry = {
   message?: string | null;
   product_id?: string | null;
   service_type?: string | null;
+  include_installation?: boolean | null;
   status: string;
   priority: string;
   assigned_to?: string | null;
   admin_notes?: string | null;
   created_at: string;
+  products?: InquiryProduct[];
 };
 
 type AiReplyDraft = {
@@ -100,6 +116,10 @@ export function InquiriesClient() {
   const [lastLiveUpdate, setLastLiveUpdate] = useState<string | null>(null);
   const [aiReplyDraft, setAiReplyDraft] = useState<AiReplyDraft | null>(null);
   const [selectedInquiry, setSelectedInquiry] = useState<Inquiry | null>(null);
+  const selectedDisplayProducts = useMemo(
+    () => productsForInquiryDisplay(selectedInquiry),
+    [selectedInquiry],
+  );
   const [inqPage, setInqPage] = useState(1);
   const [inqTotal, setInqTotal] = useState(0);
   const INQ_PER_PAGE = 50;
@@ -142,6 +162,17 @@ export function InquiriesClient() {
     if (searchParams.get("id")) router.replace("/admin/inquiries");
   }, [router, searchParams]);
 
+  const openInquiryDetail = useCallback(async (inquiry: Inquiry) => {
+    setSelectedInquiry(inquiry);
+    try {
+      const res = await fetch(`/api/admin/inquiries/${inquiry.id}`, { credentials: "include" });
+      const json = await res.json();
+      if (res.ok && json.data) setSelectedInquiry(json.data as Inquiry);
+    } catch {
+      /* запазваме данните от списъка */
+    }
+  }, []);
+
   useEffect(() => {
     const id = searchParams.get("id")?.trim();
     if (!id) {
@@ -153,7 +184,7 @@ export function InquiriesClient() {
     const fromList = items.find((row) => row.id === id);
     if (fromList) {
       openedFromUrlRef.current = id;
-      setSelectedInquiry(fromList);
+      void openInquiryDetail(fromList);
       return;
     }
 
@@ -168,7 +199,7 @@ export function InquiriesClient() {
         setError(e instanceof Error ? e.message : "Грешка при зареждане на запитването");
       }
     })();
-  }, [searchParams, items, selectedInquiry?.id]);
+  }, [searchParams, items, selectedInquiry?.id, openInquiryDetail]);
 
   useEffect(() => {
     const events = new EventSource("/api/admin/inquiries/stream");
@@ -383,7 +414,7 @@ export function InquiriesClient() {
             <Table>
               <thead>
                 <tr>
-                  <Th>Клиент</Th><Th>Контакт</Th><Th>Статус</Th>
+                  <Th>Клиент</Th><Th>Контакт</Th><Th>Монтаж</Th><Th>Климатици</Th><Th>Статус</Th>
                   <Th>Приоритет</Th><Th>Източник</Th><Th>Създадено</Th><Th>Действия</Th>
                 </tr>
               </thead>
@@ -394,11 +425,17 @@ export function InquiriesClient() {
                   return (
                     <tr key={i.id} className="hover:bg-slate-50 transition-colors">
                       <Td className="font-bold text-slate-900">
-                        <button type="button" onClick={() => setSelectedInquiry(i)} title={INQUIRY_TIPS.details} className="rounded text-left font-bold text-slate-900 underline-offset-4 transition-colors hover:text-brand-blue-700 hover:underline">{i.customer_name}</button>
+                        <button type="button" onClick={() => void openInquiryDetail(i)} title={INQUIRY_TIPS.details} className="rounded text-left font-bold text-slate-900 underline-offset-4 transition-colors hover:text-brand-blue-700 hover:underline">{i.customer_name}</button>
                       </Td>
                       <Td>
                         <div className="font-medium text-slate-700">{i.customer_phone}</div>
                         {i.customer_email && <div className="text-xs text-slate-500 mt-0.5">{i.customer_email}</div>}
+                      </Td>
+                      <Td className="text-xs font-semibold text-slate-700 whitespace-nowrap">
+                        {mountPreferenceLabel(i.include_installation, i.message)}
+                      </Td>
+                      <Td className="max-w-[220px]">
+                        <InquiryProductsSummary inquiry={i} />
                       </Td>
                       <Td><Badge label={s.label} colorClass={s.colorClass} /></Td>
                       <Td><Badge label={p.label} colorClass={p.colorClass} /></Td>
@@ -407,7 +444,7 @@ export function InquiriesClient() {
                       <Td>
                         <div className="flex flex-wrap gap-1.5 items-center">
                           <HoverTip tip={INQUIRY_TIPS.details}>
-                            <Button variant="secondary" size="sm" onClick={() => setSelectedInquiry(i)} aria-label={INQUIRY_TIPS.details} className="gap-1.5 !py-1 !px-2.5 !text-xs border-brand-blue-200 bg-brand-blue-50 text-brand-blue-700">Детайли</Button>
+                            <Button variant="secondary" size="sm" onClick={() => void openInquiryDetail(i)} aria-label={INQUIRY_TIPS.details} className="gap-1.5 !py-1 !px-2.5 !text-xs border-brand-blue-200 bg-brand-blue-50 text-brand-blue-700">Детайли</Button>
                           </HoverTip>
                           <HoverTip tip={INQUIRY_TIPS.notes}>
                             <Button variant="secondary" size="sm" onClick={() => setNotesForId(i.id)} aria-label={INQUIRY_TIPS.notes} className={`gap-1 !py-1 !px-2.5 !text-xs ${i.admin_notes ? "border-brand-blue-300 bg-brand-blue-50 text-brand-blue-700" : ""}`}>
@@ -437,7 +474,7 @@ export function InquiriesClient() {
                     </tr>
                   );
                 })}
-                {items.length === 0 && <tr><Td colSpan={7} className="text-center py-8 text-slate-500">Няма намерени запитвания.</Td></tr>}
+                {items.length === 0 && <tr><Td colSpan={9} className="text-center py-8 text-slate-500">Няма намерени запитвания.</Td></tr>}
               </tbody>
             </Table>
           </div>
@@ -450,7 +487,7 @@ export function InquiriesClient() {
               const p = priorityLabel(i.priority);
               return (
                 <div key={i.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                  <button type="button" className="w-full text-left p-4 active:bg-slate-50 transition-colors" onClick={() => setSelectedInquiry(i)}>
+                  <button type="button" className="w-full text-left p-4 active:bg-slate-50 transition-colors" onClick={() => void openInquiryDetail(i)}>
                     <div className="flex items-start justify-between gap-3 mb-2">
                       <div className="min-w-0">
                         <div className="font-bold text-slate-900 text-sm leading-snug">{i.customer_name}</div>
@@ -462,6 +499,12 @@ export function InquiriesClient() {
                       </div>
                     </div>
                     {i.message && <div className="text-xs text-slate-600 line-clamp-2 leading-relaxed bg-slate-50 rounded-lg px-3 py-2 mb-2">{i.message}</div>}
+                    <p className="text-[11px] font-semibold text-slate-600 mb-1">
+                      Монтаж: {mountPreferenceLabel(i.include_installation, i.message)}
+                    </p>
+                    <div className="mb-2">
+                      <InquiryProductsSummary inquiry={i} compact />
+                    </div>
                     <div className="flex items-center justify-between">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${sourceLabel(i.source).colorClass}`}>{sourceLabel(i.source).label}</span>
                       <span className="text-[10px] text-slate-400 font-medium">{new Date(i.created_at).toLocaleDateString("bg-BG")}</span>
@@ -474,7 +517,7 @@ export function InquiriesClient() {
                     <button type="button" title={INQUIRY_TIPS.done} onClick={() => quickUpdate(i.id, { status: "done" })} className="flex-1 py-3 flex items-center justify-center gap-1 text-xs font-semibold text-green-700 hover:bg-green-50 active:bg-green-100 transition-colors">
                       <CheckCircle className="w-4 h-4" /> Приключи
                     </button>
-                    <button type="button" title={INQUIRY_TIPS.details} onClick={() => setSelectedInquiry(i)} className="flex-1 py-3 flex items-center justify-center gap-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 active:bg-slate-100 transition-colors">
+                    <button type="button" title={INQUIRY_TIPS.details} onClick={() => void openInquiryDetail(i)} className="flex-1 py-3 flex items-center justify-center gap-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 active:bg-slate-100 transition-colors">
                       Детайли
                     </button>
                   </div>
@@ -531,17 +574,29 @@ export function InquiriesClient() {
             </div>
             <div className="grid max-h-[calc(100vh-11rem)] gap-4 overflow-y-auto p-6 lg:grid-cols-[1fr_320px]">
               <div className="space-y-4">
+                {selectedDisplayProducts.length > 0 && (
+                  <div className="rounded-2xl border border-brand-blue-100 bg-brand-blue-50/40 p-4 shadow-sm">
+                    <div className="mb-3 text-xs font-bold uppercase tracking-wide text-brand-blue-700">Продукти в запитването</div>
+                    <InquiryProductCards products={selectedDisplayProducts} />
+                  </div>
+                )}
                 <div className={`rounded-2xl border p-4 shadow-sm ${selectedInquiry.source === "wizard" ? "border-violet-200 bg-violet-50/40" : "border-slate-200 bg-white"}`}>
                   <div className="mb-2 flex items-center gap-2">
                     <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{selectedInquiry.source === "wizard" ? "Анкетни отговори" : "Съобщение"}</div>
                     {selectedInquiry.source === "wizard" && <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border bg-violet-50 border-violet-200 text-violet-700">📋 Анкета</span>}
                   </div>
-                  <div className="whitespace-pre-wrap text-sm font-medium leading-6 text-slate-900 font-mono">{selectedInquiry.message || "Няма допълнително съобщение."}</div>
+                  <div className="whitespace-pre-wrap text-sm font-medium leading-6 text-slate-900 font-mono">
+                    {inquiryMessageForDisplay(selectedInquiry.message, selectedDisplayProducts)}
+                  </div>
                 </div>
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                   <InfoBox label="Телефон" value={selectedInquiry.customer_phone} />
                   <InfoBox label="Имейл" value={selectedInquiry.customer_email || "—"} />
                   <InfoBox label="Тип заявка" value={serviceTypeLabel(selectedInquiry.service_type)} />
+                  <InfoBox
+                    label="Монтаж"
+                    value={mountPreferenceLabel(selectedInquiry.include_installation, selectedInquiry.message)}
+                  />
                   <InfoBox label="Източник" value={sourceLabel(selectedInquiry.source).label} />
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
@@ -647,6 +702,18 @@ function serviceTypeLabel(value: string | null | undefined) {
   return "—";
 }
 
+function mountPreferenceLabel(
+  includeInstallation: boolean | null | undefined,
+  message?: string | null,
+): string {
+  if (includeInstallation === true) return "С монтаж";
+  if (includeInstallation === false) return "Само уред";
+  const m = message ?? "";
+  if (m.includes("Монтаж: с монтаж")) return "С монтаж";
+  if (m.includes("Монтаж: само уред")) return "Само уред";
+  return "—";
+}
+
 function InfoBox({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
@@ -654,6 +721,87 @@ function InfoBox({ label, value }: { label: string; value: string }) {
       <div className="mt-1 text-sm font-semibold text-slate-900">{value}</div>
     </div>
   );
+}
+
+
+function inquiryProductsFromMessage(message?: string | null): string[] {
+  if (!message?.trim()) return [];
+  const seen = new Set<string>();
+  const names: string[] = [];
+  for (const line of message.split("\n")) {
+    const trimmed = line.trim();
+    const match = trimmed.match(/^запитване\s*за\s*:\s*(.+)$/iu);
+    if (!match) continue;
+    const name = match[1].trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    names.push(name);
+  }
+  return names;
+}
+
+function InquiryProductsSummary({ inquiry, compact = false }: { inquiry: Inquiry; compact?: boolean }) {
+  const products = productsForInquiryDisplay(inquiry);
+  if (!products.length) return <span className="text-xs text-slate-400">—</span>;
+  return (
+    <ul className={compact ? "space-y-0.5" : "space-y-1"}>
+      {products.map((p) => (
+        <li
+          key={p.id}
+          className={`font-medium text-slate-800 ${compact ? "text-[11px] leading-snug line-clamp-2" : "text-xs line-clamp-2"}`}
+          title={p.product_name}
+        >
+          {p.product_name}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function productsForInquiryDisplay(inquiry: Inquiry | null): InquiryProduct[] {
+  if (!inquiry) return [];
+  if (inquiry.products?.length) return inquiry.products;
+
+  const names = inquiryProductsFromMessage(inquiry.message);
+  if (!names.length && inquiry.product_id) {
+    const fallbackName =
+      inquiry.message?.replace(/^запитване\s*за\s*:\s*/iu, "").trim() || "Климатик";
+    return [
+      {
+        id: `ui-${inquiry.id}-0`,
+        inquiry_id: inquiry.id,
+        product_id: inquiry.product_id,
+        product_slug: null,
+        product_name: fallbackName.split("\n")[0]?.trim() || "Климатик",
+        created_at: inquiry.created_at,
+      },
+    ];
+  }
+
+  return names.map((product_name, index) => ({
+    id: `ui-${inquiry.id}-${index}`,
+    inquiry_id: inquiry.id,
+    product_id: index === 0 && inquiry.product_id ? inquiry.product_id : null,
+    product_slug: null,
+    product_name,
+    created_at: inquiry.created_at,
+  }));
+}
+
+function inquiryMessageForDisplay(
+  message: string | null | undefined,
+  products?: InquiryProduct[],
+): string {
+  const hasProducts = (products?.length ?? 0) > 0;
+  if (!message?.trim()) return hasProducts ? "—" : "Няма допълнително съобщение.";
+  if (!hasProducts) return message.trim();
+  const lines = message
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line && !/^запитване\s*за\s*:/iu.test(line));
+  return lines.join("\n").trim() || "—";
 }
 
 function InquiryNotesModal({ inquiryId, initialNotes, onClose, onSave }: {

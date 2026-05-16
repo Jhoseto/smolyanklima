@@ -44,9 +44,9 @@ const MAX_IMAGES = 4;
 // Включваме `model_code` (миграция 0038). Колоната е по избор —
 // при липсваща се прави fallback към варианти без нея.
 const ADMIN_PRODUCT_DETAIL_SELECT_WITH_LOCATION =
-  "id,slug,name,model_code,brand_id,type_id,product_condition,description,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,stock_status,stock_location,stock_quantity,sold_quantity,product_region";
+  "id,slug,name,model_code,brand_id,type_id,product_condition,description,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,show_in_public_catalog,stock_status,stock_location,stock_quantity,sold_quantity,product_region";
 const ADMIN_PRODUCT_DETAIL_SELECT_BASE =
-  "id,slug,name,model_code,brand_id,type_id,product_condition,description,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,stock_status,stock_quantity,sold_quantity,product_region";
+  "id,slug,name,model_code,brand_id,type_id,product_condition,description,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,show_in_public_catalog,stock_status,stock_quantity,sold_quantity,product_region";
 const ADMIN_PRODUCT_DETAIL_SELECT_NO_REGION =
   "id,slug,name,model_code,brand_id,type_id,product_condition,description,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,stock_status,stock_location,stock_quantity,sold_quantity";
 const ADMIN_PRODUCT_DETAIL_SELECT_NO_REGION_NO_LOC =
@@ -73,6 +73,7 @@ const UpdateSchema = z
   supplierInvoiceNumber: z.string().max(120).optional().nullable(),
   purchasePrice: z.number().nonnegative().optional().nullable(),
   isFeatured: z.boolean().optional(),
+  showInPublicCatalog: z.boolean().optional(),
   stockStatus: z.enum(["in_stock", "out_of_stock", "on_order"]).optional(),
   stockLocation: z.enum(["showroom", "warehouse"]).optional(),
   productRegion: z.enum(["europe", "japan"]).optional(),
@@ -202,6 +203,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     patch.supplier_invoice_number = parsed.data.supplierInvoiceNumber?.trim() || null;
   if (parsed.data.purchasePrice !== undefined && isMaster) patch.purchase_price = parsed.data.purchasePrice;
   if (parsed.data.isFeatured !== undefined) patch.is_featured = parsed.data.isFeatured;
+  if (parsed.data.showInPublicCatalog !== undefined) patch.show_in_public_catalog = parsed.data.showInPublicCatalog;
   if (parsed.data.stockStatus !== undefined) patch.stock_status = parsed.data.stockStatus;
   if (parsed.data.stockLocation !== undefined) {
     if (canEditProductStockLocation(session.role)) {
@@ -233,6 +235,11 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       const { model_code: _omitMc, ...patchRest3 } = patch;
       ({ data, error } = await supabase.from("products").update(patchRest3).eq("id", id).select("id,slug").maybeSingle());
       delete patch.model_code;
+    }
+    if (error && isPostgrestMissingColumn(error, "show_in_public_catalog") && "show_in_public_catalog" in patch) {
+      const { show_in_public_catalog: _omitPub, ...patchRest4 } = patch;
+      ({ data, error } = await supabase.from("products").update(patchRest4).eq("id", id).select("id,slug").maybeSingle());
+      delete patch.show_in_public_catalog;
     }
     if (error) {
       console.error("[admin/products][PUT] products.update failed", { id, patch, ...formatSupabaseError(error) });

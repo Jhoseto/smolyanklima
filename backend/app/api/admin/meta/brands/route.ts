@@ -10,6 +10,20 @@ export async function OPTIONS(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   const supabase = await adminDb();
+  const usedInProducts = req.nextUrl.searchParams.get("usedInProducts") === "1";
+
+  if (usedInProducts) {
+    const { data, error } = await supabase
+      .from("brands")
+      .select("id, name, products!inner(id)")
+      .order("name", { ascending: true });
+    if (error) {
+      return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
+    }
+    const rows = ((data ?? []) as Array<{ id: string; name: string }>).map(({ id, name }) => ({ id, name }));
+    return withCors(req, NextResponse.json({ data: rows }));
+  }
+
   const { data, error } = await supabase.from("brands").select("id,name").order("name");
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   return withCors(req, NextResponse.json({ data: data ?? [] }));
