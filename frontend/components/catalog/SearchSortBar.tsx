@@ -22,6 +22,8 @@ interface SearchSortBarProps {
   filteredCount: number;
   onToggleSidebar: () => void;
   sidebarOpen: boolean;
+  /** Активни филтри — показват се под броя „X от Y“. */
+  activeFiltersSlot?: React.ReactNode;
 }
 
 export const SearchSortBar = ({
@@ -35,6 +37,7 @@ export const SearchSortBar = ({
   filteredCount,
   onToggleSidebar,
   sidebarOpen,
+  activeFiltersSlot,
 }: SearchSortBarProps) => {
   return (
     <div className="bg-white/90 backdrop-blur-md border border-gray-100 sm:rounded-2xl shadow-sm transition-all">
@@ -115,6 +118,10 @@ export const SearchSortBar = ({
             <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
           </div>
         </div>
+
+        {activeFiltersSlot ? (
+          <div className="mt-2 pt-2 border-t border-gray-100/70">{activeFiltersSlot}</div>
+        ) : null}
       </div>
     </div>
   );

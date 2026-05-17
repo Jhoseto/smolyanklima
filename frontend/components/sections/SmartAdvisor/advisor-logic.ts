@@ -40,7 +40,7 @@ export function calcInstallCost(
   buildingType?: string,
 ): number {
   const base = product.type?.includes('Мулти') ? 250
-    : product.type?.includes('Касетъ') ? 350
+    : product.type?.includes('Касетъ') || product.type?.includes('Таван') ? 350
     : 150;
   const floorExtra = FLOOR_EXTRA[floor ?? 'ground'] ?? 0;
   const buildingExtra = BUILDING_EXTRA[buildingType ?? 'brick'] ?? 0;
@@ -152,8 +152,8 @@ export function scoreProduct(product: CatalogProduct, answers: WizardAnswers): {
     const type = product.type ?? '';
     if (answers.roomType === 'commercial' && (cat.includes('Търговски') || type.includes('Касетъ'))) {
       score += 10; reasons.push('Подходящ за търговски обект');
-    } else if (answers.roomType === 'office' && (cat.includes('Офис') || cat.includes('Търговски'))) {
-      score += 10; reasons.push('Офис серия');
+    } else if (answers.roomType === 'office' && (type.includes('Таван') || type.includes('Касетъ') || cat.includes('Търговски'))) {
+      score += 10; reasons.push('Подходящ за офисно помещение');
     } else if (['bedroom', 'kids', 'living'].includes(answers.roomType) && cat.includes('Апартамент')) {
       score += 10; reasons.push('Идеален за дома');
     } else if (answers.roomType === 'kids') {

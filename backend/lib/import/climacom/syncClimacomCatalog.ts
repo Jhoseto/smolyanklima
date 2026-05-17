@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { slugifyBg } from "../slugify";
+import { stripImportSourceFromDescription } from "../stripImportSourceFromDescription";
 import { replaceProductImages, upsertProductSpecs, type ImageInput, type SpecsInput } from "@/lib/admin/syncProductChildren";
 import { collectClimacomCatalogProducts } from "./collectClimacomProducts";
 import {
@@ -171,11 +172,13 @@ async function upsertOne(
   const baseSlug = slugifyBg(item.modelCode ?? item.name);
   const slug = existing?.id ? undefined : await uniqueSlug(supabase, baseSlug);
 
+  const description = stripImportSourceFromDescription(item.description);
+
   const productRow: Record<string, unknown> = {
     name: item.name,
     brand_id: brandId,
     type_id: typeId,
-    description: item.description,
+    description,
     price: item.priceEur,
     price_with_mount: item.priceWithMountEur,
     model_code: item.modelCode,
@@ -188,7 +191,7 @@ async function upsertOne(
     product_region: "europe",
     stock_location: "warehouse",
     meta_title: item.name.slice(0, 200),
-    meta_description: (item.description ?? item.name).slice(0, 160),
+    meta_description: (description ?? item.name).slice(0, 160),
   };
 
   if (refs.supplierId) productRow.supplier_id = refs.supplierId;

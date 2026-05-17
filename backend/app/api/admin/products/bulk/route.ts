@@ -5,6 +5,8 @@ import { adminSession, requireRole } from "@/lib/admin/db";
 import { isPostgrestMissingColumn } from "@/lib/admin/pgMissingColumn";
 import { logAdminActivity } from "@/lib/admin/audit";
 import { insertProductCatalogStockCalendarEvent } from "@/lib/admin/productCatalogWorkItems";
+import { detachProductsBeforeDelete } from "@/lib/admin/detachProductReferences";
+import { mapProductDbError } from "@/lib/admin/productDbErrors";
 
 const IdsSchema = z.array(z.string().uuid()).min(1).max(200);
 
@@ -52,8 +54,23 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    const { error: detachErr } = await detachProductsBeforeDelete(supabase, ids);
+    if (detachErr) {
+      const mapped = mapProductDbError(detachErr.message);
+      return withCors(
+        req,
+        NextResponse.json({ error: mapped?.error ?? detachErr.message }, { status: mapped?.status ?? 500 }),
+      );
+    }
+
     const { error } = await supabase.from("products").delete().in("id", ids);
-    if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
+    if (error) {
+      const mapped = mapProductDbError(error.message);
+      return withCors(
+        req,
+        NextResponse.json({ error: mapped?.error ?? error.message }, { status: mapped?.status ?? 500 }),
+      );
+    }
 
     await logAdminActivity({
       action: "product.bulk.delete",

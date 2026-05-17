@@ -2,21 +2,17 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { slugifyBg } from "../slugify";
 import { stripImportSourceFromDescription } from "../stripImportSourceFromDescription";
 import { replaceProductImages, upsertProductSpecs, type ImageInput, type SpecsInput } from "@/lib/admin/syncProductChildren";
-import {
-  collectBulclimaProductUrls,
-  fetchBulclimaHtml,
-  parseBulclimaProductPage,
-  type BulclimaParsedProduct,
-} from "./parseBulclimaHtml";
-import { classifyBulclimaCatalogItem } from "./classifyBulclimaItem";
-import { applyBulclimaSupplierToProduct, backfillBulclimaSupplierOnProducts } from "./applyBulclimaSupplier";
-import { ensureBulclimaSupplierId } from "./ensureBulclimaSupplier";
-import { upsertBulclimaAccessory } from "./upsertBulclimaAccessory";
-import { emitBulclimaProgress, type BulclimaSyncProgressHandler } from "./bulclimaSyncProgress";
+import { collectCondexProductUrls } from "./collectCondexProducts";
+import { classifyCondexCatalogItem } from "./classifyCondexItem";
+import { fetchCondexHtml, parseCondexProductPage, type CondexParsedProduct } from "./parseCondexProduct";
+import { applyCondexSupplierToProduct, backfillCondexSupplierOnProducts } from "./applyCondexSupplier";
+import { ensureCondexSupplierId } from "./ensureCondexSupplier";
+import { upsertCondexAccessory } from "./upsertCondexAccessory";
+import { emitCondexProgress, type CondexSyncProgressHandler } from "./condexSyncProgress";
 
-export type { BulclimaSyncProgressEvent } from "./bulclimaSyncProgress";
+export type { CondexSyncProgressEvent } from "./condexSyncProgress";
 
-export type BulclimaSyncSummary = {
+export type CondexSyncSummary = {
   created: number;
   updated: number;
   skipped: number;
@@ -24,19 +20,17 @@ export type BulclimaSyncSummary = {
   productUrls: number;
   accessoriesCreated: number;
   accessoriesUpdated: number;
-  /** UUID на доставчик „Булклима“ (null = не е намерен/създаден). */
   supplierId: string | null;
-  /** Колко климатици получиха supplier_id при backfill след sync. */
   supplierBackfilled: number;
 };
 
 const FEATURE_KEYWORDS: Array<{ slug: string; patterns: RegExp[] }> = [
   { slug: "wifi", patterns: [/wi-?fi/i, /безжично/i, /интернет/i] },
-  { slug: "inverter", patterns: [/инвертор/i] },
+  { slug: "inverter", patterns: [/инвертор/i, /hyper inverter/i] },
   { slug: "night_mode", patterns: [/нощен/i, /тих режим/i, /сън/i] },
-  { slug: "self_cleaning", patterns: [/самопочистване/i] },
+  { slug: "self_cleaning", patterns: [/самопочистване/i, /self-clean/i] },
   { slug: "ionizer", patterns: [/йон/i, /дезодориращ/i] },
-  { slug: "turbo", patterns: [/мощен режим/i, /powerful/i, /турбо/i] },
+  { slug: "turbo", patterns: [/мощен режим/i, /hi power/i, /турбо/i] },
 ];
 
 type RefMaps = {
@@ -54,7 +48,7 @@ async function loadRefs(supabase: SupabaseClient): Promise<RefMaps> {
     supabase.from("product_types").select("id,name"),
     supabase.from("categories").select("id,slug"),
     supabase.from("features").select("id,slug"),
-    ensureBulclimaSupplierId(supabase),
+    ensureCondexSupplierId(supabase),
   ]);
 
   const brandByName = new Map<string, string>();
@@ -99,7 +93,7 @@ async function ensureBrand(supabase: SupabaseClient, brandByName: Map<string, st
   const slug = slugifyBg(name);
   const { data, error } = await supabase
     .from("brands")
-    .insert({ slug, name, color: "#6B7280", is_active: true })
+    .insert({ slug, name, color: "#1E3A5F", is_active: true })
     .select("id")
     .single();
   if (error) {
@@ -152,92 +146,25 @@ async function findExistingProduct(
   brandId: string,
   modelCode: string | null,
   name: string,
-): Promise<{ id: string; show_in_public_catalog: boolean | null } | null> {
+): Promise<{ id: string } | null> {
   if (modelCode) {
     const { data } = await supabase
       .from("products")
-      .select("id,show_in_public_catalog")
+      .select("id")
       .eq("brand_id", brandId)
       .ilike("model_code", modelCode)
       .limit(1)
       .maybeSingle();
-    if (data?.id) return data as { id: string; show_in_public_catalog: boolean | null };
+    if (data?.id) return data as { id: string };
   }
-  const { data } = await supabase.from("products").select("id,show_in_public_catalog").eq("brand_id", brandId).eq("name", name).maybeSingle();
-  return (data as { id: string; show_in_public_catalog: boolean | null } | null) ?? null;
-}
-
-async function upsertOne(
-  supabase: SupabaseClient,
-  refs: RefMaps,
-  item: BulclimaParsedProduct,
-  syncedProductIds: string[],
-): Promise<"created" | "updated" | "skipped"> {
-  if (!item.brandName) return "skipped";
-
-  const brandId = await ensureBrand(supabase, refs.brandByName, item.brandName);
-  if (!brandId) return "skipped";
-
-  const typeId = resolveTypeId(refs, item.typeHint);
-  const categoryId = item.categorySlug ? (refs.categoryBySlug.get(item.categorySlug) ?? null) : null;
-
-  const existing = await findExistingProduct(supabase, brandId, item.modelCode, item.name);
-  const baseSlug = slugifyBg(item.modelCode ?? item.name);
-  const slug = existing?.id ? undefined : await uniqueSlug(supabase, baseSlug);
-
-  const description = stripImportSourceFromDescription(item.description);
-
-  const productRow: Record<string, unknown> = {
-    name: item.name,
-    brand_id: brandId,
-    type_id: typeId,
-    category_id: categoryId,
-    description,
-    price: item.priceEur,
-    price_with_mount: item.priceWithMountEur ?? item.priceEur + 200,
-    model_code: item.modelCode,
-    product_condition: "new",
-    stock_status: "on_order",
-    stock_quantity: 0,
-    sold_quantity: 0,
-    is_active: true,
-    is_featured: false,
-    product_region: "europe",
-    stock_location: "warehouse",
-    meta_title: item.name.slice(0, 200),
-    meta_description: (description ?? item.name).slice(0, 160),
-  };
-
-  if (refs.supplierId) {
-    productRow.supplier_id = refs.supplierId;
-  }
-
-  if (!existing) {
-    productRow.slug = slug;
-    productRow.show_in_public_catalog = false;
-    const { data, error } = await supabase.from("products").insert(productRow).select("id").single();
-    if (error || !data?.id) throw new Error(error?.message ?? "insert failed");
-    const productId = data.id as string;
-    if (refs.supplierId) await applyBulclimaSupplierToProduct(supabase, productId, refs.supplierId);
-    syncedProductIds.push(productId);
-    await syncChildren(supabase, productId, item, refs);
-    return "created";
-  }
-
-  const updateRow = { ...productRow };
-  delete updateRow.show_in_public_catalog;
-  const { error } = await supabase.from("products").update(updateRow).eq("id", existing.id);
-  if (error) throw new Error(error.message);
-  if (refs.supplierId) await applyBulclimaSupplierToProduct(supabase, existing.id, refs.supplierId);
-  syncedProductIds.push(existing.id);
-  await syncChildren(supabase, existing.id, item, refs);
-  return "updated";
+  const { data } = await supabase.from("products").select("id").eq("brand_id", brandId).eq("name", name).maybeSingle();
+  return (data as { id: string } | null) ?? null;
 }
 
 async function syncChildren(
   supabase: SupabaseClient,
   productId: string,
-  item: BulclimaParsedProduct,
+  item: CondexParsedProduct,
   refs: RefMaps,
 ): Promise<void> {
   const specs: SpecsInput = { ...item.specs };
@@ -261,16 +188,79 @@ async function syncChildren(
   }
 }
 
-export async function runBulclimaCatalogSync(
+async function upsertOne(
   supabase: SupabaseClient,
-  opts?: { limit?: number; onProgress?: BulclimaSyncProgressHandler },
-): Promise<BulclimaSyncSummary> {
-  if (process.env.BULCLIMA_TLS_INSECURE === "1") {
+  refs: RefMaps,
+  item: CondexParsedProduct,
+  syncedProductIds: string[],
+): Promise<"created" | "updated" | "skipped"> {
+  const brandId = await ensureBrand(supabase, refs.brandByName, item.brandName);
+  if (!brandId) return "skipped";
+
+  const typeId = resolveTypeId(refs, item.typeHint);
+  const categoryId = item.categorySlug ? (refs.categoryBySlug.get(item.categorySlug) ?? null) : null;
+
+  const existing = await findExistingProduct(supabase, brandId, item.modelCode, item.name);
+  const baseSlug = slugifyBg(item.modelCode ?? item.name);
+  const slug = existing?.id ? undefined : await uniqueSlug(supabase, baseSlug);
+
+  const description = stripImportSourceFromDescription(item.description);
+
+  const productRow: Record<string, unknown> = {
+    name: item.name,
+    brand_id: brandId,
+    type_id: typeId,
+    category_id: categoryId,
+    description,
+    price: item.priceEur,
+    price_with_mount: item.priceWithMountEur,
+    model_code: item.modelCode,
+    product_condition: "new",
+    stock_status: "on_order",
+    stock_quantity: 0,
+    sold_quantity: 0,
+    is_active: true,
+    is_featured: false,
+    product_region: "europe",
+    stock_location: "warehouse",
+    meta_title: item.name.slice(0, 200),
+    meta_description: (description ?? item.name).slice(0, 160),
+  };
+
+  if (refs.supplierId) {
+    productRow.supplier_id = refs.supplierId;
+  }
+
+  if (!existing) {
+    productRow.slug = slug;
+    productRow.show_in_public_catalog = false;
+    const { data, error } = await supabase.from("products").insert(productRow).select("id").single();
+    if (error || !data?.id) throw new Error(error?.message ?? "insert failed");
+    const productId = data.id as string;
+    if (refs.supplierId) await applyCondexSupplierToProduct(supabase, productId, refs.supplierId);
+    syncedProductIds.push(productId);
+    await syncChildren(supabase, productId, item, refs);
+    return "created";
+  }
+
+  const { error } = await supabase.from("products").update(productRow).eq("id", existing.id);
+  if (error) throw new Error(error.message);
+  if (refs.supplierId) await applyCondexSupplierToProduct(supabase, existing.id, refs.supplierId);
+  syncedProductIds.push(existing.id);
+  await syncChildren(supabase, existing.id, item, refs);
+  return "updated";
+}
+
+export async function runCondexCatalogSync(
+  supabase: SupabaseClient,
+  opts?: { limit?: number; onProgress?: CondexSyncProgressHandler },
+): Promise<CondexSyncSummary> {
+  if (process.env.CONDEX_TLS_INSECURE === "1") {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
   }
 
   const onProgress = opts?.onProgress;
-  const summary: BulclimaSyncSummary = {
+  const summary: CondexSyncSummary = {
     created: 0,
     updated: 0,
     skipped: 0,
@@ -281,101 +271,130 @@ export async function runBulclimaCatalogSync(
     supplierId: null,
     supplierBackfilled: 0,
   };
-  const syncedClimateProductIds: string[] = [];
+  const syncedProductIds: string[] = [];
 
-  emitBulclimaProgress(onProgress, { phase: "start", message: "Старт на синхронизация с bulclima.com…" });
+  emitCondexProgress(onProgress, { phase: "start", message: "Старт на синхронизация с condex.bg…" });
 
   await supabase
     .from("product_catalog_settings")
-    .upsert({ id: 1, bulclima_last_sync_status: "running", bulclima_last_sync_summary: null }, { onConflict: "id" });
+    .upsert({ id: 1, condex_last_sync_status: "running", condex_last_sync_summary: null }, { onConflict: "id" });
 
-  emitBulclimaProgress(onProgress, { phase: "crawl", message: "Зареждане на референции (марки, категории)…" });
+  emitCondexProgress(onProgress, { phase: "crawl", message: "Зареждане на референции…" });
   const refs = await loadRefs(supabase);
   summary.supplierId = refs.supplierId;
   if (!refs.supplierId) {
     summary.errors.push(
-      "Липсва доставчик „Булклима“ в контакти — продуктите няма да получат supplier_id. Пуснете seed 0001_supplier_contacts.sql или създайте доставчик ръчно.",
+      "Липсва доставчик „Кондекс“ в контакти — продуктите няма да получат supplier_id. Пуснете seed 0001_supplier_contacts.sql.",
     );
-    emitBulclimaProgress(onProgress, {
-      phase: "crawl",
-      message: "Внимание: не е намерен доставчик Булклима в контакти.",
-    });
+    emitCondexProgress(onProgress, { phase: "crawl", message: "Внимание: не е намерен доставчик Кондекс." });
   } else {
-    emitBulclimaProgress(onProgress, { phase: "crawl", message: "Доставчик: Булклима (автоматично при импорт)." });
+    emitCondexProgress(onProgress, { phase: "crawl", message: "Доставчик: Кондекс (автоматично при импорт)." });
   }
 
-  emitBulclimaProgress(onProgress, { phase: "crawl", message: "Обхождане на каталога bulclima.com…" });
-  const entries = await collectBulclimaProductUrls(opts?.limit, (message) => {
-    emitBulclimaProgress(onProgress, { phase: "crawl", message });
+  emitCondexProgress(onProgress, {
+    phase: "crawl",
+    message: "Обхождане на RAC + multi-split каталога…",
+    discovered: 0,
+    current: 0,
+    total: 0,
+    created: 0,
+    updated: 0,
+    skipped: 0,
+  });
+  const entries = await collectCondexProductUrls(opts?.limit, ({ message, discovered }) => {
+    emitCondexProgress(onProgress, {
+      phase: "crawl",
+      message,
+      discovered,
+      current: discovered,
+      total: 0,
+      created: summary.created,
+      updated: summary.updated,
+      skipped: summary.skipped,
+    });
   });
   summary.productUrls = entries.length;
-  emitBulclimaProgress(onProgress, {
+  emitCondexProgress(onProgress, {
     phase: "import",
     message: `Намерени ${entries.length} продукта — започва импорт…`,
+    discovered: entries.length,
     current: 0,
     total: entries.length,
+    created: 0,
+    updated: 0,
+    skipped: 0,
   });
 
   for (let i = 0; i < entries.length; i++) {
     const { url, listingCategoryPath } = entries[i]!;
     const current = i + 1;
     try {
-      emitBulclimaProgress(onProgress, {
+      emitCondexProgress(onProgress, {
         phase: "import",
         message: `Зареждане ${current}/${entries.length}: ${url}`,
+        discovered: entries.length,
         current,
         total: entries.length,
+        created: summary.created,
+        updated: summary.updated,
+        skipped: summary.skipped,
         url,
       });
-      const html = await fetchBulclimaHtml(url);
-      const parsed = parseBulclimaProductPage(html, url, listingCategoryPath);
+      const html = await fetchCondexHtml(url);
+      const parsed = parseCondexProductPage(html, url, listingCategoryPath);
       if (!parsed) {
         summary.skipped++;
-        emitBulclimaProgress(onProgress, {
+        emitCondexProgress(onProgress, {
           phase: "import",
           message: `Пропуснат (няма цена/име): ${url}`,
+          discovered: entries.length,
           current,
           total: entries.length,
+          created: summary.created,
+          updated: summary.updated,
+          skipped: summary.skipped,
           url,
           result: "skipped",
         });
         continue;
       }
-      const catalogKind = classifyBulclimaCatalogItem(parsed, url);
+
+      const catalogKind = classifyCondexCatalogItem(parsed, url, listingCategoryPath);
       let result: "created" | "updated" | "skipped";
       let kindLabel: string;
 
       if (catalogKind === "accessory") {
         kindLabel = "аксесоар";
-        let brandId: string | null = null;
-        let brandSkipped = false;
-        if (parsed.brandName) {
-          brandId = await ensureBrand(supabase, refs.brandByName, parsed.brandName);
-          if (!brandId) {
-            brandSkipped = true;
-            kindLabel = "аксесоар (марка?)";
-          }
-        }
-        if (brandSkipped) {
+        const brandId = await ensureBrand(supabase, refs.brandByName, parsed.brandName);
+        if (!brandId) {
           result = "skipped";
+          kindLabel = "аксесоар (марка?)";
         } else {
-          result = await upsertBulclimaAccessory(supabase, brandId, parsed);
+          const misplaced = await findExistingProduct(supabase, brandId, parsed.modelCode, parsed.name);
+          if (misplaced) {
+            await supabase.from("products").delete().eq("id", misplaced.id);
+          }
+          result = await upsertCondexAccessory(supabase, brandId, parsed);
           if (result === "created") summary.accessoriesCreated++;
           else if (result === "updated") summary.accessoriesUpdated++;
         }
       } else {
-        result = await upsertOne(supabase, refs, parsed, syncedClimateProductIds);
+        result = await upsertOne(supabase, refs, parsed, syncedProductIds);
         summary[result]++;
         kindLabel = "климатик";
       }
 
       if (result === "skipped" && catalogKind === "accessory") summary.skipped++;
 
-      emitBulclimaProgress(onProgress, {
+      emitCondexProgress(onProgress, {
         phase: "import",
         message: `${result === "created" ? "Нов" : result === "updated" ? "Обновен" : "Пропуснат"} (${kindLabel}): ${parsed.name} · ${parsed.imageUrls.length} снимки`,
+        discovered: entries.length,
         current,
         total: entries.length,
+        created: summary.created,
+        updated: summary.updated,
+        skipped: summary.skipped,
         url,
         productName: parsed.name,
         result,
@@ -384,23 +403,27 @@ export async function runBulclimaCatalogSync(
     } catch (e: unknown) {
       const errMsg = e instanceof Error ? e.message : String(e);
       summary.errors.push(`${url}: ${errMsg}`);
-      emitBulclimaProgress(onProgress, {
+      emitCondexProgress(onProgress, {
         phase: "import",
         message: `Грешка: ${url} — ${errMsg}`,
+        discovered: entries.length,
         current,
         total: entries.length,
+        created: summary.created,
+        updated: summary.updated,
+        skipped: summary.skipped,
         url,
       });
     }
-    await new Promise((r) => setTimeout(r, 600));
+    await new Promise((r) => setTimeout(r, Number(process.env.CONDEX_IMPORT_DELAY_MS) || 350));
   }
 
-  if (refs.supplierId && syncedClimateProductIds.length) {
+  if (refs.supplierId && syncedProductIds.length) {
     try {
-      summary.supplierBackfilled = await backfillBulclimaSupplierOnProducts(
+      summary.supplierBackfilled = await backfillCondexSupplierOnProducts(
         supabase,
         refs.supplierId,
-        syncedClimateProductIds,
+        syncedProductIds,
       );
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -417,18 +440,22 @@ export async function runBulclimaCatalogSync(
   await supabase.from("product_catalog_settings").upsert(
     {
       id: 1,
-      bulclima_last_sync_at: new Date().toISOString(),
-      bulclima_last_sync_status: status,
-      bulclima_last_sync_summary: summary,
+      condex_last_sync_at: new Date().toISOString(),
+      condex_last_sync_status: status,
+      condex_last_sync_summary: summary,
     },
     { onConflict: "id" },
   );
 
-  emitBulclimaProgress(onProgress, {
+  emitCondexProgress(onProgress, {
     phase: "done",
-    message: `Готово: ${summary.created} климатици (нови), ${summary.updated} (обновени); ${summary.accessoriesCreated} аксесоара (нови), ${summary.accessoriesUpdated} (обновени); ${summary.skipped} пропуснати; доставчик: ${summary.supplierId ? "Булклима" : "липсва"}${summary.supplierBackfilled ? ` (+${summary.supplierBackfilled} попълнени)` : ""}; ${summary.errors.length} грешки`,
+    message: `Готово: ${summary.created} климатици (нови), ${summary.updated} (обновени); ${summary.accessoriesCreated} аксесоара (нови), ${summary.accessoriesUpdated} (обновени); ${summary.skipped} пропуснати; доставчик: ${summary.supplierId ? "Кондекс" : "липсва"}${summary.supplierBackfilled ? ` (+${summary.supplierBackfilled} попълнени)` : ""}; ${summary.errors.length} грешки`,
+    discovered: entries.length,
     current: entries.length,
     total: entries.length,
+    created: summary.created,
+    updated: summary.updated,
+    skipped: summary.skipped,
   });
 
   return summary;

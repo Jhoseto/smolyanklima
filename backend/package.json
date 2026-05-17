@@ -9,6 +9,7 @@
     "import:blog": "tsx scripts/import_blog.ts",
     "import:bulclima": "tsx scripts/sync-bulclima-catalog.ts",
     "import:climacom": "tsx scripts/sync-climacom-catalog.ts",
+    "import:condex": "tsx scripts/sync-condex-catalog.ts",
     "reclassify:accessories": "tsx scripts/reclassify-bulclima-accessories.ts",
     "catalog:images": "node scripts/sync-ddg-images.mjs",
     "catalog:images:stale": "node scripts/sync-ddg-images.mjs --only-stale"

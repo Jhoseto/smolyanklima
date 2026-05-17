@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
+import { stripImportSourceFromDescription } from "@/lib/import/stripImportSourceFromDescription";
 import { withCloudinaryWebOptimization } from "@/lib/services/cloudinaryService";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { parseBtuCsvParam, resolveProductIdsForBtuList } from "@/lib/catalog/productBtu";
@@ -42,7 +43,7 @@ const CATEGORY_TYPE_FALLBACK: Record<string, string[]> = {
   multi: ["Мулти-сплит система"],
   cassette: ["Касетъчен климатик"],
   floor: ["Подов климатик"],
-  office: ["Офис климатик"],
+  ceiling: ["Таванен климатик"],
 };
 
 export async function OPTIONS(req: NextRequest) {
@@ -472,6 +473,7 @@ export async function GET(req: NextRequest) {
 
   const stitched = rows.map((r) => ({
     ...r,
+    description: stripImportSourceFromDescription(r.description as string | null | undefined),
     brands: brandById.get(r.brand_id as string) ?? null,
     product_types: typeById.get(r.type_id as string) ?? null,
     product_specs: specsByProduct.get(r.id as string) ?? [],

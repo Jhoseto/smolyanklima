@@ -645,6 +645,22 @@ const CatalogPage = () => {
             filteredCount={total}
             onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
             sidebarOpen={sidebarOpen}
+            activeFiltersSlot={
+              <ActiveFilters
+                compact
+                brands={brands}
+                btus={showEnergyAndFeatureFilters ? btus : []}
+                energyClasses={energyClasses}
+                features={features}
+                search={search}
+                onRemoveBrand={(b) => setBrands((prev) => prev.filter((x) => x !== b))}
+                onRemoveBtu={(b) => setBtus((prev) => prev.filter((x) => x !== b))}
+                onRemoveEnergy={(e) => setEnergyClasses((prev) => prev.filter((x) => x !== e))}
+                onRemoveFeature={(f) => setFeatures((prev) => prev.filter((x) => x !== f))}
+                onClearSearch={() => setSearch('')}
+                onClearAll={resetAllFilters}
+              />
+            }
           />
         </div>
 
@@ -704,21 +720,6 @@ const CatalogPage = () => {
             </div>
           )}
         </div>
-
-        {/* Active Filters */}
-        <ActiveFilters
-          brands={brands}
-          btus={showEnergyAndFeatureFilters ? btus : []}
-          energyClasses={energyClasses}
-          features={features}
-          search={search}
-          onRemoveBrand={(b) => setBrands(prev => prev.filter(x => x !== b))}
-          onRemoveBtu={(b) => setBtus(prev => prev.filter(x => x !== b))}
-          onRemoveEnergy={(e) => setEnergyClasses(prev => prev.filter(x => x !== e))}
-          onRemoveFeature={(f) => setFeatures(prev => prev.filter(x => x !== f))}
-          onClearSearch={() => setSearch('')}
-          onClearAll={resetAllFilters}
-        />
 
         {/* Layout: Sidebar + Grid */}
         <div className="flex gap-6 mt-2">

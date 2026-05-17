@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { CATALOG_BTU_OPTIONS } from "@/lib/catalog/productBtu";
 import { SectionTitle, Card, Button, Input, Select, Table, Th, Td, Textarea } from "../ui";
+import { ActiveFilterChipsBar, type ActiveFilterChip } from "./ActiveFilterChipsBar";
 import {
   Plus,
   FilterX,
@@ -25,7 +26,7 @@ import {
   EyeOff,
 } from "lucide-react";
 import { ShareToChatModal } from "../chat/ShareToChatModal";
-import { ProductQuickViewButton } from "../ProductQuickView";
+import { CatalogItemQuickViewButton } from "../ProductQuickView";
 import { FeaturedSlotModal } from "./FeaturedSlotModal";
 import { ProductCatalogSettingsModal } from "./ProductCatalogSettingsModal";
 import { useDebounce } from "@/lib/hooks/useDebounce";
@@ -86,6 +87,38 @@ type SortDir = "asc" | "desc";
 
 function isAccessoryRow(p: Pick<ProductRow, "catalog_item">): boolean {
   return p.catalog_item === "accessory";
+}
+
+function catalogEditHref(p: Pick<ProductRow, "id" | "catalog_item">): string {
+  return isAccessoryRow(p) ? `/admin/accessories/${p.id}` : `/admin/products/${p.id}`;
+}
+
+function partitionSelectedIds(items: ProductRow[], selected: string[]) {
+  const selectedSet = new Set(selected);
+  const rows = items.filter((x) => selectedSet.has(x.id));
+  return {
+    productIds: rows.filter((x) => !isAccessoryRow(x)).map((x) => x.id),
+    accessoryIds: rows.filter((x) => isAccessoryRow(x)).map((x) => x.id),
+  };
+}
+
+function bulkDeleteNoun(items: ProductRow[], selected: string[]) {
+  const { productIds, accessoryIds } = partitionSelectedIds(items, selected);
+  const n = selected.length;
+  if (productIds.length > 0 && accessoryIds.length > 0) return n === 1 ? "артикул" : "артикула";
+  if (accessoryIds.length > 0) return n === 1 ? "аксесоар" : "аксесоара";
+  return n === 1 ? "продукт" : "продукта";
+}
+
+function bulkDeleteWarning(items: ProductRow[], selected: string[]) {
+  const { productIds, accessoryIds } = partitionSelectedIds(items, selected);
+  if (accessoryIds.length > 0 && productIds.length === 0) {
+    return "Заедно с аксесоарите ще се изтрият и свързаните снимки.";
+  }
+  if (productIds.length > 0 && accessoryIds.length > 0) {
+    return "Ще се изтрият избраните климатици (снимки, спецификации) и аксесоари (снимки).";
+  }
+  return "Заедно с продуктите ще се изтрият: снимки, характеристики, оценки и история на запитванията за тях.";
 }
 
 const PRODUCTS_PER_PAGE_OPTS = [10, 20, 50, 100] as const;
@@ -152,7 +185,24 @@ function productStockLocationBadgeClass(loc: unknown) {
 }
 
 function canRecordSale(p: ProductRow) {
-  return p.stock_status !== "out_of_stock";
+  return p.stock_status === "in_stock" || p.stock_status === "on_order";
+}
+
+function saleButtonTitle(p: ProductRow): string {
+  if (p.stock_status === "out_of_stock") return "Изчерпан — продажба не е възможна";
+  if (canRecordSale(p)) return "Продажба";
+  return "Продажба не е възможна";
+}
+
+/** След продажба: само „в наличност“ → „изчерпан“; „по поръчка“ остава непроменен. */
+function stockStatusAfterSale(
+  priorStatus: ProductRow["stock_status"],
+  hasModelCode: boolean,
+  nextQty: number,
+): ProductRow["stock_status"] | undefined {
+  if (priorStatus !== "in_stock") return undefined;
+  if (hasModelCode) return "out_of_stock";
+  return nextQty <= 0 ? "out_of_stock" : "in_stock";
 }
 
 function defaultNextMountDate(): string {
@@ -688,15 +738,30 @@ export default function AdminProductsPage() {
       setConfirmBulkDelete(true);
       return;
     }
-    const res = await fetch("/api/admin/products/bulk", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "delete", ids: selected }),
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setError((json as any).error || "Грешка при изтриване");
+    const { productIds, accessoryIds } = partitionSelectedIds(items, selected);
+    try {
+      if (productIds.length > 0) {
+        const res = await fetch("/api/admin/products/bulk", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "delete", ids: productIds }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error((json as { error?: string }).error || "Грешка при изтриване на климатици");
+      }
+      if (accessoryIds.length > 0) {
+        const res = await fetch("/api/admin/accessories/bulk", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "delete", ids: accessoryIds }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error((json as { error?: string }).error || "Грешка при изтриване на аксесоари");
+      }
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
       return;
     }
     setConfirmBulkDelete(false);
@@ -706,15 +771,30 @@ export default function AdminProductsPage() {
 
   async function bulkSetPublicCatalog(visible: boolean) {
     if (selected.length === 0) return;
-    const res = await fetch("/api/admin/products/bulk", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "set_public_catalog", ids: selected, visible }),
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setError((json as any).error || "Грешка при масова промяна на видимостта");
+    const { productIds, accessoryIds } = partitionSelectedIds(items, selected);
+    try {
+      if (productIds.length > 0) {
+        const res = await fetch("/api/admin/products/bulk", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "set_public_catalog", ids: productIds, visible }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error((json as { error?: string }).error || "Грешка при видимост на климатици");
+      }
+      if (accessoryIds.length > 0) {
+        const res = await fetch("/api/admin/accessories/bulk", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "set_active", ids: accessoryIds, active: visible }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error((json as { error?: string }).error || "Грешка при видимост на аксесоари");
+      }
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
       return;
     }
     setSelected([]);
@@ -722,6 +802,26 @@ export default function AdminProductsPage() {
   }
 
   async function togglePublicCatalog(p: ProductRow) {
+    if (isAccessoryRow(p)) {
+      const next = !(p.is_active ?? p.show_in_public_catalog);
+      const res = await fetch(`/api/admin/accessories/${p.id}`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: next }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError((json as { error?: string }).error || "Грешка при промяна на видимостта");
+        return;
+      }
+      setItems((prev) =>
+        prev.map((x) =>
+          x.id === p.id ? { ...x, is_active: next, show_in_public_catalog: next } : x,
+        ),
+      );
+      return;
+    }
     const next = !p.show_in_public_catalog;
     const res = await fetch(`/api/admin/products/${p.id}`, {
       method: "PUT",
@@ -731,7 +831,7 @@ export default function AdminProductsPage() {
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setError((json as any).error || "Грешка при промяна на видимостта");
+      setError((json as { error?: string }).error || "Грешка при промяна на видимостта");
       return;
     }
     setItems((prev) => prev.map((x) => (x.id === p.id ? { ...x, show_in_public_catalog: next } : x)));
@@ -802,14 +902,15 @@ export default function AdminProductsPage() {
     const hasModelCode = Boolean((prod.model_code ?? "").trim());
     const currentQty = Math.max(0, Number(prod.stock_quantity ?? 0));
     const nextSold = Math.max(0, Number(prod.sold_quantity ?? 0) + 1);
+    const nextQty = Math.max(0, currentQty - 1);
 
     const putBody: Record<string, unknown> = { soldQuantity: nextSold };
-    if (hasModelCode) {
-      putBody.stockStatus = "out_of_stock";
-    } else {
-      const nextQty = Math.max(0, currentQty - 1);
+    if (!hasModelCode) {
       putBody.stockQuantity = nextQty;
-      putBody.stockStatus = nextQty === 0 ? "out_of_stock" : prod.stock_status;
+    }
+    const nextStockStatus = stockStatusAfterSale(prod.stock_status, hasModelCode, nextQty);
+    if (nextStockStatus !== undefined) {
+      putBody.stockStatus = nextStockStatus;
     }
 
     let saleId: string | null = null;
@@ -874,16 +975,16 @@ export default function AdminProductsPage() {
         throw new Error((json as { error?: string }).error || "Грешка при маркиране на продажба в склада");
       }
 
-      const nextQty = Math.max(0, currentQty - 1);
       const modelKey = (prod.model_code ?? "").trim().toLowerCase();
+      const soldRowStatus = stockStatusAfterSale(prod.stock_status, hasModelCode, nextQty) ?? prod.stock_status;
       setItems((prev) =>
         prev.map((x) => {
           if (x.id === prod.id) {
             return {
               ...x,
-              stock_status: hasModelCode || nextQty === 0 ? "out_of_stock" : x.stock_status,
+              stock_status: soldRowStatus,
               sold_quantity: nextSold,
-              stock_quantity: nextQty,
+              stock_quantity: hasModelCode ? x.stock_quantity : nextQty,
             };
           }
           if (
@@ -1015,12 +1116,21 @@ export default function AdminProductsPage() {
   const rangeTo = meta.total === 0 ? 0 : Math.min(page * meta.perPage, meta.total);
 
   // Списък с активни филтри — ползва се за брояча и за chip bar-а.
-  type ActiveFilter = { key: string; label: string; onClear: () => void };
   const supplierName = supplierId ? suppliersById[supplierId] : null;
   const brandName = brandId ? brands.find((b) => b.id === brandId)?.name : null;
   const typeName = typeId ? types.find((t) => t.id === typeId)?.name : null;
 
-  const activeFilters: ActiveFilter[] = [];
+  const activeFilters: ActiveFilterChip[] = [];
+  if (q.trim()) {
+    activeFilters.push({
+      key: "q",
+      label: `Търсене: „${q.trim()}“`,
+      onClear: () => {
+        setPage(1);
+        setQ("");
+      },
+    });
+  }
   if (catalogKind !== "climatics") {
     activeFilters.push({
       key: "catalogKind",
@@ -1144,11 +1254,19 @@ export default function AdminProductsPage() {
           )}
           <Link
             href="/admin/products/new"
+            className="inline-flex items-center gap-2 bg-brand-blue-600 text-white px-3 py-2 md:px-4 rounded-xl font-semibold hover:bg-brand-blue-700 transition-colors shadow-sm text-sm"
+          >
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">Нов климатик</span>
+            <span className="sm:hidden">Климатик</span>
+          </Link>
+          <Link
+            href="/admin/accessories/new"
             className="inline-flex items-center gap-2 bg-brand-orange-500 text-white px-3 py-2 md:px-4 rounded-xl font-semibold hover:bg-brand-orange-600 active:bg-brand-orange-700 transition-colors shadow-sm text-sm"
           >
             <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">Нов продукт</span>
-            <span className="sm:hidden">Нов</span>
+            <span className="hidden sm:inline">Нов аксесоар</span>
+            <span className="sm:hidden">Аксесоар</span>
           </Link>
         </div>
       </div>
@@ -1181,6 +1299,24 @@ export default function AdminProductsPage() {
           )}
           <ChevronDown className={`w-3.5 h-3.5 transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
         </button>
+      </div>
+
+      <div className="md:hidden space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] font-semibold text-slate-500 tabular-nums">
+            Намерени: <span className="text-slate-900">{meta.total}</span>
+          </span>
+          {activeFiltersCount > 0 ? (
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 hover:text-slate-800"
+            >
+              <FilterX className="w-3 h-3" />
+              Изчисти ({activeFiltersCount})
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {/* Filters card — always visible on desktop, toggleable on mobile */}
@@ -1380,36 +1516,17 @@ export default function AdminProductsPage() {
          * връзката „кликни → сортира тази колона“ е очевидна.
          */}
 
-        {/* Active filter chips */}
-        {activeFilters.length > 0 && (
-          <div className="pt-1 border-t border-slate-100">
-            <div className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 md:mb-2">
-              Активни филтри
-            </div>
-            <div className="flex flex-wrap gap-1 md:gap-1.5">
-              {activeFilters.map((f) => (
-                <button
-                  key={f.key}
-                  onClick={() => { setPage(1); f.onClear(); }}
-                  className="inline-flex items-center gap-1 max-w-full min-w-0 px-2 py-0.5 md:px-2.5 md:py-1 rounded-full text-[10px] md:text-xs font-semibold bg-brand-blue-50 text-brand-blue-700 border border-brand-blue-200 hover:bg-brand-blue-100 hover:text-brand-blue-800 transition-colors"
-                  title="Премахни този филтър"
-                >
-                  <span className="min-w-0 truncate">{f.label}</span>
-                  <span aria-hidden className="text-brand-blue-500 shrink-0">×</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </Card>
 
-      {/* Bulk actions — само „Изтрий“. Видимо когато има поне един избран ред. */}
-      {canMutateProductRows && catalogKind === "climatics" && selected.length > 0 && (
+      {/* Bulk actions — видимост в каталога + изтриване */}
+      {canMutateProductRows && selected.length > 0 && (
         <div className="bg-brand-blue-50 border border-brand-blue-200 rounded-lg md:rounded-xl px-2.5 py-2 md:px-3 md:py-2.5 flex items-center justify-between gap-2 flex-wrap">
           <span className="text-[11px] md:text-sm font-bold text-brand-blue-700">
             Избрани: {selected.length}{" "}
             <span className="font-normal text-brand-blue-600/80 hidden sm:inline">
-              (за останалите промени отвори картата на продукта)
+              {catalogKind === "accessories"
+                ? "(за останалите промени отвори картата на аксесоара)"
+                : "(за останалите промени отвори картата на артикула)"}
             </span>
           </span>
           <div className="flex gap-1.5 flex-wrap">
@@ -1443,6 +1560,13 @@ export default function AdminProductsPage() {
 
       {/* Desktop table — компактна, table-fixed за ширина на екрана */}
       <div className="hidden md:block rounded-xl border border-slate-200 bg-white shadow-sm max-w-full overflow-hidden">
+        <ActiveFilterChipsBar
+          filters={activeFilters}
+          onClearAll={resetFilters}
+          onBeforeClear={() => setPage(1)}
+          compact
+          className="px-3 py-2 border-b border-brand-blue-100 bg-brand-blue-50/40 rounded-none"
+        />
         <Table
           className="border-0 rounded-none shadow-none bg-transparent w-full table-fixed [&_th]:!px-1 [&_th]:!py-1 [&_th]:!text-[10px] [&_td]:!px-1 [&_td]:!py-0.5 [&_td]:!text-[11px] [&_td]:leading-tight"
           stickyHeader
@@ -1513,50 +1637,45 @@ export default function AdminProductsPage() {
                 )}
                 <Td className="font-semibold text-slate-900 text-center !align-top min-w-0 whitespace-normal">
                   <div className="flex justify-center min-w-0">
-                    {isAccessoryRow(p) ? (
-                      <span className="block whitespace-normal text-center leading-tight text-[11px] line-clamp-2 break-words font-semibold text-slate-800">
-                        {p.name}
-                      </span>
-                    ) : (
-                      <ProductQuickViewButton
-                        productId={p.id}
-                        productName={p.name}
-                        className="block whitespace-normal text-center leading-tight text-[11px] line-clamp-2 break-words font-semibold"
-                      />
-                    )}
+                    <CatalogItemQuickViewButton
+                      catalogItem={isAccessoryRow(p) ? "accessory" : "product"}
+                      itemId={p.id}
+                      itemName={p.name}
+                      className="block whitespace-normal text-center leading-tight text-[11px] line-clamp-2 break-words font-semibold"
+                    />
                   </div>
                 </Td>
                 <Td className="text-center align-middle whitespace-nowrap !px-0">
-                  {isAccessoryRow(p) ? (
-                    <span title={p.is_active ? "Активен в каталога" : "Неактивен"}>
-                      {p.is_active ? (
-                        <Eye className="w-3.5 h-3.5 text-sky-600 inline-block" />
-                      ) : (
-                        <EyeOff className="w-3.5 h-3.5 text-slate-400 inline-block" />
-                      )}
-                    </span>
-                  ) : canMutateProductRows ? (
-                    <button
-                      type="button"
-                      onClick={() => void togglePublicCatalog(p)}
-                      className="inline-flex items-center justify-center p-0.5 rounded hover:bg-slate-100"
-                      title={
-                        p.show_in_public_catalog
-                          ? "Видим в публичния каталог — клик за скриване"
-                          : "Скрит от публичния каталог — клик за показване"
-                      }
-                    >
-                      {p.show_in_public_catalog ? (
-                        <Eye className="w-3.5 h-3.5 text-sky-600" />
-                      ) : (
-                        <EyeOff className="w-3.5 h-3.5 text-slate-400" />
-                      )}
-                    </button>
-                  ) : p.show_in_public_catalog ? (
-                    <Eye className="w-3.5 h-3.5 text-sky-600 inline-block" />
-                  ) : (
-                    <EyeOff className="w-3.5 h-3.5 text-slate-400 inline-block" />
-                  )}
+                  {(() => {
+                    const catalogVisible = isAccessoryRow(p)
+                      ? Boolean(p.is_active ?? p.show_in_public_catalog)
+                      : Boolean(p.show_in_public_catalog);
+                    if (canMutateProductRows) {
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => void togglePublicCatalog(p)}
+                          className="inline-flex items-center justify-center p-0.5 rounded hover:bg-slate-100"
+                          title={
+                            catalogVisible
+                              ? "Видим в публичния каталог — клик за скриване"
+                              : "Скрит от публичния каталог — клик за показване"
+                          }
+                        >
+                          {catalogVisible ? (
+                            <Eye className="w-3.5 h-3.5 text-sky-600" />
+                          ) : (
+                            <EyeOff className="w-3.5 h-3.5 text-slate-400" />
+                          )}
+                        </button>
+                      );
+                    }
+                    return catalogVisible ? (
+                      <Eye className="w-3.5 h-3.5 text-sky-600 inline-block" />
+                    ) : (
+                      <EyeOff className="w-3.5 h-3.5 text-slate-400 inline-block" />
+                    );
+                  })()}
                 </Td>
                 <Td className="text-center align-middle whitespace-nowrap">
                   <span
@@ -1722,10 +1841,10 @@ export default function AdminProductsPage() {
                     <span className="text-[10px] text-slate-500 font-medium">Аксесоар</span>
                   ) : canMutateProductRows ? (
                   <div className="flex flex-nowrap items-center justify-center gap-0.5 min-w-0">
-                    <Button variant="secondary" size="sm" onClick={() => { setSaleFor(p); setSaleForm(emptySaleModalForm()); setContactQuery(""); setContactResults([]); }} disabled={!canRecordSale(p)} className="!p-1 shrink-0" title="Продажба">
+                    <Button variant="secondary" size="sm" onClick={() => { setSaleFor(p); setSaleForm(emptySaleModalForm()); setContactQuery(""); setContactResults([]); }} disabled={!canRecordSale(p)} className="!p-1 shrink-0" title={saleButtonTitle(p)}>
                       <PackageCheck className="w-3 h-3" />
                     </Button>
-                    <Link href={`/admin/products/${p.id}`} className="inline-flex items-center justify-center p-1 bg-brand-blue-50 text-brand-blue-700 hover:bg-brand-blue-100 rounded shrink-0" title="Редакция">
+                    <Link href={catalogEditHref(p)} className="inline-flex items-center justify-center p-1 bg-brand-blue-50 text-brand-blue-700 hover:bg-brand-blue-100 rounded shrink-0" title="Редакция">
                       <Edit className="w-3 h-3 shrink-0" />
                     </Link>
                     <button
@@ -1766,6 +1885,12 @@ export default function AdminProductsPage() {
 
       {/* Mobile: компактен списък (PWA / телефон) */}
       <div className="md:hidden space-y-1.5">
+        <ActiveFilterChipsBar
+          filters={activeFilters}
+          onClearAll={resetFilters}
+          onBeforeClear={() => setPage(1)}
+          compact
+        />
         {loading && (
           <div className="text-center py-6 text-slate-500 text-xs">Зареждане...</div>
         )}
@@ -1794,9 +1919,10 @@ export default function AdminProductsPage() {
                 />
               )}
               <div className="flex-1 min-w-0">
-                <ProductQuickViewButton
-                  productId={p.id}
-                  productName={p.name}
+                <CatalogItemQuickViewButton
+                  catalogItem={isAccessoryRow(p) ? "accessory" : "product"}
+                  itemId={p.id}
+                  itemName={p.name}
                   className="!text-[13px] !font-bold leading-snug line-clamp-2"
                 />
                 <div className="mt-1 flex flex-wrap items-center gap-1">
@@ -1813,10 +1939,14 @@ export default function AdminProductsPage() {
                     type="button"
                     onClick={() => canMutateProductRows && void togglePublicCatalog(p)}
                     className={`inline-flex items-center p-0.5 rounded ${canMutateProductRows ? "hover:bg-slate-100" : ""}`}
-                    title={p.show_in_public_catalog ? "Видим в каталога" : "Скрит от каталога"}
+                    title={
+                      (isAccessoryRow(p) ? p.is_active : p.show_in_public_catalog)
+                        ? "Видим в каталога"
+                        : "Скрит от каталога"
+                    }
                     disabled={!canMutateProductRows}
                   >
-                    {p.show_in_public_catalog ? (
+                    {(isAccessoryRow(p) ? p.is_active : p.show_in_public_catalog) ? (
                       <Eye className="w-3.5 h-3.5 text-sky-600" />
                     ) : (
                       <EyeOff className="w-3.5 h-3.5 text-slate-400" />
@@ -1985,12 +2115,13 @@ export default function AdminProductsPage() {
                     setContactResults([]);
                   }}
                   disabled={!canRecordSale(p)}
+                  title={saleButtonTitle(p)}
                   className="py-2 px-0.5 text-[10px] font-bold text-slate-800 hover:bg-white active:bg-slate-100 transition-colors disabled:opacity-35 leading-tight"
                 >
                   Продажба
                 </button>
                 <Link
-                  href={`/admin/products/${p.id}`}
+                  href={catalogEditHref(p)}
                   className="flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-bold text-brand-blue-700 hover:bg-white active:bg-brand-blue-50/60 min-w-0"
                   title="Редакция"
                 >
@@ -2027,10 +2158,10 @@ export default function AdminProductsPage() {
             ) : (
               <div className="border-t border-slate-100 bg-slate-50/40">
                 <Link
-                  href={`/admin/products/${p.id}`}
+                  href={catalogEditHref(p)}
                   className="block py-2 text-center text-[11px] font-bold text-brand-blue-700 hover:bg-white transition-colors"
                 >
-                  Пълен запис на продукта →
+                  {isAccessoryRow(p) ? "Пълен запис на аксесоара →" : "Пълен запис на продукта →"}
                 </Link>
               </div>
             )}
@@ -2280,10 +2411,10 @@ export default function AdminProductsPage() {
                 <div className="text-xl font-black text-slate-950">Окончателно изтриване</div>
                 <div className="mt-1 text-sm text-slate-600">
                   Ще бъдат изтрити <span className="font-bold text-rose-700">{selected.length}</span>{" "}
-                  {selected.length === 1 ? "продукт" : "продукта"}. Това действие <span className="font-bold">не може да бъде отменено</span>.
+                  {bulkDeleteNoun(items, selected)}. Това действие <span className="font-bold">не може да бъде отменено</span>.
                 </div>
                 <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
-                  Заедно с продуктите ще се изтрият: снимки, характеристики, оценки и история на запитванията за тях.
+                  {bulkDeleteWarning(items, selected)}
                 </div>
               </div>
             </div>

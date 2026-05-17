@@ -20,6 +20,16 @@ const RequestSchema = z.discriminatedUnion("task", [
     }),
   }),
   z.object({
+    task: z.literal("accessory_draft"),
+    input: z.object({
+      name: z.string().min(2).max(240),
+      brandName: z.string().max(120).optional(),
+      kind: z.enum(["accessory", "spare_part", "consumable"]).optional(),
+      price: z.number().nonnegative().optional(),
+      currentDescription: z.string().max(5000).optional(),
+    }),
+  }),
+  z.object({
     task: z.literal("product_dimensions"),
     input: z.object({
       name: z.string().min(2).max(240),
@@ -934,6 +944,23 @@ function buildPrompt(payload: z.infer<typeof RequestSchema>) {
       "Структура:",
       `{"slug":"latin-url-slug","description":"кратко продаващо описание на български до 900 символа","specs":{"coverage_m2":"","cooling_power_kw":"","heating_power_kw":"","energy_class_cool":"","energy_class_heat":"","seer":"","scop":"","wifi":false,"refrigerant":"","warranty_months":""}}`,
       "Не измисляй технически стойности, ако не личат от името или входните данни. Остави празен string за неизвестно.",
+      `Вход: ${JSON.stringify(payload.input)}`,
+    ].join("\n");
+  }
+
+  if (payload.task === "accessory_draft") {
+    const kindLabel =
+      payload.input.kind === "spare_part"
+        ? "резервна част"
+        : payload.input.kind === "consumable"
+          ? "консуматив"
+          : "аксесоар";
+    return [
+      "Ти си асистент за български онлайн магазин за климатици и аксесоари към тях.",
+      `Продуктът е ${kindLabel} (не пълен климатик).`,
+      "Върни САМО валиден JSON без markdown.",
+      'Структура: {"slug":"latin-url-slug","description":"кратко продаващо описание на български до 700 символа"}',
+      "Не измисляй технически данни, които не личат от името. Фокус върху приложение, съвместимост и ползи за клиента.",
       `Вход: ${JSON.stringify(payload.input)}`,
     ].join("\n");
   }

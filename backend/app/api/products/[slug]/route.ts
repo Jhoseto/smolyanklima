@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { optimizeImageRowUrls } from "@/lib/services/cloudinaryService";
+import { stripImportSourceFromDescription } from "@/lib/import/stripImportSourceFromDescription";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { applyPublicCatalogFilter } from "@/lib/catalog/publicProductVisibility";
 
@@ -92,7 +93,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
     id: p.id,
     slug: p.slug,
     name: p.name,
-    description: p.description,
+    description: stripImportSourceFromDescription(p.description as string | null),
     price: p.price,
     price_with_mount: p.price_with_mount,
     product_condition: (p as any).product_condition ?? "new",

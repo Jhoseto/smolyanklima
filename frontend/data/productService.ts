@@ -483,11 +483,11 @@ export const CATEGORIES: CategoryMeta[] = [
     types: ['Подов климатик'],
   },
   {
-    id: 'office',
-    label: 'Офис системи',
-    icon: 'Briefcase',
-    accentColor: '#2563EB',
-    types: ['Офис климатик'],
+    id: 'ceiling',
+    label: 'Таванни климатици',
+    icon: 'ArrowUpFromLine',
+    accentColor: '#0891B2',
+    types: ['Таванен климатик'],
   },
 ];
 

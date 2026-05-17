@@ -5,6 +5,7 @@ import { SectionTitle, Card, Input, Button } from "../ui";
 import { RefreshCw, Save, Database, Download, FolderOpen, CloudDownload } from "lucide-react";
 import type { BulclimaSyncProgressEvent } from "@/lib/import/bulclima/bulclimaSyncProgress";
 import type { ClimacomSyncProgressEvent } from "@/lib/import/climacom/climacomSyncProgress";
+import type { CondexSyncProgressEvent } from "@/lib/import/condex/condexSyncProgress";
 import {
   isLocalFolderPickerSupported,
   pickLocalFolder,
@@ -13,9 +14,130 @@ import {
 
 const MAX_SYNC_LOG_LINES = 300;
 
-async function consumeCatalogSyncStream(
+/** Очакван брой Condex продукти (за crawl прогрес преди финален брой). */
+const CONDEX_ESTIMATED_PRODUCTS = 120;
+const CONDEX_CRAWL_PERCENT = 28;
+
+type CondexProgressView = {
+  phase: "crawl" | "import" | "done";
+  discovered: number;
+  current: number;
+  total: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  startedAt: number;
+};
+
+function formatSyncEta(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "изчислява се…";
+  if (seconds < 45) return `~${Math.max(1, Math.ceil(seconds))} сек`;
+  const m = Math.floor(seconds / 60);
+  const s = Math.ceil(seconds % 60);
+  return s > 0 ? `~${m} мин ${s} сек` : `~${m} мин`;
+}
+
+function condexOverallPercent(p: CondexProgressView, now = Date.now()): number {
+  if (p.phase === "done") return 100;
+  if (p.phase === "import" && p.total > 0) {
+    const tail = 100 - CONDEX_CRAWL_PERCENT;
+    return CONDEX_CRAWL_PERCENT + Math.round((p.current / p.total) * tail);
+  }
+  if (p.phase === "crawl") {
+    const fromCount =
+      p.discovered > 0
+        ? Math.round((p.discovered / CONDEX_ESTIMATED_PRODUCTS) * CONDEX_CRAWL_PERCENT)
+        : 0;
+    const elapsedSec = (now - p.startedAt) / 1000;
+    const fromTime = Math.round((elapsedSec / 240) * CONDEX_CRAWL_PERCENT);
+    return Math.min(CONDEX_CRAWL_PERCENT, Math.max(4, fromCount, fromTime));
+  }
+  return 4;
+}
+
+function condexEtaSeconds(p: CondexProgressView, now = Date.now()): number | null {
+  const pct = condexOverallPercent(p, now);
+  const elapsed = (now - p.startedAt) / 1000;
+  if (pct < 4 || elapsed < 3) return null;
+  return ((100 - pct) / pct) * elapsed;
+}
+
+function CondexSyncProgressBar({
+  progress,
+  syncing,
+  nowMs,
+}: {
+  progress: CondexProgressView;
+  syncing: boolean;
+  nowMs: number;
+}) {
+  const pct = condexOverallPercent(progress, nowMs);
+  const eta = syncing && progress.phase !== "done" ? condexEtaSeconds(progress, nowMs) : null;
+  const phaseLabel =
+    progress.phase === "done" ? "Готово" : progress.phase === "crawl" ? "Обхождане на condex.bg" : "Импорт в каталога";
+  const detail =
+    progress.phase === "crawl"
+      ? `Намерени ${progress.discovered} продукта`
+      : progress.phase === "done"
+        ? `${progress.total || progress.discovered} продукта · нови ${progress.created} · обновени ${progress.updated}`
+        : `${progress.current} / ${progress.total} продукта`;
+
+  return (
+    <div className="rounded-xl border-2 border-sky-200 bg-gradient-to-br from-sky-50 to-white p-4 shadow-sm space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-xs font-black uppercase tracking-wide text-sky-800">{phaseLabel}</div>
+          <div className="text-sm font-semibold text-slate-800 mt-0.5">{detail}</div>
+        </div>
+        <div className="text-right shrink-0">
+          <div className="text-2xl font-black text-sky-700 tabular-nums">{pct}%</div>
+          {syncing && progress.phase !== "done" && (
+            <div className="text-[10px] font-medium text-slate-500 mt-0.5">
+              остава {eta != null ? formatSyncEta(eta) : "…"}
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="h-3 rounded-full bg-sky-100 overflow-hidden ring-1 ring-sky-200/80">
+        {syncing && progress.phase === "crawl" && pct < CONDEX_CRAWL_PERCENT ? (
+          <div
+            className="h-full bg-sky-500 transition-all duration-500 ease-out"
+            style={{ width: `${Math.max(pct, 4)}%` }}
+          />
+        ) : (
+          <div
+            className="h-full bg-sky-600 transition-all duration-300 ease-out"
+            style={{ width: `${pct}%` }}
+          />
+        )}
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-600">
+        <span>
+          <strong className="text-slate-800">{progress.discovered}</strong> открити
+        </span>
+        {progress.phase !== "crawl" && (
+          <>
+            <span>
+              <strong className="text-emerald-700">{progress.created}</strong> нови
+            </span>
+            <span>
+              <strong className="text-sky-800">{progress.updated}</strong> обновени
+            </span>
+            {progress.skipped > 0 && (
+              <span>
+                <strong className="text-amber-700">{progress.skipped}</strong> пропуснати
+              </span>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+async function consumeCatalogSyncStream<T extends { message: string }>(
   res: Response,
-  onProgress: (ev: { message: string; phase?: string; current?: number; total?: number }) => void,
+  onProgress: (ev: T) => void,
 ): Promise<Record<string, unknown>> {
   if (!res.body) throw new Error("Празен отговор от сървъра");
   const reader = res.body.getReader();
@@ -39,7 +161,7 @@ async function consumeCatalogSyncStream(
       }
       if (!data) continue;
       const parsed = JSON.parse(data) as { error?: string; data?: Record<string, unknown> };
-      if (event === "progress") onProgress(parsed as { message: string; phase?: string; current?: number; total?: number });
+      if (event === "progress") onProgress(parsed as T);
       else if (event === "done") summary = parsed.data ?? null;
       else if (event === "error") throw new Error(parsed.error || "Грешка при синхронизация");
     }
@@ -158,6 +280,16 @@ export default function SettingsPageClient() {
     status: string | null;
     summary: Record<string, unknown> | null;
   } | null>(null);
+  const [condexSyncing, setCondexSyncing] = useState(false);
+  const [condexProgress, setCondexProgress] = useState<CondexProgressView | null>(null);
+  const [condexNowMs, setCondexNowMs] = useState(() => Date.now());
+  const [condexLog, setCondexLog] = useState<string[]>([]);
+  const condexLogEndRef = useRef<HTMLDivElement>(null);
+  const [condexStatus, setCondexStatus] = useState<{
+    at: string | null;
+    status: string | null;
+    summary: Record<string, unknown> | null;
+  } | null>(null);
 
   function appendBulclimaLog(line: string) {
     setBulclimaLog((prev) => {
@@ -193,6 +325,77 @@ export default function SettingsPageClient() {
       setClimacomProgress({ current: ev.current ?? 0, total: ev.total });
     } else if (ev.phase === "crawl") {
       setClimacomProgress(null);
+    }
+  }
+
+  function appendCondexLog(line: string) {
+    setCondexLog((prev) => {
+      const next = [...prev, line];
+      return next.length > MAX_SYNC_LOG_LINES ? next.slice(-MAX_SYNC_LOG_LINES) : next;
+    });
+  }
+
+  function handleCondexProgress(ev: CondexSyncProgressEvent) {
+    const ts = new Date().toLocaleTimeString("bg-BG");
+    appendCondexLog(`[${ts}] ${ev.message}`);
+    setCondexProgress((prev) => {
+      const startedAt = prev?.startedAt ?? Date.now();
+      const base = {
+        discovered: ev.discovered ?? prev?.discovered ?? 0,
+        current: ev.current ?? prev?.current ?? 0,
+        total: ev.total ?? prev?.total ?? 0,
+        created: ev.created ?? prev?.created ?? 0,
+        updated: ev.updated ?? prev?.updated ?? 0,
+        skipped: ev.skipped ?? prev?.skipped ?? 0,
+        startedAt,
+      };
+      if (ev.phase === "done") {
+        return {
+          ...base,
+          phase: "done",
+          discovered: ev.discovered ?? base.total ?? base.discovered,
+          current: ev.total ?? base.current,
+          total: ev.total ?? base.total,
+        };
+      }
+      if (ev.phase === "import" || (ev.total != null && ev.total > 0)) {
+        return {
+          ...base,
+          phase: "import",
+          discovered: ev.discovered ?? ev.total ?? base.discovered,
+          current: ev.current ?? base.current,
+          total: ev.total ?? base.total,
+        };
+      }
+      return {
+        ...base,
+        phase: "crawl",
+        discovered: ev.discovered ?? ev.current ?? base.discovered,
+        current: ev.discovered ?? ev.current ?? base.current,
+        total: 0,
+      };
+    });
+  }
+
+  async function loadCondexStatus() {
+    try {
+      const res = await fetch("/api/admin/catalog/sync-condex", { credentials: "include" });
+      const json = (await res.json().catch(() => ({}))) as {
+        data?: {
+          condex_last_sync_at?: string | null;
+          condex_last_sync_status?: string | null;
+          condex_last_sync_summary?: Record<string, unknown> | null;
+        } | null;
+      };
+      if (!res.ok) return;
+      const d = json.data;
+      setCondexStatus({
+        at: d?.condex_last_sync_at ?? null,
+        status: d?.condex_last_sync_status ?? null,
+        summary: (d?.condex_last_sync_summary as Record<string, unknown> | null) ?? null,
+      });
+    } catch {
+      /* optional */
     }
   }
 
@@ -258,7 +461,7 @@ export default function SettingsPageClient() {
   async function refreshActiveTab() {
     setError(null);
     if (activeTab === "backup") await loadBackupSettings();
-    else if (activeTab === "catalog") await Promise.all([loadBulclimaStatus(), loadClimacomStatus()]);
+    else if (activeTab === "catalog") await Promise.all([loadBulclimaStatus(), loadClimacomStatus(), loadCondexStatus()]);
   }
 
   async function reclassifyMisplacedAccessories(dryRun: boolean) {
@@ -335,6 +538,48 @@ export default function SettingsPageClient() {
     }
   }
 
+  async function syncCondexCatalog() {
+    setCondexSyncing(true);
+    setError(null);
+    setCondexLog([]);
+    const startedAt = Date.now();
+    setCondexNowMs(startedAt);
+    setCondexProgress({
+      phase: "crawl",
+      discovered: 0,
+      current: 0,
+      total: 0,
+      created: 0,
+      updated: 0,
+      skipped: 0,
+      startedAt,
+    });
+    try {
+      const res = await fetch("/api/admin/catalog/sync-condex?stream=1", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(json.error || "Грешка при синхронизация");
+      }
+      const contentType = res.headers.get("Content-Type") ?? "";
+      if (contentType.includes("text/event-stream")) {
+        await consumeCatalogSyncStream(res, handleCondexProgress);
+      } else {
+        const json = (await res.json()) as { error?: string };
+        if (json.error) throw new Error(json.error);
+        appendCondexLog("Синхронизацията приключи.");
+      }
+      await loadCondexStatus();
+    } catch (e: unknown) {
+      setError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setCondexSyncing(false);
+      setCondexProgress((prev) => (prev ? { ...prev, phase: "done" } : null));
+    }
+  }
+
   async function syncBulclimaCatalog() {
     setBulclimaSyncing(true);
     setError(null);
@@ -375,8 +620,19 @@ export default function SettingsPageClient() {
   }, [climacomLog]);
 
   useEffect(() => {
+    condexLogEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [condexLog]);
+
+  useEffect(() => {
+    if (!condexSyncing) return;
+    const id = window.setInterval(() => setCondexNowMs(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [condexSyncing]);
+
+  useEffect(() => {
     void loadBulclimaStatus();
     void loadClimacomStatus();
+    void loadCondexStatus();
   }, []);
 
   useEffect(() => {
@@ -696,7 +952,7 @@ export default function SettingsPageClient() {
             <Button
               variant="primary"
               onClick={() => void syncBulclimaCatalog()}
-              disabled={bulclimaSyncing || climacomSyncing || reclassifying}
+              disabled={bulclimaSyncing || climacomSyncing || condexSyncing || reclassifying}
               className="gap-2"
             >
               {bulclimaSyncing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CloudDownload className="w-4 h-4" />}
@@ -705,7 +961,7 @@ export default function SettingsPageClient() {
             <Button
               variant="secondary"
               onClick={() => void reclassifyMisplacedAccessories(true)}
-              disabled={bulclimaSyncing || climacomSyncing || reclassifying}
+              disabled={bulclimaSyncing || climacomSyncing || condexSyncing || reclassifying}
               className="gap-2"
             >
               {reclassifying ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
@@ -714,7 +970,7 @@ export default function SettingsPageClient() {
             <Button
               variant="secondary"
               onClick={() => void reclassifyMisplacedAccessories(false)}
-              disabled={bulclimaSyncing || climacomSyncing || reclassifying}
+              disabled={bulclimaSyncing || climacomSyncing || condexSyncing || reclassifying}
               className="gap-2"
             >
               Премести грешно внесени в аксесоари
@@ -785,7 +1041,7 @@ export default function SettingsPageClient() {
           <Button
             variant="primary"
             onClick={() => void syncClimacomCatalog()}
-            disabled={bulclimaSyncing || climacomSyncing || reclassifying}
+            disabled={bulclimaSyncing || climacomSyncing || condexSyncing || reclassifying}
             className="gap-2"
           >
             {climacomSyncing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CloudDownload className="w-4 h-4" />}
@@ -818,6 +1074,62 @@ export default function SettingsPageClient() {
                   </div>
                 ))}
                 <div ref={climacomLogEndRef} />
+              </div>
+            </div>
+          )}
+        </Card>
+
+        <Card className="p-3 md:p-4 border-sky-200 bg-gradient-to-br from-white to-sky-50/40 mt-4">
+          <div className="flex items-start gap-3 mb-3">
+            <div className="w-10 h-10 rounded-xl bg-sky-100 text-sky-800 flex items-center justify-center shrink-0">
+              <CloudDownload className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-black text-slate-900 tracking-tight">Каталог от Кондекс (Condex)</div>
+              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                Mitsubishi Heavy Industries — RAC за дома и офиса + multi-split (SCM) от condex.bg. Доставчик КОНДЕКС,
+                статус по поръчка, технически таблици и снимки от сайта.
+              </p>
+            </div>
+          </div>
+          {condexStatus?.at && (
+            <p className="text-[11px] text-slate-600 mb-2">
+              Последен sync: {new Date(condexStatus.at).toLocaleString("bg-BG")}
+              {condexStatus.status ? ` · ${condexStatus.status}` : ""}
+              {formatCatalogSyncStats(condexStatus.summary, "productUrls")}
+            </p>
+          )}
+          <Button
+            variant="primary"
+            onClick={() => void syncCondexCatalog()}
+            disabled={bulclimaSyncing || climacomSyncing || condexSyncing || reclassifying}
+            className="gap-2"
+          >
+            {condexSyncing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CloudDownload className="w-4 h-4" />}
+            Обнови каталог от Кондекс
+          </Button>
+          <p className="text-[10px] text-slate-500 mt-2">
+            Пълен обхват: ~100+ single RAC + ~40 multi-split. Може да отнеме 10–15 минути.
+          </p>
+          {condexProgress && (condexSyncing || condexProgress.phase === "done") && (
+            <div className="mt-4">
+              <CondexSyncProgressBar
+                progress={condexProgress}
+                syncing={condexSyncing}
+                nowMs={condexNowMs}
+              />
+            </div>
+          )}
+          {(condexSyncing || condexLog.length > 0) && (
+            <div className="mt-4 space-y-2 border-t border-sky-200/60 pt-4">
+              <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Дневник</div>
+              <div className="max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-slate-900/95 p-2 font-mono text-[10px] text-slate-100">
+                {condexLog.map((line, i) => (
+                  <div key={`x-${i}`} className="whitespace-pre-wrap break-all py-0.5">
+                    {line}
+                  </div>
+                ))}
+                <div ref={condexLogEndRef} />
               </div>
             </div>
           )}

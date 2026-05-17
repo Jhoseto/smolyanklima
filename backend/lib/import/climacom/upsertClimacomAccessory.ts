@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { slugifyBg } from "../slugify";
 import type { ClimacomParsedProduct } from "./parseClimacomProduct";
+import { stripImportSourceFromDescription } from "../stripImportSourceFromDescription";
 import { inferClimacomAccessoryKind } from "./classifyClimacomItem";
 
 async function uniqueAccessorySlug(supabase: SupabaseClient, base: string): Promise<string> {
@@ -52,17 +53,19 @@ export async function upsertClimacomAccessory(
   const baseSlug = slugifyBg(item.modelCode ?? item.name);
   const slug = existing?.id ? undefined : await uniqueAccessorySlug(supabase, baseSlug);
 
+  const description = stripImportSourceFromDescription(item.description);
+
   const row: Record<string, unknown> = {
     name: item.name,
     brand_id: brandId,
-    description: item.description,
+    description,
     price: item.priceEur,
     kind: inferClimacomAccessoryKind(item.name),
     stock_status: "on_order",
     stock_quantity: 0,
     is_active: true,
     meta_title: item.name.slice(0, 200),
-    meta_description: (item.description ?? item.name).slice(0, 160),
+    meta_description: (description ?? item.name).slice(0, 160),
   };
 
   if (!existing) {

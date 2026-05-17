@@ -6,10 +6,13 @@ import { canEditProductStockLocation, normalizeProductStockLocation } from "@/li
 import { canEditProductRegion, normalizeProductRegion } from "@/lib/admin/productRegion";
 import { isPostgrestMissingColumn } from "@/lib/admin/pgMissingColumn";
 import { getEnv } from "@/lib/env";
+import { stripImportSourceFromDescription } from "@/lib/import/stripImportSourceFromDescription";
 import { withCloudinaryWebOptimization } from "@/lib/services/cloudinaryService";
 import { logAdminActivity } from "@/lib/admin/audit";
 import { insertProductCatalogStockCalendarEvent } from "@/lib/admin/productCatalogWorkItems";
+import { detachProductsBeforeDelete } from "@/lib/admin/detachProductReferences";
 import { formatSupabaseError, mapProductDbError } from "@/lib/admin/productDbErrors";
+import { enforceStockStatusAfterSale } from "@/lib/admin/productSaleStock";
 import { replaceProductImages, upsertProductSpecs, type ImageInput, type SpecsInput } from "@/lib/admin/syncProductChildren";
 
 const SpecsSchema = z.object({
@@ -140,6 +143,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     NextResponse.json({
       data: {
         ...row,
+        description: stripImportSourceFromDescription((row as { description?: string | null }).description),
         stock_location: normalizeProductStockLocation((row as { stock_location?: unknown }).stock_location),
         product_region: normalizeProductRegion((row as { product_region?: unknown }).product_region),
         brands: brandRes.data ?? null,
@@ -204,7 +208,13 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   if (parsed.data.purchasePrice !== undefined && isMaster) patch.purchase_price = parsed.data.purchasePrice;
   if (parsed.data.isFeatured !== undefined) patch.is_featured = parsed.data.isFeatured;
   if (parsed.data.showInPublicCatalog !== undefined) patch.show_in_public_catalog = parsed.data.showInPublicCatalog;
-  if (parsed.data.stockStatus !== undefined) patch.stock_status = parsed.data.stockStatus;
+  if (parsed.data.stockStatus !== undefined) {
+    const { data: currentRow } = await supabase.from("products").select("stock_status").eq("id", id).maybeSingle();
+    patch.stock_status = enforceStockStatusAfterSale(
+      (currentRow as { stock_status?: string } | null)?.stock_status,
+      parsed.data.stockStatus,
+    );
+  }
   if (parsed.data.stockLocation !== undefined) {
     if (canEditProductStockLocation(session.role)) {
       patch.stock_location = normalizeProductStockLocation(parsed.data.stockLocation);
@@ -325,8 +335,20 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
     });
   }
 
+  const { error: detachErr } = await detachProductsBeforeDelete(supabase, [id]);
+  if (detachErr) {
+    const mapped = mapProductDbError(detachErr.message);
+    return withCors(
+      req,
+      NextResponse.json({ error: mapped?.error ?? detachErr.message }, { status: mapped?.status ?? 500 }),
+    );
+  }
+
   const { error } = await supabase.from("products").delete().eq("id", id);
-  if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
+  if (error) {
+    const mapped = mapProductDbError(error.message);
+    return withCors(req, NextResponse.json({ error: mapped?.error ?? error.message }, { status: mapped?.status ?? 500 }));
+  }
   await logAdminActivity({
     action: "product.delete",
     entityType: "product",

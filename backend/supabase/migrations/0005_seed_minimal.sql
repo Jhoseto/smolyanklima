@@ -9,7 +9,7 @@ values
   ('multi', 'Мулти-сплит системи', 'Layers', '#00B4D8', 20, true),
   ('cassette', 'Касетни климатици', 'Building2', '#7C3AED', 30, true),
   ('floor', 'Подови климатици', 'ArrowDown', '#0D9488', 40, true),
-  ('office', 'Офис системи', 'Briefcase', '#2563EB', 50, true)
+  ('ceiling', 'Таванни климатици', 'ArrowUpFromLine', '#0891B2', 50, true)
 on conflict (slug) do nothing;
 
 -- Common feature slugs (used in FilterSidebar)

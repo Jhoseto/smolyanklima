@@ -64,7 +64,8 @@ export const ActiveFilters = ({
   onRemoveFeature,
   onClearSearch,
   onClearAll,
-}: ActiveFiltersProps) => {
+  compact = false,
+}: ActiveFiltersProps & { compact?: boolean }) => {
   const hasAny =
     brands.length > 0 ||
     btus.length > 0 ||
@@ -75,7 +76,7 @@ export const ActiveFilters = ({
   if (!hasAny) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 py-3">
+    <div className={`flex flex-wrap items-center gap-2 ${compact ? 'py-0' : 'py-3'}`}>
       <span className="text-xs font-bold text-gray-400 uppercase tracking-wider shrink-0">Активни:</span>
 
       <AnimatePresence mode="popLayout">

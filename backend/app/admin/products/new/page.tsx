@@ -126,10 +126,10 @@ export default function NewProductPage() {
       
       <div className="md:pt-0">
         <h1 className="text-base md:text-xl font-bold text-slate-900 leading-tight">
-          <SectionTitle title="Нов продукт" />
+          <SectionTitle title="Нов климатик" />
         </h1>
         <p className="mt-0.5 md:mt-1 text-[12px] md:text-[13px] text-slate-500 leading-snug">
-          Марка, модел, снимки и спецификации — стъпка по стъпка.
+          Марка, модел, снимки и спецификации.
         </p>
       </div>
 
@@ -158,7 +158,7 @@ export default function NewProductPage() {
       <div className="hidden md:flex justify-end">
         <Button variant="primary" size="lg" onClick={submit} disabled={submitting} className="gap-2 shadow-sm">
           <Save className="w-5 h-5" />
-          {submitting ? "Създавам..." : "Създай продукт"}
+          {submitting ? "Създавам..." : "Създай климатик"}
         </Button>
       </div>
 
@@ -166,7 +166,7 @@ export default function NewProductPage() {
       <div className="fixed bottom-16 left-0 right-0 z-40 md:hidden border-t border-slate-200 bg-white/95 backdrop-blur-sm px-3 py-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
         <Button variant="primary" className="w-full justify-center gap-2 !py-3 text-sm font-bold rounded-xl" onClick={submit} disabled={submitting}>
           <Save className="w-4 h-4" />
-          {submitting ? "Създавам..." : "Създай продукт"}
+          {submitting ? "Създавам..." : "Създай климатик"}
         </Button>
       </div>
 

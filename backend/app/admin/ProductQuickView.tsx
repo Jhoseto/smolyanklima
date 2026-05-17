@@ -43,6 +43,26 @@ type ProductQuickViewData = {
   product_images?: Array<{ url: string; sort_order?: number | null; is_main?: boolean | null }>;
 };
 
+const quickViewButtonClass = (className: string) =>
+  `min-w-0 max-w-full text-left font-bold text-slate-900 underline-offset-4 transition-colors hover:text-brand-blue-700 hover:underline focus:outline-none focus:ring-2 focus:ring-brand-blue-200 rounded ${className}`;
+
+export function CatalogItemQuickViewButton({
+  catalogItem = "product",
+  itemId,
+  itemName,
+  className = "",
+}: {
+  catalogItem?: "product" | "accessory";
+  itemId?: string | null;
+  itemName: string;
+  className?: string;
+}) {
+  if (catalogItem === "accessory") {
+    return <AccessoryQuickViewButton accessoryId={itemId} accessoryName={itemName} className={className} />;
+  }
+  return <ProductQuickViewButton productId={itemId} productName={itemName} className={className} />;
+}
+
 export function ProductQuickViewButton({
   productId,
   productName,
@@ -58,16 +78,199 @@ export function ProductQuickViewButton({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className={`min-w-0 max-w-full text-left font-bold text-slate-900 underline-offset-4 transition-colors hover:text-brand-blue-700 hover:underline focus:outline-none focus:ring-2 focus:ring-brand-blue-200 rounded ${className}`}
-        title={productName}
-      >
+      <button type="button" onClick={() => setOpen(true)} className={quickViewButtonClass(className)} title={productName}>
         {productName}
       </button>
       {open && <ProductQuickViewModal productId={productId} onClose={() => setOpen(false)} />}
     </>
+  );
+}
+
+type AccessoryQuickViewData = {
+  id: string;
+  slug: string;
+  name: string;
+  description?: string | null;
+  price: number;
+  old_price?: number | null;
+  kind?: string | null;
+  is_active?: boolean | null;
+  stock_status?: "in_stock" | "out_of_stock" | "on_order" | string;
+  stock_quantity?: number | null;
+  brands?: { name?: string | null } | null;
+  accessory_images?: Array<{ url: string; sort_order?: number | null; is_main?: boolean | null }>;
+};
+
+export function AccessoryQuickViewButton({
+  accessoryId,
+  accessoryName,
+  className = "",
+}: {
+  accessoryId?: string | null;
+  accessoryName: string;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  if (!accessoryId) return <span className={className}>{accessoryName}</span>;
+
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} className={quickViewButtonClass(className)} title={accessoryName}>
+        {accessoryName}
+      </button>
+      {open && <AccessoryQuickViewModal accessoryId={accessoryId} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+function accessoryKindLabel(kind: string | null | undefined): string {
+  if (kind === "spare_part") return "Резервна част";
+  if (kind === "consumable") return "Консуматив";
+  return "Аксесоар";
+}
+
+export function AccessoryQuickViewModal({ accessoryId, onClose }: { accessoryId: string; onClose: () => void }) {
+  const [accessory, setAccessory] = useState<AccessoryQuickViewData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setError(null);
+    setImageFailed(false);
+
+    void fetch(`/api/admin/accessories/${accessoryId}`, { credentials: "include" })
+      .then(async (res) => {
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(json.error || "Грешка при зареждане на аксесоара");
+        return json.data as AccessoryQuickViewData;
+      })
+      .then((data) => {
+        if (alive) setAccessory(data);
+      })
+      .catch((e: unknown) => {
+        if (alive) setError(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, [accessoryId]);
+
+  const images = [...(accessory?.accessory_images ?? [])].sort(
+    (a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0),
+  );
+  const mainImage = images.find((img) => img.is_main)?.url ?? images[0]?.url ?? "";
+  const price = Number(accessory?.price ?? 0);
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-h-[93vh] md:max-h-[90vh] overflow-hidden rounded-t-3xl md:rounded-3xl bg-white shadow-[0_-8px_40px_rgba(0,0,0,0.25)] md:shadow-2xl md:w-[720px] md:mx-4">
+        <div className="flex justify-center pt-3 pb-1 md:hidden">
+          <div className="w-10 h-1 rounded-full bg-gray-200" />
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-600 transition-colors hover:bg-gray-200"
+          aria-label="Затвори бърз преглед"
+        >
+          <X className="h-5 w-5" />
+        </button>
+
+        {loading ? (
+          <div className="flex min-h-[240px] items-center justify-center text-sm font-bold text-slate-500">Зареждане...</div>
+        ) : error ? (
+          <div className="flex min-h-[240px] items-center justify-center p-8 text-center text-sm font-bold text-red-600">{error}</div>
+        ) : accessory ? (
+          <div className="flex max-h-[90vh] flex-col overflow-y-auto md:flex-row md:overflow-hidden">
+            <div className="relative flex shrink-0 items-center justify-center border-b md:border-b-0 md:border-r border-gray-100 bg-gray-50 p-5 md:p-8 md:w-[300px]">
+              <div className="relative w-full">
+                <div className="absolute left-4 top-4 z-10 rounded-full bg-white/90 px-3 py-1 text-xs font-black text-violet-700 shadow-sm">
+                  {accessoryKindLabel(accessory.kind)}
+                </div>
+                <div className="flex aspect-square items-center justify-center rounded-3xl bg-white p-5 shadow-sm">
+                  {mainImage && !imageFailed ? (
+                    <img
+                      src={mainImage}
+                      alt={accessory.name}
+                      className="max-h-full max-w-full object-contain"
+                      onError={() => setImageFailed(true)}
+                    />
+                  ) : (
+                    <div className="flex h-full w-full flex-col items-center justify-center rounded-2xl bg-[radial-gradient(circle_at_top,#ede9fe_0,#f8fafc_52%,#eef2ff_100%)] p-6 text-center">
+                      <div className="text-lg font-black leading-tight text-slate-900">{accessory.name}</div>
+                      <div className="mt-2 text-sm font-medium text-slate-500">Няма качена снимка</div>
+                    </div>
+                  )}
+                </div>
+                {images.length > 1 && (
+                  <div className="mt-4 flex justify-center gap-2">
+                    {images.slice(0, 4).map((image) => (
+                      <div key={image.url} className="h-12 w-12 rounded-xl border border-gray-100 bg-white p-1 shadow-sm">
+                        <img src={image.url} alt="" className="h-full w-full object-contain" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
+              {accessory.brands?.name ? (
+                <p className="mb-1 text-xs font-bold uppercase tracking-wider text-violet-700">
+                  {accessory.brands.name}
+                </p>
+              ) : null}
+              <h2 className="mb-2 text-lg md:text-2xl font-black leading-tight text-gray-900">{accessory.name}</h2>
+              <p className="mb-4 text-sm text-gray-500">{accessoryKindLabel(accessory.kind)}</p>
+
+              {accessory.description && (
+                <p className="mb-5 text-sm leading-relaxed text-gray-600 whitespace-pre-line">{accessory.description}</p>
+              )}
+
+              <div className="mb-6 rounded-2xl border border-gray-100 bg-gray-50 p-4 md:p-5">
+                <div className="mb-4 flex items-baseline gap-3">
+                  <span className="text-3xl md:text-4xl font-extrabold text-gray-900">€{price.toLocaleString()}</span>
+                  {accessory.old_price ? (
+                    <span className="text-lg font-bold text-gray-400 line-through">
+                      €{Number(accessory.old_price).toLocaleString()}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="border-t border-gray-200 pt-4">
+                  <h4 className="mb-3 text-xs font-bold uppercase text-gray-500">Наличност</h4>
+                  <div className="flex items-start gap-3">
+                    <div className="relative mt-1">
+                      <div
+                        className={`h-2.5 w-2.5 rounded-full ${accessory.stock_status === "out_of_stock" ? "bg-red-500" : "bg-green-500"}`}
+                      />
+                      {accessory.stock_status !== "out_of_stock" && (
+                        <div className="absolute inset-0 h-2.5 w-2.5 animate-ping rounded-full bg-green-500" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-gray-900">{stockLabel(accessory.stock_status)}</p>
+                      <p className="text-xs text-gray-500">Налични: {Number(accessory.stock_quantity ?? 0)} бр.</p>
+                      {accessory.is_active === false && (
+                        <p className="mt-1 text-xs font-semibold text-amber-700">Скрит от публичния каталог</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }
 

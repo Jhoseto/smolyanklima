@@ -1,8 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { slugifyBg } from "../slugify";
-import type { BulclimaParsedProduct } from "./parseBulclimaHtml";
 import { stripImportSourceFromDescription } from "../stripImportSourceFromDescription";
-import { inferAccessoryKind } from "./classifyBulclimaItem";
+import type { CondexParsedProduct } from "./parseCondexProduct";
+import { inferCondexAccessoryKind } from "./classifyCondexItem";
 
 async function uniqueAccessorySlug(supabase: SupabaseClient, base: string): Promise<string> {
   let slug = base || "aksesoar";
@@ -44,25 +44,14 @@ async function replaceAccessoryImages(
   if (error) throw new Error(error.message);
 }
 
-export async function upsertBulclimaAccessory(
+export async function upsertCondexAccessory(
   supabase: SupabaseClient,
   brandId: string | null,
-  item: BulclimaParsedProduct,
-  opts?: { preferredSlug?: string },
+  item: CondexParsedProduct,
 ): Promise<"created" | "updated" | "skipped"> {
   const existing = await findExistingAccessory(supabase, brandId, item.name);
   const baseSlug = slugifyBg(item.modelCode ?? item.name);
-  let slug: string | undefined;
-  if (!existing?.id) {
-    const preferred = opts?.preferredSlug?.trim();
-    if (preferred) {
-      const { data: taken } = await supabase.from("accessories").select("id").eq("slug", preferred).maybeSingle();
-      slug = taken ? await uniqueAccessorySlug(supabase, baseSlug) : preferred;
-    } else {
-      slug = await uniqueAccessorySlug(supabase, baseSlug);
-    }
-  }
-
+  const slug = existing?.id ? undefined : await uniqueAccessorySlug(supabase, baseSlug);
   const description = stripImportSourceFromDescription(item.description);
 
   const row: Record<string, unknown> = {
@@ -70,7 +59,7 @@ export async function upsertBulclimaAccessory(
     brand_id: brandId,
     description,
     price: item.priceEur,
-    kind: inferAccessoryKind(item.name),
+    kind: inferCondexAccessoryKind(item.name),
     stock_status: "on_order",
     stock_quantity: 0,
     is_active: true,

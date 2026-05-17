@@ -232,12 +232,17 @@ export function wcPriceToEur(prices: ClimacomWcProduct["prices"]): number | null
 }
 
 export function resolveClimacomTypeHint(categorySlugs: string[], name: string): string | null {
-  if (categorySlugs.some((s) => s.includes("multisplit"))) return "мульти";
-  if (categorySlugs.some((s) => s.includes("stenni"))) return "стен";
-  if (/мульти|multisplit/i.test(name)) return "мульти";
+  const slugs = categorySlugs.map((s) => s.toLowerCase());
+  if (slugs.some((s) => s.includes("multisplit") || s.includes("multi"))) return "мульти";
+  if (slugs.some((s) => s.includes("podov"))) return "подов";
+  if (slugs.some((s) => s.includes("kaset"))) return "касет";
+  if (slugs.some((s) => s.includes("tavan"))) return "таван";
+  if (slugs.some((s) => s.includes("stenni"))) return "стен";
+  if (/мульти|multisplit|мултисплит/i.test(name)) return "мульти";
+  if (/подов|таванно[\s-]*подов/i.test(name)) return "подов";
+  if (/касет|4[\s-]*посоч/i.test(name)) return "касет";
+  if (/таван/i.test(name)) return "таван";
   if (/стенен|стенни/i.test(name)) return "стен";
-  if (/касет/i.test(name)) return "касет";
-  if (/подов/i.test(name)) return "подов";
   return null;
 }
 

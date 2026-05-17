@@ -105,3 +105,22 @@ export async function replaceProductImages(
   );
   return { error };
 }
+
+export async function replaceAccessoryImages(
+  supabase: SupabaseClient,
+  accessoryId: string,
+  images: ImageInput[],
+): Promise<{ error: { message: string } | null }> {
+  const { error: delErr } = await supabase.from("accessory_images").delete().eq("accessory_id", accessoryId);
+  if (delErr) return { error: delErr };
+  if (images.length === 0) return { error: null };
+  const { error } = await supabase.from("accessory_images").insert(
+    images.map((im, i) => ({
+      accessory_id: accessoryId,
+      url: im.url,
+      sort_order: im.sort_order ?? i,
+      is_main: Boolean(im.is_main),
+    })),
+  );
+  return { error };
+}
