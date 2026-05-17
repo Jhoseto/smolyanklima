@@ -302,6 +302,16 @@ export async function getProductById(id: string): Promise<CatalogProduct | undef
   return mapApiToCatalogProduct(json.data as ApiProduct);
 }
 
+/** До 3 подобни продукта от публичния каталог (сървърно ранжиране). */
+export async function getSimilarProducts(slug: string, limit = 3): Promise<CatalogProduct[]> {
+  const res = await fetch(
+    `/api/products/${encodeURIComponent(slug)}/similar?limit=${encodeURIComponent(String(limit))}`,
+  );
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || !Array.isArray(json.data)) return [];
+  return (json.data as ApiProduct[]).map(mapApiToCatalogProduct).filter((p) => !isAccessoryLike(p));
+}
+
 export async function rateProduct(
   productSlug: string,
   stars: number,

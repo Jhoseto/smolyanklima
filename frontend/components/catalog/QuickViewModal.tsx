@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Star, Check, Wifi, ShieldCheck, Zap, Volume2, Wind, ChevronDown, Ruler, Weight } from 'lucide-react';
+import { X, Star, Check, Wifi, ShieldCheck, Zap, Volume2, Wind, ChevronDown, ChevronRight, Ruler, Weight } from 'lucide-react';
 import type { CatalogProduct } from '../../data/types/product';
 import { PremiumImageGallery } from '../media/PremiumImageGallery';
 import { rateProduct, publicProductDescription } from '../../data/productService';
@@ -155,20 +156,32 @@ export const QuickViewModal = ({
 
             <div className="flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden flex-1">
 
-              {/* LEFT – Image */}
-              <div className="lg:w-[420px] shrink-0 bg-gray-50 flex items-center justify-center p-4 md:p-8 relative border-r border-gray-100 max-h-[220px] md:max-h-none overflow-hidden">
-                <PremiumImageGallery
-                  className="w-full"
-                  images={(product.images?.length ? product.images : [product.image]).filter(Boolean)}
-                  alt={product.name}
-                  badgeText={product.badge?.text}
-                  badgeClassName={
-                    product.badge
-                      ? `absolute top-6 left-6 px-3 py-1 rounded-full text-xs font-black shadow-sm ${product.badge.bg} ${product.badge.textCol}`
-                      : undefined
-                  }
-                  energyClass={product.energyClass}
-                />
+              {/* LEFT – Image + link to full product page */}
+              <div className="lg:w-[420px] shrink-0 bg-gray-50 flex flex-col border-r border-gray-100">
+                <div className="flex items-center justify-center p-4 md:p-6 pb-2 md:pb-3 max-h-[220px] md:max-h-none overflow-hidden flex-1 min-h-0">
+                  <PremiumImageGallery
+                    className="w-full"
+                    images={(product.images?.length ? product.images : [product.image]).filter(Boolean)}
+                    alt={product.name}
+                    badgeText={product.badge?.text}
+                    badgeClassName={
+                      product.badge
+                        ? `absolute top-6 left-6 px-3 py-1 rounded-full text-xs font-black shadow-sm ${product.badge.bg} ${product.badge.textCol}`
+                        : undefined
+                    }
+                    energyClass={product.energyClass}
+                  />
+                </div>
+                <div className="px-4 pb-4 md:px-6 md:pb-6 shrink-0">
+                  <Link
+                    to={`/product/${product.id}`}
+                    onClick={onClose}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#00B4D8]/25 bg-white px-4 py-3 text-sm font-bold text-[#0077B6] shadow-sm transition hover:border-[#00B4D8] hover:bg-[#F0F9FF] hover:shadow-md active:scale-[0.99]"
+                  >
+                    Подробен изглед
+                    <ChevronRight className="w-4 h-4 shrink-0" />
+                  </Link>
+                </div>
               </div>
 
               {/* RIGHT – Details + Form */}

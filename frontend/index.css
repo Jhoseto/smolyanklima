@@ -8,6 +8,14 @@
   --font-outfit: 'Outfit', sans-serif;
   --color-primary: #FF4D00;
   --color-primary-hover: #E64500;
+  --color-sk-cyan: #00B4D8;
+  --color-sk-cyan-dark: #0077B6;
+  --color-sk-cyan-light: #EBF5FF;
+  --color-sk-cyan-mist: #F0F9FF;
+  --color-sk-orange: #FF4D00;
+  --color-sk-orange-mid: #FF6A00;
+  --color-sk-coral: #FF2A4D;
+  --color-sk-warm: #FFF7F2;
 }
 
 @layer base {
