@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isPostgrestMissingColumn } from "@/lib/admin/pgMissingColumn";
 
 /** Стандартни номинали (хиляди BTU), както на bulclima.com. */
 export const CATALOG_BTU_OPTIONS = [7, 9, 12, 14, 18, 22, 24, 30, 36, 45, 48, 54, 60, 72, 90] as const;
@@ -58,6 +59,8 @@ export async function resolveProductIdsForBtu(supabase: SupabaseClient, btu: num
       const id = (row as { product_id?: string }).product_id;
       if (id) ids.add(id);
     }
+  } else if (!isPostgrestMissingColumn(btuErr, "btu")) {
+    throw new Error(btuErr.message);
   }
 
   const range = coolingKwRangeForBtu(btu);

@@ -6,6 +6,7 @@ import { isPostgrestMissingColumn } from "@/lib/admin/pgMissingColumn";
 import {
   INQUIRY_ADMIN_SELECT,
   INQUIRY_ADMIN_SELECT_BASE,
+  type InquiryAdminRow,
   withDefaultIncludeInstallation,
 } from "@/lib/inquiry/inquiryAdminSelect";
 import { attachProductsToInquiries } from "@/lib/inquiry/inquiryProducts";
@@ -55,12 +56,26 @@ export async function GET(req: NextRequest) {
   let { data, error, count } = await runListQuery(INQUIRY_ADMIN_SELECT);
   if (error && isPostgrestMissingColumn(error, "include_installation")) {
     ({ data, error, count } = await runListQuery(INQUIRY_ADMIN_SELECT_BASE));
-    if (data) data = withDefaultIncludeInstallation(data);
   }
 
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
 
-  const enriched = await attachProductsToInquiries(supabase, data ?? []);
+  const rows = withDefaultIncludeInstallation((data ?? []) as unknown as InquiryAdminRow[]);
+
+  let enriched: Awaited<ReturnType<typeof attachProductsToInquiries>>;
+  try {
+    enriched = await attachProductsToInquiries(supabase, rows);
+  } catch (attachErr: unknown) {
+    const msg = attachErr instanceof Error ? attachErr.message : String(attachErr);
+    return withCors(
+      req,
+      NextResponse.json({
+        data: rows.map((row) => ({ ...row, products: [] })),
+        meta: { page, perPage, total: count ?? 0 },
+        warning: `Продуктите по запитвания не се заредиха: ${msg}`,
+      }),
+    );
+  }
 
   return withCors(
     req,

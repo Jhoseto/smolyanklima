@@ -37,22 +37,29 @@ export async function GET(req: NextRequest) {
     return withCors(req, NextResponse.json({ data: [] }));
   }
 
-  let specsRes = await supabase
+  const specsWithBtu = await supabase
     .from("product_specs")
     .select("product_id,btu,cooling_power_kw")
     .in("product_id", productIds);
-  if (specsRes.error && isPostgrestMissingColumn(specsRes.error, "btu")) {
-    specsRes = await supabase
+
+  let specRows: Array<{ product_id?: string; btu?: number | null; cooling_power_kw?: number | null }> = [];
+  if (!specsWithBtu.error) {
+    specRows = (specsWithBtu.data ?? []) as typeof specRows;
+  } else if (isPostgrestMissingColumn(specsWithBtu.error, "btu")) {
+    const specsKwOnly = await supabase
       .from("product_specs")
       .select("product_id,cooling_power_kw")
       .in("product_id", productIds);
-  }
-  if (specsRes.error) {
-    return withCors(req, NextResponse.json({ error: specsRes.error.message }, { status: 500 }));
+    if (specsKwOnly.error) {
+      return withCors(req, NextResponse.json({ error: specsKwOnly.error.message }, { status: 500 }));
+    }
+    specRows = (specsKwOnly.data ?? []) as typeof specRows;
+  } else {
+    return withCors(req, NextResponse.json({ error: specsWithBtu.error.message }, { status: 500 }));
   }
 
   const counts = new Map<number, number>();
-  for (const row of specsRes.data ?? []) {
+  for (const row of specRows) {
     const r = row as { product_id?: string; btu?: number | null; cooling_power_kw?: number | null };
     if (!r.product_id) continue;
     let nominal = r.btu != null ? Math.round(Number(r.btu)) : inferBtuFromCoolingKw(r.cooling_power_kw);

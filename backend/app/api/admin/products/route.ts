@@ -10,6 +10,7 @@ import { mapProductDbError } from "@/lib/admin/productDbErrors";
 import { insertProductCatalogStockCalendarEvent } from "@/lib/admin/productCatalogWorkItems";
 import { replaceProductImages, upsertProductSpecs, type ImageInput, type SpecsInput } from "@/lib/admin/syncProductChildren";
 import * as catalogBtu from "@/lib/catalog/productBtu";
+import { listAdminAccessories, listAdminCatalogMerged } from "@/lib/admin/adminCatalogList";
 
 const SpecsSchema = z.object({
   coverage_m2: z.number().nonnegative().nullable().optional(),
@@ -43,24 +44,37 @@ const MAX_IMAGES = 4;
 /** Списък: марка/тип + доставка; `stock_location` (0031), `product_region` (0032),
  *  `featured_position`+`featured_badge` (0035) — fallback при липсваща колона. */
 const FEATURED_COLS = ",featured_position,featured_badge";
+const SUPPLIER_JOIN = ",supplier:supplier_id(full_name)";
 const ADMIN_PRODUCT_LIST_SELECT_MIN =
-  "id,slug,name,price,purchase_price,product_condition,is_featured,is_active,show_in_public_catalog,stock_status,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,model_code,brand_id,brands:brand_id(name),product_types:type_id(name)";
+  `id,slug,name,price,purchase_price,product_condition,is_featured,is_active,show_in_public_catalog,stock_status,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,model_code,brand_id,brands:brand_id(name),product_types:type_id(name)${SUPPLIER_JOIN}`;
 const ADMIN_PRODUCT_LIST_SELECT_WITH_REGION =
-  "id,slug,name,price,purchase_price,product_condition,is_featured,is_active,show_in_public_catalog,stock_status,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,product_region,model_code,brand_id,brands:brand_id(name),product_types:type_id(name)";
+  `id,slug,name,price,purchase_price,product_condition,is_featured,is_active,show_in_public_catalog,stock_status,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,product_region,model_code,brand_id,brands:brand_id(name),product_types:type_id(name)${SUPPLIER_JOIN}`;
 const ADMIN_PRODUCT_LIST_SELECT_WITH_LOCATION =
-  "id,slug,name,price,purchase_price,product_condition,is_featured,is_active,show_in_public_catalog,stock_status,stock_location,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,model_code,brand_id,brands:brand_id(name),product_types:type_id(name)";
+  `id,slug,name,price,purchase_price,product_condition,is_featured,is_active,show_in_public_catalog,stock_status,stock_location,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,model_code,brand_id,brands:brand_id(name),product_types:type_id(name)${SUPPLIER_JOIN}`;
 const ADMIN_PRODUCT_LIST_SELECT_FULL =
-  "id,slug,name,price,purchase_price,product_condition,is_featured,is_active,show_in_public_catalog,stock_status,stock_location,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,product_region,model_code,brand_id,brands:brand_id(name),product_types:type_id(name)";
+  `id,slug,name,price,purchase_price,product_condition,is_featured,is_active,show_in_public_catalog,stock_status,stock_location,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,product_region,model_code,brand_id,brands:brand_id(name),product_types:type_id(name)${SUPPLIER_JOIN}`;
 /** Подмножество без `model_code` — fallback за DB без миграция 0038. */
 const ADMIN_PRODUCT_LIST_SELECT_NO_MODEL_CODE_MIN = ADMIN_PRODUCT_LIST_SELECT_MIN.replace(",model_code", "");
 const ADMIN_PRODUCT_LIST_SELECT_NO_MODEL_CODE_REGION = ADMIN_PRODUCT_LIST_SELECT_WITH_REGION.replace(",model_code", "");
 const ADMIN_PRODUCT_LIST_SELECT_NO_MODEL_CODE_LOCATION = ADMIN_PRODUCT_LIST_SELECT_WITH_LOCATION.replace(",model_code", "");
 const ADMIN_PRODUCT_LIST_SELECT_NO_MODEL_CODE_FULL = ADMIN_PRODUCT_LIST_SELECT_FULL.replace(",model_code", "");
 const stripPublicCatalogCol = (sel: string) => sel.replace(",show_in_public_catalog", "");
+/** Fallback при липса на миграция 0030 (доставчик, серийни, фактура). */
+const stripSupplyCols = (sel: string) =>
+  sel
+    .replace(/,supplier:supplier_id\(full_name\)/g, "")
+    .replace(/,supplier_id/g, "")
+    .replace(/,indoor_unit_serial/g, "")
+    .replace(/,outdoor_unit_serial/g, "")
+    .replace(/,supplier_invoice_number/g, "")
+    .replace(/,purchased_at/g, "")
+    .replace(/,purchase_price/g, "");
 const QuerySchema = z.object({
   q: z.string().optional(),
   condition: z.enum(["new", "used"]).optional(),
   featured: z.enum(["featured", "regular"]).optional(),
+  /** Само видими / само скрити в публичния каталог (`show_in_public_catalog`). */
+  publicCatalog: z.enum(["visible", "hidden"]).optional(),
   stockStatus: z.enum(["in_stock", "out_of_stock", "on_order"]).optional(),
   stockLocation: z.enum(["showroom", "warehouse"]).optional(),
   productRegion: z.enum(["europe", "japan"]).optional(),
@@ -82,6 +96,8 @@ const QuerySchema = z.object({
   purchasedTo: z.string().optional(),
   /** Номинал BTU (хиляди): 7, 9, 12, 14, 18, 24… */
   btu: z.coerce.number().int().positive().optional(),
+  /** Климатици (`products`), аксесоари (`accessories`) или обединен списък. */
+  catalogKind: z.enum(["climatics", "accessories", "all"]).optional().default("climatics"),
   // Сортиране по дата (created_at) и филтриране по период по нея
   // съзнателно НЕ се поддържат — всеки климатик е уникален артикул,
   // а не „склад на бройки“, така че подреждане по добавяне не носи смисъл.
@@ -140,6 +156,7 @@ export async function GET(req: NextRequest) {
     q,
     condition,
     featured,
+    publicCatalog,
     stockStatus,
     stockLocation,
     productRegion: regionFilter,
@@ -153,6 +170,7 @@ export async function GET(req: NextRequest) {
     purchasedFrom,
     purchasedTo,
     btu: btuRaw,
+    catalogKind,
     sortBy,
     sortDir,
     page,
@@ -164,7 +182,7 @@ export async function GET(req: NextRequest) {
   let btuProductIds: string[] | null = null;
   if (btuFilter != null) {
     btuProductIds = await catalogBtu.resolveProductIdsForBtu(supabase, btuFilter);
-    if (btuProductIds.length === 0) {
+    if (btuProductIds.length === 0 && catalogKind !== "all") {
       return withCors(
         req,
         NextResponse.json({
@@ -175,7 +193,33 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const runList = (selectCols: string, applyStockLocationFilter: boolean, applyRegionFilter: boolean) => {
+  const sharedListFilters = {
+    q,
+    stockStatus,
+    brandId,
+    priceMin,
+    priceMax,
+    sortBy,
+    sortDir,
+    page,
+    perPage,
+  };
+
+  if (catalogKind === "accessories") {
+    try {
+      const { data, total } = await listAdminAccessories(supabase, sharedListFilters);
+      return withCors(req, NextResponse.json({ data, meta: { page, perPage, total } }));
+    } catch (e) {
+      return withCors(req, NextResponse.json({ error: String(e) }, { status: 500 }));
+    }
+  }
+
+  const runList = (
+    selectCols: string,
+    applyStockLocationFilter: boolean,
+    applyRegionFilter: boolean,
+    applySupplyFields = true,
+  ) => {
     let query = supabase.from("products").select(selectCols, { count: "exact" });
     if (btuProductIds) query = query.in("id", btuProductIds);
     if (q?.trim()) {
@@ -184,54 +228,119 @@ export async function GET(req: NextRequest) {
       // премахват, защото PostgREST ползва запетая като разделител в
       // `or` израза и невалиден синтаксис би върнал 400.
       const t = q.trim().replace(/,/g, " ");
-      query = query.or(
-        [
-          `name.ilike.%${t}%`,
-          `slug.ilike.%${t}%`,
-          `indoor_unit_serial.ilike.%${t}%`,
-          `outdoor_unit_serial.ilike.%${t}%`,
-          `supplier_invoice_number.ilike.%${t}%`,
-        ].join(","),
-      );
+      const searchFields = applySupplyFields
+        ? [
+            `name.ilike.%${t}%`,
+            `slug.ilike.%${t}%`,
+            `indoor_unit_serial.ilike.%${t}%`,
+            `outdoor_unit_serial.ilike.%${t}%`,
+            `supplier_invoice_number.ilike.%${t}%`,
+          ]
+        : [`name.ilike.%${t}%`, `slug.ilike.%${t}%`];
+      query = query.or(searchFields.join(","));
     }
     if (condition) query = query.eq("product_condition", condition);
     if (featured === "featured") query = query.eq("is_featured", true);
     if (featured === "regular") query = query.eq("is_featured", false);
+    if (publicCatalog === "visible") query = query.eq("show_in_public_catalog", true);
+    if (publicCatalog === "hidden") query = query.eq("show_in_public_catalog", false);
     if (stockStatus) query = query.eq("stock_status", stockStatus);
     if (applyStockLocationFilter && stockLocation) query = query.eq("stock_location", stockLocation);
     if (applyRegionFilter && regionFilter) query = query.eq("product_region", regionFilter);
     if (brandId) query = query.eq("brand_id", brandId);
     if (typeId) query = query.eq("type_id", typeId);
-    if (supplierId) query = query.eq("supplier_id", supplierId);
+    if (applySupplyFields && supplierId) query = query.eq("supplier_id", supplierId);
     if (priceMin !== undefined) query = query.gte("price", priceMin);
     if (priceMax !== undefined) query = query.lte("price", priceMax);
-    if (hasSerial === "with") {
+    if (applySupplyFields && hasSerial === "with") {
       // Има поне един сериен номер (вътрешен или външен блок).
       query = query.or("indoor_unit_serial.not.is.null,outdoor_unit_serial.not.is.null");
     }
-    if (hasSerial === "without") {
+    if (applySupplyFields && hasSerial === "without") {
       query = query.is("indoor_unit_serial", null).is("outdoor_unit_serial", null);
     }
-    if (hasPurchasePrice === "with") query = query.not("purchase_price", "is", null);
-    if (hasPurchasePrice === "without") query = query.is("purchase_price", null);
+    if (applySupplyFields && hasPurchasePrice === "with") query = query.not("purchase_price", "is", null);
+    if (applySupplyFields && hasPurchasePrice === "without") query = query.is("purchase_price", null);
     // Период на закупуване: колоната е тип `date` (без час) → сравняваме
     // директно с ISO дата (YYYY-MM-DD), което Postgres приема нативно.
-    if (purchasedFrom) query = query.gte("purchased_at", purchasedFrom);
-    if (purchasedTo) query = query.lte("purchased_at", purchasedTo);
+    if (applySupplyFields && purchasedFrom) query = query.gte("purchased_at", purchasedFrom);
+    if (applySupplyFields && purchasedTo) query = query.lte("purchased_at", purchasedTo);
     const from = (page - 1) * perPage;
     const to = from + perPage - 1;
+    const orderCol =
+      !applySupplyFields && (sortBy === "purchase_price" || sortBy === "purchased_at") ? "name" : sortBy;
     // Допълнителното подреждане по `name` гарантира стабилен ред при
     // равни стойности (напр. еднакви цени → азбучен ред по име).
     return query
-      .order(sortBy, { ascending: sortDir === "asc" })
+      .order(orderCol, { ascending: sortDir === "asc" })
       .order("name", { ascending: true })
       .range(from, to);
   };
 
+  if (catalogKind === "all") {
+    try {
+      const stubSelect = "id,name,price,product_condition,purchased_at";
+      let stubQuery = supabase.from("products").select(stubSelect, { count: "exact" });
+      if (btuProductIds) stubQuery = stubQuery.in("id", btuProductIds);
+      if (q?.trim()) {
+        const t = q.trim().replace(/,/g, " ");
+        stubQuery = stubQuery.or(
+          [
+            `name.ilike.%${t}%`,
+            `slug.ilike.%${t}%`,
+            `indoor_unit_serial.ilike.%${t}%`,
+            `outdoor_unit_serial.ilike.%${t}%`,
+            `supplier_invoice_number.ilike.%${t}%`,
+          ].join(","),
+        );
+      }
+      if (condition) stubQuery = stubQuery.eq("product_condition", condition);
+      if (featured === "featured") stubQuery = stubQuery.eq("is_featured", true);
+      if (featured === "regular") stubQuery = stubQuery.eq("is_featured", false);
+      if (publicCatalog === "visible") stubQuery = stubQuery.eq("show_in_public_catalog", true);
+      if (publicCatalog === "hidden") stubQuery = stubQuery.eq("show_in_public_catalog", false);
+      if (stockStatus) stubQuery = stubQuery.eq("stock_status", stockStatus);
+      if (stockLocation) stubQuery = stubQuery.eq("stock_location", stockLocation);
+      if (regionFilter) stubQuery = stubQuery.eq("product_region", regionFilter);
+      if (brandId) stubQuery = stubQuery.eq("brand_id", brandId);
+      if (typeId) stubQuery = stubQuery.eq("type_id", typeId);
+      if (supplierId) stubQuery = stubQuery.eq("supplier_id", supplierId);
+      if (priceMin !== undefined) stubQuery = stubQuery.gte("price", priceMin);
+      if (priceMax !== undefined) stubQuery = stubQuery.lte("price", priceMax);
+      if (hasSerial === "with") {
+        stubQuery = stubQuery.or("indoor_unit_serial.not.is.null,outdoor_unit_serial.not.is.null");
+      }
+      if (hasSerial === "without") {
+        stubQuery = stubQuery.is("indoor_unit_serial", null).is("outdoor_unit_serial", null);
+      }
+      if (hasPurchasePrice === "with") stubQuery = stubQuery.not("purchase_price", "is", null);
+      if (hasPurchasePrice === "without") stubQuery = stubQuery.is("purchase_price", null);
+      if (purchasedFrom) stubQuery = stubQuery.gte("purchased_at", purchasedFrom);
+      if (purchasedTo) stubQuery = stubQuery.lte("purchased_at", purchasedTo);
+      const stubRes = await stubQuery.limit(4000);
+      if (stubRes.error) return withCors(req, NextResponse.json({ error: stubRes.error.message }, { status: 500 }));
+      const productStubs = ((stubRes.data ?? []) as { id: string; name: string; price: number; product_condition: string; purchased_at: string | null }[]).map(
+        (r) => ({
+          catalog_item: "product" as const,
+          id: r.id,
+          name: r.name,
+          price: r.price,
+          product_condition: r.product_condition,
+          purchased_at: r.purchased_at,
+        }),
+      );
+      const productTotal = btuProductIds && btuProductIds.length === 0 ? 0 : (stubRes.count ?? 0);
+      const { data, total } = await listAdminCatalogMerged(supabase, sharedListFilters, productStubs, productTotal);
+      return withCors(req, NextResponse.json({ data, meta: { page, perPage, total } }));
+    } catch (e) {
+      return withCors(req, NextResponse.json({ error: String(e) }, { status: 500 }));
+    }
+  }
+
   // Опитваме първо с `featured_position`+`featured_badge` (миграция 0035),
   // и при липсващи колони падаме до старите варианти. Това запазва обратна
   // съвместимост за DB-та, върху които миграцията още не е приложена.
-  const listAttempts: Array<[string, boolean, boolean]> = [
+  const listAttempts: Array<[string, boolean, boolean, boolean?]> = [
     [ADMIN_PRODUCT_LIST_SELECT_FULL + FEATURED_COLS, true, Boolean(regionFilter)],
     [ADMIN_PRODUCT_LIST_SELECT_WITH_REGION + FEATURED_COLS, false, Boolean(regionFilter)],
     [ADMIN_PRODUCT_LIST_SELECT_WITH_LOCATION + FEATURED_COLS, true, false],
@@ -254,13 +363,16 @@ export async function GET(req: NextRequest) {
     [stripPublicCatalogCol(ADMIN_PRODUCT_LIST_SELECT_MIN + FEATURED_COLS), false, false],
     [stripPublicCatalogCol(ADMIN_PRODUCT_LIST_SELECT_FULL), true, Boolean(regionFilter)],
     [stripPublicCatalogCol(ADMIN_PRODUCT_LIST_SELECT_MIN), false, false],
+    // Fallback без полета за доставчик/серийни (миграция 0030).
+    [stripSupplyCols(stripPublicCatalogCol(ADMIN_PRODUCT_LIST_SELECT_MIN)), false, false, false],
+    [stripSupplyCols(ADMIN_PRODUCT_LIST_SELECT_NO_MODEL_CODE_MIN), false, false, false],
   ];
 
   let data: unknown[] | null = null;
   let error: { message?: string; code?: string } | null = null;
   let count: number | null = null;
-  for (const [sel, locF, regF] of listAttempts) {
-    const res = await runList(sel, locF, regF);
+  for (const [sel, locF, regF, supplyF = true] of listAttempts) {
+    const res = await runList(sel, locF, regF, supplyF);
     data = res.data as unknown[] | null;
     error = res.error as { message?: string; code?: string } | null;
     count = res.count;
@@ -271,6 +383,7 @@ export async function GET(req: NextRequest) {
   const list = (data ?? []) as unknown as Record<string, unknown>[];
   const rows = list.map((r) => ({
     ...r,
+    catalog_item: "product" as const,
     stock_location: normalizeProductStockLocation((r as { stock_location?: unknown }).stock_location),
     product_region: normalizeProductRegion((r as { product_region?: unknown }).product_region),
   }));

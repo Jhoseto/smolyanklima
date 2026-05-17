@@ -42,7 +42,11 @@ import {
 
 export const dynamic = "force-dynamic";
 
+type CatalogKindFilter = "climatics" | "accessories" | "all";
+
 type ProductRow = {
+  catalog_item?: "product" | "accessory";
+  accessory_kind?: string | null;
   id: string;
   slug: string;
   name: string;
@@ -72,12 +76,27 @@ type ProductRow = {
   brand_id?: string | null;
   brands?: { name?: string } | null;
   product_types?: { name?: string } | null;
+  supplier?: { full_name?: string | null } | { full_name?: string | null }[] | null;
 };
 
 type OptionRow = { id: string; name: string };
 type ContactChoice = { id: string; full_name: string; phone: string; email?: string | null; address?: string | null };
 type SortField = "name" | "price" | "purchase_price" | "product_condition" | "purchased_at";
 type SortDir = "asc" | "desc";
+
+function isAccessoryRow(p: Pick<ProductRow, "catalog_item">): boolean {
+  return p.catalog_item === "accessory";
+}
+
+const PRODUCTS_PER_PAGE_OPTS = [10, 20, 50, 100] as const;
+const PRODUCTS_PER_PAGE_STORAGE = "admin-products-per-page";
+type ProductsPerPage = (typeof PRODUCTS_PER_PAGE_OPTS)[number];
+
+function readProductsPerPage(): ProductsPerPage {
+  if (typeof window === "undefined") return 20;
+  const n = Number(localStorage.getItem(PRODUCTS_PER_PAGE_STORAGE));
+  return (PRODUCTS_PER_PAGE_OPTS as readonly number[]).includes(n) ? (n as ProductsPerPage) : 20;
+}
 
 /**
  * Кликаемо заглавие на колона в таблицата — заменя статичния `<Th>` за
@@ -218,9 +237,9 @@ function fmtPurchaseDate(value: string | null | undefined): string {
 
 function catalogStockBadgeText(status: string, compact = false) {
   if (compact) {
-    if (status === "in_stock") return "Налич.";
-    if (status === "out_of_stock") return "Изчерп.";
-    if (status === "on_order") return "Поръчка";
+    if (status === "in_stock") return "Наличен";
+    if (status === "out_of_stock") return "Изчерпан";
+    if (status === "on_order") return "По поръчка";
     return status || "—";
   }
   if (status === "in_stock") return "В наличност";
@@ -231,7 +250,7 @@ function catalogStockBadgeText(status: string, compact = false) {
 
 function stockLocationLabelCompact(loc: unknown) {
   const n = normalizeProductStockLocation(loc);
-  return n === "showroom" ? "Маг." : "Скл.";
+  return n === "showroom" ? "Магагазин" : "Склад";
 }
 
 function catalogStockBadgeClass(status: string) {
@@ -434,9 +453,11 @@ export default function AdminProductsPage() {
   const [q, setQ] = useState("");
   const [condition, setCondition] = useState<"" | "new" | "used">("");
   const [featured, setFeatured] = useState<"" | "featured" | "regular">("");
+  const [publicCatalog, setPublicCatalog] = useState<"" | "visible" | "hidden">("");
   const [stockStatus, setStockStatus] = useState<"" | "in_stock" | "out_of_stock" | "on_order">("");
   const [stockLocationFilter, setStockLocationFilter] = useState<"" | ProductStockLocation>("");
   const [productRegionFilter, setProductRegionFilter] = useState<"" | ProductRegion>("");
+  const [catalogKind, setCatalogKind] = useState<CatalogKindFilter>("climatics");
   const [brandId, setBrandId] = useState("");
   const [btuFilter, setBtuFilter] = useState("");
   const [typeId, setTypeId] = useState("");
@@ -450,6 +471,7 @@ export default function AdminProductsPage() {
   const [sortBy, setSortBy] = useState<SortField>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState<ProductsPerPage>(() => readProductsPerPage());
   const [meta, setMeta] = useState({ page: 1, perPage: 20, total: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -490,8 +512,10 @@ export default function AdminProductsPage() {
   const qs = useMemo(() => {
     const sp = new URLSearchParams();
     if (debouncedQ.trim()) sp.set("q", debouncedQ.trim());
+    sp.set("catalogKind", catalogKind);
     if (condition) sp.set("condition", condition);
     if (featured) sp.set("featured", featured);
+    if (publicCatalog) sp.set("publicCatalog", publicCatalog);
     if (stockStatus) sp.set("stockStatus", stockStatus);
     if (stockLocationFilter) sp.set("stockLocation", stockLocationFilter);
     if (productRegionFilter) sp.set("productRegion", productRegionFilter);
@@ -508,12 +532,14 @@ export default function AdminProductsPage() {
     sp.set("sortBy", sortBy);
     sp.set("sortDir", sortDir);
     sp.set("page", String(page));
-    sp.set("perPage", "20");
+    sp.set("perPage", String(perPage));
     return sp.toString();
   }, [
     debouncedQ,
+    catalogKind,
     condition,
     featured,
+    publicCatalog,
     stockStatus,
     stockLocationFilter,
     productRegionFilter,
@@ -530,7 +556,19 @@ export default function AdminProductsPage() {
     sortBy,
     sortDir,
     page,
+    perPage,
   ]);
+
+  function handlePerPageChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const n = Number(e.target.value) as ProductsPerPage;
+    setPerPage(n);
+    try {
+      localStorage.setItem(PRODUCTS_PER_PAGE_STORAGE, String(n));
+    } catch {
+      /* ignore */
+    }
+    setPage(1);
+  }
 
   async function loadMeta() {
     try {
@@ -568,9 +606,13 @@ export default function AdminProductsPage() {
     }
   }
 
-  function supplierLabel(id: string | null | undefined) {
-    if (!id) return "—";
-    return suppliersById[id] ?? "—";
+  function supplierLabel(p: Pick<ProductRow, "supplier_id" | "supplier">) {
+    const joined = p.supplier
+      ? (Array.isArray(p.supplier) ? p.supplier[0]?.full_name : p.supplier.full_name)
+      : null;
+    if (joined?.trim()) return joined.trim();
+    if (p.supplier_id && suppliersById[p.supplier_id]) return suppliersById[p.supplier_id];
+    return "—";
   }
 
   async function load() {
@@ -601,8 +643,10 @@ export default function AdminProductsPage() {
 
   function resetFilters() {
     setQ("");
+    setCatalogKind("climatics");
     setCondition("");
     setFeatured("");
+    setPublicCatalog("");
     setStockStatus("");
     setStockLocationFilter("");
     setProductRegionFilter("");
@@ -967,6 +1011,8 @@ export default function AdminProductsPage() {
   }
 
   const pages = Math.max(1, Math.ceil(meta.total / meta.perPage));
+  const rangeFrom = meta.total === 0 ? 0 : (page - 1) * meta.perPage + 1;
+  const rangeTo = meta.total === 0 ? 0 : Math.min(page * meta.perPage, meta.total);
 
   // Списък с активни филтри — ползва се за брояча и за chip bar-а.
   type ActiveFilter = { key: string; label: string; onClear: () => void };
@@ -975,6 +1021,13 @@ export default function AdminProductsPage() {
   const typeName = typeId ? types.find((t) => t.id === typeId)?.name : null;
 
   const activeFilters: ActiveFilter[] = [];
+  if (catalogKind !== "climatics") {
+    activeFilters.push({
+      key: "catalogKind",
+      label: catalogKind === "accessories" ? "Само аксесоари" : "Климатици и аксесоари",
+      onClear: () => setCatalogKind("climatics"),
+    });
+  }
   if (condition) {
     activeFilters.push({
       key: "condition",
@@ -987,6 +1040,13 @@ export default function AdminProductsPage() {
       key: "featured",
       label: featured === "featured" ? "Само топ продукти" : "Само нормални (без топ)",
       onClear: () => setFeatured(""),
+    });
+  }
+  if (publicCatalog) {
+    activeFilters.push({
+      key: "publicCatalog",
+      label: publicCatalog === "visible" ? "Видими в публичния каталог" : "Скрити от публичния каталог",
+      onClear: () => setPublicCatalog(""),
     });
   }
   if (stockStatus) {
@@ -1192,6 +1252,13 @@ export default function AdminProductsPage() {
               >
                 <Star className="w-3 h-3 fill-current" /> Топ продукти
               </ChipToggle>
+              <ChipToggle
+                active={publicCatalog === "visible"}
+                tone="brand"
+                onClick={() => { setPage(1); setPublicCatalog(publicCatalog === "visible" ? "" : "visible"); }}
+              >
+                <Eye className="w-3 h-3" /> В публичен каталог
+              </ChipToggle>
             </div>
           </div>
         </div>
@@ -1222,7 +1289,15 @@ export default function AdminProductsPage() {
         {/* Класификация: марка / тип / доставчик / място / страна */}
         <div className="space-y-1.5 md:space-y-2">
           <div className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500">Класификация</div>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-1.5 md:gap-3 [&_select]:text-xs md:[&_select]:text-sm">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-1.5 md:gap-3 [&_select]:text-xs md:[&_select]:text-sm">
+            <Select
+              value={catalogKind}
+              onChange={(e) => { setPage(1); setCatalogKind(e.target.value as CatalogKindFilter); }}
+            >
+              <option value="climatics">Климатици</option>
+              <option value="accessories">Аксесоари</option>
+              <option value="all">Всички</option>
+            </Select>
             <Select value={brandId} onChange={(e) => { setPage(1); setBrandId(e.target.value); }}>
               <option value="">Марка: всички</option>
               {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
@@ -1329,7 +1404,7 @@ export default function AdminProductsPage() {
       </Card>
 
       {/* Bulk actions — само „Изтрий“. Видимо когато има поне един избран ред. */}
-      {canMutateProductRows && selected.length > 0 && (
+      {canMutateProductRows && catalogKind === "climatics" && selected.length > 0 && (
         <div className="bg-brand-blue-50 border border-brand-blue-200 rounded-lg md:rounded-xl px-2.5 py-2 md:px-3 md:py-2.5 flex items-center justify-between gap-2 flex-wrap">
           <span className="text-[11px] md:text-sm font-bold text-brand-blue-700">
             Избрани: {selected.length}{" "}
@@ -1383,9 +1458,7 @@ export default function AdminProductsPage() {
             <col className="w-[5%]" />
             <col className="w-[4%]" />
             <col className="w-[4%]" />
-            <col className="w-[4%]" />
-            <col className="w-[4%]" />
-            <col className="w-[4%]" />
+            <col className="w-[7%]" />
             <col className="w-[4%]" />
             <col className="w-[3.5%]" />
             <col className="w-[4%]" />
@@ -1411,18 +1484,16 @@ export default function AdminProductsPage() {
               </Th>
               <Th className="text-center">Статус</Th>
               <Th className="text-center">Марка</Th>
-              <SortableTh label="Съст." field="product_condition" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} center />
+              <SortableTh label="Състояние" field="product_condition" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} center />
               <Th className="text-center">Тип</Th>
-              <Th className="text-center">Дост.</Th>
-              <SortableTh label="Закуп." field="purchase_price" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} center />
+              <SortableTh label="Закупна" field="purchase_price" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} center />
               <SortableTh label="Дата" field="purchased_at" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} center />
-              <SortableTh label="Прод." field="price" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} center />
-              <Th className="text-center" title="Сериен вътрешен">Сер. в.</Th>
-              <Th className="text-center" title="Сериен външен">Сер. вън.</Th>
-              <Th className="text-center" title="Фактура доставчик">Факт.</Th>
+              <SortableTh label="Продажна" field="price" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} center />
+              <Th className="text-center">Доставчик</Th>
+              <Th className="text-center" title="Фактура доставчик">Фактура</Th>
               <Th className="text-center">Рег.</Th>
               <Th className="text-center">Място</Th>
-              <Th className="text-center">Действ.</Th>
+              <Th className="text-center">Действия</Th>
             </tr>
           </thead>
           <tbody className="[&>tr>td]:align-middle">
@@ -1442,15 +1513,29 @@ export default function AdminProductsPage() {
                 )}
                 <Td className="font-semibold text-slate-900 text-center !align-top min-w-0 whitespace-normal">
                   <div className="flex justify-center min-w-0">
-                    <ProductQuickViewButton
-                      productId={p.id}
-                      productName={p.name}
-                      className="block whitespace-normal text-center leading-tight text-[11px] line-clamp-2 break-words font-semibold"
-                    />
+                    {isAccessoryRow(p) ? (
+                      <span className="block whitespace-normal text-center leading-tight text-[11px] line-clamp-2 break-words font-semibold text-slate-800">
+                        {p.name}
+                      </span>
+                    ) : (
+                      <ProductQuickViewButton
+                        productId={p.id}
+                        productName={p.name}
+                        className="block whitespace-normal text-center leading-tight text-[11px] line-clamp-2 break-words font-semibold"
+                      />
+                    )}
                   </div>
                 </Td>
                 <Td className="text-center align-middle whitespace-nowrap !px-0">
-                  {canMutateProductRows ? (
+                  {isAccessoryRow(p) ? (
+                    <span title={p.is_active ? "Активен в каталога" : "Неактивен"}>
+                      {p.is_active ? (
+                        <Eye className="w-3.5 h-3.5 text-sky-600 inline-block" />
+                      ) : (
+                        <EyeOff className="w-3.5 h-3.5 text-slate-400 inline-block" />
+                      )}
+                    </span>
+                  ) : canMutateProductRows ? (
                     <button
                       type="button"
                       onClick={() => void togglePublicCatalog(p)}
@@ -1484,26 +1569,29 @@ export default function AdminProductsPage() {
                   {p.brands?.name ?? "—"}
                 </Td>
                 <Td className="text-center align-middle whitespace-nowrap">
-                  <span
-                    className={`inline-flex shrink-0 items-center justify-center px-1 py-px rounded text-[10px] font-medium leading-none ${
-                      p.product_condition === "used" ? "bg-brand-orange-100 text-brand-orange-700" : "bg-brand-blue-100 text-brand-blue-700"
-                    }`}
-                  >
-                    {p.product_condition === "used" ? "Употр." : "Нов"}
-                  </span>
+                  {isAccessoryRow(p) ? (
+                    <span className="text-slate-400">—</span>
+                  ) : (
+                    <span
+                      className={`inline-flex shrink-0 items-center justify-center px-1 py-px rounded text-[10px] font-medium leading-none ${
+                        p.product_condition === "used" ? "bg-brand-orange-100 text-brand-orange-700" : "bg-brand-blue-100 text-brand-blue-700"
+                      }`}
+                    >
+                      {p.product_condition === "used" ? "Употр." : "Нов"}
+                    </span>
+                  )}
                 </Td>
                 <Td className="text-center align-middle min-w-0 truncate whitespace-nowrap" title={p.product_types?.name ?? undefined}>
                   {p.product_types?.name ?? "—"}
-                </Td>
-                <Td className="text-center align-middle min-w-0 truncate whitespace-nowrap" title={supplierLabel(p.supplier_id)}>
-                  <span className="block truncate">{supplierLabel(p.supplier_id)}</span>
                 </Td>
                 <Td
                   className={`text-center align-middle min-w-0 tabular-nums ${
                     editingPurchaseId === p.id && canEditMasterPricesInline ? "whitespace-normal" : "whitespace-nowrap"
                   }`}
                 >
-                  {editingPurchaseId === p.id && canEditMasterPricesInline ? (
+                  {isAccessoryRow(p) ? (
+                    <span className="text-slate-400">—</span>
+                  ) : editingPurchaseId === p.id && canEditMasterPricesInline ? (
                     <div className="flex flex-col gap-0.5 min-w-[5rem] mx-auto items-center">
                       <Input
                         type="number"
@@ -1552,14 +1640,16 @@ export default function AdminProductsPage() {
                 </Td>
                 {/* Дата на закупуване от доставчик — редактира се от формата на продукта. */}
                 <Td className="whitespace-nowrap text-[10px] text-slate-600 text-center align-middle tabular-nums">
-                  {fmtPurchaseDate(p.purchased_at)}
+                  {isAccessoryRow(p) ? "—" : fmtPurchaseDate(p.purchased_at)}
                 </Td>
                 <Td
                   className={`font-semibold text-center align-middle min-w-0 tabular-nums ${
-                    editingPriceId === p.id && canEditMasterPricesInline ? "whitespace-normal" : "whitespace-nowrap"
+                    editingPriceId === p.id && canEditMasterPricesInline && !isAccessoryRow(p) ? "whitespace-normal" : "whitespace-nowrap"
                   }`}
                 >
-                  {editingPriceId === p.id && canEditMasterPricesInline ? (
+                  {isAccessoryRow(p) ? (
+                    <span className="inline-block rounded px-1 py-0.5 text-slate-900 tabular-nums">{fmtEuro(p.price)}</span>
+                  ) : editingPriceId === p.id && canEditMasterPricesInline ? (
                     <div className="flex flex-col gap-0.5 min-w-[5rem] mx-auto items-center">
                       <Input type="number" min={0} value={priceDraft} onChange={(e) => setPriceDraft(e.target.value)} className="!text-xs !py-1 text-center" autoFocus />
                       <div className="flex gap-1 justify-center">
@@ -1595,22 +1685,21 @@ export default function AdminProductsPage() {
                     </span>
                   )}
                 </Td>
-                <Td className="font-mono text-[10px] text-slate-700 text-center align-middle truncate" title={(p.indoor_unit_serial ?? "").trim() || undefined}>
-                  {truncCell(p.indoor_unit_serial, 8)}
-                </Td>
-                <Td className="font-mono text-[10px] text-slate-700 text-center align-middle truncate" title={(p.outdoor_unit_serial ?? "").trim() || undefined}>
-                  {truncCell(p.outdoor_unit_serial, 8)}
+                <Td className="text-center align-middle min-w-0 truncate whitespace-nowrap" title={isAccessoryRow(p) ? undefined : supplierLabel(p)}>
+                  <span className="block truncate">{isAccessoryRow(p) ? "—" : supplierLabel(p)}</span>
                 </Td>
                 <Td className="text-[10px] text-slate-700 text-center align-middle truncate" title={(p.supplier_invoice_number ?? "").trim() || undefined}>
-                  {truncCell(p.supplier_invoice_number, 8)}
+                  {isAccessoryRow(p) ? "—" : truncCell(p.supplier_invoice_number, 8)}
                 </Td>
                 <Td className="text-center align-middle whitespace-nowrap">
                   <span className="inline-flex items-center px-1 py-px rounded text-[10px] font-bold text-slate-700 bg-slate-100 leading-none">
-                    {productRegionLabel(p.product_region)}
+                    {isAccessoryRow(p) ? "—" : productRegionLabel(p.product_region)}
                   </span>
                 </Td>
                 <Td className="text-center align-middle whitespace-nowrap">
-                  {canMutateProductRows ? (
+                  {isAccessoryRow(p) ? (
+                    <span className="text-slate-400 text-[10px]">—</span>
+                  ) : canMutateProductRows ? (
                   <button
                     type="button"
                     disabled={locationBusyId === p.id}
@@ -1629,7 +1718,9 @@ export default function AdminProductsPage() {
                   )}
                 </Td>
                 <Td className="text-center align-middle whitespace-nowrap !px-0.5">
-                  {canMutateProductRows ? (
+                  {isAccessoryRow(p) ? (
+                    <span className="text-[10px] text-slate-500 font-medium">Аксесоар</span>
+                  ) : canMutateProductRows ? (
                   <div className="flex flex-nowrap items-center justify-center gap-0.5 min-w-0">
                     <Button variant="secondary" size="sm" onClick={() => { setSaleFor(p); setSaleForm(emptySaleModalForm()); setContactQuery(""); setContactResults([]); }} disabled={!canRecordSale(p)} className="!p-1 shrink-0" title="Продажба">
                       <PackageCheck className="w-3 h-3" />
@@ -1667,7 +1758,7 @@ export default function AdminProductsPage() {
               </tr>
             ))}
             {!loading && items.length === 0 && (
-              <tr><Td colSpan={canMutateProductRows ? 17 : 16} className="text-center py-8 text-slate-500">Няма намерени продукти.</Td></tr>
+              <tr><Td colSpan={canMutateProductRows ? 15 : 14} className="text-center py-8 text-slate-500">Няма намерени артикули.</Td></tr>
             )}
           </tbody>
         </Table>
@@ -1870,22 +1961,10 @@ export default function AdminProductsPage() {
 
             <div className="px-2.5 py-1.5 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px] text-slate-600">
               <div className="col-span-2 flex min-w-0 gap-1">
-                <span className="text-slate-400 shrink-0">Дост.</span>
-                <span className="font-medium text-slate-800 truncate min-w-0" title={supplierLabel(p.supplier_id)}>
-                  {supplierLabel(p.supplier_id)}
+                <span className="text-slate-400 shrink-0">Доставчик</span>
+                <span className="font-medium text-slate-800 truncate min-w-0" title={supplierLabel(p)}>
+                  {supplierLabel(p)}
                 </span>
-              </div>
-              <div className="min-w-0">
-                <span className="text-slate-400">Вътр. сер.</span>
-                <div className="font-mono text-slate-900 break-all leading-tight" title={(p.indoor_unit_serial ?? "").trim() || undefined}>
-                  {truncCell(p.indoor_unit_serial, 22)}
-                </div>
-              </div>
-              <div className="min-w-0">
-                <span className="text-slate-400">Външ. сер.</span>
-                <div className="font-mono text-slate-900 break-all leading-tight" title={(p.outdoor_unit_serial ?? "").trim() || undefined}>
-                  {truncCell(p.outdoor_unit_serial, 22)}
-                </div>
               </div>
               <div className="col-span-2 min-w-0">
                 <span className="text-slate-400">Фактура </span>
@@ -1961,8 +2040,31 @@ export default function AdminProductsPage() {
 
       {/* Pagination */}
       <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 pt-1">
-        <span className="text-xs md:text-sm text-slate-500 font-medium">Общо: {meta.total}</span>
-        <div className="flex items-center justify-end gap-1.5 md:gap-3">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs md:text-sm text-slate-500 font-medium">
+          <span>Общо: {meta.total}</span>
+          {meta.total > 0 && (
+            <span className="text-slate-400 tabular-nums">
+              {rangeFrom}–{rangeTo} от {meta.total}
+            </span>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-2 md:gap-3">
+          <label className="inline-flex items-center gap-1.5 text-xs md:text-sm text-slate-600 font-medium">
+            <span className="whitespace-nowrap">На страница:</span>
+            <Select
+              value={String(perPage)}
+              onChange={handlePerPageChange}
+              className="!w-auto !py-1 !px-2 !text-xs md:!text-sm min-w-[4.25rem]"
+              aria-label="Брой продукти на страница"
+            >
+              {PRODUCTS_PER_PAGE_OPTS.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </Select>
+          </label>
+          <div className="flex items-center gap-1.5">
           <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className="!text-xs md:!text-sm">
             ‹ Пред.
           </Button>
@@ -1972,6 +2074,7 @@ export default function AdminProductsPage() {
           <Button variant="secondary" size="sm" disabled={page >= pages} onClick={() => setPage((p) => p + 1)} className="!text-xs md:!text-sm">
             Следв. ›
           </Button>
+          </div>
         </div>
       </div>
 

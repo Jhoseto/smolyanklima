@@ -2,12 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
+import { buildBusinessExcelBuffer } from "@/lib/backup/buildExcelBackup";
+import { exportBusinessExcelData } from "@/lib/backup/exportBusinessExcelData";
+import { backupFilename, exportAllPublicTables } from "@/lib/backup/exportPublicTables";
 
 export const maxDuration = 300;
-
-const PAGE = 2000;
-
-type RpcRow = { table_name: string };
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflight(req);
@@ -26,60 +25,75 @@ export async function GET(req: NextRequest) {
     return withCors(req, NextResponse.json({ error: "Само главен администратор може да изтегля пълен архив." }, { status: 403 }));
   }
 
+  const format = req.nextUrl.searchParams.get("format") === "xlsx" ? "xlsx" : "json";
   const supabase = session.db;
-  const { data: tableRows, error: rpcErr } = await supabase.rpc("admin_export_list_public_tables");
-  if (rpcErr) {
-    return withCors(req, NextResponse.json({ error: rpcErr.message }, { status: 500 }));
-  }
 
-  const names = ((tableRows ?? []) as RpcRow[]).map((r) => r.table_name).filter(Boolean);
-  const exportedAt = new Date().toISOString();
-  const data: Record<string, unknown[]> = {};
-  const tableErrors: Record<string, string> = {};
+  if (format === "xlsx") {
+    try {
+      const business = await exportBusinessExcelData(supabase);
+      const buffer = buildBusinessExcelBuffer(business);
+      const filename = backupFilename(business.exportedAt, "xlsx");
 
-  for (const table of names) {
-    const rows: unknown[] = [];
-    let offset = 0;
-    let errMsg: string | null = null;
-    for (;;) {
-      const { data: chunk, error } = await supabase.from(table).select("*").range(offset, offset + PAGE - 1);
-      if (error) {
-        errMsg = error.message;
-        break;
-      }
-      const part = chunk ?? [];
-      rows.push(...part);
-      if (part.length < PAGE) break;
-      offset += PAGE;
+      await logAdminActivity({
+        action: "backup.business_export_xlsx",
+        entityType: "database",
+        entityId: null,
+        details: {
+          sales: business.sales.length,
+          stockInStock: business.stock.length,
+        },
+      });
+
+      return withCors(
+        req,
+        new NextResponse(buffer, {
+          status: 200,
+          headers: {
+            "Content-Type": "application/vnd.ms-excel; charset=utf-8",
+            "Content-Disposition": `attachment; filename="${filename}"`,
+            "Cache-Control": "no-store",
+          },
+        }),
+      );
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      return withCors(req, NextResponse.json({ error: message }, { status: 500 }));
     }
-    if (errMsg) tableErrors[table] = errMsg;
-    else data[table] = rows as unknown[];
   }
 
+  let exported;
+  try {
+    exported = await exportAllPublicTables(supabase);
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e);
+    return withCors(req, NextResponse.json({ error: message }, { status: 500 }));
+  }
+
+  const { exportedAt, names, data, tableErrors } = exported;
+  const rowCounts = Object.fromEntries(
+    names.map((t) => [t, tableErrors[t] ? 0 : (data[t]?.length ?? 0)]),
+  );
+  const hadErrors = Object.keys(tableErrors).length > 0;
+
+  await logAdminActivity({
+    action: "backup.full_export",
+    entityType: "database",
+    entityId: null,
+    details: { format: "json", tables: names.length, rowCounts, hadErrors },
+  });
+
+  const filename = backupFilename(exportedAt, "json");
   const body = {
     manifest: {
       format: "smolyanklima-full-json",
       formatVersion: 1,
       exportedAt,
       tables: names,
-      rowCounts: Object.fromEntries(names.map((t) => [t, Array.isArray(data[t]) ? (data[t] as unknown[]).length : 0])),
-      tableErrors: Object.keys(tableErrors).length ? tableErrors : undefined,
+      rowCounts,
+      tableErrors: hadErrors ? tableErrors : undefined,
     },
     data,
   };
-
-  const filename = `smolyanklima-backup-${exportedAt.replace(/[:]/g, "-")}.json`;
-
-  await logAdminActivity({
-    action: "backup.full_export",
-    entityType: "database",
-    entityId: null,
-    details: {
-      tables: names.length,
-      rowCounts: body.manifest.rowCounts,
-      hadErrors: Object.keys(tableErrors).length > 0,
-    },
-  });
 
   return withCors(
     req,

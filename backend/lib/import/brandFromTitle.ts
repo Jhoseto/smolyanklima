@@ -1,5 +1,11 @@
 const BRAND_ALIASES: Array<{ patterns: RegExp[]; brandName: string }> = [
-  { patterns: [/general\s*fujitsu/i, /\bgeneral\b/i, /\bfujitsu\b/i], brandName: "Fujitsu" },
+  // Конкретни марки преди „General“ (серия Fujitsu General).
+  { patterns: [/\bauratsu\b/i], brandName: "Auratsu" },
+  { patterns: [/\baspen\b/i], brandName: "Aspen" },
+  { patterns: [/\batlantic\b/i], brandName: "Atlantic" },
+  { patterns: [/\bwilliams\b/i], brandName: "Williams" },
+  { patterns: [/\bolimpia\s*splendid\b/i], brandName: "Olimpia Splendid" },
+  { patterns: [/\bkaisai\b/i], brandName: "Kaisai" },
   { patterns: [/\bdaikin\b/i], brandName: "Daikin" },
   { patterns: [/\bmitsubishi\s*electric\b/i], brandName: "Mitsubishi Electric" },
   { patterns: [/\bmitsubishi\s*heavy\b/i], brandName: "Mitsubishi Heavy" },
@@ -13,7 +19,7 @@ const BRAND_ALIASES: Array<{ patterns: RegExp[]; brandName: string }> = [
   { patterns: [/\bmidea\b/i], brandName: "Midea" },
   { patterns: [/\bsharp\b/i], brandName: "Sharp" },
   { patterns: [/\bnacional\b/i], brandName: "Nacional" },
-  { patterns: [/\bkaisai\b/i], brandName: "Kaisai" },
+  { patterns: [/general\s*fujitsu/i, /\bfujitsu\b/i, /\bgeneral\b/i], brandName: "Fujitsu" },
 ];
 
 export function extractModelCode(text: string): string | null {

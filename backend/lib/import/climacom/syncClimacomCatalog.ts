@@ -1,59 +1,55 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { slugifyBg } from "../slugify";
 import { replaceProductImages, upsertProductSpecs, type ImageInput, type SpecsInput } from "@/lib/admin/syncProductChildren";
+import { collectClimacomCatalogProducts } from "./collectClimacomProducts";
 import {
-  collectBulclimaProductUrls,
-  fetchBulclimaHtml,
-  parseBulclimaProductPage,
-  type BulclimaParsedProduct,
-} from "./parseBulclimaHtml";
-import { classifyBulclimaCatalogItem } from "./classifyBulclimaItem";
-import { applyBulclimaSupplierToProduct, backfillBulclimaSupplierOnProducts } from "./applyBulclimaSupplier";
-import { ensureBulclimaSupplierId } from "./ensureBulclimaSupplier";
-import { upsertBulclimaAccessory } from "./upsertBulclimaAccessory";
-import { emitBulclimaProgress, type BulclimaSyncProgressHandler } from "./bulclimaSyncProgress";
+  fetchClimacomHtml,
+  parseClimacomProduct,
+  type ClimacomParsedProduct,
+} from "./parseClimacomProduct";
+import { classifyClimacomCatalogItem } from "./classifyClimacomItem";
+import { applyKlimakomSupplierToProduct, backfillKlimakomSupplierOnProducts } from "./applyKlimakomSupplier";
+import { ensureKlimakomSupplierId } from "./ensureKlimakomSupplier";
+import { upsertClimacomAccessory } from "./upsertClimacomAccessory";
+import { emitClimacomProgress, type ClimacomSyncProgressHandler } from "./climacomSyncProgress";
 
-export type { BulclimaSyncProgressEvent } from "./bulclimaSyncProgress";
+export type { ClimacomSyncProgressEvent } from "./climacomSyncProgress";
 
-export type BulclimaSyncSummary = {
+export type ClimacomSyncSummary = {
   created: number;
   updated: number;
   skipped: number;
   errors: string[];
-  productUrls: number;
+  productCount: number;
   accessoriesCreated: number;
   accessoriesUpdated: number;
-  /** UUID на доставчик „Булклима“ (null = не е намерен/създаден). */
   supplierId: string | null;
-  /** Колко климатици получиха supplier_id при backfill след sync. */
   supplierBackfilled: number;
 };
 
 const FEATURE_KEYWORDS: Array<{ slug: string; patterns: RegExp[] }> = [
-  { slug: "wifi", patterns: [/wi-?fi/i, /безжично/i, /интернет/i] },
-  { slug: "inverter", patterns: [/инвертор/i] },
-  { slug: "night_mode", patterns: [/нощен/i, /тих режим/i, /сън/i] },
+  { slug: "wifi", patterns: [/wi-?fi/i, /melcloud/i, /безжично/i] },
+  { slug: "inverter", patterns: [/инвертор/i, /inverter/i] },
+  { slug: "night_mode", patterns: [/нощен/i, /тих режим/i] },
   { slug: "self_cleaning", patterns: [/самопочистване/i] },
-  { slug: "ionizer", patterns: [/йон/i, /дезодориращ/i] },
-  { slug: "turbo", patterns: [/мощен режим/i, /powerful/i, /турбо/i] },
+  { slug: "ionizer", patterns: [/plasma quad/i, /йон/i, /филтър/i] },
 ];
 
 type RefMaps = {
   brandByName: Map<string, string>;
   typeByName: Map<string, string>;
-  categoryBySlug: Map<string, string>;
   featureBySlug: Map<string, string>;
   supplierId: string | null;
   defaultTypeId: string;
+  multisplitTypeId: string;
 };
 
 async function loadRefs(supabase: SupabaseClient): Promise<RefMaps> {
-  const [brands, types, categories, features, supplierId] = await Promise.all([
+  const [brands, types, features, supplierId] = await Promise.all([
     supabase.from("brands").select("id,name").eq("is_active", true),
     supabase.from("product_types").select("id,name"),
-    supabase.from("categories").select("id,slug"),
     supabase.from("features").select("id,slug"),
-    ensureBulclimaSupplierId(supabase),
+    ensureKlimakomSupplierId(supabase),
   ]);
 
   const brandByName = new Map<string, string>();
@@ -63,31 +59,23 @@ async function loadRefs(supabase: SupabaseClient): Promise<RefMaps> {
 
   const typeByName = new Map<string, string>();
   let defaultTypeId = "";
+  let multisplitTypeId = "";
   for (const t of types.data ?? []) {
-    typeByName.set(String(t.name).toLowerCase(), t.id as string);
+    const name = String(t.name);
+    typeByName.set(name.toLowerCase(), t.id as string);
     if (!defaultTypeId) defaultTypeId = t.id as string;
-    if (/стен/i.test(String(t.name))) defaultTypeId = t.id as string;
+    if (/стен/i.test(name)) defaultTypeId = t.id as string;
+    if (/мульти|multi/i.test(name)) multisplitTypeId = t.id as string;
   }
   if (!defaultTypeId && types.data?.[0]) defaultTypeId = types.data[0].id as string;
-
-  const categoryBySlug = new Map<string, string>();
-  for (const c of categories.data ?? []) {
-    categoryBySlug.set(String(c.slug), c.id as string);
-  }
+  if (!multisplitTypeId) multisplitTypeId = defaultTypeId;
 
   const featureBySlug = new Map<string, string>();
   for (const f of features.data ?? []) {
     featureBySlug.set(String(f.slug), f.id as string);
   }
 
-  return {
-    brandByName,
-    typeByName,
-    categoryBySlug,
-    featureBySlug,
-    supplierId,
-    defaultTypeId,
-  };
+  return { brandByName, typeByName, featureBySlug, supplierId, defaultTypeId, multisplitTypeId };
 }
 
 async function ensureBrand(supabase: SupabaseClient, brandByName: Map<string, string>, name: string): Promise<string | null> {
@@ -98,7 +86,7 @@ async function ensureBrand(supabase: SupabaseClient, brandByName: Map<string, st
   const slug = slugifyBg(name);
   const { data, error } = await supabase
     .from("brands")
-    .insert({ slug, name, color: "#6B7280", is_active: true })
+    .insert({ slug, name, color: "#E60012", is_active: true })
     .select("id")
     .single();
   if (error) {
@@ -118,6 +106,7 @@ function resolveTypeId(refs: RefMaps, hint: string | null): string {
     for (const [name, id] of refs.typeByName) {
       if (name.includes(hint.toLowerCase()) || hint.toLowerCase().includes(name)) return id;
     }
+    if (/мульти|multi/i.test(hint)) return refs.multisplitTypeId;
   }
   return refs.defaultTypeId;
 }
@@ -169,7 +158,7 @@ async function findExistingProduct(
 async function upsertOne(
   supabase: SupabaseClient,
   refs: RefMaps,
-  item: BulclimaParsedProduct,
+  item: ClimacomParsedProduct,
   syncedProductIds: string[],
 ): Promise<"created" | "updated" | "skipped"> {
   if (!item.brandName) return "skipped";
@@ -178,8 +167,6 @@ async function upsertOne(
   if (!brandId) return "skipped";
 
   const typeId = resolveTypeId(refs, item.typeHint);
-  const categoryId = item.categorySlug ? (refs.categoryBySlug.get(item.categorySlug) ?? null) : null;
-
   const existing = await findExistingProduct(supabase, brandId, item.modelCode, item.name);
   const baseSlug = slugifyBg(item.modelCode ?? item.name);
   const slug = existing?.id ? undefined : await uniqueSlug(supabase, baseSlug);
@@ -188,10 +175,9 @@ async function upsertOne(
     name: item.name,
     brand_id: brandId,
     type_id: typeId,
-    category_id: categoryId,
     description: item.description,
     price: item.priceEur,
-    price_with_mount: item.priceWithMountEur ?? item.priceEur + 200,
+    price_with_mount: item.priceWithMountEur,
     model_code: item.modelCode,
     product_condition: "new",
     stock_status: "on_order",
@@ -205,9 +191,7 @@ async function upsertOne(
     meta_description: (item.description ?? item.name).slice(0, 160),
   };
 
-  if (refs.supplierId) {
-    productRow.supplier_id = refs.supplierId;
-  }
+  if (refs.supplierId) productRow.supplier_id = refs.supplierId;
 
   if (!existing) {
     productRow.slug = slug;
@@ -215,17 +199,16 @@ async function upsertOne(
     const { data, error } = await supabase.from("products").insert(productRow).select("id").single();
     if (error || !data?.id) throw new Error(error?.message ?? "insert failed");
     const productId = data.id as string;
-    if (refs.supplierId) await applyBulclimaSupplierToProduct(supabase, productId, refs.supplierId);
+    if (refs.supplierId) await applyKlimakomSupplierToProduct(supabase, productId, refs.supplierId);
     syncedProductIds.push(productId);
     await syncChildren(supabase, productId, item, refs);
     return "created";
   }
 
   const updateRow = { ...productRow };
-  delete updateRow.show_in_public_catalog;
   const { error } = await supabase.from("products").update(updateRow).eq("id", existing.id);
   if (error) throw new Error(error.message);
-  if (refs.supplierId) await applyBulclimaSupplierToProduct(supabase, existing.id, refs.supplierId);
+  if (refs.supplierId) await applyKlimakomSupplierToProduct(supabase, existing.id, refs.supplierId);
   syncedProductIds.push(existing.id);
   await syncChildren(supabase, existing.id, item, refs);
   return "updated";
@@ -234,7 +217,7 @@ async function upsertOne(
 async function syncChildren(
   supabase: SupabaseClient,
   productId: string,
-  item: BulclimaParsedProduct,
+  item: ClimacomParsedProduct,
   refs: RefMaps,
 ): Promise<void> {
   const specs: SpecsInput = { ...item.specs };
@@ -258,21 +241,21 @@ async function syncChildren(
   }
 }
 
-export async function runBulclimaCatalogSync(
+export async function runClimacomCatalogSync(
   supabase: SupabaseClient,
-  opts?: { limit?: number; onProgress?: BulclimaSyncProgressHandler },
-): Promise<BulclimaSyncSummary> {
-  if (process.env.BULCLIMA_TLS_INSECURE === "1") {
+  opts?: { limit?: number; onProgress?: ClimacomSyncProgressHandler },
+): Promise<ClimacomSyncSummary> {
+  if (process.env.CLIMACOM_TLS_INSECURE === "1") {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
   }
 
   const onProgress = opts?.onProgress;
-  const summary: BulclimaSyncSummary = {
+  const summary: ClimacomSyncSummary = {
     created: 0,
     updated: 0,
     skipped: 0,
     errors: [],
-    productUrls: 0,
+    productCount: 0,
     accessoriesCreated: 0,
     accessoriesUpdated: 0,
     supplierId: null,
@@ -280,83 +263,85 @@ export async function runBulclimaCatalogSync(
   };
   const syncedClimateProductIds: string[] = [];
 
-  emitBulclimaProgress(onProgress, { phase: "start", message: "Старт на синхронизация с bulclima.com…" });
+  emitClimacomProgress(onProgress, { phase: "start", message: "Старт на синхронизация с climacom.com…" });
 
   await supabase
     .from("product_catalog_settings")
-    .upsert({ id: 1, bulclima_last_sync_status: "running", bulclima_last_sync_summary: null }, { onConflict: "id" });
+    .upsert({ id: 1, climacom_last_sync_status: "running", climacom_last_sync_summary: null }, { onConflict: "id" });
 
-  emitBulclimaProgress(onProgress, { phase: "crawl", message: "Зареждане на референции (марки, категории)…" });
+  emitClimacomProgress(onProgress, { phase: "crawl", message: "Зареждане на референции…" });
   const refs = await loadRefs(supabase);
   summary.supplierId = refs.supplierId;
+
   if (!refs.supplierId) {
     summary.errors.push(
-      "Липсва доставчик „Булклима“ в контакти — продуктите няма да получат supplier_id. Пуснете seed 0001_supplier_contacts.sql или създайте доставчик ръчно.",
+      "Липсва доставчик „КЛИМАКОМ“ в контакти — продуктите няма да получат supplier_id.",
     );
-    emitBulclimaProgress(onProgress, {
-      phase: "crawl",
-      message: "Внимание: не е намерен доставчик Булклима в контакти.",
-    });
+    emitClimacomProgress(onProgress, { phase: "crawl", message: "Внимание: не е намерен доставчик КЛИМАКОМ." });
   } else {
-    emitBulclimaProgress(onProgress, { phase: "crawl", message: "Доставчик: Булклима (автоматично при импорт)." });
+    emitClimacomProgress(onProgress, { phase: "crawl", message: "Доставчик: КЛИМАКОМ (автоматично)." });
   }
 
-  emitBulclimaProgress(onProgress, { phase: "crawl", message: "Обхождане на каталога bulclima.com…" });
-  const urls = await collectBulclimaProductUrls(opts?.limit, (message) => {
-    emitBulclimaProgress(onProgress, { phase: "crawl", message });
-  });
-  summary.productUrls = urls.length;
-  emitBulclimaProgress(onProgress, {
-    phase: "import",
-    message: `Намерени ${urls.length} продукта — започва импорт…`,
-    current: 0,
-    total: urls.length,
+  emitClimacomProgress(onProgress, {
+    phase: "crawl",
+    message: "Зареждане на продукти от WooCommerce API (стенни, мултисплит, Wi‑Fi)…",
   });
 
-  for (let i = 0; i < urls.length; i++) {
-    const url = urls[i]!;
+  const wcProducts = await collectClimacomCatalogProducts({
+    limit: opts?.limit,
+    onProgress: (message) => emitClimacomProgress(onProgress, { phase: "crawl", message }),
+  });
+
+  summary.productCount = wcProducts.length;
+  emitClimacomProgress(onProgress, {
+    phase: "import",
+    message: `Намерени ${wcProducts.length} артикула — започва импорт…`,
+    current: 0,
+    total: wcProducts.length,
+  });
+
+  for (let i = 0; i < wcProducts.length; i++) {
+    const wc = wcProducts[i]!;
     const current = i + 1;
+    const url = wc.permalink;
     try {
-      emitBulclimaProgress(onProgress, {
+      emitClimacomProgress(onProgress, {
         phase: "import",
-        message: `Зареждане ${current}/${urls.length}: ${url}`,
+        message: `Зареждане ${current}/${wcProducts.length}: ${wc.name}`,
         current,
-        total: urls.length,
+        total: wcProducts.length,
         url,
       });
-      const html = await fetchBulclimaHtml(url);
-      const parsed = parseBulclimaProductPage(html, url);
+
+      const html = await fetchClimacomHtml(url);
+      const parsed = await parseClimacomProduct(wc, html);
       if (!parsed) {
         summary.skipped++;
-        emitBulclimaProgress(onProgress, {
+        emitClimacomProgress(onProgress, {
           phase: "import",
-          message: `Пропуснат (няма цена/име): ${url}`,
+          message: `Пропуснат (няма цена): ${wc.name}`,
           current,
-          total: urls.length,
+          total: wcProducts.length,
           url,
           result: "skipped",
         });
         continue;
       }
-      const catalogKind = classifyBulclimaCatalogItem(parsed, url);
+
+      const catalogKind = classifyClimacomCatalogItem(parsed);
       let result: "created" | "updated" | "skipped";
       let kindLabel: string;
 
       if (catalogKind === "accessory") {
         kindLabel = "аксесоар";
-        let brandId: string | null = null;
-        let brandSkipped = false;
-        if (parsed.brandName) {
-          brandId = await ensureBrand(supabase, refs.brandByName, parsed.brandName);
-          if (!brandId) {
-            brandSkipped = true;
-            kindLabel = "аксесоар (марка?)";
-          }
-        }
-        if (brandSkipped) {
+        const brandId = parsed.brandName
+          ? await ensureBrand(supabase, refs.brandByName, parsed.brandName)
+          : null;
+        if (!brandId && parsed.brandName) {
           result = "skipped";
+          kindLabel = "аксесоар (марка?)";
         } else {
-          result = await upsertBulclimaAccessory(supabase, brandId, parsed);
+          result = await upsertClimacomAccessory(supabase, brandId, parsed);
           if (result === "created") summary.accessoriesCreated++;
           else if (result === "updated") summary.accessoriesUpdated++;
         }
@@ -368,11 +353,11 @@ export async function runBulclimaCatalogSync(
 
       if (result === "skipped" && catalogKind === "accessory") summary.skipped++;
 
-      emitBulclimaProgress(onProgress, {
+      emitClimacomProgress(onProgress, {
         phase: "import",
-        message: `${result === "created" ? "Нов" : result === "updated" ? "Обновен" : "Пропуснат"} (${kindLabel}): ${parsed.name} · ${parsed.imageUrls.length} снимки`,
+        message: `${result === "created" ? "Нов" : result === "updated" ? "Обновен" : "Пропуснат"} (${kindLabel}): ${parsed.name}`,
         current,
-        total: urls.length,
+        total: wcProducts.length,
         url,
         productName: parsed.name,
         result,
@@ -381,27 +366,26 @@ export async function runBulclimaCatalogSync(
     } catch (e: unknown) {
       const errMsg = e instanceof Error ? e.message : String(e);
       summary.errors.push(`${url}: ${errMsg}`);
-      emitBulclimaProgress(onProgress, {
+      emitClimacomProgress(onProgress, {
         phase: "import",
-        message: `Грешка: ${url} — ${errMsg}`,
+        message: `Грешка: ${wc.name} — ${errMsg}`,
         current,
-        total: urls.length,
+        total: wcProducts.length,
         url,
       });
     }
-    await new Promise((r) => setTimeout(r, 600));
+    await new Promise((r) => setTimeout(r, 450));
   }
 
   if (refs.supplierId && syncedClimateProductIds.length) {
     try {
-      summary.supplierBackfilled = await backfillBulclimaSupplierOnProducts(
+      summary.supplierBackfilled = await backfillKlimakomSupplierOnProducts(
         supabase,
         refs.supplierId,
         syncedClimateProductIds,
       );
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      summary.errors.push(`Доставчик (backfill): ${msg}`);
+      summary.errors.push(`Доставчик (backfill): ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -414,18 +398,18 @@ export async function runBulclimaCatalogSync(
   await supabase.from("product_catalog_settings").upsert(
     {
       id: 1,
-      bulclima_last_sync_at: new Date().toISOString(),
-      bulclima_last_sync_status: status,
-      bulclima_last_sync_summary: summary,
+      climacom_last_sync_at: new Date().toISOString(),
+      climacom_last_sync_status: status,
+      climacom_last_sync_summary: summary,
     },
     { onConflict: "id" },
   );
 
-  emitBulclimaProgress(onProgress, {
+  emitClimacomProgress(onProgress, {
     phase: "done",
-    message: `Готово: ${summary.created} климатици (нови), ${summary.updated} (обновени); ${summary.accessoriesCreated} аксесоара (нови), ${summary.accessoriesUpdated} (обновени); ${summary.skipped} пропуснати; доставчик: ${summary.supplierId ? "Булклима" : "липсва"}${summary.supplierBackfilled ? ` (+${summary.supplierBackfilled} попълнени)` : ""}; ${summary.errors.length} грешки`,
-    current: urls.length,
-    total: urls.length,
+    message: `Готово: ${summary.created} климатици (нови), ${summary.updated} (обновени); ${summary.accessoriesCreated} аксесоара (нови), ${summary.accessoriesUpdated} (обновени); ${summary.skipped} пропуснати; доставчик: ${summary.supplierId ? "КЛИМАКОМ" : "липсва"}; ${summary.errors.length} грешки`,
+    current: wcProducts.length,
+    total: wcProducts.length,
   });
 
   return summary;

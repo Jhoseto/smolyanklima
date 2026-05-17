@@ -4,9 +4,9 @@ import { adminSession, requireRole } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import {
-  runBulclimaCatalogSync,
-  type BulclimaSyncProgressEvent,
-} from "@/lib/import/bulclima/syncBulclimaCatalog";
+  runClimacomCatalogSync,
+  type ClimacomSyncProgressEvent,
+} from "@/lib/import/climacom/syncClimacomCatalog";
 
 export const maxDuration = 300;
 
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await session.db
     .from("product_catalog_settings")
-    .select("bulclima_last_sync_at,bulclima_last_sync_status,bulclima_last_sync_summary,updated_at")
+    .select("climacom_last_sync_at,climacom_last_sync_status,climacom_last_sync_summary,updated_at")
     .eq("id", 1)
     .maybeSingle();
 
@@ -61,7 +61,9 @@ async function authorizeSync(req: NextRequest) {
   try {
     requireRole(session, "master_admin", "office_staff");
   } catch {
-    return { error: withCors(req, NextResponse.json({ error: "Само офис персонал може да синхронизира каталога." }, { status: 403 })) };
+    return {
+      error: withCors(req, NextResponse.json({ error: "Само офис персонал може да синхронизира." }, { status: 403 })),
+    };
   }
   return { session };
 }
@@ -83,18 +85,18 @@ export async function POST(req: NextRequest) {
           try {
             controller.enqueue(sseEncode(event, data));
           } catch {
-            /* client disconnected */
+            /* disconnected */
           }
         };
 
         try {
-          const summary = await runBulclimaCatalogSync(supabase, {
+          const summary = await runClimacomCatalogSync(supabase, {
             limit,
-            onProgress: (ev: BulclimaSyncProgressEvent) => send("progress", ev),
+            onProgress: (ev: ClimacomSyncProgressEvent) => send("progress", ev),
           });
 
           await logAdminActivity({
-            action: "catalog.bulclima_sync",
+            action: "catalog.climacom_sync",
             entityType: "product_catalog_settings",
             entityId: null,
             details: summary,
@@ -106,8 +108,8 @@ export async function POST(req: NextRequest) {
           await supabase.from("product_catalog_settings").upsert(
             {
               id: 1,
-              bulclima_last_sync_status: "error",
-              bulclima_last_sync_summary: { error: message },
+              climacom_last_sync_status: "error",
+              climacom_last_sync_summary: { error: message },
             },
             { onConflict: "id" },
           );
@@ -122,10 +124,10 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const summary = await runBulclimaCatalogSync(supabase, { limit });
+    const summary = await runClimacomCatalogSync(supabase, { limit });
 
     await logAdminActivity({
-      action: "catalog.bulclima_sync",
+      action: "catalog.climacom_sync",
       entityType: "product_catalog_settings",
       entityId: null,
       details: summary,
@@ -137,8 +139,8 @@ export async function POST(req: NextRequest) {
     await supabase.from("product_catalog_settings").upsert(
       {
         id: 1,
-        bulclima_last_sync_status: "error",
-        bulclima_last_sync_summary: { error: message },
+        climacom_last_sync_status: "error",
+        climacom_last_sync_summary: { error: message },
       },
       { onConflict: "id" },
     );

@@ -14,7 +14,7 @@ const QuerySchema = z.object({
   q: z.string().optional(),
   kind: z.enum(["client", "supplier"]).optional(),
   page: z.coerce.number().int().min(1).optional().default(1),
-  perPage: z.coerce.number().int().min(1).max(200).optional().default(30),
+  perPage: z.coerce.number().int().min(1).max(500).optional().default(30),
 });
 
 const BodySchema = z.object({

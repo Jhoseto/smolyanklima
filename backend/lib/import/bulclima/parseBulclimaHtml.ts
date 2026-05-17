@@ -1,4 +1,5 @@
 import { inferBtuFromCoolingKw } from "@/lib/catalog/productBtu";
+import { parseEnergyClassFromText } from "../parseEnergyClass";
 import { extractModelCode, resolveBrandName } from "../brandFromTitle";
 
 export type BulclimaParsedProduct = {
@@ -25,6 +26,7 @@ export type BulclimaParsedProduct = {
     energy_class_heat?: string | null;
     seer?: number | null;
     scop?: number | null;
+    warranty_months?: number | null;
     weight_indoor_kg?: number | null;
     weight_outdoor_kg?: number | null;
     dim_indoor_length_mm?: number | null;
@@ -80,12 +82,6 @@ function parseNum(s: string | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function parseEnergyClass(s: string | undefined): string | null {
-  if (!s) return null;
-  const m = s.match(/A\+{1,3}/i);
-  return m ? m[0].toUpperCase() : null;
-}
-
 /** Bulclima таблица: Височина × Дължина × Ширина (mm). */
 function parseBulclimaDimensionsHlw(s: string | undefined): {
   dim_length_mm: number;
@@ -114,7 +110,7 @@ function parseNoiseIndoorDb(s: string | undefined): number | null {
 
 function parseSeerScopCell(s: string | undefined): { value: number | null; energyClass: string | null } {
   if (!s || /^-+$/.test(s.trim())) return { value: null, energyClass: null };
-  return { value: firstNumberInText(s), energyClass: parseEnergyClass(s) };
+  return { value: firstNumberInText(s), energyClass: parseEnergyClassFromText(s) };
 }
 
 type BulclimaTableRow = { unit?: string; cool?: string; heat?: string };
@@ -185,8 +181,10 @@ function extractListCharacteristics(html: string): {
   const scopM = text.match(/SCOP\s*([\d.,]+)/i);
   if (seerM) out.seer = parseNum(seerM[1]) ?? undefined;
   if (scopM) out.scop = parseNum(scopM[1]) ?? undefined;
-  out.energyCool = parseEnergyClass(text.match(/SEER[\s\S]{0,40}?(A\+{1,3})/i)?.[1] ?? text) ?? undefined;
-  out.energyHeat = parseEnergyClass(text.match(/SCOP[\s\S]{0,40}?(A\+{1,3})/i)?.[1] ?? text) ?? undefined;
+  const seerChunk = text.match(/SEER[\s\S]{0,60}/i)?.[0];
+  const scopChunk = text.match(/SCOP[\s\S]{0,60}/i)?.[0];
+  out.energyCool = parseEnergyClassFromText(seerChunk ?? text) ?? undefined;
+  out.energyHeat = parseEnergyClassFromText(scopChunk ?? text) ?? undefined;
   const noiseM = text.match(/(\d+(?:[.,]\d+)?)\s*dB/i);
   if (noiseM) out.noiseDb = parseNum(noiseM[1]) ?? undefined;
   const refrM = text.match(/\b(R32|R410A|R290)\b/i);
@@ -230,14 +228,14 @@ export function extractBulclimaProductSpecs(html: string): BulclimaSpecsPayload 
 
   const coolKw =
     firstNumberInText(powerRow?.cool) ??
-    parseNum(readAttributeIconValue(html, "Охлаждане")) ??
+    parseNum(readAttributeIconValue(html, "Охлаждане") ?? undefined) ??
     firstNumberInText(html.match(/coolding-capacity-attribute-value[\s\S]{0,200}?attribute-value[^>]*>([^<]+)/i)?.[1]);
   const heatKw =
     firstNumberInText(powerRow?.heat) ??
-    parseNum(readAttributeIconValue(html, "Отопление")) ??
+    parseNum(readAttributeIconValue(html, "Отопление") ?? undefined) ??
     firstNumberInText(html.match(/heating-capacity-attribute-value[\s\S]{0,200}?attribute-value[^>]*>([^<]+)/i)?.[1]);
 
-  const btuIcon = parseNum(readAttributeIconValue(html, "Мощност"));
+  const btuIcon = parseNum(readAttributeIconValue(html, "Мощност") ?? undefined);
   const btu =
     btuIcon != null && btuIcon > 0 && btuIcon <= 120
       ? Math.round(btuIcon)
@@ -246,7 +244,7 @@ export function extractBulclimaProductSpecs(html: string): BulclimaSpecsPayload 
   const seerCell = parseSeerScopCell(seerRow?.cool);
   const scopCell = parseSeerScopCell(scopRow?.heat);
 
-  const classIcon = parseEnergyClass(readAttributeIconValue(html, "Клас") ?? undefined);
+  const classIcon = parseEnergyClassFromText(readAttributeIconValue(html, "Клас") ?? undefined);
 
   const indoorDim = parseBulclimaDimensionsHlw(dimRow?.cool);
   const outdoorDim = parseBulclimaDimensionsHlw(dimRow?.heat);
@@ -271,8 +269,8 @@ export function extractBulclimaProductSpecs(html: string): BulclimaSpecsPayload 
       html.match(/\b(R32|R410A|R290)\b/i)?.[1]?.toUpperCase() ||
       null,
     wifi,
-    energy_class_cool: seerCell.energyClass ?? list.energyCool ?? classIcon,
-    energy_class_heat: scopCell.energyClass ?? list.energyHeat ?? classIcon,
+    energy_class_cool: seerCell.energyClass ?? list.energyCool ?? classIcon ?? null,
+    energy_class_heat: scopCell.energyClass ?? list.energyHeat ?? null,
     seer: seerCell.value ?? list.seer ?? null,
     scop: scopCell.value ?? list.scop ?? null,
     warranty_months: parseWarrantyMonths(html),
@@ -498,6 +496,19 @@ export function extractPaginationUrls(html: string, currentUrl: string): string[
   return [...pages];
 }
 
+/** Лого/марка от продуктовата страница на Bulclima (`single-product-brand-thumb`). */
+export function extractBulclimaBrandHint(html: string): string | null {
+  const thumb = html.match(
+    /class=["'][^"']*single-product-brand-thumb[^"']*["'][^>]*(?:title|alt)=["']([^"']+)["']/i,
+  );
+  if (thumb?.[1]) return decodeHtml(thumb[1]).replace(/\s+Inc\.?$/i, "").trim() || null;
+  const thumbAltFirst = html.match(
+    /single-product-brand-thumb[^>]*\s(?:title|alt)=["']([^"']+)["']/i,
+  );
+  if (thumbAltFirst?.[1]) return decodeHtml(thumbAltFirst[1]).replace(/\s+Inc\.?$/i, "").trim() || null;
+  return null;
+}
+
 function categorySlugFromUrl(url: string): string | null {
   if (url.includes("podovi")) return "floor";
   if (url.includes("kasset")) return "cassette";
@@ -518,7 +529,7 @@ export function parseBulclimaProductPage(html: string, sourceUrl: string): Bulcl
 
   const mount = parseMountAddon(html);
   const modelCode = extractModelCode(name);
-  const brandName = resolveBrandName(name);
+  const brandName = resolveBrandName(name, extractBulclimaBrandHint(html));
 
   let description: string | null = null;
   const descTab = html.match(

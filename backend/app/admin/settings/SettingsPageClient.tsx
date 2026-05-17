@@ -4,12 +4,18 @@ import { useEffect, useRef, useState } from "react";
 import { SectionTitle, Card, Input, Button } from "../ui";
 import { RefreshCw, Save, Database, Download, FolderOpen, CloudDownload } from "lucide-react";
 import type { BulclimaSyncProgressEvent } from "@/lib/import/bulclima/bulclimaSyncProgress";
+import type { ClimacomSyncProgressEvent } from "@/lib/import/climacom/climacomSyncProgress";
+import {
+  isLocalFolderPickerSupported,
+  pickLocalFolder,
+  writeBlobToDirectory,
+} from "@/lib/client/pickLocalFolder";
 
 const MAX_SYNC_LOG_LINES = 300;
 
-async function consumeBulclimaSyncStream(
+async function consumeCatalogSyncStream(
   res: Response,
-  onProgress: (ev: BulclimaSyncProgressEvent) => void,
+  onProgress: (ev: { message: string; phase?: string; current?: number; total?: number }) => void,
 ): Promise<Record<string, unknown>> {
   if (!res.body) throw new Error("Празен отговор от сървъра");
   const reader = res.body.getReader();
@@ -33,13 +39,40 @@ async function consumeBulclimaSyncStream(
       }
       if (!data) continue;
       const parsed = JSON.parse(data) as { error?: string; data?: Record<string, unknown> };
-      if (event === "progress") onProgress(parsed as BulclimaSyncProgressEvent);
+      if (event === "progress") onProgress(parsed as { message: string; phase?: string; current?: number; total?: number });
       else if (event === "done") summary = parsed.data ?? null;
       else if (event === "error") throw new Error(parsed.error || "Грешка при синхронизация");
     }
   }
   if (!summary) throw new Error("Синхронизацията приключи без обобщение");
   return summary;
+}
+
+/** Ред „открити / нови / обновени“ след последен sync (Bulclima + Climacom). */
+function formatCatalogSyncStats(summary: Record<string, unknown> | null, foundKey: "productUrls" | "productCount") {
+  if (!summary || typeof summary.created !== "number") return null;
+  const found =
+    typeof summary[foundKey] === "number"
+      ? summary[foundKey]
+      : foundKey === "productUrls" && typeof summary.productCount === "number"
+        ? summary.productCount
+        : "—";
+  const parts = [
+    `открити: ${found}`,
+    `климатици: ${summary.created} нови / ${summary.updated ?? 0} обновени`,
+  ];
+  if (typeof summary.accessoriesCreated === "number") {
+    parts.push(
+      `аксесоари: ${summary.accessoriesCreated} нови / ${typeof summary.accessoriesUpdated === "number" ? summary.accessoriesUpdated : 0} обновени`,
+    );
+  }
+  if (typeof summary.skipped === "number" && summary.skipped > 0) {
+    parts.push(`пропуснати: ${summary.skipped}`);
+  }
+  if (Array.isArray(summary.errors) && summary.errors.length > 0) {
+    parts.push(`грешки: ${summary.errors.length}`);
+  }
+  return ` · ${parts.join("; ")}`;
 }
 
 type SettingRow = { key: string; value: string | null; description: string | null; updated_at: string };
@@ -52,7 +85,7 @@ const LS_LAST_BACKUP = "smolyanklima_last_full_backup_at";
 
 const TABS: { id: SettingsTab; label: string; hint: string }[] = [
   { id: "general", label: "Общи", hint: "Общи настройки — засега празно" },
-  { id: "catalog", label: "Каталог", hint: "Импорт на продукти от Булклима" },
+  { id: "catalog", label: "Каталог", hint: "Импорт от Булклима и Климаком (Climacom)" },
   { id: "backup", label: "Резервно копие", hint: "Пълен JSON архив на базата данни" },
 ];
 
@@ -99,15 +132,28 @@ export default function SettingsPageClient() {
   const [error, setError] = useState<string | null>(null);
   const [backupLoading, setBackupLoading] = useState(false);
   const [backupFolder, setBackupFolder] = useState("");
+  const backupDirHandleRef = useRef<FileSystemDirectoryHandle | null>(null);
+  const [folderPicking, setFolderPicking] = useState(false);
+  const [folderManualEdit, setFolderManualEdit] = useState(false);
   const [backupReminderDays, setBackupReminderDays] = useState("7");
   const [backupSaving, setBackupSaving] = useState(false);
-  const [backupDownloading, setBackupDownloading] = useState(false);
+  const [backupDownloading, setBackupDownloading] = useState<"json" | "xlsx" | null>(null);
   const [lastBackupAt, setLastBackupAt] = useState<string | null>(null);
   const [bulclimaSyncing, setBulclimaSyncing] = useState(false);
+  const [reclassifying, setReclassifying] = useState(false);
   const [bulclimaProgress, setBulclimaProgress] = useState<{ current: number; total: number } | null>(null);
   const [bulclimaLog, setBulclimaLog] = useState<string[]>([]);
   const bulclimaLogEndRef = useRef<HTMLDivElement>(null);
   const [bulclimaStatus, setBulclimaStatus] = useState<{
+    at: string | null;
+    status: string | null;
+    summary: Record<string, unknown> | null;
+  } | null>(null);
+  const [climacomSyncing, setClimacomSyncing] = useState(false);
+  const [climacomProgress, setClimacomProgress] = useState<{ current: number; total: number } | null>(null);
+  const [climacomLog, setClimacomLog] = useState<string[]>([]);
+  const climacomLogEndRef = useRef<HTMLDivElement>(null);
+  const [climacomStatus, setClimacomStatus] = useState<{
     at: string | null;
     status: string | null;
     summary: Record<string, unknown> | null;
@@ -130,6 +176,45 @@ export default function SettingsPageClient() {
       });
     } else if (ev.phase === "crawl") {
       setBulclimaProgress(null);
+    }
+  }
+
+  function appendClimacomLog(line: string) {
+    setClimacomLog((prev) => {
+      const next = [...prev, line];
+      return next.length > MAX_SYNC_LOG_LINES ? next.slice(-MAX_SYNC_LOG_LINES) : next;
+    });
+  }
+
+  function handleClimacomProgress(ev: ClimacomSyncProgressEvent) {
+    const ts = new Date().toLocaleTimeString("bg-BG");
+    appendClimacomLog(`[${ts}] ${ev.message}`);
+    if (ev.total != null && ev.total > 0) {
+      setClimacomProgress({ current: ev.current ?? 0, total: ev.total });
+    } else if (ev.phase === "crawl") {
+      setClimacomProgress(null);
+    }
+  }
+
+  async function loadClimacomStatus() {
+    try {
+      const res = await fetch("/api/admin/catalog/sync-climacom", { credentials: "include" });
+      const json = (await res.json().catch(() => ({}))) as {
+        data?: {
+          climacom_last_sync_at?: string | null;
+          climacom_last_sync_status?: string | null;
+          climacom_last_sync_summary?: Record<string, unknown> | null;
+        } | null;
+      };
+      if (!res.ok) return;
+      const d = json.data;
+      setClimacomStatus({
+        at: d?.climacom_last_sync_at ?? null,
+        status: d?.climacom_last_sync_status ?? null,
+        summary: (d?.climacom_last_sync_summary as Record<string, unknown> | null) ?? null,
+      });
+    } catch {
+      /* optional */
     }
   }
 
@@ -173,7 +258,81 @@ export default function SettingsPageClient() {
   async function refreshActiveTab() {
     setError(null);
     if (activeTab === "backup") await loadBackupSettings();
-    else if (activeTab === "catalog") await loadBulclimaStatus();
+    else if (activeTab === "catalog") await Promise.all([loadBulclimaStatus(), loadClimacomStatus()]);
+  }
+
+  async function reclassifyMisplacedAccessories(dryRun: boolean) {
+    if (!dryRun) {
+      const ok = window.confirm(
+        "Ще премести помпи, маркучи, Wi‑Fi модули и др. от „Климатици“ в „Аксесоари“ и ще изтрие старите записи в продукти. Продължаване?",
+      );
+      if (!ok) return;
+    }
+    setReclassifying(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/catalog/reclassify-accessories?dryRun=${dryRun ? "1" : "0"}`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        data?: {
+          scanned?: number;
+          moved?: number;
+          deleted?: number;
+          accessoriesCreated?: number;
+          accessoriesUpdated?: number;
+          errors?: string[];
+          items?: Array<{ name: string; slug: string }>;
+        };
+      };
+      if (!res.ok) throw new Error(json.error || "Грешка при преместване");
+      const d = json.data;
+      const msg = dryRun
+        ? `Преглед: ${d?.moved ?? 0} артикула ще бъдат преместени (от ${d?.scanned ?? 0} прегледани).`
+        : `Готово: преместени ${d?.moved ?? 0}, нови аксесоари ${d?.accessoriesCreated ?? 0}, обновени ${d?.accessoriesUpdated ?? 0}, изтрити продукти ${d?.deleted ?? 0}.`;
+      if ((d?.errors?.length ?? 0) > 0) {
+        setError(`${msg} Грешки: ${d!.errors!.length}`);
+      } else {
+        window.alert(msg);
+      }
+    } catch (e: unknown) {
+      setError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setReclassifying(false);
+    }
+  }
+
+  async function syncClimacomCatalog() {
+    setClimacomSyncing(true);
+    setError(null);
+    setClimacomLog([]);
+    setClimacomProgress(null);
+    try {
+      const res = await fetch("/api/admin/catalog/sync-climacom?stream=1", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(json.error || "Грешка при синхронизация");
+      }
+      const contentType = res.headers.get("Content-Type") ?? "";
+      if (contentType.includes("text/event-stream")) {
+        await consumeCatalogSyncStream(res, handleClimacomProgress);
+      } else {
+        const json = (await res.json()) as { error?: string };
+        if (json.error) throw new Error(json.error);
+        appendClimacomLog("Синхронизацията приключи.");
+      }
+      await loadClimacomStatus();
+    } catch (e: unknown) {
+      setError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setClimacomSyncing(false);
+      setClimacomProgress(null);
+    }
   }
 
   async function syncBulclimaCatalog() {
@@ -192,7 +351,7 @@ export default function SettingsPageClient() {
       }
       const contentType = res.headers.get("Content-Type") ?? "";
       if (contentType.includes("text/event-stream")) {
-        await consumeBulclimaSyncStream(res, handleBulclimaProgress);
+        await consumeCatalogSyncStream(res, handleBulclimaProgress);
       } else {
         const json = (await res.json()) as { error?: string };
         if (json.error) throw new Error(json.error);
@@ -212,7 +371,12 @@ export default function SettingsPageClient() {
   }, [bulclimaLog]);
 
   useEffect(() => {
+    climacomLogEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [climacomLog]);
+
+  useEffect(() => {
     void loadBulclimaStatus();
+    void loadClimacomStatus();
   }, []);
 
   useEffect(() => {
@@ -262,26 +426,65 @@ export default function SettingsPageClient() {
     }
   }
 
-  async function downloadFullBackup() {
-    setBackupDownloading(true);
+  async function chooseBackupFolder() {
+    if (folderPicking) return;
+    setFolderPicking(true);
     setError(null);
     try {
-      const res = await fetch("/api/admin/backup/full", { credentials: "include" });
+      const picked = await pickLocalFolder();
+      if (!picked) return;
+      backupDirHandleRef.current = picked.directoryHandle ?? null;
+      setBackupFolder(picked.displayPath);
+    } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
+      setError(
+        e instanceof Error
+          ? e.message
+          : "Браузърът не поддържа избор на папка. Въведете пътя ръчно (напр. D:/Backup/SmolyanKlima).",
+      );
+    } finally {
+      setFolderPicking(false);
+    }
+  }
+
+  async function downloadFullBackup(format: "json" | "xlsx") {
+    setBackupDownloading(format);
+    setError(null);
+    try {
+      const url =
+        format === "xlsx" ? "/api/admin/backup/full?format=xlsx" : "/api/admin/backup/full";
+      const res = await fetch(url, { credentials: "include" });
       if (!res.ok) {
         const j = (await res.json().catch(() => null)) as { error?: string } | null;
         throw new Error(j?.error || "Грешка при генериране на архива");
       }
       const blob = await res.blob();
       const cd = res.headers.get("Content-Disposition");
-      let filename = "smolyanklima-backup.json";
+      let filename = format === "xlsx" ? "smolyanklima-prodazhbi-stoka.xml" : "smolyanklima-backup.json";
       const m = cd?.match(/filename="([^"]+)"/);
       if (m?.[1]) filename = m[1];
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
+
+      const dirHandle = backupDirHandleRef.current;
+      if (dirHandle) {
+        try {
+          await writeBlobToDirectory(dirHandle, filename, blob);
+        } catch {
+          backupDirHandleRef.current = null;
+          const blobUrl = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = blobUrl;
+          a.download = filename;
+          a.click();
+          URL.revokeObjectURL(blobUrl);
+        }
+      } else {
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(blobUrl);
+      }
       try {
         const iso = new Date().toISOString();
         localStorage.setItem(LS_LAST_BACKUP, iso);
@@ -292,7 +495,7 @@ export default function SettingsPageClient() {
     } catch (e: unknown) {
       setError(String(e instanceof Error ? e.message : e));
     } finally {
-      setBackupDownloading(false);
+      setBackupDownloading(null);
     }
   }
 
@@ -340,8 +543,9 @@ export default function SettingsPageClient() {
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-black text-slate-900 tracking-tight">Резервно копие на базата данни</div>
                   <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                    Пълен експорт на всички <strong>public</strong> таблици като един JSON файл (с манифест и брой редове).
-                    Запишете го на сигурно място. Уеб приложението <strong>не може</strong> да записва директно в папка на диска.
+                    <strong>JSON</strong> — пълен технически архив на базата. <strong>Excel</strong> — отчет за офиса: лист{" "}
+                    <strong>„Продажби“</strong> (всички продажби до момента) и <strong>„Налична стока“</strong> (артикули със
+                    статус „В наличност“). Запишете файловете на сигурно място.
                   </p>
                 </div>
               </div>
@@ -360,13 +564,54 @@ export default function SettingsPageClient() {
                     <FolderOpen className="w-3.5 h-3.5 opacity-70" />
                     Препоръчана локална папка (път)
                   </span>
-                  <Input
-                    value={backupFolder}
-                    onChange={(e) => setBackupFolder(e.target.value)}
-                    placeholder="напр. D:/Backup/SmolyanKlima"
-                  />
+                  <div className="flex rounded-xl border border-slate-200 bg-white overflow-hidden focus-within:ring-2 focus-within:ring-brand-blue-500/30 focus-within:border-brand-blue-400">
+                    <input
+                      type="text"
+                      value={backupFolder}
+                      onChange={(e) => setBackupFolder(e.target.value)}
+                      onClick={() => {
+                        if (isLocalFolderPickerSupported() && !folderManualEdit) void chooseBackupFolder();
+                      }}
+                      readOnly={isLocalFolderPickerSupported() && !folderManualEdit}
+                      placeholder="напр. D:/Backup/SmolyanKlima"
+                      className={`flex-1 min-w-0 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 bg-transparent border-0 outline-none ${
+                        isLocalFolderPickerSupported() && !folderManualEdit ? "cursor-pointer" : ""
+                      }`}
+                      title={
+                        isLocalFolderPickerSupported() && !folderManualEdit
+                          ? "Кликнете за избор на папка"
+                          : "Път до папка за архиви"
+                      }
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void chooseBackupFolder()}
+                      disabled={folderPicking}
+                      className="shrink-0 px-3 border-l border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-brand-blue-700 disabled:opacity-50"
+                      title="Избери папка на компютъра"
+                    >
+                      {folderPicking ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <FolderOpen className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
                   <span className="text-[10px] text-slate-500">
-                    Напомняне за екипа къде да държите копията; не се синхронизира автоматично с диска.
+                    {isLocalFolderPickerSupported() ? (
+                      <>
+                        Кликнете в полето или иконата за избор на папка (Chrome/Edge). При изтегляне архивът може да се запише директно там.{" "}
+                        <button
+                          type="button"
+                          className="underline text-brand-blue-700 hover:text-brand-blue-900"
+                          onClick={() => setFolderManualEdit((v) => !v)}
+                        >
+                          {folderManualEdit ? "Избор от диск" : "Въведи път ръчно"}
+                        </button>
+                      </>
+                    ) : (
+                      "Напомняне за екипа къде да държите копията — въведете пътя ръчно (този браузър няма диалог за папка)."
+                    )}
                   </span>
                 </label>
                 <label className="grid gap-1.5">
@@ -391,12 +636,29 @@ export default function SettingsPageClient() {
                 </Button>
                 <Button
                   variant="secondary"
-                  onClick={() => void downloadFullBackup()}
-                  disabled={backupDownloading}
+                  onClick={() => void downloadFullBackup("json")}
+                  disabled={backupDownloading !== null}
                   className="gap-2"
                 >
-                  {backupDownloading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                  Свали пълен архив (JSON)
+                  {backupDownloading === "json" ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                  Архив JSON
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => void downloadFullBackup("xlsx")}
+                  disabled={backupDownloading !== null}
+                  className="gap-2"
+                >
+                  {backupDownloading === "xlsx" ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                  Excel: продажби и стока
                 </Button>
               </div>
               <p className="text-[10px] text-slate-500 mt-3 leading-relaxed">
@@ -408,7 +670,8 @@ export default function SettingsPageClient() {
       )}
 
       {activeTab === "catalog" && (
-        <Card className="p-3 md:p-4 border-orange-200 bg-gradient-to-br from-white to-orange-50/40">
+        <>
+        <Card className="p-3 md:p-4 border-orange-200 bg-gradient-to-br from-white to-orange-50/40 mb-4">
           <div className="flex items-start gap-3 mb-3">
             <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-700 flex items-center justify-center shrink-0">
               <CloudDownload className="w-5 h-5" />
@@ -426,27 +689,40 @@ export default function SettingsPageClient() {
             <p className="text-[11px] text-slate-600 mb-2">
               Последен sync: {new Date(bulclimaStatus.at).toLocaleString("bg-BG")}
               {bulclimaStatus.status ? ` · ${bulclimaStatus.status}` : ""}
-              {bulclimaStatus.summary && typeof bulclimaStatus.summary.created === "number" ? (
-                <>
-                  {` · открити: ${typeof bulclimaStatus.summary.productUrls === "number" ? bulclimaStatus.summary.productUrls : "—"}`}
-                  {`, нови: ${bulclimaStatus.summary.created}, обновени: ${bulclimaStatus.summary.updated}`}
-                  {typeof bulclimaStatus.summary.skipped === "number" && bulclimaStatus.summary.skipped > 0
-                    ? `, пропуснати: ${bulclimaStatus.summary.skipped}`
-                    : ""}
-                  {typeof bulclimaStatus.summary.errors === "object" &&
-                  Array.isArray(bulclimaStatus.summary.errors) &&
-                  bulclimaStatus.summary.errors.length > 0
-                    ? `, грешки: ${bulclimaStatus.summary.errors.length}`
-                    : ""}
-                </>
-              ) : null}
+              {formatCatalogSyncStats(bulclimaStatus.summary, "productUrls")}
             </p>
           )}
-          <Button variant="primary" onClick={() => void syncBulclimaCatalog()} disabled={bulclimaSyncing} className="gap-2">
-            {bulclimaSyncing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CloudDownload className="w-4 h-4" />}
-            Обнови каталог от Булклима
-          </Button>
-          <p className="text-[10px] text-slate-500 mt-2">Може да отнеме няколко минути. Не затваряйте страницата по време на sync.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="primary"
+              onClick={() => void syncBulclimaCatalog()}
+              disabled={bulclimaSyncing || climacomSyncing || reclassifying}
+              className="gap-2"
+            >
+              {bulclimaSyncing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CloudDownload className="w-4 h-4" />}
+              Обнови каталог от Булклима
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => void reclassifyMisplacedAccessories(true)}
+              disabled={bulclimaSyncing || climacomSyncing || reclassifying}
+              className="gap-2"
+            >
+              {reclassifying ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
+              Преглед: помпи → аксесоари
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => void reclassifyMisplacedAccessories(false)}
+              disabled={bulclimaSyncing || climacomSyncing || reclassifying}
+              className="gap-2"
+            >
+              Премести грешно внесени в аксесоари
+            </Button>
+          </div>
+          <p className="text-[10px] text-slate-500 mt-2">
+            Sync може да отнеме няколко минути. „Премести“ прехвърля стари помпи/маркучи от климатици в аксесоари (еднократно почистване).
+          </p>
 
           {(bulclimaSyncing || bulclimaLog.length > 0) && (
             <div className="mt-4 space-y-2 border-t border-orange-200/60 pt-4">
@@ -485,6 +761,68 @@ export default function SettingsPageClient() {
             </div>
           )}
         </Card>
+
+        <Card className="p-3 md:p-4 border-red-200 bg-gradient-to-br from-white to-red-50/30 mt-4">
+          <div className="flex items-start gap-3 mb-3">
+            <div className="w-10 h-10 rounded-xl bg-red-100 text-red-700 flex items-center justify-center shrink-0">
+              <CloudDownload className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-black text-slate-900 tracking-tight">Каталог от Климаком (Climacom)</div>
+              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                Стенни + мултисплит + Wi‑Fi от climacom.com. Доставчик КЛИМАКОМ, статус по поръчка, технически
+                таблици (SEER, SCOP, размери).
+              </p>
+            </div>
+          </div>
+          {climacomStatus?.at && (
+            <p className="text-[11px] text-slate-600 mb-2">
+              Последен sync: {new Date(climacomStatus.at).toLocaleString("bg-BG")}
+              {climacomStatus.status ? ` · ${climacomStatus.status}` : ""}
+              {formatCatalogSyncStats(climacomStatus.summary, "productCount")}
+            </p>
+          )}
+          <Button
+            variant="primary"
+            onClick={() => void syncClimacomCatalog()}
+            disabled={bulclimaSyncing || climacomSyncing || reclassifying}
+            className="gap-2"
+          >
+            {climacomSyncing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CloudDownload className="w-4 h-4" />}
+            Обнови каталог от Климаком
+          </Button>
+          {(climacomSyncing || climacomLog.length > 0) && (
+            <div className="mt-4 space-y-2 border-t border-red-200/60 pt-4">
+              {climacomProgress && climacomProgress.total > 0 && (
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[10px] font-bold text-slate-600">
+                    <span>Импорт</span>
+                    <span>
+                      {climacomProgress.current} / {climacomProgress.total}
+                    </span>
+                  </div>
+                  <div className="h-2 rounded-full bg-red-100 overflow-hidden">
+                    <div
+                      className="h-full bg-red-600 transition-all duration-300"
+                      style={{
+                        width: `${Math.min(100, (climacomProgress.current / climacomProgress.total) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+              <div className="max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-slate-900/95 p-2 font-mono text-[10px] text-slate-100">
+                {climacomLog.map((line, i) => (
+                  <div key={`c-${i}`} className="whitespace-pre-wrap break-all py-0.5">
+                    {line}
+                  </div>
+                ))}
+                <div ref={climacomLogEndRef} />
+              </div>
+            </div>
+          )}
+        </Card>
+        </>
       )}
     </div>
   );

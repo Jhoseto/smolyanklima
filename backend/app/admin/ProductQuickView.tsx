@@ -71,8 +71,11 @@ export function ProductQuickViewButton({
   );
 }
 
+type CatalogMountDefaults = { newEur: number; usedEur: number };
+
 export function ProductQuickViewModal({ productId, onClose }: { productId: string; onClose: () => void }) {
   const [product, setProduct] = useState<ProductQuickViewData | null>(null);
+  const [mountDefaults, setMountDefaults] = useState<CatalogMountDefaults | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [imageFailed, setImageFailed] = useState(false);
@@ -82,18 +85,32 @@ export function ProductQuickViewModal({ productId, onClose }: { productId: strin
     setLoading(true);
     setError(null);
     setImageFailed(false);
+    setMountDefaults(null);
 
-    fetch(`/api/admin/products/${productId}`, { credentials: "include" })
-      .then(async (res) => {
+    void Promise.all([
+      fetch(`/api/admin/products/${productId}`, { credentials: "include" }).then(async (res) => {
         const json = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(json.error || "Грешка при зареждане на продукта");
         return json.data as ProductQuickViewData;
+      }),
+      fetch("/api/admin/products/catalog-settings", { credentials: "include" }).then(async (res) => {
+        if (!res.ok) return null;
+        const json = (await res.json().catch(() => ({}))) as {
+          data?: { defaultMountNewEur?: number | null; defaultMountUsedEur?: number | null };
+        };
+        const n = json.data?.defaultMountNewEur;
+        const u = json.data?.defaultMountUsedEur;
+        if (n == null || u == null || !Number.isFinite(n) || !Number.isFinite(u)) return null;
+        return { newEur: n, usedEur: u };
+      }),
+    ])
+      .then(([data, defaults]) => {
+        if (!alive) return;
+        setProduct(data);
+        setMountDefaults(defaults);
       })
-      .then((data) => {
-        if (alive) setProduct(data);
-      })
-      .catch((e: any) => {
-        if (alive) setError(String(e?.message ?? e));
+      .catch((e: unknown) => {
+        if (alive) setError(e instanceof Error ? e.message : String(e));
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -108,7 +125,20 @@ export function ProductQuickViewModal({ productId, onClose }: { productId: strin
   const images = [...(product?.product_images ?? [])].sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0));
   const mainImage = images.find((img) => img.is_main)?.url ?? images[0]?.url ?? "";
   const price = Number(product?.price ?? 0);
-  const priceWithMount = product?.price_with_mount != null ? Number(product.price_with_mount) : null;
+  const storedPriceWithMount = product?.price_with_mount != null ? Number(product.price_with_mount) : null;
+  const standardMountFromSettings =
+    product && mountDefaults
+      ? product.product_condition === "used"
+        ? mountDefaults.usedEur
+        : mountDefaults.newEur
+      : null;
+  const standardMount =
+    standardMountFromSettings ??
+    (storedPriceWithMount != null && storedPriceWithMount >= price ? storedPriceWithMount - price : null);
+  const totalWithMount =
+    standardMountFromSettings != null
+      ? Math.round((price + standardMountFromSettings) * 100) / 100
+      : storedPriceWithMount;
   const features = [
     specs?.energy_class_cool && `Охлаждане ${specs.energy_class_cool}`,
     specs?.energy_class_heat && `Отопление ${specs.energy_class_heat}`,
@@ -258,7 +288,7 @@ export function ProductQuickViewModal({ productId, onClose }: { productId: strin
                   <span className="text-3xl md:text-4xl font-extrabold text-gray-900">€{price.toLocaleString()}</span>
                   {product.old_price ? <span className="text-lg font-bold text-gray-400 line-through">€{Number(product.old_price).toLocaleString()}</span> : null}
                 </div>
-                {priceWithMount != null && priceWithMount >= price && (
+                {standardMount != null && standardMount >= 0 && totalWithMount != null && totalWithMount >= price && (
                   <div className="mb-4 space-y-2 text-sm text-gray-600">
                     <div className="flex justify-between">
                       <span>Цена на уреда:</span>
@@ -266,11 +296,11 @@ export function ProductQuickViewModal({ productId, onClose }: { productId: strin
                     </div>
                     <div className="flex justify-between">
                       <span>Стандартен монтаж:</span>
-                      <strong>€{(priceWithMount - price).toLocaleString()}</strong>
+                      <strong>€{standardMount.toLocaleString("bg-BG")}</strong>
                     </div>
                     <div className="flex justify-between border-t border-gray-200 pt-2 text-base">
                       <span>Общо с монтаж:</span>
-                      <strong className="text-gray-900">€{priceWithMount.toLocaleString()}</strong>
+                      <strong className="text-gray-900">€{totalWithMount.toLocaleString("bg-BG")}</strong>
                     </div>
                   </div>
                 )}

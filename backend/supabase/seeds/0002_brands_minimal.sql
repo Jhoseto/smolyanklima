@@ -20,7 +20,12 @@ values
   ('toshiba',            'Toshiba',               '#FF0000', true),
   ('midea',              'Midea',                 '#007DC5', true),
   ('sharp',              'Sharp',                 '#E60012', true),
-  ('nacional',           'Nacional',              '#0f766e', true)
+  ('nacional',           'Nacional',              '#0f766e', true),
+  ('auratsu',            'Auratsu',               '#0077B6', true),
+  ('aspen',              'Aspen',                 '#F97316', true),
+  ('atlantic',           'Atlantic',              '#2563EB', true),
+  ('williams',           'Williams',              '#64748B', true),
+  ('olimpia-splendid',   'Olimpia Splendid',      '#0EA5E9', true)
 on conflict (slug) do update
   set is_active = excluded.is_active,
       color = coalesce(public.brands.color, excluded.color);
