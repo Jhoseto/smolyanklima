@@ -71,6 +71,7 @@ export async function upsertBulclimaAccessory(
     description,
     price: item.priceEur,
     kind: inferAccessoryKind(item.name),
+    source_url: item.sourceUrl || null,
     stock_status: "on_order",
     stock_quantity: 0,
     is_active: true,

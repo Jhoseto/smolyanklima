@@ -82,6 +82,22 @@ function parseNum(s: string | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/**
+ * Нормализира хомоглифни символи (Cyrillic А/В/Е/…, Dze Ѕ, Kra ĸ) към ASCII латиница.
+ * Ползва се като fallback при търсене в таблични редове — напр. Williams пишат „ЅЕЕR/ЅСОР"
+ * с Cyrillic lookalike chars вместо ASCII S/C/O/P.
+ */
+function toLatinAscii(s: string): string {
+  return s
+    .replace(/[Ѕѕ]/g, (c) => (c === "Ѕ" ? "S" : "s"))
+    .replace(/ĸ/g, "k")
+    .replace(/[АВЕКМНОРСТХ]/g, (c) =>
+      ({ А: "A", В: "B", Е: "E", К: "K", М: "M", Н: "H", О: "O", Р: "P", С: "C", Т: "T", Х: "X" }[c] ?? c),
+    )
+    .replace(/[аеоксрхту]/g, (c) => ({ а: "a", е: "e", о: "o", к: "k", с: "c", р: "p", х: "x", т: "t", у: "y" }[c] ?? c))
+    .toLowerCase();
+}
+
 /** Bulclima таблица: Височина × Дължина × Ширина (mm). */
 function parseBulclimaDimensionsHlw(s: string | undefined): {
   dim_length_mm: number;
@@ -89,10 +105,41 @@ function parseBulclimaDimensionsHlw(s: string | undefined): {
   dim_height_mm: number;
 } | null {
   if (!s) return null;
-  const parts = s.split(/[×x]/).map((p) => parseInt(p.replace(/\D/g, ""), 10));
+  // Cassette units combine body + panel in one cell: "246x840x840 / 53x950x950" — take body only.
+  const clean = s.split(/\s*\/\s*/)[0]!.trim();
+  const parts = clean.split(/[×x]/).map((p) => parseInt(p.replace(/\D/g, ""), 10));
   if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return null;
   const [h, l, w] = parts;
   return { dim_height_mm: h!, dim_length_mm: l!, dim_width_mm: w! };
+}
+
+/** Алтернативен формат ШхВхД (Ширина × Височина × Дълбочина) — Williams и др. */
+function parseBulclimaDimensionsShvd(s: string | undefined): {
+  dim_length_mm: number;
+  dim_width_mm: number;
+  dim_height_mm: number;
+} | null {
+  if (!s) return null;
+  // Strip panel suffix if present (e.g. "246x840x840 / 53x950x950").
+  const clean = s.split(/\s*\/\s*/)[0]!.trim();
+  const parts = clean.split(/[×x]/).map((p) => parseInt(p.replace(/\D/g, ""), 10));
+  if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return null;
+  const [w, h, d] = parts;
+  return { dim_width_mm: w!, dim_height_mm: h!, dim_length_mm: d! };
+}
+
+/** Избира правилния parser за размери според формата в заглавието на реда.
+ *  "ШхВхД" (Ширина × Височина × Дълбочина) → ШВД парсер.
+ *  Всичко друго → стандартен ВхДхШ парсер.
+ */
+function parseDimensions(
+  s: string | undefined,
+  labelHint: string,
+): ReturnType<typeof parseBulclimaDimensionsHlw> {
+  if (!s) return null;
+  // Match explicitly "Ш×В×Д" or "ШхВхД" (В may be Latin B from Williams mixed encoding)
+  if (/ш\s*[хx×]\s*[вb]\s*[хx×]\s*д/i.test(labelHint)) return parseBulclimaDimensionsShvd(s);
+  return parseBulclimaDimensionsHlw(s);
 }
 
 function firstNumberInText(s: string | undefined): number | null {
@@ -101,11 +148,37 @@ function firstNumberInText(s: string | undefined): number | null {
   return m ? parseNum(m[1]) : null;
 }
 
+/**
+ * Парсва мощност охлаждане/отопление.
+ * Обработва: разделни колони (4-кол. таблица), единична колона с „X/Y" (3-кол.)
+ * и единична колона само с едната стойност.
+ */
+function parsePowerPair(
+  cool: string | undefined,
+  heat: string | undefined,
+): { cool: number | null; heat: number | null } {
+  if (heat !== undefined) {
+    return { cool: firstNumberInText(cool), heat: firstNumberInText(heat) };
+  }
+  if (!cool) return { cool: null, heat: null };
+  const slash = cool.match(/([\d.,]+(?:\s*\([\d.,\s\-–]+\))?)\s*[/]\s*([\d.,]+)/);
+  if (slash) {
+    return {
+      cool: parseNum(slash[1]!.split("(")[0]!.trim().replace(",", ".")),
+      heat: parseNum(slash[2]!.replace(",", ".")),
+    };
+  }
+  return { cool: firstNumberInText(cool), heat: null };
+}
+
 function parseNoiseIndoorDb(s: string | undefined): number | null {
   if (!s) return null;
-  const pair = s.match(/(\d+(?:[.,]\d+)?)\s*\/\s*(\d+(?:[.,]\d+)?)/);
-  if (pair?.[2]) return parseNum(pair[2]);
-  return firstNumberInText(s);
+  const parts = s
+    .split(/\s*[/\-–]\s*/)
+    .map((p) => parseNum(p.replace(/[^\d.,]/g, "")))
+    .filter((n): n is number => n != null);
+  if (!parts.length) return null;
+  return Math.min(...parts);
 }
 
 function parseSeerScopCell(s: string | undefined): { value: number | null; energyClass: string | null } {
@@ -113,47 +186,120 @@ function parseSeerScopCell(s: string | undefined): { value: number | null; energ
   return { value: firstNumberInText(s), energyClass: parseEnergyClassFromText(s) };
 }
 
-type BulclimaTableRow = { unit?: string; cool?: string; heat?: string };
+type BulclimaTableRow = { unit?: string; cool?: string; heat?: string; label?: string };
 
 function stripHtmlToText(fragment: string): string {
   return decodeHtml(fragment.replace(/<[^>]+>/g, " "));
 }
 
-function extractTechnicalSpecsTable(html: string): Map<string, BulclimaTableRow> {
-  const tableBlock =
-    html.match(/id=["']tab-2["'][\s\S]*?<table[\s\S]*?<\/table>/i)?.[0] ??
-    html.match(/technical-characteristics[\s\S]*?<table[\s\S]*?<\/table>/i)?.[0];
-  const rows = new Map<string, BulclimaTableRow>();
-  if (!tableBlock) return rows;
+/**
+ * Hint за технически таблици — matchва на raw или toLatinAscii(raw) HTML.
+ * Достатъчно е едно съвпадение за да се сканира таблицата.
+ */
+const SPEC_TABLE_HINT =
+  /мощност|мощн|capacity|seer|scop|eer|cop|шум|noise|размери|dimension|тегло|weight|хладилен|refrigerant|енергиен|energy|клас|class|ток|current|дебит|flow|\bkW\b|\bdB\b|BTU|ВТU|R32|R410A|R290|\bmm\b/i;
 
-  const trRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-  let tr: RegExpExecArray | null;
-  while ((tr = trRe.exec(tableBlock)) !== null) {
-    const cells: string[] = [];
-    const tdRe = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
-    let td: RegExpExecArray | null;
-    while ((td = tdRe.exec(tr[1])) !== null) {
-      const t = stripHtmlToText(td[1]);
-      if (t) cells.push(t);
+function isSpecTable(tableHtml: string): boolean {
+  if (SPEC_TABLE_HINT.test(tableHtml)) return true;
+  const norm = toLatinAscii(tableHtml.slice(0, 2000));
+  return SPEC_TABLE_HINT.test(norm);
+}
+
+function extractTechnicalSpecsTable(html: string): Map<string, BulclimaTableRow> {
+  const rows = new Map<string, BulclimaTableRow>();
+  const tab2Block =
+    html.match(/id=["']tab-2["'][\s\S]*?(?=id=["']tab-3["']|id=["']tab-4["']|$)/i)?.[0] ??
+    html.match(/technical-characteristics[\s\S]{0,60000}/i)?.[0];
+  const singleProductBlock = html.match(/single-product[\s\S]{0,150000}/i)?.[0] ?? "";
+  const scanBlocks = [tab2Block ?? "", singleProductBlock].filter(Boolean);
+  const seenTables = new Set<string>();
+
+  const parseTable = (table: string) => {
+    if (!isSpecTable(table) || seenTables.has(table)) return;
+    seenTables.add(table);
+    const trRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+    let tr: RegExpExecArray | null;
+    while ((tr = trRe.exec(table)) !== null) {
+      const cells: string[] = [];
+      const tdRe = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
+      let td: RegExpExecArray | null;
+      while ((td = tdRe.exec(tr[1])) !== null) {
+        const t = stripHtmlToText(td[1]);
+        if (t) cells.push(t);
+      }
+      if (cells.length < 2) continue;
+      const rawLabel = cells[0]!;
+      const label = rawLabel.toLowerCase();
+      const row: BulclimaTableRow =
+        cells.length >= 4
+          ? { unit: cells[1], cool: cells[2], heat: cells[3], label: rawLabel }
+          : cells.length === 3
+            ? { unit: cells[1], cool: cells[2], label: rawLabel }
+            : { cool: cells[1], label: rawLabel };
+      if (!rows.has(label)) rows.set(label, row);
     }
-    if (cells.length < 2) continue;
-    const label = cells[0]!.toLowerCase();
-    if (cells.length >= 4) {
-      rows.set(label, { unit: cells[1], cool: cells[2], heat: cells[3] });
-    } else if (cells.length === 3) {
-      rows.set(label, { unit: cells[1], cool: cells[2] });
-    } else {
-      rows.set(label, { cool: cells[1] });
+  };
+
+  for (const block of scanBlocks) {
+    for (const table of block.match(/<table[\s\S]*?<\/table>/gi) ?? []) {
+      parseTable(table);
     }
   }
+
+  // Fallback: scan full HTML when nothing found in known sections
+  if (rows.size === 0) {
+    for (const table of html.match(/<table[\s\S]*?<\/table>/gi) ?? []) {
+      parseTable(table);
+      if (rows.size >= 8) break;
+    }
+  }
+
   return rows;
 }
 
+/**
+ * Търси ред по ключови думи.
+ * При неуспех опитва с ASCII-нормализиран label (справя се с Williams хомоглифни chars).
+ */
 function tableRow(rows: Map<string, BulclimaTableRow>, ...fragments: string[]): BulclimaTableRow | undefined {
   for (const [label, row] of rows) {
     if (fragments.every((f) => label.includes(f))) return row;
   }
+  for (const [label, row] of rows) {
+    const norm = toLatinAscii(label);
+    if (fragments.every((f) => norm.includes(toLatinAscii(f)))) return row;
+  }
   return undefined;
+}
+
+function tableRowFirst(rows: Map<string, BulclimaTableRow>, ...alternates: string[][]): BulclimaTableRow | undefined {
+  for (const frags of alternates) {
+    const r = tableRow(rows, ...frags);
+    if (r) return r;
+  }
+  return undefined;
+}
+
+/**
+ * WiFi — само ако изрично е вграден в продукта.
+ * "чрез WiFi адаптер" / "по желание" → false (опционален аксесоар).
+ * Без ясни данни → null.
+ */
+function detectBulclimaWifi(
+  featureLabels: string[],
+  listBlockHtml: string,
+  descTabHtml: string,
+): boolean | null {
+  const BUILT_IN =
+    /вграден\s+wi-?fi|built.?in\s+wi-?fi|wi-?fi\s+(?:вграден|включен|ready|chip)|airstage\s+(?:app|apл)|melcloud/i;
+  const OPTIONAL =
+    /чрез\s+wi-?fi\s+адаптер|wi-?fi\s+адаптер|wi-?fi\s+модул\s*(?:[а-яa-z]*\s*)?(?:по\s+желание|опционален|отделно)|опционален.*wi-?fi/i;
+
+  for (const src of [featureLabels.join(" "), listBlockHtml, descTabHtml]) {
+    if (BUILT_IN.test(src)) return true;
+    if (OPTIONAL.test(src)) return false;
+  }
+  return null;
 }
 
 function readAttributeIconValue(html: string, title: string): string | null {
@@ -172,7 +318,6 @@ function extractListCharacteristics(html: string): {
   energyHeat?: string;
   noiseDb?: number;
   refrigerant?: string;
-  wifi?: boolean;
 } {
   const block = html.match(/single-product-list-characteristics[\s\S]{0,4000}/i)?.[0] ?? "";
   const text = stripHtmlToText(block);
@@ -189,7 +334,6 @@ function extractListCharacteristics(html: string): {
   if (noiseM) out.noiseDb = parseNum(noiseM[1]) ?? undefined;
   const refrM = text.match(/\b(R32|R410A|R290)\b/i);
   if (refrM) out.refrigerant = refrM[1]!.toUpperCase();
-  if (/wi-?fi|безжично|интернет управление/i.test(block)) out.wifi = true;
   return out;
 }
 
@@ -211,51 +355,116 @@ function parseWarrantyMonths(html: string): number | null {
   return null;
 }
 
+
 export type BulclimaSpecsPayload = BulclimaParsedProduct["specs"];
 
-/** Пълни технически данни от таб „Технически характеристики“, иконите и списъка. */
-export function extractBulclimaProductSpecs(html: string): BulclimaSpecsPayload {
+/** Пълни технически данни от таб „Технически характеристики", иконите и списъка. */
+export function extractBulclimaProductSpecs(html: string, featureLabels: string[] = []): BulclimaSpecsPayload {
   const table = extractTechnicalSpecsTable(html);
   const list = extractListCharacteristics(html);
 
-  const powerRow = tableRow(table, "мощност");
-  const seerRow = tableRow(table, "seer");
-  const scopRow = tableRow(table, "scop");
-  const dimRow = tableRow(table, "размери");
-  const weightRow = tableRow(table, "тегло");
-  const noiseRow = tableRow(table, "шум");
-  const refrRow = tableRow(table, "хладилен", "агент");
-
+  // ── Мощност ──────────────────────────────────────────────────────────────
+  const powerRow = tableRowFirst(table, ["мощност"], ["capacity"], ["мощн"]);
+  const power = parsePowerPair(powerRow?.cool, powerRow?.heat);
   const coolKw =
-    firstNumberInText(powerRow?.cool) ??
+    power.cool ??
     parseNum(readAttributeIconValue(html, "Охлаждане") ?? undefined) ??
     firstNumberInText(html.match(/coolding-capacity-attribute-value[\s\S]{0,200}?attribute-value[^>]*>([^<]+)/i)?.[1]);
   const heatKw =
-    firstNumberInText(powerRow?.heat) ??
+    power.heat ??
     parseNum(readAttributeIconValue(html, "Отопление") ?? undefined) ??
     firstNumberInText(html.match(/heating-capacity-attribute-value[\s\S]{0,200}?attribute-value[^>]*>([^<]+)/i)?.[1]);
 
+  // ── BTU ───────────────────────────────────────────────────────────────────
   const btuIcon = parseNum(readAttributeIconValue(html, "Мощност") ?? undefined);
+  const btuTable = tableRowFirst(table, ["btu"], ["капацитет", "btu"]);
+  const btuTableVal = firstNumberInText(btuTable?.cool);
   const btu =
     btuIcon != null && btuIcon > 0 && btuIcon <= 120
       ? Math.round(btuIcon)
-      : inferBtuFromCoolingKw(coolKw);
+      : btuTableVal != null && btuTableVal > 100
+        ? Math.round(btuTableVal / 1000)
+        : inferBtuFromCoolingKw(coolKw);
 
-  const seerCell = parseSeerScopCell(seerRow?.cool);
-  const scopCell = parseSeerScopCell(scopRow?.heat);
+  // ── SEER / SCOP ───────────────────────────────────────────────────────────
+  // toLatinAscii fallback handles Williams homoglyph chars (Ѕ, Cyrillic С/О/Р → seer/scop)
+  const seerRow = tableRowFirst(table, ["seer"], ["eer"]);
+  const scopRow = tableRowFirst(table, ["scop"], ["cop"]);
+  // 3-column tables (Williams): value in .cool; 4-column (General): seer→cool, scop→heat
+  const seerCell = parseSeerScopCell(seerRow?.cool ?? seerRow?.heat);
+  const scopCell = parseSeerScopCell(scopRow?.heat ?? scopRow?.cool);
 
+  // ── Енергиен клас ─────────────────────────────────────────────────────────
+  const energyClassCoolRow = tableRowFirst(
+    table, ["клас", "охлажд"], ["клас", "охл"], ["class", "cool"], ["energy", "cooling"],
+  );
+  const energyClassHeatRow = tableRowFirst(
+    table, ["клас", "отопл"], ["class", "heat"], ["energy", "heating"],
+  );
+  const energyClassRow = tableRowFirst(table, ["енергиен", "клас"], ["energy", "class"]);
   const classIcon = parseEnergyClassFromText(readAttributeIconValue(html, "Клас") ?? undefined);
+  const energyCoolFromTable =
+    parseEnergyClassFromText(energyClassCoolRow?.cool ?? energyClassCoolRow?.heat) ??
+    (energyClassRow?.cool?.includes("/")
+      ? parseEnergyClassFromText(energyClassRow.cool.split("/")[0])
+      : parseEnergyClassFromText(energyClassRow?.cool));
+  const energyHeatFromTable =
+    parseEnergyClassFromText(energyClassHeatRow?.cool ?? energyClassHeatRow?.heat) ??
+    (energyClassRow?.cool?.includes("/")
+      ? parseEnergyClassFromText(energyClassRow.cool.split("/")[1])
+      : parseEnergyClassFromText(energyClassRow?.heat));
 
-  const indoorDim = parseBulclimaDimensionsHlw(dimRow?.cool);
-  const outdoorDim = parseBulclimaDimensionsHlw(dimRow?.heat);
-
-  const wifi =
-    list.wifi ||
-    /wi-?fi|безжично|интернет управление|airstage/i.test(html) ||
-    /product-attribute-extra[\s\S]{0,200}?wi-?fi/i.test(html);
-
+  // ── Шум ──────────────────────────────────────────────────────────────────
+  const noiseIndoorRow = tableRowFirst(
+    table, ["шум", "вътреш"], ["noise", "indoor"], ["sound", "indoor"],
+  );
+  const noiseRow = tableRowFirst(table, ["шум"], ["звуков"], ["noise", "level"], ["sound"], ["noise"]);
   const noise_db =
-    parseNoiseIndoorDb(noiseRow?.cool) ?? list.noiseDb ?? parseNum(html.match(/(\d+)\s*dB\s*\(A\)/i)?.[1]);
+    parseNoiseIndoorDb(noiseIndoorRow?.cool ?? noiseIndoorRow?.heat) ??
+    parseNoiseIndoorDb(noiseRow?.cool) ??
+    list.noiseDb ??
+    parseNum(html.match(/(\d+)\s*dB\s*\(A\)/i)?.[1]);
+
+  // ── Размери ───────────────────────────────────────────────────────────────
+  const dimIndoorRow = tableRowFirst(
+    table, ["размери", "вътреш"], ["dimension", "indoor"], ["dimension", "internal"],
+  );
+  const dimOutdoorRow = tableRowFirst(
+    table, ["размери", "външ"], ["dimension", "outdoor"], ["dimension", "external"],
+  );
+  const dimRow = tableRowFirst(table, ["размери"], ["dimension"]);
+  const indoorDimRaw = dimIndoorRow?.cool ?? dimIndoorRow?.heat ?? dimRow?.cool;
+  const outdoorDimRaw = dimOutdoorRow?.cool ?? dimOutdoorRow?.heat ?? dimRow?.heat;
+  const indoorDim = parseDimensions(indoorDimRaw, dimIndoorRow?.label ?? dimRow?.label ?? "");
+  const outdoorDim = parseDimensions(outdoorDimRaw, dimOutdoorRow?.label ?? dimRow?.label ?? "");
+
+  // ── Тегло ─────────────────────────────────────────────────────────────────
+  const weightIndoorRow = tableRowFirst(
+    table, ["тегло", "вътреш"], ["weight", "indoor"], ["weight", "internal"],
+  );
+  const weightOutdoorRow = tableRowFirst(
+    table, ["тегло", "външ"], ["weight", "outdoor"], ["weight", "external"],
+  );
+  const weightRow = tableRowFirst(table, ["тегло"], ["weight"]);
+  const weight_indoor_kg =
+    firstNumberInText(weightIndoorRow?.cool ?? weightIndoorRow?.heat) ??
+    firstNumberInText(weightRow?.cool);
+  const weight_outdoor_kg =
+    firstNumberInText(weightOutdoorRow?.cool ?? weightOutdoorRow?.heat) ??
+    firstNumberInText(weightRow?.heat);
+
+  // ── Хладилен агент ────────────────────────────────────────────────────────
+  const refrRow = tableRowFirst(table, ["хладилен", "агент"], ["refrigerant"]);
+  const refrigerant =
+    refrRow?.cool?.trim() ||
+    list.refrigerant ||
+    html.match(/\b(R32|R410A|R290)\b/i)?.[1]?.toUpperCase() ||
+    null;
+
+  // ── WiFi ──────────────────────────────────────────────────────────────────
+  const listBlockHtml = html.match(/single-product-list-characteristics[\s\S]{0,4000}/i)?.[0] ?? "";
+  const descTabHtml = html.match(/id=["']tab-1["'][\s\S]{0,8000}/i)?.[0] ?? "";
+  const wifi = detectBulclimaWifi(featureLabels, listBlockHtml, descTabHtml);
 
   return {
     btu,
@@ -263,19 +472,15 @@ export function extractBulclimaProductSpecs(html: string): BulclimaSpecsPayload 
     noise_db,
     cooling_power_kw: coolKw,
     heating_power_kw: heatKw,
-    refrigerant:
-      refrRow?.cool?.trim() ||
-      list.refrigerant ||
-      html.match(/\b(R32|R410A|R290)\b/i)?.[1]?.toUpperCase() ||
-      null,
+    refrigerant,
     wifi,
-    energy_class_cool: seerCell.energyClass ?? list.energyCool ?? classIcon ?? null,
-    energy_class_heat: scopCell.energyClass ?? list.energyHeat ?? null,
+    energy_class_cool: seerCell.energyClass ?? energyCoolFromTable ?? list.energyCool ?? classIcon ?? null,
+    energy_class_heat: scopCell.energyClass ?? energyHeatFromTable ?? list.energyHeat ?? null,
     seer: seerCell.value ?? list.seer ?? null,
     scop: scopCell.value ?? list.scop ?? null,
     warranty_months: parseWarrantyMonths(html),
-    weight_indoor_kg: firstNumberInText(weightRow?.cool),
-    weight_outdoor_kg: firstNumberInText(weightRow?.heat),
+    weight_indoor_kg,
+    weight_outdoor_kg,
     dim_indoor_length_mm: indoorDim?.dim_length_mm ?? null,
     dim_indoor_width_mm: indoorDim?.dim_width_mm ?? null,
     dim_indoor_height_mm: indoorDim?.dim_height_mm ?? null,
@@ -687,7 +892,7 @@ export function parseBulclimaProductPage(
     }
   }
 
-  const specs = extractBulclimaProductSpecs(html);
+  const specs = extractBulclimaProductSpecs(html, featureLabels);
 
   const { categorySlug, typeHint } = resolveBulclimaProductClassification(
     html,
@@ -715,6 +920,28 @@ export function parseBulclimaProductPage(
 
 export const BULCLIMA_KLIMA_ROOT = "https://bulclima.com/products/klimatici";
 
+/**
+ * Разрешени подкатегории на Bulclima:
+ *   Климатици — стенни, подови, таванни, касетъчни.
+ *   Аксесоари — wi-fi и аксесоари за климатици.
+ * Изключват се: канални, колонни, мобилни, мултисплит.
+ */
+const ALLOWED_CATEGORY_PATTERNS = [
+  /stenni/i,
+  /podovi/i,
+  /tavann/i,
+  /kaset/i,
+  /wi-fi-i-aksesoari/i,
+];
+
+export function isAllowedBulclimaCategoryPath(path: string): boolean {
+  const p = path.toLowerCase();
+  // Reject known excluded slugs explicitly
+  if (/kanalni|kolonni|mobilni|multisplit/i.test(p)) return false;
+  // Accept only the allowed subcategories
+  return ALLOWED_CATEGORY_PATTERNS.some((re) => re.test(p));
+}
+
 export type BulclimaCatalogEntry = {
   url: string;
   listingCategoryPath: string | null;
@@ -726,8 +953,17 @@ export async function collectBulclimaProductUrls(
 ): Promise<BulclimaCatalogEntry[]> {
   onStatus?.("Зареждане на главната категория klimatici…");
   const rootHtml = await fetchBulclimaHtml(BULCLIMA_KLIMA_ROOT);
-  const categoryUrls = [BULCLIMA_KLIMA_ROOT, ...extractCategoryUrls(rootHtml)];
-  onStatus?.(`Обхождане на ${categoryUrls.length} категории/листинги…`);
+  const allCategoryUrls = extractCategoryUrls(rootHtml);
+  const categoryUrls = allCategoryUrls.filter((u) => {
+    try {
+      return isAllowedBulclimaCategoryPath(new URL(u).pathname);
+    } catch {
+      return isAllowedBulclimaCategoryPath(u);
+    }
+  });
+  onStatus?.(
+    `Обхождане на ${categoryUrls.length} разрешени категории (${allCategoryUrls.length} общо)…`,
+  );
   const productEntries = new Map<string, BulclimaCatalogEntry>();
 
   for (const catUrl of categoryUrls) {

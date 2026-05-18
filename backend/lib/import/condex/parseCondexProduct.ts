@@ -100,6 +100,63 @@ function firstNumberInText(s: string | undefined): number | null {
   return m ? parseNum(m[1]) : null;
 }
 
+/** Condex often lists kW columns as watts (e.g. 3000 → 3.0 kW). */
+function parseCondexCapacityKw(raw: string | undefined): number | null {
+  const n = firstNumberInText(raw);
+  if (n == null) return null;
+  if (n >= 100) return Math.round((n / 1000) * 100) / 100;
+  return n;
+}
+
+/** „2,5 (0,9 – 3,2)“ → 2.5 kW (номинал преди скоби). */
+function parseCondexNominalKw(raw: string | undefined): number | null {
+  if (!raw) return null;
+  const head = raw.split("(")[0]!.trim();
+  return parseCondexCapacityKw(head);
+}
+
+function parseCondexNoiseDb(raw: string | undefined): number | null {
+  if (!raw) return null;
+  const parts = raw
+    .split(/\s*[/\-–]\s*/)
+    .map((p) => parseNum(p.replace(/[^\d.,]/g, "")))
+    .filter((n): n is number => n != null);
+  if (!parts.length) return null;
+  return Math.min(...parts);
+}
+
+function parseCondexWarrantyMonths(html: string): number | null {
+  const scope =
+    html.match(/id=["']tab-general-details["'][\s\S]{0,12000}/i)?.[0] ??
+    html.match(/single-product[\s\S]{0,120000}/i)?.[0] ??
+    html.slice(0, 120000);
+  const years = scope.match(/гаранц[\s\S]{0,200}?(\d+)\s*(?:години|година|г\.)/i);
+  if (years?.[1]) {
+    const n = Number(years[1]);
+    return Number.isFinite(n) ? n * 12 : null;
+  }
+  const enYears = scope.match(/warranty[\s\S]{0,200}?(\d+)\s*(?:years?|yr)/i);
+  if (enYears?.[1]) {
+    const n = Number(enYears[1]);
+    return Number.isFinite(n) ? n * 12 : null;
+  }
+  const months = scope.match(/гаранц[\s\S]{0,200}?(\d+)\s*месеца/i);
+  if (months?.[1]) {
+    const n = Number(months[1]);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function isCondexOutdoorOnlyProduct(name: string, description: string | null): boolean {
+  const hay = `${name} ${description ?? ""}`;
+  return (
+    /\bвъншно\s+тяло\b|\bвъншен\s+агрегат\b|\boutdoor\s+unit\b/i.test(hay) &&
+    !/\bвътрешн/i.test(hay) &&
+    !/\bинверторен\s+климатик\b|\bsplit\s+система\b/i.test(hay)
+  );
+}
+
 export function parseCondexEuroPrice(html: string): number | null {
   const candidates: string[] = [];
   const priceBlock = html.match(/class=["'][^"']*product_price[^"']*["'][\s\S]{0,400}/i)?.[0];
@@ -142,14 +199,8 @@ function parseDimensionsHlw(s: string | undefined): {
   return { dim_height_mm: h!, dim_length_mm: l!, dim_width_mm: w! };
 }
 
-function parseNoiseIndoorDb(s: string | undefined): number | null {
-  if (!s) return null;
-  const nums = s.match(/\d+(?:[.,]\d+)?/g);
-  if (!nums?.length) return null;
-  const values = nums.map((n) => parseNum(n)).filter((n): n is number => n != null);
-  if (values.length >= 2) return values[1]!;
-  return values[0] ?? null;
-}
+const SPEC_TABLE_HINT =
+  /capacity|капацитет|мощност|seer|scop|шум|noise|размери|dimension|тегло|weight|хладилен|refrigerant|енергиен|energy|eer|cop|wi-?fi/i;
 
 function parseSlashPair(s: string | undefined): { a: number | null; b: number | null } {
   if (!s) return { a: null, b: null };
@@ -158,25 +209,39 @@ function parseSlashPair(s: string | undefined): { a: number | null; b: number | 
 }
 
 function extractCondexSpecRows(html: string): Map<string, string> {
-  const tableBlock =
-    html.match(/id=["']tab-1["'][\s\S]*?<table[\s\S]*?<\/table>/i)?.[0] ??
-    html.match(/Characteristics[\s\S]*?<table[\s\S]*?<\/table>/i)?.[0];
   const rows = new Map<string, string>();
-  if (!tableBlock) return rows;
+  const tab1 =
+    html.match(/id=["']tab-1["'][\s\S]*?(?=id=["']tab-2["']|id=["']tab-attached|$)/i)?.[0] ?? "";
+  const scanBlocks = [
+    tab1,
+    html.match(/Characteristics[\s\S]{0,20000}/i)?.[0] ?? "",
+    html.match(/single-product[\s\S]{0,80000}/i)?.[0] ?? "",
+  ].filter(Boolean);
 
-  const trRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-  let tr: RegExpExecArray | null;
-  while ((tr = trRe.exec(tableBlock)) !== null) {
-    const cells: string[] = [];
-    const tdRe = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
-    let td: RegExpExecArray | null;
-    while ((td = tdRe.exec(tr[1])) !== null) {
-      const t = stripHtmlToText(td[1]);
-      if (t) cells.push(t);
+  const seenTables = new Set<string>();
+  for (const block of scanBlocks) {
+    for (const table of block.match(/<table[\s\S]*?<\/table>/gi) ?? []) {
+      if (!SPEC_TABLE_HINT.test(table) || seenTables.has(table)) continue;
+      seenTables.add(table);
+
+      const trRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+      let tr: RegExpExecArray | null;
+      while ((tr = trRe.exec(table)) !== null) {
+        const cells: string[] = [];
+        const tdRe = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
+        let td: RegExpExecArray | null;
+        while ((td = tdRe.exec(tr[1])) !== null) {
+          const t = stripHtmlToText(td[1]);
+          if (t) cells.push(t);
+        }
+        if (cells.length < 2) continue;
+        const label = cells[0]!.toLowerCase();
+        const value = cells[cells.length - 1]!.trim();
+        if (!label || !value || label.length > 120) continue;
+        rows.set(label, value);
+      }
     }
-    if (cells.length >= 2) {
-      rows.set(cells[0]!.toLowerCase(), cells[1]!);
-    }
+    if (rows.size >= 4) break;
   }
   return rows;
 }
@@ -188,26 +253,38 @@ function rowValue(rows: Map<string, string>, ...fragments: string[]): string | u
   return undefined;
 }
 
-export function extractCondexProductSpecs(html: string): CondexParsedProduct["specs"] {
+export function extractCondexProductSpecs(
+  html: string,
+  context?: { name?: string; description?: string | null },
+): CondexParsedProduct["specs"] {
   const rows = extractCondexSpecRows(html);
+  const outdoorOnly = isCondexOutdoorOnlyProduct(context?.name ?? "", context?.description ?? null);
 
   const coolRaw =
     rowValue(rows, "охладителен", "капацитет") ??
+    rowValue(rows, "охладителна", "мощност") ??
+    rowValue(rows, "охладител", "мощ") ??
     rowValue(rows, "cooling capacity") ??
-    rowValue(rows, "охлаждане", "капацитет");
+    rowValue(rows, "охлаждане", "капацитет") ??
+    rowValue(rows, "cooling", "capacity");
   const heatRaw =
     rowValue(rows, "отоплителен", "капацитет") ??
+    rowValue(rows, "отоплителна", "мощност") ??
+    rowValue(rows, "отоплител", "мощ") ??
     rowValue(rows, "heating capacity") ??
-    rowValue(rows, "отопление", "капацитет");
+    rowValue(rows, "отопление", "капацитет") ??
+    rowValue(rows, "heating", "capacity");
 
-  const coolKw = firstNumberInText(coolRaw);
-  const heatKw = firstNumberInText(heatRaw);
+  const coolKw = parseCondexNominalKw(coolRaw);
+  const heatKw = parseCondexNominalKw(heatRaw);
 
   const eerCop = parseSlashPair(rowValue(rows, "eer", "cop"));
   const seerScop = parseSlashPair(rowValue(rows, "seer", "scop"));
 
   const energyRaw =
-    rowValue(rows, "енергиен клас") ?? rowValue(rows, "energy class");
+    rowValue(rows, "енергиен клас") ??
+    rowValue(rows, "energy class") ??
+    rowValue(rows, "energy", "class");
   let energyCool: string | null = null;
   let energyHeat: string | null = null;
   if (energyRaw) {
@@ -215,27 +292,68 @@ export function extractCondexProductSpecs(html: string): CondexParsedProduct["sp
     energyCool = parts[0] ?? parseEnergyClassFromText(energyRaw);
     energyHeat = parts[1] ?? null;
   }
+  energyCool =
+    energyCool ??
+    parseEnergyClassFromText(rowValue(rows, "енергиен", "охлажд") ?? rowValue(rows, "energy", "cooling") ?? "") ??
+    null;
+  energyHeat =
+    energyHeat ??
+    parseEnergyClassFromText(rowValue(rows, "енергиен", "отопл") ?? rowValue(rows, "energy", "heating") ?? "") ??
+    null;
 
   const noiseCool =
     rowValue(rows, "шум", "охлаждане") ??
     rowValue(rows, "cooling noise") ??
-    rowValue(rows, "noise level", "cooling");
+    rowValue(rows, "noise level", "cooling") ??
+    rowValue(rows, "ниво на шум", "охлаждане");
   const noiseHeat =
     rowValue(rows, "шум", "отопление") ??
     rowValue(rows, "heating noise") ??
-    rowValue(rows, "noise level", "heating");
+    rowValue(rows, "noise level", "heating") ??
+    rowValue(rows, "ниво на шум", "отопление");
 
   const dimIn =
     rowValue(rows, "размери вътрешно") ??
     rowValue(rows, "internal dimensions") ??
-    rowValue(rows, "indoor", "dimension");
+    rowValue(rows, "indoor", "dimension") ??
+    rowValue(rows, "размери", "вътреш");
   const dimOut =
     rowValue(rows, "размери външно") ??
     rowValue(rows, "external dimensions") ??
-    rowValue(rows, "outdoor", "dimension");
+    rowValue(rows, "outdoor", "dimension") ??
+    rowValue(rows, "размери", "външ");
 
   const indoorDim = parseDimensionsHlw(dimIn);
   const outdoorDim = parseDimensionsHlw(dimOut);
+
+  const weightInRaw =
+    rowValue(rows, "тегло", "вътреш") ??
+    rowValue(rows, "weight", "internal") ??
+    rowValue(rows, "weight", "indoor");
+  const weightOutRaw =
+    rowValue(rows, "тегло", "външ") ??
+    rowValue(rows, "weight", "external") ??
+    rowValue(rows, "weight", "outdoor");
+  const weightCombined = rowValue(rows, "тегло") ?? rowValue(rows, "weight");
+  let weight_indoor_kg = firstNumberInText(weightInRaw);
+  let weight_outdoor_kg = firstNumberInText(weightOutRaw);
+  if (weightCombined && (weight_indoor_kg == null || weight_outdoor_kg == null)) {
+    const slash = weightCombined.match(/([\d.,]+)\s*\/\s*([\d.,]+)/);
+    if (slash) {
+      weight_indoor_kg = weight_indoor_kg ?? parseNum(slash[1]);
+      weight_outdoor_kg = weight_outdoor_kg ?? parseNum(slash[2]);
+    } else {
+      const single = parseNum(weightCombined.replace(/[^\d.,]/g, ""));
+      if (/външ|outdoor/i.test(weightCombined)) weight_outdoor_kg = weight_outdoor_kg ?? single;
+      else weight_indoor_kg = weight_indoor_kg ?? single;
+    }
+  }
+
+  const coverageRaw =
+    rowValue(rows, "площ", "помещение") ??
+    rowValue(rows, "coverage") ??
+    rowValue(rows, "площ");
+  const coverageParsed = firstNumberInText(coverageRaw);
 
   const refrigerant =
     rowValue(rows, "хладилен", "агент") ??
@@ -243,14 +361,34 @@ export function extractCondexProductSpecs(html: string): CondexParsedProduct["sp
     html.match(/\b(R32|R410A|R290)\b/i)?.[1]?.toUpperCase() ??
     null;
 
-  const wifi =
-    /wi-?fi|безжично|интернет управление/i.test(html) ||
-    /wi-?fi/i.test(stripHtmlToText(html.match(/id=["']tab-general-details["'][\s\S]{0,8000}/i)?.[0] ?? ""));
+  const generalText = stripHtmlToText(html.match(/id=["']tab-general-details["'][\s\S]{0,8000}/i)?.[0] ?? "");
+  const wifiRow = rowValue(rows, "wi-fi") ?? rowValue(rows, "wifi") ?? rowValue(rows, "безжич");
+  let wifi: boolean | null = null;
+  if (wifiRow) {
+    wifi = !/^(не|no|без|without|false|0)\b/i.test(wifiRow.trim());
+  } else if (
+    /вграден\s+wi-?fi|built-?in\s+wi-?fi|wi-?fi\s+включен|wi-?fi\s+ready|с\s+wi-?fi/i.test(generalText)
+  ) {
+    wifi = true;
+  } else if (/без\s+wi-?fi|no\s+wi-?fi|without\s+wi-?fi/i.test(generalText)) {
+    wifi = false;
+  }
+
+  const noiseIn = parseCondexNoiseDb(noiseCool);
+  const noiseOut = parseCondexNoiseDb(noiseHeat);
+  const noise_db = outdoorOnly
+    ? (noiseOut ?? noiseIn)
+    : (noiseIn ?? noiseOut);
 
   return {
     btu: inferBtuFromCoolingKw(coolKw),
-    coverage_m2: coolKw != null && coolKw > 0 ? Math.round(coolKw * 10) : null,
-    noise_db: parseNoiseIndoorDb(noiseCool) ?? parseNoiseIndoorDb(noiseHeat),
+    coverage_m2:
+      coverageParsed != null && coverageParsed > 0
+        ? Math.round(coverageParsed)
+        : coolKw != null && coolKw > 0
+          ? Math.round(coolKw * 10)
+          : null,
+    noise_db,
     cooling_power_kw: coolKw,
     heating_power_kw: heatKw,
     refrigerant,
@@ -259,9 +397,9 @@ export function extractCondexProductSpecs(html: string): CondexParsedProduct["sp
     energy_class_heat: energyHeat,
     seer: seerScop.a ?? eerCop.a,
     scop: seerScop.b ?? eerCop.b,
-    warranty_months: null,
-    weight_indoor_kg: null,
-    weight_outdoor_kg: null,
+    warranty_months: parseCondexWarrantyMonths(html),
+    weight_indoor_kg,
+    weight_outdoor_kg,
     dim_indoor_length_mm: indoorDim?.dim_length_mm ?? null,
     dim_indoor_width_mm: indoorDim?.dim_width_mm ?? null,
     dim_indoor_height_mm: indoorDim?.dim_height_mm ?? null,
@@ -427,7 +565,6 @@ export function parseCondexProductPage(
   if (priceEur == null) return null;
 
   const modelCode = extractCondexModelCode(name);
-  const specs = extractCondexProductSpecs(html);
 
   let description: string | null = null;
   const generalSlice =
@@ -447,6 +584,7 @@ export function parseCondexProductPage(
     description = [h2 ? stripHtmlToText(h2) : "", bullets.join(" ")].filter(Boolean).join(". ").slice(0, 4000);
   }
   const generalBlock = generalSlice;
+  const specs = extractCondexProductSpecs(html, { name, description });
 
   if (/не включва панел|does not include panel|panel.*mandatory|задължителн/i.test(html)) {
     const note =

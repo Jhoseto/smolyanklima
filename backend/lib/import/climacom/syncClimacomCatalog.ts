@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { slugifyBg } from "../slugify";
 import { stripImportSourceFromDescription } from "../stripImportSourceFromDescription";
-import { replaceProductImages, upsertProductSpecs, type ImageInput, type SpecsInput } from "@/lib/admin/syncProductChildren";
+import { replaceProductImages, replaceProductSpecs, replaceProductFeatures, type ImageInput, type SpecsInput } from "@/lib/admin/syncProductChildren";
 import { collectClimacomCatalogProducts } from "./collectClimacomProducts";
 import {
   fetchClimacomHtml,
@@ -28,12 +28,20 @@ export type ClimacomSyncSummary = {
   supplierBackfilled: number;
 };
 
-const FEATURE_KEYWORDS: Array<{ slug: string; patterns: RegExp[] }> = [
-  { slug: "wifi", patterns: [/wi-?fi/i, /melcloud/i, /безжично/i] },
-  { slug: "inverter", patterns: [/инвертор/i, /inverter/i] },
-  { slug: "night_mode", patterns: [/нощен/i, /тих режим/i] },
-  { slug: "self_cleaning", patterns: [/самопочистване/i] },
-  { slug: "ionizer", patterns: [/plasma quad/i, /йон/i, /филтър/i] },
+const FEATURE_KEYWORDS: Array<{ slug: string; patterns: RegExp[]; exclude?: RegExp[] }> = [
+  // Climacom Wi-Fi: WC attribute "WiFi интерфейс" = built-in; "Wi-Fi интерфейс - Опция" = optional.
+  // We only mark wifi if the label has no "Опция".
+  {
+    slug: "wifi",
+    patterns: [/wi-?fi/i, /melcloud/i, /безжично\s+lan/i],
+    exclude: [/\bопция\b/i],
+  },
+  { slug: "inverter", patterns: [/инвертор/i, /dc\s+inverter/i, /dc\s+fan/i] },
+  { slug: "night_mode", patterns: [/нощен/i, /тих режим/i, /sleep/i] },
+  { slug: "self_cleaning", patterns: [/самопочистване/i, /режим на самопочистване/i] },
+  { slug: "ionizer", patterns: [/plasma quad/i, /йонизатор/i, /йонизиращ/i] },
+  { slug: "nanoe", patterns: [/nanoe/i] },
+  { slug: "turbo", patterns: [/мощен режим/i, /powerful/i, /турбо/i, /hi power/i] },
 ];
 
 type RefMaps = {
@@ -112,11 +120,13 @@ function resolveTypeId(refs: RefMaps, hint: string | null): string {
   return refs.defaultTypeId;
 }
 
-function resolveFeatureIds(refs: RefMaps, labels: string[], htmlHay: string): string[] {
+function resolveFeatureIds(refs: RefMaps, labels: string[], name: string, description: string | null): string[] {
   const ids = new Set<string>();
-  const hay = `${htmlHay} ${labels.join(" ")}`.toLowerCase();
-  for (const { slug, patterns } of FEATURE_KEYWORDS) {
+  // Always include name so "Инверторен климатик …" is considered regardless of description.
+  const hay = `${name} ${description ?? ""} ${labels.join(" ")}`.toLowerCase();
+  for (const { slug, patterns, exclude } of FEATURE_KEYWORDS) {
     if (patterns.some((p) => p.test(hay))) {
+      if (exclude?.some((ex) => ex.test(hay))) continue;
       const id = refs.featureBySlug.get(slug);
       if (id) ids.add(id);
     }
@@ -182,6 +192,7 @@ async function upsertOne(
     price: item.priceEur,
     price_with_mount: item.priceWithMountEur,
     model_code: item.modelCode,
+    source_url: item.sourceUrl || null,
     product_condition: "new",
     stock_status: "on_order",
     stock_quantity: 0,
@@ -224,24 +235,20 @@ async function syncChildren(
   refs: RefMaps,
 ): Promise<void> {
   const specs: SpecsInput = { ...item.specs };
-  await upsertProductSpecs(supabase, productId, specs);
+  const specsErr = await replaceProductSpecs(supabase, productId, specs);
+  if (specsErr.error) throw new Error(specsErr.error.message);
 
-  if (item.imageUrls.length) {
-    const images: ImageInput[] = item.imageUrls.map((url, i) => ({
-      url,
-      sort_order: i,
-      is_main: i === 0,
-    }));
-    await replaceProductImages(supabase, productId, images);
-  }
+  const images: ImageInput[] = item.imageUrls.map((url, i) => ({
+    url,
+    sort_order: i,
+    is_main: i === 0,
+  }));
+  const imgErr = await replaceProductImages(supabase, productId, images);
+  if (imgErr.error) throw new Error(imgErr.error.message);
 
-  const featureIds = resolveFeatureIds(refs, item.featureLabels, item.description ?? item.name);
-  if (featureIds.length) {
-    await supabase.from("product_features").delete().eq("product_id", productId);
-    await supabase.from("product_features").insert(
-      featureIds.map((feature_id) => ({ product_id: productId, feature_id })),
-    );
-  }
+  const featureIds = resolveFeatureIds(refs, item.featureLabels, item.name, item.description);
+  const featErr = await replaceProductFeatures(supabase, productId, featureIds);
+  if (featErr.error) throw new Error(featErr.error.message);
 }
 
 export async function runClimacomCatalogSync(
@@ -322,7 +329,22 @@ export async function runClimacomCatalogSync(
         summary.skipped++;
         emitClimacomProgress(onProgress, {
           phase: "import",
-          message: `Пропуснат (няма цена): ${wc.name}`,
+          message: `Пропуснат (липсват данни): ${wc.name}`,
+          current,
+          total: wcProducts.length,
+          url,
+          result: "skipped",
+        });
+        continue;
+      }
+
+      // Skip climate products without a price — only accessories may have price=0
+      const isClimateCat = classifyClimacomCatalogItem(parsed) === "climate";
+      if (isClimateCat && !parsed.priceEur) {
+        summary.skipped++;
+        emitClimacomProgress(onProgress, {
+          phase: "import",
+          message: `Пропуснат (няма цена за климатик): ${parsed.name}`,
           current,
           total: wcProducts.length,
           url,

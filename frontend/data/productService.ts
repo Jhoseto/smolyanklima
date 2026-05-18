@@ -139,6 +139,8 @@ type ApiProduct = {
     wifi?: boolean | null;
     energy_class_cool?: string | null;
     energy_class_heat?: string | null;
+    seer?: number | null;
+    scop?: number | null;
     warranty_months?: number | null;
     weight_indoor_kg?: number | null;
     weight_outdoor_kg?: number | null;
@@ -245,6 +247,8 @@ function mapApiToCatalogProduct(raw: ApiProduct): CatalogProduct {
     refrigerant: specs0?.refrigerant ?? undefined,
     coolingPower,
     heatingPower,
+    seer: numOrUndef(specs0?.seer),
+    scop: numOrUndef(specs0?.scop),
 
     price: Number(raw.price),
     priceWithMount: resolveInstallPrice({ type, price: Number(raw.price) }),

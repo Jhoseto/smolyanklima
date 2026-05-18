@@ -59,8 +59,9 @@ export async function upsertClimacomAccessory(
     name: item.name,
     brand_id: brandId,
     description,
-    price: item.priceEur,
+    price: item.priceEur || null,  // store null when price=0 (no publicly listed price)
     kind: inferClimacomAccessoryKind(item.name),
+    source_url: item.sourceUrl || null,
     stock_status: "on_order",
     stock_quantity: 0,
     is_active: true,

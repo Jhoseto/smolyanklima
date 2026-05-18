@@ -75,6 +75,9 @@ export interface CatalogProduct {
   refrigerant?: string;
   coolingPower?: string;
   heatingPower?: string;
+  /** Реален SEER от спецификации (ако има в БД). */
+  seer?: number;
+  scop?: number;
 
   // Pricing
   price: number;           // EUR, base price (converted from BGN at 1.95 rate)

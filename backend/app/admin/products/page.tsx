@@ -24,6 +24,7 @@ import {
   Settings,
   Eye,
   EyeOff,
+  ExternalLink,
 } from "lucide-react";
 import { ShareToChatModal } from "../chat/ShareToChatModal";
 import { CatalogItemQuickViewButton } from "../ProductQuickView";
@@ -64,6 +65,7 @@ type ProductRow = {
   sold_quantity: number;
   product_condition: "new" | "used";
   supplier_id?: string | null;
+  source_url?: string | null;
   indoor_unit_serial?: string | null;
   outdoor_unit_serial?: string | null;
   supplier_invoice_number?: string | null;
@@ -1575,6 +1577,7 @@ export default function AdminProductsPage() {
             {canMutateProductRows && <col className="w-[2%]" />}
             <col className="w-[11%]" />
             <col className="w-[2%]" />
+            <col className="w-[2%]" />
             <col className="w-[6%]" />
             <col className="w-[5%]" />
             <col className="w-[4%]" />
@@ -1603,6 +1606,9 @@ export default function AdminProductsPage() {
               </Th>
               )}
               <SortableTh label="Име" field="name" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} center />
+              <Th className="text-center !px-0" title="Линк към доставчик">
+                <ExternalLink className="w-3 h-3 opacity-70 mx-auto" />
+              </Th>
               <Th className="text-center !px-0" title="Публичен каталог">
                 <Eye className="w-3 h-3 opacity-70 mx-auto" />
               </Th>
@@ -1644,6 +1650,19 @@ export default function AdminProductsPage() {
                       className="block whitespace-normal text-center leading-tight text-[11px] line-clamp-2 break-words font-semibold"
                     />
                   </div>
+                </Td>
+                <Td className="text-center align-middle whitespace-nowrap !px-0">
+                  {p.source_url ? (
+                    <a
+                      href={p.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Отвори при доставчика"
+                      className="inline-flex items-center justify-center p-0.5 rounded hover:bg-slate-100 text-slate-400 hover:text-brand-blue-600 transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  ) : null}
                 </Td>
                 <Td className="text-center align-middle whitespace-nowrap !px-0">
                   {(() => {

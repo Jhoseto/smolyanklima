@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronDown, RotateCcw } from 'lucide-react';
-import { EnergyCalculator, PowerCalculator } from './Calculators';
+import { PowerCalculator } from './Calculators';
 
 const ENERGY_CLASSES = ['A+++', 'A++', 'A+', 'A'];
 
@@ -360,7 +360,6 @@ export const FilterSidebar = ({
       {/* ── CALCULATORS ────────────────────── */}
       <div className="mt-6 border-t border-gray-100 pt-6">
         <h3 className="text-xs font-black text-gray-500 uppercase tracking-wider mb-4">Полезни инструменти</h3>
-        <EnergyCalculator />
         <PowerCalculator />
       </div>
 

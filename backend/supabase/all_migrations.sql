@@ -1165,6 +1165,12 @@ alter table public.service_protocols
   alter column status set default 'prepared';
 
 
+-- 0060 · Products / Accessories: source_url
+alter table public.products
+  add column if not exists source_url text;
+alter table public.accessories
+  add column if not exists source_url text;
+
 -- ============================================================
 -- Край. След изпълнение:
 -- 1. Authentication → Settings → enable Email/Password sign-in

@@ -7,14 +7,17 @@ export function normalizeEnergyClassLetters(text: string): string {
   return text.replace(/\u0410/g, "A");
 }
 
-/** Парсва A, A+, A++, A+++ от текст (най-дългото съвпадение първо). */
+/** Парсва A, A+, A++, A+++ от текст (най-дългото съвпадение първо).
+ *  Обработва и формати с интервали: "A ++", "A + + +" → нормализира до "A++", "A+++".
+ */
 export function parseEnergyClassFromText(text: string | null | undefined): string | null {
   if (!text?.trim()) return null;
   const t = normalizeEnergyClassLetters(text.trim());
-  const withPlus = t.match(/A\+{3}|A\+{2}|A\+(?!\+)/i);
-  if (withPlus) return withPlus[0]!.toUpperCase();
+  // Match A with optional spaces before/between plus signs (e.g. "A ++", "A + + +")
+  const withPlus = t.match(/A\s*\+\s*\+\s*\+|A\s*\+\s*\+|A\s*\+(?![\s*+])/i);
+  if (withPlus) return withPlus[0]!.replace(/\s+/g, "").toUpperCase();
   if (/^A$/i.test(t)) return "A";
-  const afterNum = t.match(/(\d+[.,]?\d*)\s+(A)\b(?!\+)/i);
+  const afterNum = t.match(/(\d+[.,]?\d*)\s+(A)\b(?!\s*\+)/i);
   if (afterNum) return afterNum[2]!.toUpperCase();
   return null;
 }

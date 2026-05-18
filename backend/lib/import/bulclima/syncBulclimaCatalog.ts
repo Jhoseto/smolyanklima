@@ -30,11 +30,24 @@ export type BulclimaSyncSummary = {
   supplierBackfilled: number;
 };
 
-const FEATURE_KEYWORDS: Array<{ slug: string; patterns: RegExp[] }> = [
-  { slug: "wifi", patterns: [/wi-?fi/i, /безжично/i, /интернет/i] },
-  { slug: "inverter", patterns: [/инвертор/i] },
-  { slug: "night_mode", patterns: [/нощен/i, /тих режим/i, /сън/i] },
-  { slug: "self_cleaning", patterns: [/самопочистване/i] },
+const FEATURE_KEYWORDS: Array<{ slug: string; patterns: RegExp[]; exclude?: RegExp[] }> = [
+  // Exclude "(опция)" entries — they are optional adapters, not built-in
+  {
+    slug: "wifi",
+    patterns: [/wi-?fi/i, /безжично\s+lan/i, /вграден\s+wi/i],
+    exclude: [/опция/i, /adapter/i, /адаптер/i],
+  },
+  {
+    slug: "inverter",
+    patterns: [
+      /инвертор/i,
+      /инвepт/i,   // mixed homoglyph: "инвepтopeн" (Kaisai featureLabels with Latin е/р)
+      /all\s+dc/i, // "All DC модели" — DC inverter motor
+      /dc\s+мотор/i,
+    ],
+  },
+  { slug: "night_mode", patterns: [/нощен/i, /тих режим/i, /сън/i, /sleep/i] },
+  { slug: "self_cleaning", patterns: [/самопочистване/i, /heat\s+clean/i] },
   { slug: "ionizer", patterns: [/йон/i, /дезодориращ/i] },
   { slug: "turbo", patterns: [/мощен режим/i, /powerful/i, /турбо/i] },
 ];
@@ -123,11 +136,14 @@ function resolveTypeId(refs: RefMaps, hint: string | null): string {
   return refs.defaultTypeId;
 }
 
-function resolveFeatureIds(refs: RefMaps, labels: string[], htmlHay: string): string[] {
+function resolveFeatureIds(refs: RefMaps, labels: string[], name: string, description: string | null): string[] {
   const ids = new Set<string>();
-  const hay = `${htmlHay} ${labels.join(" ")}`.toLowerCase();
-  for (const { slug, patterns } of FEATURE_KEYWORDS) {
+  // Always include name so "Инверторен климатик …" is matched regardless of description presence.
+  const hay = `${name} ${description ?? ""} ${labels.join(" ")}`.toLowerCase();
+  for (const { slug, patterns, exclude } of FEATURE_KEYWORDS) {
     if (patterns.some((p) => p.test(hay))) {
+      // Skip if any exclusion pattern also matches (e.g. wifi "(опция)")
+      if (exclude?.some((ex) => ex.test(hay))) continue;
       const id = refs.featureBySlug.get(slug);
       if (id) ids.add(id);
     }
@@ -196,6 +212,7 @@ async function upsertOne(
     price: item.priceEur,
     price_with_mount: item.priceWithMountEur ?? item.priceEur + 200,
     model_code: item.modelCode,
+    source_url: item.sourceUrl || null,
     product_condition: "new",
     stock_status: "on_order",
     stock_quantity: 0,
@@ -252,7 +269,7 @@ async function syncChildren(
     await replaceProductImages(supabase, productId, images);
   }
 
-  const featureIds = resolveFeatureIds(refs, item.featureLabels, item.description ?? item.name);
+  const featureIds = resolveFeatureIds(refs, item.featureLabels, item.name, item.description);
   if (featureIds.length) {
     await supabase.from("product_features").delete().eq("product_id", productId);
     await supabase.from("product_features").insert(

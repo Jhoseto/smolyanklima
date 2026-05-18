@@ -47,12 +47,8 @@ function isMissingDimensionColumn(error: { message?: string; code?: string } | n
   return DIMENSION_COLUMNS.some((c) => msg.includes(c));
 }
 
-export async function upsertProductSpecs(
-  supabase: SupabaseClient,
-  productId: string,
-  specs: SpecsInput,
-): Promise<{ error: { message: string } | null }> {
-  const row: Record<string, unknown> = {
+function buildProductSpecsRow(productId: string, specs: SpecsInput): Record<string, unknown> {
+  return {
     product_id: productId,
     btu: specs.btu ?? null,
     coverage_m2: specs.coverage_m2 ?? null,
@@ -75,15 +71,62 @@ export async function upsertProductSpecs(
     dim_outdoor_width_mm: specs.dim_outdoor_width_mm ?? null,
     dim_outdoor_height_mm: specs.dim_outdoor_height_mm ?? null,
   };
+}
 
-  let { error } = await supabase.from("product_specs").upsert(row, { onConflict: "product_id" });
+async function writeProductSpecsRow(
+  supabase: SupabaseClient,
+  row: Record<string, unknown>,
+  mode: "upsert" | "insert",
+): Promise<{ error: { message: string } | null }> {
+  const table = supabase.from("product_specs");
+  let { error } =
+    mode === "insert"
+      ? await table.insert(row)
+      : await table.upsert(row, { onConflict: "product_id" });
   if (error && isMissingDimensionColumn(error)) {
     const fallback = { ...row };
     for (const col of DIMENSION_COLUMNS) {
       delete (fallback as Record<string, unknown>)[col as DimensionColumn];
     }
-    ({ error } = await supabase.from("product_specs").upsert(fallback, { onConflict: "product_id" }));
+    ({ error } =
+      mode === "insert"
+        ? await table.insert(fallback)
+        : await table.upsert(fallback, { onConflict: "product_id" }));
   }
+  return { error };
+}
+
+/** Частично обновяване (админ форми). */
+export async function upsertProductSpecs(
+  supabase: SupabaseClient,
+  productId: string,
+  specs: SpecsInput,
+): Promise<{ error: { message: string } | null }> {
+  return writeProductSpecsRow(supabase, buildProductSpecsRow(productId, specs), "upsert");
+}
+
+/** Пълно презаписване при каталожен sync — всички полета, включително null. */
+export async function replaceProductSpecs(
+  supabase: SupabaseClient,
+  productId: string,
+  specs: SpecsInput,
+): Promise<{ error: { message: string } | null }> {
+  const { error: delErr } = await supabase.from("product_specs").delete().eq("product_id", productId);
+  if (delErr) return { error: delErr };
+  return writeProductSpecsRow(supabase, buildProductSpecsRow(productId, specs), "insert");
+}
+
+export async function replaceProductFeatures(
+  supabase: SupabaseClient,
+  productId: string,
+  featureIds: string[],
+): Promise<{ error: { message: string } | null }> {
+  const { error: delErr } = await supabase.from("product_features").delete().eq("product_id", productId);
+  if (delErr) return { error: delErr };
+  if (!featureIds.length) return { error: null };
+  const { error } = await supabase.from("product_features").insert(
+    featureIds.map((feature_id) => ({ product_id: productId, feature_id })),
+  );
   return { error };
 }
 

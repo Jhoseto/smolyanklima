@@ -71,12 +71,12 @@ export async function upsertCondexAccessory(
     row.slug = slug;
     const { data, error } = await supabase.from("accessories").insert(row).select("id").single();
     if (error || !data?.id) throw new Error(error?.message ?? "accessory insert failed");
-    if (item.imageUrls.length) await replaceAccessoryImages(supabase, data.id as string, item.imageUrls);
+    await replaceAccessoryImages(supabase, data.id as string, item.imageUrls);
     return "created";
   }
 
   const { error } = await supabase.from("accessories").update(row).eq("id", existing.id);
   if (error) throw new Error(error.message);
-  if (item.imageUrls.length) await replaceAccessoryImages(supabase, existing.id, item.imageUrls);
+  await replaceAccessoryImages(supabase, existing.id, item.imageUrls);
   return "updated";
 }

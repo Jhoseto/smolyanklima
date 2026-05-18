@@ -1,7 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { slugifyBg } from "../slugify";
 import { stripImportSourceFromDescription } from "../stripImportSourceFromDescription";
-import { replaceProductImages, upsertProductSpecs, type ImageInput, type SpecsInput } from "@/lib/admin/syncProductChildren";
+import {
+  replaceProductFeatures,
+  replaceProductImages,
+  replaceProductSpecs,
+  type ImageInput,
+  type SpecsInput,
+} from "@/lib/admin/syncProductChildren";
 import { collectCondexProductUrls } from "./collectCondexProducts";
 import { classifyCondexCatalogItem } from "./classifyCondexItem";
 import { fetchCondexHtml, parseCondexProductPage, type CondexParsedProduct } from "./parseCondexProduct";
@@ -168,24 +174,20 @@ async function syncChildren(
   refs: RefMaps,
 ): Promise<void> {
   const specs: SpecsInput = { ...item.specs };
-  await upsertProductSpecs(supabase, productId, specs);
+  const specsErr = await replaceProductSpecs(supabase, productId, specs);
+  if (specsErr.error) throw new Error(specsErr.error.message);
 
-  if (item.imageUrls.length) {
-    const images: ImageInput[] = item.imageUrls.map((url, i) => ({
-      url,
-      sort_order: i,
-      is_main: i === 0,
-    }));
-    await replaceProductImages(supabase, productId, images);
-  }
+  const images: ImageInput[] = item.imageUrls.map((url, i) => ({
+    url,
+    sort_order: i,
+    is_main: i === 0,
+  }));
+  const imgErr = await replaceProductImages(supabase, productId, images);
+  if (imgErr.error) throw new Error(imgErr.error.message);
 
   const featureIds = resolveFeatureIds(refs, item.featureLabels, item.description ?? item.name);
-  if (featureIds.length) {
-    await supabase.from("product_features").delete().eq("product_id", productId);
-    await supabase.from("product_features").insert(
-      featureIds.map((feature_id) => ({ product_id: productId, feature_id })),
-    );
-  }
+  const featErr = await replaceProductFeatures(supabase, productId, featureIds);
+  if (featErr.error) throw new Error(featErr.error.message);
 }
 
 async function upsertOne(

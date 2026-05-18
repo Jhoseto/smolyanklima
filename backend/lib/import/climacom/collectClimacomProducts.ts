@@ -2,11 +2,19 @@ import { CLIMACOM_WC_API, type ClimacomWcProduct } from "./parseClimacomProduct"
 
 const UA = "SmolyanKlimaCatalogSync/1.0";
 
-/** Климатици за дома: стенни + мултисплит. */
-export const CLIMACOM_CLIMATE_CATEGORY_SLUGS = ["stenni-klimatici", "multisplit-sistemi"] as const;
+/** Климатици за дома: стенни, мултисплит, касетъчни. */
+export const CLIMACOM_CLIMATE_CATEGORY_SLUGS = [
+  "stenni-klimatici",
+  "multisplit-sistemi",
+  "chetiristruini-kaseti",      // 4-stream cassette
+  "ednostruyna-kaseta-mlz-kp",  // 1-stream cassette MLZ-KP
+] as const;
 
-/** Wi‑Fi модули и сродни аксесоари. */
-export const CLIMACOM_ACCESSORY_CATEGORY_SLUGS = ["wi-fi-moduli-mitsubishi-electric"] as const;
+/** Wi‑Fi модули, дистанционни управления и аксесоари. */
+export const CLIMACOM_ACCESSORY_CATEGORY_SLUGS = [
+  "wi-fi-moduli-mitsubishi-electric",
+  "distancionni-upravlenia-mitsubishi-electric",
+] as const;
 
 async function fetchWcPage(url: string): Promise<ClimacomWcProduct[]> {
   const res = await fetch(url, { headers: { "User-Agent": UA } });

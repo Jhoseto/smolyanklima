@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { Check, Ruler, ShieldCheck, Star, Volume2, Weight, Wifi, Wind, X, Zap } from "lucide-react";
+import { Check, ExternalLink, Ruler, ShieldCheck, Star, Volume2, Weight, Wifi, Wind, X, Zap } from "lucide-react";
+import { publicProductPageUrl } from "@/lib/publicCatalogUrl";
 
 type ProductQuickViewData = {
   id: string;
@@ -411,6 +412,17 @@ export function ProductQuickViewModal({ productId, onClose }: { productId: strin
                     ))}
                   </div>
                 )}
+                {product.slug ? (
+                  <a
+                    href={publicProductPageUrl(product.slug)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-[#00B4D8]/30 bg-white px-4 py-2.5 text-sm font-bold text-[#0077B6] shadow-sm transition-colors hover:bg-[#EBF5FF]"
+                  >
+                    <ExternalLink className="h-4 w-4 shrink-0" />
+                    Клиентски изглед
+                  </a>
+                ) : null}
               </div>
             </div>
 

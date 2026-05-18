@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Check, ArrowRightLeft, DollarSign, Zap, Volume2, Square, Wifi, Tag, Shield, Star, Loader2 } from 'lucide-react';
 import type { CatalogProduct } from '../../data/types/product';
 import { getComparisonAIService } from '../ai-assistant/core/ComparisonAIService';
+import { CompareEnergySavings } from './Calculators';
 
 interface CompareBarProps {
   compareList: CatalogProduct[];
@@ -309,7 +310,9 @@ export const CompareBar = ({ compareList, onRemove, onClear }: CompareBarProps) 
                     </tr>
                   </tbody>
                 </table>
-                
+
+                <CompareEnergySavings products={compareList} />
+
                 {/* AI Summary Section */}
                 <div className="mt-6 p-5 bg-gradient-to-r from-[#00B4D8]/5 to-[#0077B6]/5 rounded-2xl border border-[#00B4D8]/20">
                   <div className="flex items-center gap-2 mb-3">

@@ -15,7 +15,7 @@ export type AdminCatalogListFilters = {
 };
 
 const ACCESSORY_SELECT =
-  "id,slug,name,price,stock_status,stock_quantity,is_active,created_at,brand_id,kind,brands:brand_id(name)";
+  "id,slug,name,price,stock_status,stock_quantity,is_active,source_url,created_at,brand_id,kind,brands:brand_id(name)";
 
 const ACCESSORY_STUB_SELECT = "id,name,price,created_at";
 
@@ -27,6 +27,7 @@ type AccessoryRow = {
   stock_status: string;
   stock_quantity: number;
   is_active: boolean;
+  source_url?: string | null;
   created_at: string;
   brand_id: string | null;
   kind: string;
@@ -60,6 +61,7 @@ export function mapAccessoryToAdminListRow(row: AccessoryRow) {
     created_at: row.created_at,
     purchased_at: null,
     supplier_id: null,
+    source_url: row.source_url ?? null,
     indoor_unit_serial: null,
     outdoor_unit_serial: null,
     supplier_invoice_number: null,
