@@ -382,7 +382,7 @@ export async function runBittelCatalogSync(
           if (misplaced) {
             await supabase.from("products").delete().eq("id", misplaced.id);
           }
-          result = await upsertBittelAccessory(supabase, brandId, parsed);
+          result = await upsertBittelAccessory(supabase, brandId, parsed, refs.supplierId);
           if (result === "created") summary.accessoriesCreated++;
           else if (result === "updated") summary.accessoriesUpdated++;
         }

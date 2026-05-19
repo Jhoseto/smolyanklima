@@ -377,7 +377,7 @@ export async function runCondexCatalogSync(
           if (misplaced) {
             await supabase.from("products").delete().eq("id", misplaced.id);
           }
-          result = await upsertCondexAccessory(supabase, brandId, parsed);
+          result = await upsertCondexAccessory(supabase, brandId, parsed, refs.supplierId);
           if (result === "created") summary.accessoriesCreated++;
           else if (result === "updated") summary.accessoriesUpdated++;
         }

@@ -376,7 +376,7 @@ export async function runBulclimaCatalogSync(
         if (brandSkipped) {
           result = "skipped";
         } else {
-          result = await upsertBulclimaAccessory(supabase, brandId, parsed);
+          result = await upsertBulclimaAccessory(supabase, brandId, parsed, { supplierId: refs.supplierId });
           if (result === "created") summary.accessoriesCreated++;
           else if (result === "updated") summary.accessoriesUpdated++;
         }

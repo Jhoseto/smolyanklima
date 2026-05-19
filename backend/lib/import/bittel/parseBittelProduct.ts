@@ -49,7 +49,6 @@ const FETCH_HEADERS = {
 
 const DEFAULT_MOUNT_EUR = 200;
 const MAX_PRODUCT_IMAGES = 4;
-const IMAGE_EXT = /\.(jpg|jpeg|png|webp|avif)(\?|$)/i;
 
 export async function fetchBittelHtml(url: string): Promise<string> {
   const res = await fetch(url, { headers: FETCH_HEADERS, redirect: "follow" });
@@ -113,30 +112,34 @@ function parseNoiseDb(raw: string | undefined): number | null {
   return Math.min(...parts);
 }
 
-/** "286 x 770 x 225 В x Ш x Д (мм)" → {h, w, d} in mm (Височина × Ширина × Дълбочина) */
+/**
+ * "286 x 770 x 225 В x Ш x Д (мм)" → {height_mm:286, width_mm:770, depth_mm:225}
+ * Also handles "80.3 x 97.8 x 42.1" without labels.
+ * Strategy: extract the first three positive numbers in the string.
+ */
 function parseDimensionsHwd(s: string | undefined): {
   height_mm: number;
   width_mm: number;
   depth_mm: number;
 } | null {
   if (!s) return null;
-  const clean = s
-    .replace(/В\s*[xх×]/gi, "x")
-    .replace(/Ш\s*[xх×]/gi, "x")
-    .replace(/Д\s*/gi, "")
-    .replace(/\(мм\)/gi, "")
-    .trim();
-  const parts = clean
-    .split(/\s*[xхX×]\s*/)
-    .map((p) => parseInt(p.replace(/\D/g, ""), 10));
-  if (parts.length < 3 || parts.some((n) => !Number.isFinite(n) || n <= 0)) return null;
-  return { height_mm: parts[0]!, width_mm: parts[1]!, depth_mm: parts[2]! };
+  const nums = [...s.matchAll(/(\d+(?:[.,]\d+)?)/g)]
+    .map((m) => parseFloat(m[1]!.replace(",", ".")))
+    .filter((n) => n > 0);
+  if (nums.length < 3) return null;
+  return {
+    height_mm: Math.round(nums[0]!),
+    width_mm: Math.round(nums[1]!),
+    depth_mm: Math.round(nums[2]!),
+  };
 }
 
 /**
- * Bittel pages have "Техническа информация" with sub-sections:
- * "Основни характеристики", "Вътрешно тяло", "Външно тяло".
- * We parse spec tables/definition lists and track which section each row belongs to.
+ * Bittel product pages have a spec tab with id="tab-specification".
+ * Inside it, <ul class="specification"> contains:
+ *   <li class="group-title"><div>GROUP NAME</div></li>   ← section separator
+ *   <li><div><strong>LABEL:</strong><p>VALUE</p></div></li>  ← spec row
+ * Group names: "Основни характеристики" (general), "Вътрешно тяло" (indoor), "Външно тяло" (outdoor)
  */
 export function extractBittelSpecRows(html: string): {
   general: Map<string, string>;
@@ -147,106 +150,49 @@ export function extractBittelSpecRows(html: string): {
   const indoor = new Map<string, string>();
   const outdoor = new Map<string, string>();
 
-  // Find the "Техническа информация" section
-  const techSection =
-    html.match(/[Тт]ехническа\s+информация[\s\S]{0,60000}/)?.[0] ??
-    html.match(/technical[\s\S]{0,60000}/i)?.[0] ??
-    html;
+  // Find the spec tab
+  const specTabStart = html.indexOf('id="tab-specification"');
+  if (specTabStart < 0) return { general, indoor, outdoor };
 
-  // Split into sub-sections by headers
-  // Headers appear as text "Основни характеристики", "Вътрешно тяло", "Външно тяло"
-  const generalMarker = /основни\s+характеристики/i;
-  const indoorMarker = /вътрешно\s+тяло/i;
-  const outdoorMarker = /външно\s+тяло/i;
+  // Stop before the next sibling tab to avoid parsing description/documents/opinions
+  let specTabEnd = html.indexOf('id="tab-description"', specTabStart);
+  if (specTabEnd < 0) specTabEnd = html.indexOf('id="tab-documents"', specTabStart);
+  if (specTabEnd < 0) specTabEnd = html.indexOf('id="opinions"', specTabStart);
+  if (specTabEnd < 0) specTabEnd = specTabStart + 30000;
 
-  let generalText = "";
-  let indoorText = "";
-  let outdoorText = "";
+  const specHtml = html.slice(specTabStart, specTabEnd);
 
-  const indoorIdx = techSection.search(indoorMarker);
-  const outdoorIdx = techSection.search(outdoorMarker);
-  const generalIdx = techSection.search(generalMarker);
+  // Walk all <li> items, tracking which group they belong to
+  let currentGroup: Map<string, string> = general;
+  const liRe = /<li(?:\s[^>]*)?>[\s\S]*?<\/li>/gi;
+  let li: RegExpExecArray | null;
 
-  if (generalIdx >= 0) {
-    const end = indoorIdx > generalIdx ? indoorIdx : (outdoorIdx > generalIdx ? outdoorIdx : techSection.length);
-    generalText = techSection.slice(generalIdx, end);
-  } else {
-    // No explicit general section marker — use everything before "Вътрешно тяло"
-    const end = indoorIdx >= 0 ? indoorIdx : (outdoorIdx >= 0 ? outdoorIdx : techSection.length / 3);
-    generalText = techSection.slice(0, end);
-  }
+  while ((li = liRe.exec(specHtml)) !== null) {
+    const liHtml = li[0]!;
 
-  if (indoorIdx >= 0) {
-    const end = outdoorIdx > indoorIdx ? outdoorIdx : techSection.length;
-    indoorText = techSection.slice(indoorIdx, end);
-  }
-
-  if (outdoorIdx >= 0) {
-    outdoorText = techSection.slice(outdoorIdx);
-  }
-
-  function parseSection(sectionHtml: string): Map<string, string> {
-    const rows = new Map<string, string>();
-
-    // Try: <tr><td>label</td><td>value</td></tr> pattern
-    const trRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-    let tr: RegExpExecArray | null;
-    while ((tr = trRe.exec(sectionHtml)) !== null) {
-      const cells: string[] = [];
-      const tdRe = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
-      let td: RegExpExecArray | null;
-      while ((td = tdRe.exec(tr[1]!)) !== null) {
-        const t = stripHtmlToText(td[1]!).trim();
-        if (t) cells.push(t);
+    if (/class="group-title"/i.test(liHtml)) {
+      const groupText = stripHtmlToText(liHtml).toLowerCase();
+      if (/вътрешно\s+тяло/i.test(groupText)) {
+        currentGroup = indoor;
+      } else if (/външно\s+тяло/i.test(groupText)) {
+        currentGroup = outdoor;
+      } else {
+        currentGroup = general;
       }
-      if (cells.length >= 2) {
-        const label = cells[0]!.replace(/:$/, "").toLowerCase().trim();
-        const value = cells[cells.length - 1]!.trim();
-        if (label && value && label.length <= 120) rows.set(label, value);
-      }
+      continue;
     }
 
-    // Try: <dt>label</dt><dd>value</dd> pattern
-    const dlContent = sectionHtml.match(/<d[lt][^>]*>[\s\S]*?(?=<\/dl>|$)/gi) ?? [];
-    for (const dl of dlContent) {
-      const dtRe = /<dt[^>]*>([\s\S]*?)<\/dt>/gi;
-      const ddRe = /<dd[^>]*>([\s\S]*?)<\/dd>/gi;
-      const labels: string[] = [];
-      const values: string[] = [];
-      let dt: RegExpExecArray | null;
-      let dd: RegExpExecArray | null;
-      while ((dt = dtRe.exec(dl)) !== null) labels.push(stripHtmlToText(dt[1]!).replace(/:$/, "").toLowerCase().trim());
-      while ((dd = ddRe.exec(dl)) !== null) values.push(stripHtmlToText(dd[1]!).trim());
-      for (let i = 0; i < Math.min(labels.length, values.length); i++) {
-        const l = labels[i]!;
-        const v = values[i]!;
-        if (l && v && l.length <= 120) rows.set(l, v);
+    // Bittel spec item: <strong>LABEL:</strong> … <p>VALUE</p>
+    const strongM = liHtml.match(/<strong>([\s\S]*?)<\/strong>/i);
+    const pM = liHtml.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+    if (strongM && pM) {
+      const label = stripHtmlToText(strongM[1]!).replace(/:$/, "").toLowerCase().trim();
+      const value = stripHtmlToText(pM[1]!).trim();
+      if (label && value && label.length <= 150 && !currentGroup.has(label)) {
+        currentGroup.set(label, value);
       }
     }
-
-    // Try: lines matching "Label: Value" or "Label Value\n" pattern in plain text
-    if (rows.size < 2) {
-      const text = stripHtmlToText(sectionHtml);
-      const lineRe = /([А-ЯA-Za-z][А-Яа-яA-Za-z\s()\/.,+-]{3,80}?)\s*:\s*([^\n:]{2,100})/g;
-      let m: RegExpExecArray | null;
-      while ((m = lineRe.exec(text)) !== null) {
-        const label = m[1]!.toLowerCase().trim();
-        const value = m[2]!.trim();
-        if (label && value && !rows.has(label)) rows.set(label, value);
-      }
-    }
-
-    return rows;
   }
-
-  // Parse each section
-  const gRows = parseSection(generalText);
-  const iRows = parseSection(indoorText);
-  const oRows = parseSection(outdoorText);
-
-  for (const [k, v] of gRows) general.set(k, v);
-  for (const [k, v] of iRows) indoor.set(k, v);
-  for (const [k, v] of oRows) outdoor.set(k, v);
 
   return { general, indoor, outdoor };
 }
@@ -404,41 +350,18 @@ function toAbsoluteBittelUrl(src: string): string {
   return "";
 }
 
-function isProductImageUrl(url: string): boolean {
-  const u = url.toLowerCase();
-  if (!IMAGE_EXT.test(u)) return false;
-  if (/logo|icon|flag|banner|sprite|social|avatar|pixel|tracking/i.test(u)) return false;
-  // Bittel product images are under /web/files/products/ (not /thumbs/)
-  if (!u.includes("bittel.bg")) return false;
-  if (u.includes("/web/files/products/") || u.includes("/images/")) return true;
-  return false;
-}
-
-function isProductThumbnailUrl(url: string): boolean {
-  const u = url.toLowerCase();
-  return u.includes("/web/files/thumbs/") && IMAGE_EXT.test(u) && u.includes("bittel.bg");
-}
-
-/** Convert thumbnail URL to full-size URL (strip thumbs path component) */
-function upgradeToFullSize(url: string): string {
-  // Typically: /web/files/thumbs/products/... → /web/files/products/...
-  return url.replace(/\/web\/files\/thumbs\//, "/web/files/");
-}
-
+/**
+ * Extract product image URLs from Bittel gallery.
+ * Gallery uses: <a class="c-gallery-image" href="/web/img/[year]/[productId]/[imageId]/0/slug.png">
+ * The href is the full-size image (path segment "0" = original size).
+ */
 export function extractBittelProductImageUrls(html: string): string[] {
   const seen = new Set<string>();
   const urls: string[] = [];
 
-  const push = (raw: string, preferFull = false) => {
-    let abs = toAbsoluteBittelUrl(raw);
+  const addUrl = (raw: string) => {
+    const abs = toAbsoluteBittelUrl(raw);
     if (!abs) return;
-    // Try to upgrade thumbnail → full size
-    if (isProductThumbnailUrl(abs)) {
-      const full = upgradeToFullSize(abs);
-      abs = full;
-    }
-    if (!isProductImageUrl(abs) && !isProductThumbnailUrl(abs)) return;
-    // Normalise: remove query string
     const clean = abs.split("?")[0]!;
     if (!seen.has(clean)) {
       seen.add(clean);
@@ -446,71 +369,83 @@ export function extractBittelProductImageUrls(html: string): string[] {
     }
   };
 
-  // og:image is the main product image
-  const og = html.match(/property=["']og:image["'][^>]*content=["']([^"']+)["']/i);
-  if (og?.[1]) push(og[1]);
+  // Primary: full-size gallery links  <a class="c-gallery-image" href="...">
+  // The href attribute may come before or after class, so try both orderings.
+  const re1 = /<a\s[^>]*class="c-gallery-image"[^>]*href="([^"]+)"/gi;
+  const re2 = /<a\s[^>]*href="([^"]+)"[^>]*class="c-gallery-image"/gi;
+  for (const re of [re1, re2]) {
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(html)) !== null && urls.length < MAX_PRODUCT_IMAGES) {
+      addUrl(m[1]!);
+    }
+  }
 
-  // Gallery area — look for product image containers
-  const galleryBlock =
-    html.match(/class=["'][^"']*product[_-]?(?:images?|gallery|photo)[^"']*["'][\s\S]{0,20000}/i)?.[0] ??
-    html.match(/id=["'][^"']*product[_-]?(?:images?|gallery|photos?)[^"']*["'][\s\S]{0,20000}/i)?.[0] ??
-    html.slice(0, 60000);
-
-  // Extract data-zoom-image, data-large_image, data-src, src
-  const imgRe = /\b(?:data-zoom-image|data-large_image|data-src|src)=["']([^"']+)["']/gi;
-  let m: RegExpExecArray | null;
-  while ((m = imgRe.exec(galleryBlock)) !== null) {
-    push(m[1]!);
-    if (urls.length >= MAX_PRODUCT_IMAGES * 2) break;
+  // Fallback: og:image meta tag
+  if (!urls.length) {
+    const ogM = html.match(/property=["']og:image["'][^>]*content=["']([^"']+)["']/i);
+    if (ogM?.[1]) addUrl(ogM[1]);
   }
 
   return urls.slice(0, MAX_PRODUCT_IMAGES);
 }
 
-/** Extract description from "Подробно описание" section */
+/**
+ * Extract description from the Bittel description tab: id="tab-description".
+ * Content lives inside <div class="text" itemprop="description">.
+ * Structured as <table class="tmp-text-picture"> blocks, each with a
+ * .text-part div containing an orange <span> heading and <p> body text.
+ */
 export function extractBittelDescription(html: string): string | null {
-  // Look for "Подробно описание" section
-  const descSection =
-    html.match(/[Пп]одробно\s+описание[\s\S]{0,12000}/)?.[0] ??
-    html.match(/[Оо]писание[\s\S]{0,8000}/)?.[0];
+  const descTabIdx = html.indexOf('id="tab-description"');
+  if (descTabIdx < 0) return null;
 
-  if (!descSection) return null;
+  // Limit to 25000 chars of the description tab content
+  const descHtml = html.slice(descTabIdx, descTabIdx + 25000);
 
-  // Extract paragraphs and headings
+  // Find the inner text container
+  const textDivM = descHtml.match(
+    /itemprop="description"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/i,
+  );
+  const contentHtml = textDivM ? textDivM[1]! : descHtml.slice(0, 20000);
+
   const parts: string[] = [];
+  const seen = new Set<string>();
 
-  // Extract <h2>/<h3> headings followed by <p> text
-  const headingRe = /<h[23][^>]*>([\s\S]*?)<\/h[23]>/gi;
-  let h: RegExpExecArray | null;
-  while ((h = headingRe.exec(descSection)) !== null) {
-    const heading = stripHtmlToText(h[1]!);
-    if (heading && heading.length > 2) parts.push(heading);
+  const addPart = (text: string) => {
+    const t = text.trim();
+    if (t && t.length > 4 && !seen.has(t)) {
+      seen.add(t);
+      parts.push(t);
+    }
+  };
+
+  // Each feature block: <div class="text-part"><span>HEADING</span><p>TEXT</p></div>
+  const blockRe = /<div[^>]*class="text-part"[^>]*>([\s\S]*?)<\/div>/gi;
+  let block: RegExpExecArray | null;
+  while ((block = blockRe.exec(contentHtml)) !== null) {
+    const blockHtml = block[1]!;
+    // Orange heading in <span style="...color...">
+    const spanM = blockHtml.match(/<span[^>]*>([\s\S]*?)<\/span>/i);
+    if (spanM) addPart(stripHtmlToText(spanM[1]!));
+    // Body paragraphs
+    const pRe = /<p[^>]*>([\s\S]*?)<\/p>/gi;
+    let pm: RegExpExecArray | null;
+    while ((pm = pRe.exec(blockHtml)) !== null) {
+      addPart(stripHtmlToText(pm[1]!));
+    }
   }
 
-  // Extract <p> paragraphs
-  const pRe = /<p[^>]*>([\s\S]*?)<\/p>/gi;
-  let p: RegExpExecArray | null;
-  while ((p = pRe.exec(descSection)) !== null) {
-    const text = stripHtmlToText(p[1]!);
-    if (text && text.length > 10) parts.push(text);
-  }
-
-  // Extract <li> bullets
-  const liRe = /<li[^>]*>([\s\S]*?)<\/li>/gi;
-  let li: RegExpExecArray | null;
-  while ((li = liRe.exec(descSection)) !== null) {
-    const text = stripHtmlToText(li[1]!);
-    if (text && text.length > 8 && text.length <= 300) parts.push(`• ${text}`);
-  }
-
+  // Fallback: extract all <p> from the content section
   if (!parts.length) {
-    // Fallback: strip all HTML tags and take the text
-    const rawText = stripHtmlToText(descSection).slice(0, 4000);
-    if (rawText.length > 50) return rawText;
-    return null;
+    const pRe = /<p[^>]*>([\s\S]*?)<\/p>/gi;
+    let pm: RegExpExecArray | null;
+    while ((pm = pRe.exec(contentHtml)) !== null) {
+      addPart(stripHtmlToText(pm[1]!));
+    }
   }
 
-  return parts.join("\n\n").slice(0, 4000) || null;
+  if (!parts.length) return null;
+  return parts.join("\n\n").slice(0, 5000);
 }
 
 /** Extract model code from product name.
@@ -528,8 +463,10 @@ export function extractBittelModelCode(name: string): string | null {
   const multiMatch = name.match(/\b([A-Z][A-Z0-9]{2,}[0-9][\w.]*(?:\s*\+\s*[A-Z][A-Z0-9]{2,}[\w.]+){1,4})/);
   if (multiMatch) return multiMatch[1]!.replace(/\s*\+\s*/g, "+");
 
-  // Single model code like "AM2-H18/4DR3HA" or "BRP069B45"
-  const single = name.match(/\b([A-Z]{2,}[0-9][-\w./]+)\b/);
+  // Single model code — covers both:
+  //   "FTXF35F" / "BRP069B45" — letters then digit then more chars
+  //   "NPC-24T-PRO" / "AM2-H18/4DR3HA" — letters, optional dash, digit, chars
+  const single = name.match(/\b([A-Z]{2,}[-]?[A-Z0-9]*[0-9][A-Z0-9]*[-\w./]+)\b/);
   if (single?.[1] && single[1]!.length >= 5) return single[1]!;
 
   return null;
@@ -596,37 +533,37 @@ export function parseBittelProductPage(
 }
 
 export function extractBittelPriceEur(html: string): number | null {
-  // Pattern: "1063.00 €" or "1 063.00 €" or "€ 1063.00"
-  const candidates: RegExpMatchArray[] = [];
-
-  // Look in the first part of the page (price area)
-  const priceArea =
-    html.match(/itemprop=["']price["'][\s\S]{0,400}/i)?.[0] ??
-    html.match(/class=["'][^"']*price[^"']*["'][\s\S]{0,400}/i)?.[0] ??
-    html.slice(0, 4000);
-
-  // "1063.00 € | 2079.05 лв." → first number before €
-  const beforeEuro = priceArea.match(/([\d][\d\s]*[\d][.,]\d{2})\s*€/);
-  if (beforeEuro?.[1]) {
-    const n = parseNum(beforeEuro[1]);
+  // Best source: structured-data meta tag  <meta itemprop="price" content="1039.99"/>
+  // Bittel always sets priceCurrency=EUR, so this is the EUR price.
+  const metaM =
+    html.match(/<meta\s[^>]*itemprop=["']price["'][^>]*content=["']([^"']+)["']/i) ??
+    html.match(/content=["']([^"']+)["'][^>]*itemprop=["']price["']/i);
+  if (metaM?.[1]) {
+    const n = parseNum(metaM[1]);
     if (n && n > 0) return Math.round(n * 100) / 100;
   }
 
-  // "€ 1063.00"
-  const afterEuro = priceArea.match(/€\s*([\d][\d\s]*[\d][.,]\d{2})/);
-  if (afterEuro?.[1]) {
-    const n = parseNum(afterEuro[1]);
+  // Fallback: split-rendered price "1039.<sup>99</sup> <sub>€</sub>"
+  // Combine integer and decimal parts around a <sup> tag
+  const splitM = html.match(/(\d{2,5})\.<sup>(\d{2})<\/sup>\s*<sub>€<\/sub>/i);
+  if (splitM) {
+    const n = parseNum(`${splitM[1]}.${splitM[2]}`);
     if (n && n > 0) return Math.round(n * 100) / 100;
   }
 
-  // Last resort: any price-looking number in the page
-  const any = html.match(/([\d][\d\s]*[\d][.,]\d{2})\s*€/);
-  if (any?.[1]) {
-    const n = parseNum(any[1]);
-    if (n && n > 0) return Math.round(n * 100) / 100;
+  // Last resort: look for "NNNN.NN €" in the price div only (not installment lines)
+  // Installment lines match "12 x NN.NN €" so exclude those
+  const priceDiv = html.match(/class=["'][^"']*price[^"']*["'][^>]*>[\s\S]{0,600}/i)?.[0] ?? "";
+  const lineRe = /([\d]{3,5}[.,]\d{2})\s*[€]/g;
+  let m: RegExpExecArray | null;
+  while ((m = lineRe.exec(priceDiv)) !== null) {
+    // Skip installment-style context: "12 x NNN"
+    const before = priceDiv.slice(Math.max(0, m.index! - 20), m.index!);
+    if (/\d\s*x\s*$/i.test(before)) continue;
+    const n = parseNum(m[1]);
+    if (n && n >= 50) return Math.round(n * 100) / 100;
   }
 
-  void candidates;
   return null;
 }
 
@@ -650,34 +587,32 @@ function resolveBittelProductClassification(
 
 export { resolveBittelProductClassification };
 
-function extractBittelFeatureLabels(html: string, description: string | null): string[] {
+/**
+ * Extract feature labels from the description tab (.text-part span headings).
+ * These are the short orange feature titles like "Висока ефективност", "Wi-Fi управление", etc.
+ */
+function extractBittelFeatureLabels(html: string, _description: string | null): string[] {
   const labels: string[] = [];
   const seen = new Set<string>();
 
-  const descSection =
-    html.match(/[Пп]одробно\s+описание[\s\S]{0,12000}/)?.[0] ?? "";
+  const descTabIdx = html.indexOf('id="tab-description"');
+  if (descTabIdx < 0) return labels;
 
-  const liRe = /<li[^>]*>([\s\S]*?)<\/li>/gi;
-  let li: RegExpExecArray | null;
-  while ((li = liRe.exec(descSection)) !== null) {
-    const t = stripHtmlToText(li[1]!);
-    if (t.length < 8 || t.length > 200) continue;
-    const key = t.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    labels.push(t);
-  }
+  const descHtml = html.slice(descTabIdx, descTabIdx + 25000);
 
-  // Also extract heading features
-  const h3Re = /<h3[^>]*>([\s\S]*?)<\/h3>/gi;
-  let h3: RegExpExecArray | null;
-  while ((h3 = h3Re.exec(descSection)) !== null) {
-    const t = stripHtmlToText(h3[1]!);
-    if (t.length >= 8 && t.length <= 120) {
-      const key = t.toLowerCase();
-      if (!seen.has(key)) {
-        seen.add(key);
-        labels.push(t);
+  // Feature headings are inside <div class="text-part"> as <span style="..."> text
+  const blockRe = /<div[^>]*class="text-part"[^>]*>([\s\S]*?)<\/div>/gi;
+  let block: RegExpExecArray | null;
+  while ((block = blockRe.exec(descHtml)) !== null) {
+    const spanM = block[1]!.match(/<span[^>]*>([\s\S]*?)<\/span>/i);
+    if (spanM) {
+      const t = stripHtmlToText(spanM[1]!);
+      if (t.length >= 4 && t.length <= 120) {
+        const key = t.toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          labels.push(t);
+        }
       }
     }
   }

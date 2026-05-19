@@ -366,7 +366,7 @@ export async function runClimacomCatalogSync(
           result = "skipped";
           kindLabel = "аксесоар (марка?)";
         } else {
-          result = await upsertClimacomAccessory(supabase, brandId, parsed);
+          result = await upsertClimacomAccessory(supabase, brandId, parsed, refs.supplierId);
           if (result === "created") summary.accessoriesCreated++;
           else if (result === "updated") summary.accessoriesUpdated++;
         }

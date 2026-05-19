@@ -48,7 +48,7 @@ export async function upsertBulclimaAccessory(
   supabase: SupabaseClient,
   brandId: string | null,
   item: BulclimaParsedProduct,
-  opts?: { preferredSlug?: string },
+  opts?: { preferredSlug?: string; supplierId?: string | null },
 ): Promise<"created" | "updated" | "skipped"> {
   const existing = await findExistingAccessory(supabase, brandId, item.name);
   const baseSlug = slugifyBg(item.modelCode ?? item.name);
@@ -78,6 +78,7 @@ export async function upsertBulclimaAccessory(
     meta_title: item.name.slice(0, 200),
     meta_description: (description ?? item.name).slice(0, 160),
   };
+  if (opts?.supplierId) row.supplier_id = opts.supplierId;
 
   if (!existing) {
     row.slug = slug;

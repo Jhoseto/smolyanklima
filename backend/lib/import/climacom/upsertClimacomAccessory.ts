@@ -48,6 +48,7 @@ export async function upsertClimacomAccessory(
   supabase: SupabaseClient,
   brandId: string | null,
   item: ClimacomParsedProduct,
+  supplierId?: string | null,
 ): Promise<"created" | "updated" | "skipped"> {
   const existing = await findExistingAccessory(supabase, brandId, item.name);
   const baseSlug = slugifyBg(item.modelCode ?? item.name);
@@ -68,6 +69,7 @@ export async function upsertClimacomAccessory(
     meta_title: item.name.slice(0, 200),
     meta_description: (description ?? item.name).slice(0, 160),
   };
+  if (supplierId) row.supplier_id = supplierId;
 
   if (!existing) {
     row.slug = slug;
