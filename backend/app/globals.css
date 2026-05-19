@@ -264,3 +264,30 @@ a {
 .login-back:hover {
   color: #ff4d00;
 }
+
+.catalog-product-image-fade {
+  -webkit-mask-image: radial-gradient(
+    ellipse 84% 84% at 50% 50%,
+    #000 44%,
+    transparent 100%
+  );
+  mask-image: radial-gradient(ellipse 84% 84% at 50% 50%, #000 44%, transparent 100%);
+}
+
+.catalog-product-image-fade-soft {
+  -webkit-mask-image: radial-gradient(
+    ellipse 90% 90% at 50% 50%,
+    #000 52%,
+    transparent 100%
+  );
+  mask-image: radial-gradient(ellipse 90% 90% at 50% 50%, #000 52%, transparent 100%);
+}
+
+.catalog-product-image-fade-thumb {
+  -webkit-mask-image: radial-gradient(
+    ellipse 78% 78% at 50% 50%,
+    #000 38%,
+    transparent 100%
+  );
+  mask-image: radial-gradient(ellipse 78% 78% at 50% 50%, #000 38%, transparent 100%);
+}

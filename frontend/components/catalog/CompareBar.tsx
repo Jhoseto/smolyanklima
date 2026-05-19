@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Check, ArrowRightLeft, DollarSign, Zap, Volume2, Square, Wifi, Tag, Shield, Star, Loader2 } from 'lucide-react';
 import type { CatalogProduct } from '../../data/types/product';
+import { CatalogProductImage } from './CatalogProductImage';
 import { getComparisonAIService } from '../ai-assistant/core/ComparisonAIService';
 import { CompareEnergySavings } from './Calculators';
 
@@ -109,7 +110,7 @@ export const CompareBar = ({ compareList, onRemove, onClear }: CompareBarProps) 
                   >
                     <X className="w-3 h-3" />
                   </button>
-                  <img src={p.image} alt={p.model} className="w-8 h-8 md:w-10 md:h-10 object-contain mix-blend-multiply bg-white rounded-lg p-1 shrink-0" />
+                  <CatalogProductImage src={p.image} alt={p.model} fade="thumb" className="w-8 h-8 md:w-10 md:h-10 rounded-lg shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-[10px] font-bold text-[#00B4D8] uppercase truncate">{p.brand}</p>
                     <p className="text-xs font-bold text-gray-900 truncate">{p.model}</p>
@@ -183,7 +184,7 @@ export const CompareBar = ({ compareList, onRemove, onClear }: CompareBarProps) 
                       {compareList.map(p => (
                         <th key={p.id} className="p-4 border-b-2 border-gray-200 w-1/4 align-top">
                           <div className="relative">
-                            <img src={p.image} alt={p.model} className="w-28 h-28 object-contain mx-auto mix-blend-multiply mb-3 bg-white rounded-xl p-2 shadow-sm" />
+                            <CatalogProductImage src={p.image} alt={p.model} className="w-28 h-28 mx-auto mb-3" />
                             <div className="absolute top-0 right-0 bg-gradient-to-r from-[#00B4D8] to-[#0077B6] text-white text-[10px] font-black px-2 py-1 rounded-lg uppercase tracking-wider">
                               {p.brand}
                             </div>

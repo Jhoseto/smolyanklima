@@ -1,13 +1,15 @@
 import type { CondexParsedProduct } from "./parseCondexProduct";
 
-const ACCESSORY_LISTING_PATH =
-  /vatreshni-tela|vanshni-tela|products-vatreshni|products-vanshni|aksesoar|wi-fi|modul-wi/i;
+/** RAC мултисплит под „За дома и офиса“ — климатици, не аксесоари. */
+const RAC_ZA_DOMA_MULTI_LISTING =
+  /vatreshni-tela-za-multi-split|vanshni-tela-za-multi-split-sistemi/;
 
-const ACCESSORY_PRODUCT_URL =
-  /vatreshni|vanshni|aksesoar|wi-fi-modul|distancion|pompa|markuch|kabel-kanal/i;
+const ACCESSORY_LISTING_PATH = /products-vatreshni|products-vanshni|aksesoar|wi-fi|modul-wi/i;
+
+const ACCESSORY_PRODUCT_URL = /aksesoar|wi-fi-modul|distancion|pompa|markuch|kabel-kanal/i;
 
 const KLIMA_NAME =
-  /\b(инверторен\s+)?климатик\b|сплит\s+система|мультисплит\s+систем/i;
+  /\b(инверторен\s+)?климатик\b|сплит\s+система|мультисплит|мултисплит|multi[\s-]*split/i;
 
 const CONDEX_UNIT_ONLY_NAME =
   /\bвътрешно\s+тяло\b|\bвъншно\s+тяло\b|\bвътрешен\s+агрегат\b|\bвъншен\s+агрегат\b/i;
@@ -41,11 +43,16 @@ export function classifyCondexCatalogItem(
   const name = item.name;
   const pathHay = `${listingCategoryPath ?? ""} ${url}`.toLowerCase();
 
+  if (RAC_ZA_DOMA_MULTI_LISTING.test(pathHay)) {
+    return "climate";
+  }
+
   if (ACCESSORY_LISTING_PATH.test(pathHay) || ACCESSORY_PRODUCT_URL.test(url)) {
     return "accessory";
   }
 
   if (CONDEX_UNIT_ONLY_NAME.test(name)) {
+    if (KLIMA_NAME.test(name) || RAC_ZA_DOMA_MULTI_LISTING.test(pathHay)) return "climate";
     return "accessory";
   }
 
@@ -58,6 +65,7 @@ export function classifyCondexCatalogItem(
   }
 
   if (/\bscm\s*\d/i.test(name) && !/вътрешн/i.test(name) && !KLIMA_NAME.test(name)) {
+    if (RAC_ZA_DOMA_MULTI_LISTING.test(pathHay)) return "climate";
     return "accessory";
   }
 

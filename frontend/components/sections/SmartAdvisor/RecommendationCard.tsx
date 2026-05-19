@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { Star, Check, ChevronRight, Leaf, CheckCircle2 } from 'lucide-react';
 import type { ResultTier } from './types';
+import { CatalogProductImage } from '../../catalog/CatalogProductImage';
 
 interface RecommendationCardProps {
   tier: ResultTier;
@@ -69,11 +70,11 @@ export const RecommendationCard: React.FC<RecommendationCardProps> = ({
 
       {/* ── Image area — identical to ProductCard ── */}
       <div className={`relative h-40 w-full overflow-hidden cursor-pointer ${product.imgBg ?? 'bg-gray-50'}`}>
-        <img
+        <CatalogProductImage
           src={imgError ? '/images/hero-ac.jpg' : product.image}
           alt={product.name}
           onError={() => setImgError(true)}
-          className="w-full h-full object-contain p-3 transition-transform duration-700 group-hover:scale-105"
+          className="w-full h-full p-4 transition-transform duration-700 group-hover:scale-105"
         />
         {/* Gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-80" />

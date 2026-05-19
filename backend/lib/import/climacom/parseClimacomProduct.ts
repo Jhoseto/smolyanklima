@@ -68,14 +68,63 @@ const FETCH_HEADERS = {
   "Accept-Language": "bg,en;q=0.9",
 };
 
+const MAX_DESCRIPTION_CHARS = 12_000;
+
 function stripHtmlToText(html: string): string {
   return html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
     .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<\/li>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "• ")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
-    .replace(/\s+/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/(?:^|\n)\s*•\s*(?=\n|$)/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+/**
+ * Пълно описание: WooCommerce `description` (не short!), после short, после HTML блок на страницата.
+ * Tab „Описание“ на Climacom често съдържа само техническа таблица — не го ползваме за текст.
+ */
+export function extractClimacomDescription(
+  wc: Pick<ClimacomWcProduct, "short_description" | "description">,
+  html: string,
+): string | null {
+  const full = stripHtmlToText(wc.description ?? "");
+  const short = stripHtmlToText(wc.short_description ?? "");
+
+  let text = "";
+  if (full.length >= short.length) {
+    text = full;
+  } else if (short) {
+    text = short;
+    if (full && !short.includes(full)) text = `${short}\n\n${full}`;
+  } else {
+    text = full;
+  }
+
+  if (text.length < 80) {
+    const htmlShort = html.match(
+      /woocommerce-product-details__short-description[^>]*>([\s\S]*?)<\/div>/i,
+    )?.[1];
+    const fromPage = htmlShort ? stripHtmlToText(htmlShort) : "";
+    if (fromPage.length > text.length) text = fromPage;
+  }
+
+  if (!text.trim()) return null;
+  return text.slice(0, MAX_DESCRIPTION_CHARS);
 }
 
 function parseNum(raw: string | undefined | null): number | null {
@@ -97,9 +146,12 @@ function parseNominalFromRange(value: string): number | null {
   return parseNum(cleaned);
 }
 
+/** Разделител между размери: ×, x, или кирилско „х“. */
+const DIM_SEP = "[×xх]";
+
 function parseDimensionsTriplet(value: string): { h: number; w: number; d: number } | null {
   const x = value.replace(/,/g, "").trim();
-  const mul = x.match(/(\d+)\s*[×x]\s*(\d+)\s*[×x]\s*(\d+)/i);
+  const mul = new RegExp(`(\\d+)\\s*${DIM_SEP}\\s*(\\d+)\\s*${DIM_SEP}\\s*(\\d+)`, "i").exec(x);
   if (mul) {
     return {
       h: Number(mul[1]),
@@ -124,7 +176,18 @@ function parseNoiseDb(value: string): number | null {
   return Math.min(...parts);
 }
 
-const SPEC_TABLE_HINT = /охлаждащ|seer|scop|размери|тегло|шум|хладилен агент|refrigerant|r32|r410/i;
+const SPEC_TABLE_HINT =
+  /охлаждащ|seer|scop|размери|тегло|шум|хладилен агент|refrigerant|r32|r410|cooling capacity|heating capacity|indoor unit|outdoor unit|sound level|energy efficiency/i;
+
+/** Етикет + стойност от ред с 2+ клетки (Climacom често има празна първа колона). */
+function pickSpecRowLabelValue(cells: string[]): { label: string; value: string } | null {
+  const nonEmpty = cells.map((c) => c.trim()).filter(Boolean);
+  if (nonEmpty.length < 2) return null;
+  const value = nonEmpty[nonEmpty.length - 1]!;
+  const label = nonEmpty[nonEmpty.length - 2]!;
+  if (!label || !value) return null;
+  return { label: label.toLowerCase(), value };
+}
 
 function extractSpecRows(html: string): Map<string, string> {
   const rows = new Map<string, string>();
@@ -141,10 +204,9 @@ function extractSpecRows(html: string): Map<string, string> {
         const t = stripHtmlToText(td[1]);
         if (t) cells.push(t);
       }
-      if (cells.length >= 2) {
-        const label = cells[0]!.toLowerCase();
-        const value = cells[cells.length - 1]!;
-        if (label && value && !label.includes("качено") && !label.includes("цена")) rows.set(label, value);
+      const pair = pickSpecRowLabelValue(cells);
+      if (pair && !pair.label.includes("качено") && !pair.label.includes("цена")) {
+        rows.set(pair.label, pair.value);
       }
     }
   }
@@ -154,6 +216,15 @@ function extractSpecRows(html: string): Map<string, string> {
 function rowValue(rows: Map<string, string>, ...fragments: string[]): string | null {
   for (const [label, value] of rows) {
     if (fragments.every((f) => label.includes(f))) return value;
+  }
+  return null;
+}
+
+/** Първо съвпадение от няколко варианта на етикет (български / английски). */
+function rowValueAny(rows: Map<string, string>, ...patternSets: string[][]): string | null {
+  for (const fragments of patternSets) {
+    const v = rowValue(rows, ...fragments);
+    if (v) return v;
   }
   return null;
 }
@@ -194,7 +265,9 @@ function extractEnergyClassesFromLabels(
   const found: string[] = [];
   for (const lbl of labels) {
     const normalized = lbl.replace(/\u0410/g, "A");
-    const m = normalized.match(/Енергиен\s+клас\s+(A\+{0,3})/i);
+    const m =
+      normalized.match(/Енергиен\s+клас\s+(A\+{0,3})/i) ??
+      normalized.match(/Energy\s+efficiency\s+class\s+(A\+{0,3})/i);
     if (m?.[1]) found.push(m[1].toUpperCase());
   }
   if (!found.length) return { cool: null, heat: null };
@@ -223,8 +296,8 @@ function extractEnergyClassesFromLabels(
 /** Returns true if this is an outdoor-only unit (no indoor body). */
 function isOutdoorOnly(html: string, name: string): boolean {
   if (/външно\s+тяло|outdoor\s+unit/i.test(name)) return true;
-  // If spec table has generic "Размери [mm]" (without вътр./външ.), it's outdoor-only
-  if (/размери\s+вътр/i.test(html)) return false; // has indoor label
+  // If spec table has indoor dimensions row, it's not outdoor-only
+  if (/размери\s+вътр|indoor\s+unit\s+dim/i.test(html)) return false;
   return false;
 }
 
@@ -253,8 +326,16 @@ export function extractClimacomProductSpecs(
   const outdoorOnly = isOutdoorOnly(html, "");
 
   // ── Power ────────────────────────────────────────────────────────────────
-  const coolVal = rowValue(rows, "охлаждащ", "мощност");
-  const heatVal = rowValue(rows, "отоплителн", "мощност");
+  const coolVal = rowValueAny(
+    rows,
+    ["охлаждащ", "мощност"],
+    ["cooling", "capacity"],
+  );
+  const heatVal = rowValueAny(
+    rows,
+    ["отоплителн", "мощност"],
+    ["heating", "capacity"],
+  );
   if (coolVal) specs.cooling_power_kw = parseNominalFromRange(coolVal);
   if (heatVal) specs.heating_power_kw = parseNominalFromRange(heatVal);
 
@@ -287,9 +368,18 @@ export function extractClimacomProductSpecs(
   specs.energy_class_heat = energyHeat ?? null;
 
   // ── Noise ─────────────────────────────────────────────────────────────────
-  const noiseCool = rowValue(rows, "шум", "охл");
-  const noiseHeat = rowValue(rows, "шум", "отопл");
-  const noiseAny = rowValue(rows, "шумов") ?? rowValue(rows, "шум");
+  const noiseCool = rowValueAny(
+    rows,
+    ["шум", "охл"],
+    ["sound", "cool"],
+  );
+  const noiseHeat = rowValueAny(
+    rows,
+    ["шум", "отопл"],
+    ["sound", "heat"],
+  );
+  const noiseAny =
+    rowValueAny(rows, ["шумов"], ["шум"], ["sound", "level"], ["sound"]) ?? null;
   specs.noise_db =
     parseNoiseDb(noiseCool ?? "") ??
     parseNoiseDb(noiseHeat ?? "") ??
@@ -297,9 +387,17 @@ export function extractClimacomProductSpecs(
     null;
 
   // ── Dimensions ───────────────────────────────────────────────────────────
-  const indoorDim = rowValue(rows, "размери", "вътр");
-  const outdoorDim = rowValue(rows, "размери", "външ");
-  const anyDim = rowValue(rows, "размери");
+  const indoorDim = rowValueAny(
+    rows,
+    ["размери", "вътр"],
+    ["indoor", "dimension"],
+  );
+  const outdoorDim = rowValueAny(
+    rows,
+    ["размери", "външ"],
+    ["outdoor", "dimension"],
+  );
+  const anyDim = rowValueAny(rows, ["размери"], ["dimension"]);
   const inD = parseDimensionsTriplet(indoorDim ?? "");
   const outD = parseDimensionsTriplet(outdoorDim ?? (outdoorOnly ? anyDim : null) ?? "");
   if (inD) {
@@ -322,7 +420,7 @@ export function extractClimacomProductSpecs(
   }
 
   // ── Weight ────────────────────────────────────────────────────────────────
-  const weightVal = rowValue(rows, "тегло");
+  const weightVal = rowValueAny(rows, ["тегло"], ["weight"]);
   if (weightVal) {
     const slash = weightVal.match(/([\d.,]+)\s*[/\/]\s*([\d.,]+)/);
     if (slash) {
@@ -330,7 +428,7 @@ export function extractClimacomProductSpecs(
       specs.weight_outdoor_kg = parseNum(slash[2]);
     } else {
       const single = parseNum(weightVal.replace(/[^\d.,]/g, ""));
-      if (/външ/i.test(weightVal) || outdoorOnly || !indoorDim) {
+      if (/външ|outdoor/i.test(weightVal) || outdoorOnly || !indoorDim) {
         // Outdoor-only or no indoor dimension → weight is outdoor
         specs.weight_outdoor_kg = single;
       } else {
@@ -368,12 +466,17 @@ export function wcPriceToEur(prices: ClimacomWcProduct["prices"]): number | null
 
 export function resolveClimacomTypeHint(categorySlugs: string[], name: string): string | null {
   const slugs = categorySlugs.map((s) => s.toLowerCase());
-  if (slugs.some((s) => s.includes("multisplit") || s.includes("multi"))) return "мульти";
+  // Check category slugs first
+  if (slugs.some((s) => s.includes("multisplit") || s.includes("multi"))) return "мулти";
   if (slugs.some((s) => s.includes("podov"))) return "подов";
   if (slugs.some((s) => s.includes("kaset"))) return "касет";
   if (slugs.some((s) => s.includes("tavan"))) return "таван";
   if (slugs.some((s) => s.includes("stenni"))) return "стен";
-  if (/мульти|multisplit|мултисплит/i.test(name)) return "мульти";
+  // SFZ-M / SLZ-M / SEZ-M inner units always pair with MXZ multi-split outdoor bodies
+  if (slugs.some((s) => /sfz-m|slz-m|sez-m|mxz/.test(s))) return "мулти";
+  // Check product name
+  if (/мулти|мульти|multisplit|мултисплит/i.test(name)) return "мулти";
+  if (/mxz\b|sfz-m\d|slz-m\d|sez-m\d/i.test(name)) return "мулти";
   if (/подов|таванно[\s-]*подов/i.test(name)) return "подов";
   if (/касет|4[\s-]*посоч/i.test(name)) return "касет";
   if (/таван/i.test(name)) return "таван";
@@ -405,7 +508,7 @@ export async function parseClimacomProduct(
   if (priceEur === null || !wc.name?.trim()) return null;
 
   const categorySlugs = (wc.categories ?? []).map((c) => c.slug);
-  const plainDesc = stripHtmlToText(wc.short_description ?? wc.description ?? "");
+  const plainDesc = extractClimacomDescription(wc, html) ?? "";
   const modelCode =
     (wc.sku?.trim() || null) ?? extractModelCode(wc.name) ?? extractModelCode(plainDesc);
   const brandName = resolveBrandName(wc.name, "Mitsubishi Electric");

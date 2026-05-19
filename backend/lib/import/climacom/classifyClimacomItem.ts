@@ -7,7 +7,7 @@ const ACCESSORY_CATEGORY_SLUGS = new Set([
 ]);
 
 const ACCESSORY_NAME =
-  /\bwi-?fi\s*(модул|адаптер|adapter)\b|\bmelcloud\b|\bmac-\d+|дистанционно\s+управ|par-\w+|pac-yt|pac-ct|pac-sl|\baksesoar/i;
+  /\bwi-?fi\s*(модул|адаптер|adapter)\b|\bmelcloud\b|\bmac-\d+|дистанционно\s+управ|par-\w+|pac-yt|pac-ct|pac-sl|pac-mmk|pac-mk\d|pac-sk|декоративен\s+панел|\bslp-\w|\baksesoar/i;
 
 /** Wi‑Fi модули и дистанционни управления → accessories; всичко останало → products. */
 export function classifyClimacomCatalogItem(item: ClimacomParsedProduct): "climate" | "accessory" {

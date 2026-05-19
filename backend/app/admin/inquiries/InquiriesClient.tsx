@@ -8,6 +8,7 @@ import { useDebounce } from "@/lib/hooks/useDebounce";
 import { assertNoContactPrimaryPhoneDuplicate } from "@/lib/admin/contactPhoneConflictClient";
 import { notifyInquiriesChanged } from "@/lib/admin/inquiries-count-events";
 import { InquiryProductCards } from "./InquiryProductCards";
+import { inquiryServiceTypeLabel } from "@/lib/inquiry/serviceTypeLabels";
 
 function Badge({ label, colorClass }: { label: string; colorClass: string }) {
   return (
@@ -298,7 +299,7 @@ export function InquiriesClient() {
           status: "planned", priority: inquiry.priority === "high" ? "high" : "medium",
           inquiryId: inquiry.id, productId: inquiry.product_id ?? null,
           customerName: inquiry.customer_name, customerPhone: inquiry.customer_phone,
-          notes: [inquiry.service_type ? `Услуга: ${inquiry.service_type}` : "", inquiry.message ?? ""].filter(Boolean).join("\n\n") || null,
+          notes: [inquiry.service_type ? `Услуга: ${inquiryServiceTypeLabel(inquiry.service_type)}` : "", inquiry.message ?? ""].filter(Boolean).join("\n\n") || null,
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -592,7 +593,7 @@ export function InquiriesClient() {
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                   <InfoBox label="Телефон" value={selectedInquiry.customer_phone} />
                   <InfoBox label="Имейл" value={selectedInquiry.customer_email || "—"} />
-                  <InfoBox label="Тип заявка" value={serviceTypeLabel(selectedInquiry.service_type)} />
+                  <InfoBox label="Тип заявка" value={inquiryServiceTypeLabel(selectedInquiry.service_type)} />
                   <InfoBox
                     label="Монтаж"
                     value={mountPreferenceLabel(selectedInquiry.include_installation, selectedInquiry.message)}
@@ -692,14 +693,6 @@ export function InquiriesClient() {
 function appendNote(existing: string | null | undefined, line: string) {
   const stamp = new Date().toLocaleString("bg-BG");
   return [existing?.trim(), `[${stamp}] ${line}`].filter(Boolean).join("\n");
-}
-
-function serviceTypeLabel(value: string | null | undefined) {
-  if (value === "sale") return "Продажба";
-  if (value === "installation") return "Монтаж";
-  if (value === "maintenance") return "Профилактика";
-  if (value === "repair") return "Ремонт";
-  return "—";
 }
 
 function mountPreferenceLabel(

@@ -42,6 +42,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           <img
             src={product.image}
             alt={product.name}
+            className="catalog-product-image-fade"
             style={{
               width: '100%',
               height: '100%',

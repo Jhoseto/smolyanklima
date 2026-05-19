@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { CatalogProductImage } from './CatalogProductImage';
 import { X, Send, Wind, CheckCircle2 } from 'lucide-react';
 import type { CatalogProduct } from '../../data/types/product';
 import { postPublicInquiry } from '../../data/postInquiry';
@@ -134,10 +135,11 @@ export function ProductInquiryModal({ product, onClose, onSuccess, onError }: Pr
             </div>
             {!done && (
               <motion.div className="mt-4 flex items-center gap-3 rounded-2xl border border-slate-100 bg-white/80 p-3">
-                <img
+                <CatalogProductImage
                   src={product.image}
                   alt=""
-                  className="h-14 w-14 shrink-0 rounded-xl object-contain bg-slate-50 p-1"
+                  fade="thumb"
+                  className="h-14 w-14 shrink-0 rounded-xl bg-slate-50 p-1"
                 />
                 <div className="min-w-0 text-sm">
                   <p className="font-bold text-slate-900">{product.brand}</p>

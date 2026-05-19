@@ -1,5 +1,6 @@
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
+import { CatalogProductImage } from '../catalog/CatalogProductImage';
 import { Star, Zap, Snowflake, Repeat, Wifi, ChevronRight, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -74,10 +75,11 @@ function ProductCard({ product, index }: { product: FeaturedProduct; index: numb
       {/* Снимка */}
       <div className="relative shrink-0 overflow-hidden bg-gray-50" style={{ height: 110 }}>
         {product.image ? (
-          <img
+          <CatalogProductImage
             src={product.image}
             alt={product.name}
-            className="w-full h-full object-contain p-2 transition-transform duration-700 group-hover:scale-105"
+            fade="soft"
+            className="w-full h-full p-3 transition-transform duration-700 group-hover:scale-105"
             draggable={false}
           />
         ) : (

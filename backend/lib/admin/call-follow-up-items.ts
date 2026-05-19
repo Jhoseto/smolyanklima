@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DashboardPanelItem, FollowUpStatusKind } from "@/app/admin/DashboardPanel";
+import { inquiryServiceTypeLabel } from "@/lib/inquiry/serviceTypeLabels";
 
 function formatDateKey(d: Date) {
   const y = d.getFullYear();
@@ -23,14 +24,6 @@ function customerStatusLabel(value: string | null | undefined) {
   if (value === "active") return "Активен";
   if (value === "lost") return "Загубен";
   return "Нов";
-}
-
-function serviceTypeLabel(value: string | null | undefined) {
-  if (value === "sale") return "Продажба";
-  if (value === "installation") return "Монтаж";
-  if (value === "maintenance") return "Профилактика";
-  if (value === "repair") return "Ремонт";
-  return "Запитване";
 }
 
 function normalizePhone(value: string | null | undefined): string {
@@ -68,7 +61,7 @@ function mapInquiryToPanelItem(inq: InquiryRow): DashboardPanelItem {
     inquiryId: inq.id,
     title: inq.customer_name,
     statusKind: kind,
-    meta: [inq.customer_phone, serviceTypeLabel(inq.service_type), formatBgDateTime(inq.created_at)]
+    meta: [inq.customer_phone, inquiryServiceTypeLabel(inq.service_type), formatBgDateTime(inq.created_at)]
       .filter(Boolean)
       .join(" · "),
     detail: {
@@ -78,7 +71,7 @@ function mapInquiryToPanelItem(inq: InquiryRow): DashboardPanelItem {
         { label: "Тип", value: "Запитване" },
         { label: "Статус", value: inquiryStatusLabel(inq.status) },
         { label: "Телефон", value: inq.customer_phone },
-        { label: "Тип заявка", value: serviceTypeLabel(inq.service_type) },
+        { label: "Тип заявка", value: inquiryServiceTypeLabel(inq.service_type) },
         { label: "Получено", value: formatBgDateTime(inq.created_at) },
       ],
     },

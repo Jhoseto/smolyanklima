@@ -19,7 +19,7 @@ export type SubmitInquiryInput = {
   message?: string;
   productSlug?: string;
   productName?: string;
-  serviceType?: "sale" | "installation" | "maintenance" | "repair";
+  serviceType?: "consultation" | "sale" | "installation" | "maintenance" | "repair";
   /** true = с монтаж, false = само уред */
   includeInstallation?: boolean;
 };

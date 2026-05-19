@@ -6,6 +6,7 @@ import { RefreshCw, Save, Database, Download, FolderOpen, CloudDownload } from "
 import type { BulclimaSyncProgressEvent } from "@/lib/import/bulclima/bulclimaSyncProgress";
 import type { ClimacomSyncProgressEvent } from "@/lib/import/climacom/climacomSyncProgress";
 import type { CondexSyncProgressEvent } from "@/lib/import/condex/condexSyncProgress";
+import type { BittelSyncProgressEvent } from "@/lib/import/bittel/bittelSyncProgress";
 import {
   isLocalFolderPickerSupported,
   pickLocalFolder,
@@ -290,6 +291,16 @@ export default function SettingsPageClient() {
     status: string | null;
     summary: Record<string, unknown> | null;
   } | null>(null);
+  const [bittelSyncing, setBittelSyncing] = useState(false);
+  const [bittelProgress, setBittelProgress] = useState<CondexProgressView | null>(null);
+  const [bittelNowMs, setBittelNowMs] = useState(() => Date.now());
+  const [bittelLog, setBittelLog] = useState<string[]>([]);
+  const bittelLogEndRef = useRef<HTMLDivElement>(null);
+  const [bittelStatus, setBittelStatus] = useState<{
+    at: string | null;
+    status: string | null;
+    summary: Record<string, unknown> | null;
+  } | null>(null);
 
   function appendBulclimaLog(line: string) {
     setBulclimaLog((prev) => {
@@ -377,6 +388,59 @@ export default function SettingsPageClient() {
     });
   }
 
+  function appendBittelLog(line: string) {
+    setBittelLog((prev) => {
+      const next = [...prev, line];
+      return next.length > MAX_SYNC_LOG_LINES ? next.slice(-MAX_SYNC_LOG_LINES) : next;
+    });
+  }
+
+  function handleBittelProgress(ev: BittelSyncProgressEvent) {
+    const ts = new Date().toLocaleTimeString("bg-BG");
+    appendBittelLog(`[${ts}] ${ev.message}`);
+    setBittelProgress((prev) => {
+      const startedAt = prev?.startedAt ?? Date.now();
+      const base = {
+        discovered: ev.discovered ?? prev?.discovered ?? 0,
+        current: ev.current ?? prev?.current ?? 0,
+        total: ev.total ?? prev?.total ?? 0,
+        created: ev.created ?? prev?.created ?? 0,
+        updated: ev.updated ?? prev?.updated ?? 0,
+        skipped: ev.skipped ?? prev?.skipped ?? 0,
+        startedAt,
+      };
+      if (ev.phase === "done") {
+        return { ...base, phase: "done" as const, current: ev.total ?? base.current, total: ev.total ?? base.total };
+      }
+      if (ev.phase === "import" || (ev.total != null && ev.total > 0)) {
+        return { ...base, phase: "import" as const, current: ev.current ?? base.current, total: ev.total ?? base.total };
+      }
+      return { ...base, phase: "crawl" as const, discovered: ev.discovered ?? base.discovered, total: 0 };
+    });
+  }
+
+  async function loadBittelStatus() {
+    try {
+      const res = await fetch("/api/admin/catalog/sync-bittel", { credentials: "include" });
+      const json = (await res.json().catch(() => ({}))) as {
+        data?: {
+          bittel_last_sync_at?: string | null;
+          bittel_last_sync_status?: string | null;
+          bittel_last_sync_summary?: Record<string, unknown> | null;
+        } | null;
+      };
+      if (!res.ok) return;
+      const d = json.data;
+      setBittelStatus({
+        at: d?.bittel_last_sync_at ?? null,
+        status: d?.bittel_last_sync_status ?? null,
+        summary: (d?.bittel_last_sync_summary as Record<string, unknown> | null) ?? null,
+      });
+    } catch {
+      /* optional */
+    }
+  }
+
   async function loadCondexStatus() {
     try {
       const res = await fetch("/api/admin/catalog/sync-condex", { credentials: "include" });
@@ -461,7 +525,7 @@ export default function SettingsPageClient() {
   async function refreshActiveTab() {
     setError(null);
     if (activeTab === "backup") await loadBackupSettings();
-    else if (activeTab === "catalog") await Promise.all([loadBulclimaStatus(), loadClimacomStatus(), loadCondexStatus()]);
+    else if (activeTab === "catalog") await Promise.all([loadBulclimaStatus(), loadClimacomStatus(), loadCondexStatus(), loadBittelStatus()]);
   }
 
   async function reclassifyMisplacedAccessories(dryRun: boolean) {
@@ -580,6 +644,48 @@ export default function SettingsPageClient() {
     }
   }
 
+  async function syncBittelCatalog() {
+    setBittelSyncing(true);
+    setError(null);
+    setBittelLog([]);
+    const startedAt = Date.now();
+    setBittelNowMs(startedAt);
+    setBittelProgress({
+      phase: "crawl",
+      discovered: 0,
+      current: 0,
+      total: 0,
+      created: 0,
+      updated: 0,
+      skipped: 0,
+      startedAt,
+    });
+    try {
+      const res = await fetch("/api/admin/catalog/sync-bittel?stream=1", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(json.error || "Грешка при синхронизация");
+      }
+      const contentType = res.headers.get("Content-Type") ?? "";
+      if (contentType.includes("text/event-stream")) {
+        await consumeCatalogSyncStream(res, handleBittelProgress);
+      } else {
+        const json = (await res.json()) as { error?: string };
+        if (json.error) throw new Error(json.error);
+        appendBittelLog("Синхронизацията приключи.");
+      }
+      await loadBittelStatus();
+    } catch (e: unknown) {
+      setError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setBittelSyncing(false);
+      setBittelProgress((prev) => (prev ? { ...prev, phase: "done" } : null));
+    }
+  }
+
   async function syncBulclimaCatalog() {
     setBulclimaSyncing(true);
     setError(null);
@@ -624,15 +730,26 @@ export default function SettingsPageClient() {
   }, [condexLog]);
 
   useEffect(() => {
+    bittelLogEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [bittelLog]);
+
+  useEffect(() => {
     if (!condexSyncing) return;
     const id = window.setInterval(() => setCondexNowMs(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, [condexSyncing]);
 
   useEffect(() => {
+    if (!bittelSyncing) return;
+    const id = window.setInterval(() => setBittelNowMs(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [bittelSyncing]);
+
+  useEffect(() => {
     void loadBulclimaStatus();
     void loadClimacomStatus();
     void loadCondexStatus();
+    void loadBittelStatus();
   }, []);
 
   useEffect(() => {
@@ -952,7 +1069,7 @@ export default function SettingsPageClient() {
             <Button
               variant="primary"
               onClick={() => void syncBulclimaCatalog()}
-              disabled={bulclimaSyncing || climacomSyncing || condexSyncing || reclassifying}
+              disabled={bulclimaSyncing || climacomSyncing || condexSyncing || bittelSyncing || reclassifying}
               className="gap-2"
             >
               {bulclimaSyncing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CloudDownload className="w-4 h-4" />}
@@ -961,7 +1078,7 @@ export default function SettingsPageClient() {
             <Button
               variant="secondary"
               onClick={() => void reclassifyMisplacedAccessories(true)}
-              disabled={bulclimaSyncing || climacomSyncing || condexSyncing || reclassifying}
+              disabled={bulclimaSyncing || climacomSyncing || condexSyncing || bittelSyncing || reclassifying}
               className="gap-2"
             >
               {reclassifying ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
@@ -970,7 +1087,7 @@ export default function SettingsPageClient() {
             <Button
               variant="secondary"
               onClick={() => void reclassifyMisplacedAccessories(false)}
-              disabled={bulclimaSyncing || climacomSyncing || condexSyncing || reclassifying}
+              disabled={bulclimaSyncing || climacomSyncing || condexSyncing || bittelSyncing || reclassifying}
               className="gap-2"
             >
               Премести грешно внесени в аксесоари
@@ -1041,7 +1158,7 @@ export default function SettingsPageClient() {
           <Button
             variant="primary"
             onClick={() => void syncClimacomCatalog()}
-            disabled={bulclimaSyncing || climacomSyncing || condexSyncing || reclassifying}
+            disabled={bulclimaSyncing || climacomSyncing || condexSyncing || bittelSyncing || reclassifying}
             className="gap-2"
           >
             {climacomSyncing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CloudDownload className="w-4 h-4" />}
@@ -1102,7 +1219,7 @@ export default function SettingsPageClient() {
           <Button
             variant="primary"
             onClick={() => void syncCondexCatalog()}
-            disabled={bulclimaSyncing || climacomSyncing || condexSyncing || reclassifying}
+            disabled={bulclimaSyncing || climacomSyncing || condexSyncing || bittelSyncing || reclassifying}
             className="gap-2"
           >
             {condexSyncing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CloudDownload className="w-4 h-4" />}
@@ -1130,6 +1247,62 @@ export default function SettingsPageClient() {
                   </div>
                 ))}
                 <div ref={condexLogEndRef} />
+              </div>
+            </div>
+          )}
+        </Card>
+
+        <Card className="p-3 md:p-4 border-emerald-200 bg-gradient-to-br from-white to-emerald-50/30 mt-4">
+          <div className="flex items-start gap-3 mb-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+              <CloudDownload className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-black text-slate-900 tracking-tight">Каталог от Биттел (Bittel)</div>
+              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                Инверторни климатици + мулти-сплит системи + аксесоари от bittel.bg. Марки: Daikin, LG, Toshiba, Gree,
+                AUX, Nippon, TechPoint, Mitsubishi. Доставчик БИТТЕЛ, статус по поръчка, технически таблици и снимки.
+              </p>
+            </div>
+          </div>
+          {bittelStatus?.at && (
+            <p className="text-[11px] text-slate-600 mb-2">
+              Последен sync: {new Date(bittelStatus.at).toLocaleString("bg-BG")}
+              {bittelStatus.status ? ` · ${bittelStatus.status}` : ""}
+              {formatCatalogSyncStats(bittelStatus.summary, "productUrls")}
+            </p>
+          )}
+          <Button
+            variant="primary"
+            onClick={() => void syncBittelCatalog()}
+            disabled={bulclimaSyncing || climacomSyncing || condexSyncing || bittelSyncing || reclassifying}
+            className="gap-2"
+          >
+            {bittelSyncing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CloudDownload className="w-4 h-4" />}
+            Обнови каталог от Биттел
+          </Button>
+          <p className="text-[10px] text-slate-500 mt-2">
+            Пълен обхват: ~255 климатика + ~64 мулти-сплит + аксесоари. Може да отнеме 20–35 минути.
+          </p>
+          {bittelProgress && (bittelSyncing || bittelProgress.phase === "done") && (
+            <div className="mt-4">
+              <CondexSyncProgressBar
+                progress={bittelProgress}
+                syncing={bittelSyncing}
+                nowMs={bittelNowMs}
+              />
+            </div>
+          )}
+          {(bittelSyncing || bittelLog.length > 0) && (
+            <div className="mt-4 space-y-2 border-t border-emerald-200/60 pt-4">
+              <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Дневник</div>
+              <div className="max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-slate-900/95 p-2 font-mono text-[10px] text-slate-100">
+                {bittelLog.map((line, i) => (
+                  <div key={`b-${i}`} className="whitespace-pre-wrap break-all py-0.5">
+                    {line}
+                  </div>
+                ))}
+                <div ref={bittelLogEndRef} />
               </div>
             </div>
           )}

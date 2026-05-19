@@ -14,7 +14,16 @@ export const CONDEX_LISTING_ROOTS: readonly string[] = [
   "https://condex.bg/products/%d1%81%d0%b5%d1%80%d0%b8%d1%8f-srr-slim-%d0%ba%d0%b0%d0%bd%d0%b0%d0%bb%d0%b5%d0%bd-%d1%82%d0%b8%d0%bf-%d0%b8%d0%bd%d0%b2%d0%b5%d1%80%d1%82%d0%be%d1%80%d0%bd%d0%b8-%d0%bc%d0%be%d0%b4%d0%b5/",
   "https://condex.bg/products/%d1%81%d0%b5%d1%80%d0%b8%d1%8f-fdtc-%d0%ba%d0%be%d0%bc%d0%bf%d0%b0%d0%ba%d1%82%d0%b5%d0%bd-%d0%ba%d0%b0%d1%81%d0%b5%d1%82%d1%8a%d1%87%d0%b5%d0%bd-%d1%82%d0%b8%d0%bf-%d0%b8%d0%bd%d0%b2%d0%b5%d1%80%d1%82%d0%be%d1%80%d0%bd%d0%b8-%d0%bc%d0%be%d0%b4%d0%b5/",
   "https://condex.bg/products/multi-split/",
+  "https://condex.bg/products/vatreshni-tela-za-multi-split/",
+  "https://condex.bg/products/vanshni-tela-za-multi-split-sistemi/",
 ];
+
+/** Листинги извън „За дома и офиса (RAC)“ — не обхождаме. */
+const EXCLUDED_LISTING_PATH =
+  /sistemi-vazduh-voda|vazduh-voda|termo|teplo|promishlen|klimatizirane|promocia|mitsubishi-heavy-industries|%d0%bd%d0%b0%d0%b9/i;
+
+/** Вътрешни/външни тела само за RAC мултисплит (част от Za doma i ofisa). */
+const RAC_MULTI_SPLIT_LISTING = /vatreshni-tela-za-multi-split|vanshni-tela-za-multi-split-sistemi/;
 
 const CRAWL_DELAY_MS = Number(process.env.CONDEX_CRAWL_DELAY_MS) || 350;
 
@@ -113,17 +122,19 @@ export function extractPaginationUrls(html: string, listingRootUrl: string): str
   return pages;
 }
 
-/** Hub RAC е индекс — обхождаме само сериите, не /za-doma-i-ofisa/page/N/. */
+/** Hub RAC е индекс — обхождаме само сериите от „За дома и офиса“, не hub/page/feed и не други раздели. */
 function isSeriesListingUrl(url: string): boolean {
   try {
     const p = new URL(url).pathname.toLowerCase();
     if (!p.startsWith("/products/")) return false;
     if (p.includes("/product-details/")) return false;
     if (/\/page\/\d+/.test(p)) return false;
+    if (p.endsWith("/feed") || p.includes("/feed/")) return false;
     if (p === "/products/za-doma-i-ofisa/" || p === "/products/za-doma-i-ofisa") return false;
-    if (p.includes("mitsubishi-heavy-industries")) return false;
-    if (p.includes("promocia") || p.includes("%d0%bd%d0%b0%d0%b9")) return false;
-    if (p.includes("vatreshni-tela") || p.includes("vanshni-tela")) return false;
+    if (EXCLUDED_LISTING_PATH.test(p)) return false;
+    if (RAC_MULTI_SPLIT_LISTING.test(p)) return true;
+    // Други vatreshni/vanshni каталози (извън RAC multi) — не
+    if (/vatreshni-tela|vanshni-tela/.test(p)) return false;
     return true;
   } catch {
     return false;

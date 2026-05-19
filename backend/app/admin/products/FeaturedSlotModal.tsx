@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Star, X, Trash2, Loader2, AlertTriangle, Info } from "lucide-react";
 import { Button } from "../ui";
+import { CatalogProductImage } from "@/app/admin/components/CatalogProductImage";
 
 // Badge-те, които могат да се появят върху картичката в секцията „Топ продукти“.
 // Списъкът ТРЯБВА да съответства на CHECK constraint-а в DB (миграция 0035).
@@ -218,10 +219,11 @@ export function FeaturedSlotModal({
                         {occ ? (
                           <div className="ml-7 flex flex-col h-full">
                             {pickImage(occ) ? (
-                              <img
+                              <CatalogProductImage
                                 src={pickImage(occ)}
                                 alt={occ.name}
-                                className="h-10 w-10 object-contain self-end rounded-md bg-white/70 ring-1 ring-slate-200"
+                                fade="thumb"
+                                className="h-10 w-10 self-end rounded-md ring-1 ring-slate-200"
                                 draggable={false}
                               />
                             ) : null}

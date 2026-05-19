@@ -1,25 +1,59 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, useLocation } from 'react-router-dom';
 import { Menu, X, Phone } from 'lucide-react';
 import { Button } from '../ui/Button';
-
 import { Logo } from '../ui/Logo';
+import { useServiceRequestModal } from '../../context/ServiceRequestModalContext';
 
 export const Navbar = () => {
+  const headerRef = useRef<HTMLElement>(null);
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
+    const syncNavHeight = () => {
+      const el = headerRef.current;
+      if (el) {
+        document.documentElement.style.setProperty('--navbar-height', `${el.offsetHeight}px`);
+      }
+    };
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 20);
+      syncNavHeight();
     };
-    window.addEventListener('scroll', handleScroll);
+    syncNavHeight();
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const syncHeight = () => {
+      document.documentElement.style.setProperty('--navbar-height', `${el.offsetHeight}px`);
+    };
+    syncHeight();
+    const ro = new ResizeObserver(syncHeight);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [isScrolled, mobileMenuOpen]);
+
   const location = useLocation();
   const isHome = location.pathname === '/';
+  const isCatalog = location.pathname === '/catalog';
+  const { open: openServiceRequest } = useServiceRequestModal();
+
+  const handleServiceRequestClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setMobileMenuOpen(false);
+    const contactEl = document.getElementById('contact');
+    if (contactEl) {
+      contactEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    openServiceRequest();
+  };
 
   // Logo → full page reload (refreshes homepage)
   const handleLogoClick = (e: React.MouseEvent) => {
@@ -47,10 +81,17 @@ export const Navbar = () => {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-[200] transition-all duration-300 pl-[env(safe-area-inset-left,0px)] pr-[env(safe-area-inset-right,0px)] isolation isolate ${isScrolled ? 'bg-white/98 md:bg-white/90 md:backdrop-blur-md shadow-sm' : 'bg-transparent'}`}
+      ref={headerRef}
+      className={`fixed top-0 left-0 right-0 z-[200] pl-[env(safe-area-inset-left,0px)] pr-[env(safe-area-inset-right,0px)] isolation isolate transition-[background-color,box-shadow] duration-300 ${
+        isScrolled
+          ? isCatalog
+            ? 'bg-white shadow-sm'
+            : 'bg-white/98 md:bg-white/90 md:backdrop-blur-md shadow-sm'
+          : 'bg-transparent'
+      }`}
       style={{
-        paddingTop: `calc(env(safe-area-inset-top, 0px) + ${isScrolled ? '10px' : '16px'})`,
-        paddingBottom: isScrolled ? '10px' : '16px',
+        paddingTop: `calc(env(safe-area-inset-top, 0px) + ${isCatalog && isScrolled ? 10 : isScrolled ? 10 : 16}px)`,
+        paddingBottom: isCatalog && isScrolled ? 10 : isScrolled ? 10 : 16,
       }}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -98,11 +139,9 @@ export const Navbar = () => {
               <Phone className="w-4 h-4 text-[#FF4D00]" />
               0888 58 58 16
             </a>
-            <a href="#contact">
-              <Button size="sm" className="hidden lg:flex">
-                Заяви услуга
-              </Button>
-            </a>
+            <Button size="sm" className="hidden lg:flex" onClick={handleServiceRequestClick}>
+              Заяви услуга
+            </Button>
           </div>
 
           {/* Mobile Menu Button — винаги видим и кликваем */}
@@ -159,11 +198,9 @@ export const Navbar = () => {
                   <Phone className="w-5 h-5 text-[#FF4D00]" />
                   0888 58 58 16
                 </a>
-                <a href="#contact" className="block w-full">
-                  <Button className="w-full" onClick={() => setMobileMenuOpen(false)}>
-                    Заяви услуга
-                  </Button>
-                </a>
+                <Button className="w-full" onClick={handleServiceRequestClick}>
+                  Заяви услуга
+                </Button>
               </div>
             </div>
           </motion.div>

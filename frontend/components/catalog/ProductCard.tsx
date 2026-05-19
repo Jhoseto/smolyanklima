@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { Star, Check, ChevronRight, Heart, Share2 } from 'lucide-react';
 import type { CatalogProduct } from '../../data/types/product';
+import { CatalogProductImage } from './CatalogProductImage';
 
 interface ProductCardProps {
   product: CatalogProduct;
@@ -17,6 +18,8 @@ interface ProductCardProps {
   onCompareToggle?: () => void;
   onInquiry?: (product: CatalogProduct) => void;
   viewMode?: 'grid' | 'list';
+  /** При пагинация — пропуска enter анимацията, за да не пречи на скрола */
+  noEnterAnim?: boolean;
   key?: React.Key;
 }
 
@@ -46,6 +49,7 @@ export const ProductCard = ({
   onCompareToggle,
   onInquiry,
   viewMode = 'grid',
+  noEnterAnim = false,
 }: ProductCardProps) => {
   const [imgError, setImgError] = useState(false);
 
@@ -68,11 +72,11 @@ export const ProductCard = ({
 
   return (
     <motion.div
-      layout
-      initial={{ opacity: 0, y: 24 }}
+      layout={!noEnterAnim}
+      initial={noEnterAnim ? false : { opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.92 }}
-      transition={{ duration: 0.35, delay: Math.min(index * 0.04, 0.4) }}
+      transition={noEnterAnim ? { duration: 0 } : { duration: 0.35, delay: Math.min(index * 0.04, 0.4) }}
       whileHover={{ y: isList ? 0 : -6, x: isList ? 4 : 0, transition: { duration: 0.2 } }}
       className={`bg-white rounded-[1.5rem] overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border ${product.cardBorder} flex ${isList ? 'flex-row items-center' : 'flex-col'} group relative`}
     >
@@ -83,13 +87,13 @@ export const ProductCard = ({
         }`}
         onClick={() => onQuickView(product)}
       >
-        <img
+        <CatalogProductImage
           src={imgError ? '/images/hero-new.jpg' : product.image}
           alt={product.model}
           loading="lazy"
           decoding="async"
           onError={() => setImgError(true)}
-          className="w-full h-full object-contain p-3 transition-transform duration-700 group-hover:scale-105"
+          className="w-full h-full p-4 transition-transform duration-700 group-hover:scale-105"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-80" />
 

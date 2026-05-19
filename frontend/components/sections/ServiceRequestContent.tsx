@@ -1,0 +1,309 @@
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Send, Clock, ShieldCheck, CheckCircle, Check } from 'lucide-react';
+import { postPublicInquiry } from '../../data/postInquiry';
+
+const CONTACT_SERVICE_OPTIONS: { label: string; value: 'consultation' | 'installation' | 'maintenance' | 'repair' }[] = [
+  { label: 'Консултация', value: 'consultation' },
+  { label: 'Монтаж', value: 'installation' },
+  { label: 'Профилактика', value: 'maintenance' },
+  { label: 'Ремонт', value: 'repair' },
+];
+
+export interface ServiceRequestContentProps {
+  showTitle?: boolean;
+  subtitle?: string;
+  titleLight?: string;
+  titleBold?: string;
+  /** Уникални id за полета (модал vs страница) */
+  formIdPrefix?: string;
+  /** Без whileInView — за модал */
+  animateOnMount?: boolean;
+}
+
+export const ServiceRequestContent = ({
+  showTitle = true,
+  subtitle = 'БЪРЗА ЗАЯВКА',
+  titleLight = 'Заявете вашата',
+  titleBold = 'услуга',
+  formIdPrefix = 'contact',
+  animateOnMount = false,
+}: ServiceRequestContentProps) => {
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [message, setMessage] = useState('');
+  const [serviceType, setServiceType] = useState<(typeof CONTACT_SERVICE_OPTIONS)[number]['value']>('consultation');
+  const [honeypot, setHoneypot] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const nameId = `${formIdPrefix}-name`;
+  const phoneId = `${formIdPrefix}-phone`;
+  const messageId = `${formIdPrefix}-message`;
+  const websiteId = `${formIdPrefix}-website`;
+
+  const motionProps = animateOnMount
+    ? { initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0 } }
+    : { initial: { opacity: 0, y: 20 }, whileInView: { opacity: 1, y: 0 }, viewport: { once: true } };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitError(null);
+    if (honeypot.trim()) return;
+    setSubmitting(true);
+    try {
+      const r = await postPublicInquiry({
+        source: 'contact',
+        customerName: name.trim(),
+        customerPhone: phone.trim(),
+        message: message.trim() || undefined,
+        serviceType,
+        website: honeypot,
+      });
+      if (r.ok === false) {
+        setSubmitError(r.status === 429 ? 'Твърде много заявки. Опитайте по-късно.' : r.error);
+        return;
+      }
+      setIsSubmitted(true);
+      setName('');
+      setPhone('');
+      setMessage('');
+      setHoneypot('');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <>
+      {showTitle && (
+        <div className="text-center mb-10 sm:mb-16">
+          <motion.span
+            {...motionProps}
+            className="text-[#FF4D00] text-[10px] font-bold tracking-[0.3em] uppercase mb-5 block"
+          >
+            {subtitle}
+          </motion.span>
+          <motion.h2
+            {...motionProps}
+            transition={{ delay: 0.1 }}
+            className="font-outfit text-[2rem] sm:text-[2.5rem] md:text-[3.25rem] leading-[1.1] tracking-tight"
+          >
+            <span className="relative inline-block mr-3">
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00B4D8] to-[#0077B6] drop-shadow-sm font-extralight block">
+                {titleLight}
+              </span>
+              <motion.div className="absolute -bottom-1 left-0 right-0 h-1 bg-gradient-to-r from-[#00B4D8]/0 via-[#00B4D8] to-[#00B4D8]/0 opacity-30 rounded-full" />
+            </span>
+            <span className="relative inline-block">
+              <span className="absolute -inset-1 blur-lg bg-gradient-to-r from-[#FF4D00]/20 to-[#FF2A4D]/20 opacity-60" />
+              <span className="relative text-transparent bg-clip-text bg-gradient-to-r from-[#FF4D00] via-[#FF6A00] to-[#FF2A4D] font-black uppercase drop-shadow-sm">
+                {titleBold}
+              </span>
+            </span>
+          </motion.h2>
+        </div>
+      )}
+
+      <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-stretch">
+        <motion.div
+          initial={animateOnMount ? { opacity: 0, x: -30 } : { opacity: 0, x: -30 }}
+          animate={animateOnMount ? { opacity: 1, x: 0 } : undefined}
+          whileInView={animateOnMount ? undefined : { opacity: 1, x: 0 }}
+          viewport={animateOnMount ? undefined : { once: true }}
+          className="relative rounded-[2rem] sm:rounded-[3rem] overflow-hidden group min-h-[280px] sm:min-h-[360px] lg:min-h-full flex flex-col justify-end p-6 md:p-12"
+        >
+          <div className="absolute inset-0">
+            <img
+              src="https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?q=80&w=2053&auto=format&fit=crop"
+              alt="Луксозен модерен интериор"
+              className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-black/30" />
+          </div>
+          <div className="relative z-10">
+            <h3 className="font-outfit text-2xl sm:text-3xl md:text-4xl leading-[1.1] tracking-tight mb-4">
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#90E0EF] to-[#00B4D8] font-extralight block">
+                Перфектният климат
+              </span>
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#FF4D00] via-[#FF6A00] to-[#FF2A4D] font-black uppercase">
+                за вашия дом
+              </span>
+            </h3>
+            <p className="text-white font-medium text-sm md:text-base max-w-md mb-8 drop-shadow-md">
+              Доверете се на професионалистите за монтаж, поддръжка и сервиз на климатични системи от най-висок клас.
+            </p>
+            <div className="flex flex-col gap-4">
+              {[
+                { icon: Clock, text: 'Отговор до 60 минути' },
+                { icon: ShieldCheck, text: 'Сертифицирани инженери' },
+                { icon: CheckCircle, text: 'Безплатен оглед и консултация' },
+              ].map((point, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center gap-3 bg-white/10 md:backdrop-blur-md rounded-2xl p-3 border border-white/10 w-max"
+                >
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-r from-[#00B4D8] to-[#0077B6] flex items-center justify-center text-white shrink-0">
+                    <point.icon className="w-4 h-4" />
+                  </div>
+                  <span className="text-white text-sm font-medium">{point.text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={animateOnMount ? { opacity: 0, x: 30 } : { opacity: 0, x: 30 }}
+          animate={animateOnMount ? { opacity: 1, x: 0 } : undefined}
+          whileInView={animateOnMount ? undefined : { opacity: 1, x: 0 }}
+          viewport={animateOnMount ? undefined : { once: true }}
+          className="bg-white border md:bg-white/60 md:backdrop-blur-3xl border-gray-100 rounded-[2rem] sm:rounded-[3rem] p-5 sm:p-8 md:p-12 shadow-xl md:shadow-2xl shadow-gray-200/50 relative overflow-hidden flex flex-col justify-center"
+        >
+          <div className="absolute top-0 right-0 w-64 h-64 bg-[#00B4D8]/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+
+          <AnimatePresence mode="wait">
+            {!isSubmitted ? (
+              <motion.form
+                key="form"
+                onSubmit={handleSubmit}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95, filter: 'blur(10px)' }}
+                className="space-y-6 relative z-10"
+              >
+                <div className="absolute -left-[9999px] h-px w-px overflow-hidden" aria-hidden>
+                  <label htmlFor={websiteId}>Website</label>
+                  <input
+                    id={websiteId}
+                    name="website"
+                    tabIndex={-1}
+                    autoComplete="off"
+                    value={honeypot}
+                    onChange={(e) => setHoneypot(e.target.value)}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
+                  <motion.div {...motionProps} transition={{ delay: 0.2 }} className="relative group">
+                    <input
+                      type="text"
+                      id={nameId}
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="peer w-full h-16 px-6 pt-4 rounded-2xl bg-white border border-gray-200 text-gray-900 font-outfit font-medium placeholder-transparent focus:outline-none focus:border-[#FF4D00] focus:ring-4 focus:ring-[#FF4D00]/10 shadow-sm transition-all"
+                      placeholder=" "
+                      required
+                    />
+                    <label
+                      htmlFor={nameId}
+                      className="absolute left-6 top-2 text-[10px] font-black text-gray-400 uppercase tracking-widest transition-all peer-placeholder-shown:top-5 peer-placeholder-shown:text-sm peer-placeholder-shown:font-medium peer-placeholder-shown:normal-case peer-focus:top-2 peer-focus:text-[10px] peer-focus:font-black peer-focus:uppercase peer-focus:text-[#FF4D00]"
+                    >
+                      Име и Фамилия
+                    </label>
+                  </motion.div>
+                  <motion.div {...motionProps} transition={{ delay: 0.3 }} className="relative group">
+                    <input
+                      type="tel"
+                      id={phoneId}
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="peer w-full h-16 px-6 pt-4 rounded-2xl bg-white border border-gray-200 text-gray-900 font-outfit font-medium placeholder-transparent focus:outline-none focus:border-[#00B4D8] focus:ring-4 focus:ring-[#00B4D8]/10 shadow-sm transition-all"
+                      placeholder=" "
+                      required
+                    />
+                    <label
+                      htmlFor={phoneId}
+                      className="absolute left-6 top-2 text-[10px] font-black text-gray-400 uppercase tracking-widest transition-all peer-placeholder-shown:top-5 peer-placeholder-shown:text-sm peer-placeholder-shown:font-medium peer-placeholder-shown:normal-case peer-focus:top-2 peer-focus:text-[10px] peer-focus:font-black peer-focus:uppercase peer-focus:text-[#00B4D8]"
+                    >
+                      Телефон
+                    </label>
+                  </motion.div>
+                </div>
+
+                <motion.div {...motionProps} transition={{ delay: 0.4 }} className="space-y-3">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2 block">
+                    Желана услуга
+                  </label>
+                  <div className="flex flex-wrap gap-3">
+                    {CONTACT_SERVICE_OPTIONS.map(({ label, value }) => (
+                      <label key={value} className="cursor-pointer">
+                        <input
+                          type="radio"
+                          name={`${formIdPrefix}-service`}
+                          className="peer sr-only"
+                          checked={serviceType === value}
+                          onChange={() => setServiceType(value)}
+                        />
+                        <div className="px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl bg-white border border-gray-200 text-xs sm:text-[13px] font-bold text-gray-500 peer-checked:bg-gradient-to-r peer-checked:from-[#FF4D00] peer-checked:to-[#FF2A4D] peer-checked:text-white peer-checked:border-transparent hover:border-gray-300 transition-all shadow-sm">
+                          {label}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </motion.div>
+
+                <motion.div {...motionProps} transition={{ delay: 0.5 }} className="relative group">
+                  <textarea
+                    id={messageId}
+                    rows={4}
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    className="peer w-full p-6 pt-8 rounded-2xl bg-white border border-gray-200 text-gray-900 font-outfit font-medium placeholder-transparent focus:outline-none focus:border-[#FF4D00] focus:ring-4 focus:ring-[#FF4D00]/10 shadow-sm transition-all resize-none"
+                    placeholder=" "
+                  />
+                  <label
+                    htmlFor={messageId}
+                    className="absolute left-6 top-3 text-[10px] font-black text-gray-400 uppercase tracking-widest transition-all peer-placeholder-shown:top-6 peer-placeholder-shown:text-sm peer-placeholder-shown:font-medium peer-placeholder-shown:normal-case peer-focus:top-3 peer-focus:text-[10px] peer-focus:font-black peer-focus:uppercase peer-focus:text-[#FF4D00]"
+                  >
+                    Допълнителна информация
+                  </label>
+                </motion.div>
+
+                {submitError && (
+                  <p className="text-sm text-red-600 font-medium text-center" role="alert">
+                    {submitError}
+                  </p>
+                )}
+                <motion.button
+                  type="submit"
+                  disabled={submitting}
+                  {...motionProps}
+                  transition={{ delay: 0.6 }}
+                  whileHover={{ scale: submitting ? 1 : 1.02 }}
+                  whileTap={{ scale: submitting ? 1 : 0.98 }}
+                  className="w-full h-14 bg-gradient-to-r from-[#FF4D00] via-[#FF6A00] to-[#FF2A4D] text-white rounded-full font-bold text-lg hover:shadow-[0_10px_30px_rgba(255,77,0,0.4)] transition-all flex items-center justify-center gap-2 mt-4 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {submitting ? 'Изпращане…' : 'Изпрати заявката'} <Send className="w-5 h-5" />
+                </motion.button>
+              </motion.form>
+            ) : (
+              <motion.div
+                key="success"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="flex flex-col items-center justify-center text-center h-full min-h-[400px] relative z-10"
+              >
+                <div className="w-24 h-24 bg-gradient-to-br from-green-400 to-emerald-600 rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(52,211,153,0.4)] mb-8">
+                  <Check className="w-12 h-12 text-white" strokeWidth={3} />
+                </div>
+                <h3 className="text-3xl font-outfit font-black text-gray-900 mb-4">Успешно изпратено!</h3>
+                <p className="text-gray-500 max-w-sm mx-auto mb-8 leading-relaxed">
+                  Благодарим ви за доверието. Наш консултант ще прегледа заявката ви и ще се свърже с вас съвсем скоро.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setIsSubmitted(false)}
+                  className="text-sm font-bold text-[#00B4D8] uppercase tracking-widest hover:text-[#0077B6] transition-colors"
+                >
+                  Изпрати нова заявка
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+      </div>
+    </>
+  );
+};

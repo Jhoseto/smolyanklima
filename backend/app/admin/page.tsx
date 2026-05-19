@@ -5,6 +5,7 @@ import { DashboardPanel } from "./DashboardPanel";
 import { CallFollowUpsPanel } from "./CallFollowUpsPanel";
 import { WorkItemsPlanner } from "./WorkItemsPlanner";
 import { fetchCallFollowUpPanelItems } from "@/lib/admin/call-follow-up-items";
+import { inquiryServiceTypeLabel } from "@/lib/inquiry/serviceTypeLabels";
 
 export const dynamic = "force-dynamic";
 
@@ -174,13 +175,13 @@ export default async function AdminDashboardPage() {
           readOnly={readOnlyDashboard}
           items={(latestInquiries.data ?? []).map((item) => ({
             title: item.customer_name,
-            meta: [item.customer_phone, serviceTypeLabel(item.service_type), formatBgDateTime(item.created_at)].filter(Boolean).join(" · "),
+            meta: [item.customer_phone, inquiryServiceTypeLabel(item.service_type), formatBgDateTime(item.created_at)].filter(Boolean).join(" · "),
             detail: {
               title: item.customer_name,
               subtitle: "Ново клиентско запитване",
               fields: [
                 { label: "Телефон", value: item.customer_phone },
-                { label: "Тип заявка", value: serviceTypeLabel(item.service_type) },
+                { label: "Тип заявка", value: inquiryServiceTypeLabel(item.service_type) },
                 { label: "Получено", value: formatBgDateTime(item.created_at) },
                 { label: "Следващо действие", value: "Отвори всички заявки, прегледай съобщението и маркирай като В работа / Контакт / Оглед." },
               ],
@@ -248,14 +249,6 @@ function eventLabel(value: string | null | undefined) {
   if (value === "service_in_shop") return "Сервиз в склад";
   if (value === "consultation") return "Консултация";
   return "Задача";
-}
-
-function serviceTypeLabel(value: string | null | undefined) {
-  if (value === "sale") return "Продажба";
-  if (value === "installation") return "Монтаж";
-  if (value === "maintenance") return "Профилактика";
-  if (value === "repair") return "Ремонт";
-  return "";
 }
 
 function priorityLabel(value: string | null | undefined) {

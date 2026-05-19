@@ -1,8 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { slugifyBg } from "../slugify";
 import { stripImportSourceFromDescription } from "../stripImportSourceFromDescription";
-import type { CondexParsedProduct } from "./parseCondexProduct";
-import { inferCondexAccessoryKind } from "./classifyCondexItem";
+import type { BittelParsedProduct } from "./parseBittelProduct";
+import { inferBittelAccessoryKind } from "./classifyBittelItem";
 
 async function uniqueAccessorySlug(supabase: SupabaseClient, base: string): Promise<string> {
   let slug = base || "aksesoar";
@@ -44,10 +44,10 @@ async function replaceAccessoryImages(
   if (error) throw new Error(error.message);
 }
 
-export async function upsertCondexAccessory(
+export async function upsertBittelAccessory(
   supabase: SupabaseClient,
   brandId: string | null,
-  item: CondexParsedProduct,
+  item: BittelParsedProduct,
 ): Promise<"created" | "updated" | "skipped"> {
   const existing = await findExistingAccessory(supabase, brandId, item.name);
   const baseSlug = slugifyBg(item.modelCode ?? item.name);
@@ -59,7 +59,7 @@ export async function upsertCondexAccessory(
     brand_id: brandId,
     description,
     price: item.priceEur,
-    kind: inferCondexAccessoryKind(item.name),
+    kind: inferBittelAccessoryKind(item.name),
     source_url: item.sourceUrl || null,
     stock_status: "on_order",
     stock_quantity: 0,

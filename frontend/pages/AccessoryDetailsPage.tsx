@@ -6,6 +6,7 @@ import { ArrowLeft, Phone } from 'lucide-react';
 import { getAccessoryById, getAllAccessories } from '../data/accessoryService';
 import type { CatalogProduct } from '../data/types/product';
 import { ProductCard } from '../components/catalog/ProductCard';
+import { CatalogProductImage } from '../components/catalog/CatalogProductImage';
 
 export default function AccessoryDetailsPage() {
   const { id } = useParams<{ id: string }>();
@@ -71,10 +72,11 @@ export default function AccessoryDetailsPage() {
                   {item.badge.text}
                 </span>
               )}
-              <img
+              <CatalogProductImage
                 src={item.image}
                 alt={item.name}
-                className="w-full h-full object-contain mix-blend-multiply hover:scale-105 transition-transform duration-500"
+                fade="soft"
+                className="w-full h-full hover:scale-105 transition-transform duration-500"
               />
             </div>
           </motion.div>

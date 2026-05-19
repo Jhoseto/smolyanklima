@@ -8,17 +8,17 @@ import {
   type ImageInput,
   type SpecsInput,
 } from "@/lib/admin/syncProductChildren";
-import { collectCondexProductUrls } from "./collectCondexProducts";
-import { classifyCondexCatalogItem } from "./classifyCondexItem";
-import { fetchCondexHtml, parseCondexProductPage, type CondexParsedProduct } from "./parseCondexProduct";
-import { applyCondexSupplierToProduct, backfillCondexSupplierOnProducts } from "./applyCondexSupplier";
-import { ensureCondexSupplierId } from "./ensureCondexSupplier";
-import { upsertCondexAccessory } from "./upsertCondexAccessory";
-import { emitCondexProgress, type CondexSyncProgressHandler } from "./condexSyncProgress";
+import { collectBittelProductUrls } from "./collectBittelProducts";
+import { classifyBittelCatalogItem, resolveBittelCategoryAndType } from "./classifyBittelItem";
+import { fetchBittelHtml, parseBittelProductPage, type BittelParsedProduct } from "./parseBittelProduct";
+import { applyBittelSupplierToProduct, backfillBittelSupplierOnProducts } from "./applyBittelSupplier";
+import { ensureBittelSupplierId } from "./ensureBittelSupplier";
+import { upsertBittelAccessory } from "./upsertBittelAccessory";
+import { emitBittelProgress, type BittelSyncProgressHandler } from "./bittelSyncProgress";
 
-export type { CondexSyncProgressEvent } from "./condexSyncProgress";
+export type { BittelSyncProgressEvent } from "./bittelSyncProgress";
 
-export type CondexSyncSummary = {
+export type BittelSyncSummary = {
   created: number;
   updated: number;
   skipped: number;
@@ -31,12 +31,12 @@ export type CondexSyncSummary = {
 };
 
 const FEATURE_KEYWORDS: Array<{ slug: string; patterns: RegExp[] }> = [
-  { slug: "wifi", patterns: [/wi-?fi/i, /безжично/i, /интернет/i] },
-  { slug: "inverter", patterns: [/инвертор/i, /hyper inverter/i] },
-  { slug: "night_mode", patterns: [/нощен/i, /тих режим/i, /сън/i] },
-  { slug: "self_cleaning", patterns: [/самопочистване/i, /self-clean/i] },
-  { slug: "ionizer", patterns: [/йон/i, /дезодориращ/i] },
-  { slug: "turbo", patterns: [/мощен режим/i, /hi power/i, /турбо/i] },
+  { slug: "wifi", patterns: [/wi-?fi/i, /безжично/i, /онлайн\s+контролер/i] },
+  { slug: "inverter", patterns: [/инвертор/i, /inverter/i] },
+  { slug: "night_mode", patterns: [/нощен/i, /тих\s+режим/i, /sleep/i, /безшумно/i] },
+  { slug: "self_cleaning", patterns: [/самопочистване/i, /self.clean/i, /auto.clean/i] },
+  { slug: "ionizer", patterns: [/йон/i, /ionizer/i, /фотокатал/i] },
+  { slug: "turbo", patterns: [/мощен\s+режим/i, /turbo/i, /powerful/i] },
 ];
 
 type RefMaps = {
@@ -54,7 +54,7 @@ async function loadRefs(supabase: SupabaseClient): Promise<RefMaps> {
     supabase.from("product_types").select("id,name"),
     supabase.from("categories").select("id,slug"),
     supabase.from("features").select("id,slug"),
-    ensureCondexSupplierId(supabase),
+    ensureBittelSupplierId(supabase),
   ]);
 
   const brandByName = new Map<string, string>();
@@ -81,17 +81,14 @@ async function loadRefs(supabase: SupabaseClient): Promise<RefMaps> {
     featureBySlug.set(String(f.slug), f.id as string);
   }
 
-  return {
-    brandByName,
-    typeByName,
-    categoryBySlug,
-    featureBySlug,
-    supplierId,
-    defaultTypeId,
-  };
+  return { brandByName, typeByName, categoryBySlug, featureBySlug, supplierId, defaultTypeId };
 }
 
-async function ensureBrand(supabase: SupabaseClient, brandByName: Map<string, string>, name: string): Promise<string | null> {
+async function ensureBrand(
+  supabase: SupabaseClient,
+  brandByName: Map<string, string>,
+  name: string,
+): Promise<string | null> {
   const key = name.toLowerCase();
   const existing = brandByName.get(key);
   if (existing) return existing;
@@ -104,10 +101,7 @@ async function ensureBrand(supabase: SupabaseClient, brandByName: Map<string, st
     .single();
   if (error) {
     const { data: fb } = await supabase.from("brands").select("id").eq("slug", slug).maybeSingle();
-    if (fb?.id) {
-      brandByName.set(key, fb.id as string);
-      return fb.id as string;
-    }
+    if (fb?.id) { brandByName.set(key, fb.id as string); return fb.id as string; }
     return null;
   }
   brandByName.set(key, data.id as string);
@@ -170,20 +164,22 @@ async function findExistingProduct(
 async function syncChildren(
   supabase: SupabaseClient,
   productId: string,
-  item: CondexParsedProduct,
+  item: BittelParsedProduct,
   refs: RefMaps,
 ): Promise<void> {
   const specs: SpecsInput = { ...item.specs };
   const specsErr = await replaceProductSpecs(supabase, productId, specs);
   if (specsErr.error) throw new Error(specsErr.error.message);
 
-  const images: ImageInput[] = item.imageUrls.map((url, i) => ({
-    url,
-    sort_order: i,
-    is_main: i === 0,
-  }));
-  const imgErr = await replaceProductImages(supabase, productId, images);
-  if (imgErr.error) throw new Error(imgErr.error.message);
+  if (item.imageUrls.length > 0) {
+    const images: ImageInput[] = item.imageUrls.map((url, i) => ({
+      url,
+      sort_order: i,
+      is_main: i === 0,
+    }));
+    const imgErr = await replaceProductImages(supabase, productId, images);
+    if (imgErr.error) throw new Error(imgErr.error.message);
+  }
 
   const featureIds = resolveFeatureIds(refs, item.featureLabels, item.description ?? item.name);
   const featErr = await replaceProductFeatures(supabase, productId, featureIds);
@@ -193,14 +189,19 @@ async function syncChildren(
 async function upsertOne(
   supabase: SupabaseClient,
   refs: RefMaps,
-  item: CondexParsedProduct,
+  item: BittelParsedProduct,
+  listingCategoryPath: string | null,
   syncedProductIds: string[],
 ): Promise<"created" | "updated" | "skipped"> {
   const brandId = await ensureBrand(supabase, refs.brandByName, item.brandName);
   if (!brandId) return "skipped";
 
-  const typeId = resolveTypeId(refs, item.typeHint);
-  const categoryId = item.categorySlug ? (refs.categoryBySlug.get(item.categorySlug) ?? null) : null;
+  const { categorySlug, typeHint } = resolveBittelCategoryAndType(item.name, listingCategoryPath);
+  const effectiveCategorySlug = item.categorySlug ?? categorySlug;
+  const effectiveTypeHint = item.typeHint ?? typeHint;
+
+  const typeId = resolveTypeId(refs, effectiveTypeHint);
+  const categoryId = effectiveCategorySlug ? (refs.categoryBySlug.get(effectiveCategorySlug) ?? null) : null;
 
   const existing = await findExistingProduct(supabase, brandId, item.modelCode, item.name);
   const baseSlug = slugifyBg(item.modelCode ?? item.name);
@@ -230,9 +231,7 @@ async function upsertOne(
     meta_description: (description ?? item.name).slice(0, 160),
   };
 
-  if (refs.supplierId) {
-    productRow.supplier_id = refs.supplierId;
-  }
+  if (refs.supplierId) productRow.supplier_id = refs.supplierId;
 
   if (!existing) {
     productRow.slug = slug;
@@ -240,7 +239,7 @@ async function upsertOne(
     const { data, error } = await supabase.from("products").insert(productRow).select("id").single();
     if (error || !data?.id) throw new Error(error?.message ?? "insert failed");
     const productId = data.id as string;
-    if (refs.supplierId) await applyCondexSupplierToProduct(supabase, productId, refs.supplierId);
+    if (refs.supplierId) await applyBittelSupplierToProduct(supabase, productId, refs.supplierId);
     syncedProductIds.push(productId);
     await syncChildren(supabase, productId, item, refs);
     return "created";
@@ -248,22 +247,22 @@ async function upsertOne(
 
   const { error } = await supabase.from("products").update(productRow).eq("id", existing.id);
   if (error) throw new Error(error.message);
-  if (refs.supplierId) await applyCondexSupplierToProduct(supabase, existing.id, refs.supplierId);
+  if (refs.supplierId) await applyBittelSupplierToProduct(supabase, existing.id, refs.supplierId);
   syncedProductIds.push(existing.id);
   await syncChildren(supabase, existing.id, item, refs);
   return "updated";
 }
 
-export async function runCondexCatalogSync(
+export async function runBittelCatalogSync(
   supabase: SupabaseClient,
-  opts?: { limit?: number; onProgress?: CondexSyncProgressHandler },
-): Promise<CondexSyncSummary> {
-  if (process.env.CONDEX_TLS_INSECURE === "1") {
+  opts?: { limit?: number; onProgress?: BittelSyncProgressHandler },
+): Promise<BittelSyncSummary> {
+  if (process.env.BITTEL_TLS_INSECURE === "1") {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
   }
 
   const onProgress = opts?.onProgress;
-  const summary: CondexSyncSummary = {
+  const summary: BittelSyncSummary = {
     created: 0,
     updated: 0,
     skipped: 0,
@@ -276,27 +275,26 @@ export async function runCondexCatalogSync(
   };
   const syncedProductIds: string[] = [];
 
-  emitCondexProgress(onProgress, { phase: "start", message: "Старт на синхронизация с condex.bg…" });
+  emitBittelProgress(onProgress, { phase: "start", message: "Старт на синхронизация с bittel.bg…" });
 
   await supabase
     .from("product_catalog_settings")
-    .upsert({ id: 1, condex_last_sync_status: "running", condex_last_sync_summary: null }, { onConflict: "id" });
+    .upsert({ id: 1, bittel_last_sync_status: "running", bittel_last_sync_summary: null }, { onConflict: "id" });
 
-  emitCondexProgress(onProgress, { phase: "crawl", message: "Зареждане на референции…" });
+  emitBittelProgress(onProgress, { phase: "crawl", message: "Зареждане на референции…" });
   const refs = await loadRefs(supabase);
   summary.supplierId = refs.supplierId;
+
   if (!refs.supplierId) {
-    summary.errors.push(
-      "Липсва доставчик „Кондекс“ в контакти — продуктите няма да получат supplier_id. Пуснете seed 0001_supplier_contacts.sql.",
-    );
-    emitCondexProgress(onProgress, { phase: "crawl", message: "Внимание: не е намерен доставчик Кондекс." });
+    summary.errors.push("Липсва доставчик 'Биттел' в контакти - продуктите няма да получат supplier_id.");
+    emitBittelProgress(onProgress, { phase: "crawl", message: "Внимание: не е намерен доставчик Биттел." });
   } else {
-    emitCondexProgress(onProgress, { phase: "crawl", message: "Доставчик: Кондекс (автоматично при импорт)." });
+    emitBittelProgress(onProgress, { phase: "crawl", message: "Доставчик: Биттел (автоматично при импорт)." });
   }
 
-  emitCondexProgress(onProgress, {
+  emitBittelProgress(onProgress, {
     phase: "crawl",
-    message: "Обхождане на „За дома и офиса“ (RAC)…",
+    message: "Обхождане на климатична техника от bittel.bg…",
     discovered: 0,
     current: 0,
     total: 0,
@@ -304,8 +302,9 @@ export async function runCondexCatalogSync(
     updated: 0,
     skipped: 0,
   });
-  const entries = await collectCondexProductUrls(opts?.limit, ({ message, discovered }) => {
-    emitCondexProgress(onProgress, {
+
+  const entries = await collectBittelProductUrls(opts?.limit, ({ message, discovered }) => {
+    emitBittelProgress(onProgress, {
       phase: "crawl",
       message,
       discovered,
@@ -316,8 +315,9 @@ export async function runCondexCatalogSync(
       skipped: summary.skipped,
     });
   });
+
   summary.productUrls = entries.length;
-  emitCondexProgress(onProgress, {
+  emitBittelProgress(onProgress, {
     phase: "import",
     message: `Намерени ${entries.length} продукта — започва импорт…`,
     discovered: entries.length,
@@ -328,11 +328,13 @@ export async function runCondexCatalogSync(
     skipped: 0,
   });
 
+  const importDelay = Number(process.env.BITTEL_IMPORT_DELAY_MS) || 600;
+
   for (let i = 0; i < entries.length; i++) {
     const { url, listingCategoryPath } = entries[i]!;
     const current = i + 1;
     try {
-      emitCondexProgress(onProgress, {
+      emitBittelProgress(onProgress, {
         phase: "import",
         message: `Зареждане ${current}/${entries.length}: ${url}`,
         discovered: entries.length,
@@ -343,11 +345,13 @@ export async function runCondexCatalogSync(
         skipped: summary.skipped,
         url,
       });
-      const html = await fetchCondexHtml(url);
-      const parsed = parseCondexProductPage(html, url, listingCategoryPath);
+
+      const html = await fetchBittelHtml(url);
+      const parsed = parseBittelProductPage(html, url, listingCategoryPath);
+
       if (!parsed) {
         summary.skipped++;
-        emitCondexProgress(onProgress, {
+        emitBittelProgress(onProgress, {
           phase: "import",
           message: `Пропуснат (няма цена/име): ${url}`,
           discovered: entries.length,
@@ -362,7 +366,7 @@ export async function runCondexCatalogSync(
         continue;
       }
 
-      const catalogKind = classifyCondexCatalogItem(parsed, url, listingCategoryPath);
+      const catalogKind = classifyBittelCatalogItem(parsed, url, listingCategoryPath);
       let result: "created" | "updated" | "skipped";
       let kindLabel: string;
 
@@ -372,24 +376,23 @@ export async function runCondexCatalogSync(
         if (!brandId) {
           result = "skipped";
           kindLabel = "аксесоар (марка?)";
+          summary.skipped++;
         } else {
           const misplaced = await findExistingProduct(supabase, brandId, parsed.modelCode, parsed.name);
           if (misplaced) {
             await supabase.from("products").delete().eq("id", misplaced.id);
           }
-          result = await upsertCondexAccessory(supabase, brandId, parsed);
+          result = await upsertBittelAccessory(supabase, brandId, parsed);
           if (result === "created") summary.accessoriesCreated++;
           else if (result === "updated") summary.accessoriesUpdated++;
         }
       } else {
-        result = await upsertOne(supabase, refs, parsed, syncedProductIds);
+        result = await upsertOne(supabase, refs, parsed, listingCategoryPath, syncedProductIds);
         summary[result]++;
         kindLabel = "климатик";
       }
 
-      if (result === "skipped" && catalogKind === "accessory") summary.skipped++;
-
-      emitCondexProgress(onProgress, {
+      emitBittelProgress(onProgress, {
         phase: "import",
         message: `${result === "created" ? "Нов" : result === "updated" ? "Обновен" : "Пропуснат"} (${kindLabel}): ${parsed.name} · ${parsed.imageUrls.length} снимки`,
         discovered: entries.length,
@@ -406,7 +409,7 @@ export async function runCondexCatalogSync(
     } catch (e: unknown) {
       const errMsg = e instanceof Error ? e.message : String(e);
       summary.errors.push(`${url}: ${errMsg}`);
-      emitCondexProgress(onProgress, {
+      emitBittelProgress(onProgress, {
         phase: "import",
         message: `Грешка: ${url} — ${errMsg}`,
         discovered: entries.length,
@@ -418,12 +421,13 @@ export async function runCondexCatalogSync(
         url,
       });
     }
-    await new Promise((r) => setTimeout(r, Number(process.env.CONDEX_IMPORT_DELAY_MS) || 350));
+
+    await new Promise((r) => setTimeout(r, importDelay));
   }
 
   if (refs.supplierId && syncedProductIds.length) {
     try {
-      summary.supplierBackfilled = await backfillCondexSupplierOnProducts(
+      summary.supplierBackfilled = await backfillBittelSupplierOnProducts(
         supabase,
         refs.supplierId,
         syncedProductIds,
@@ -443,16 +447,16 @@ export async function runCondexCatalogSync(
   await supabase.from("product_catalog_settings").upsert(
     {
       id: 1,
-      condex_last_sync_at: new Date().toISOString(),
-      condex_last_sync_status: status,
-      condex_last_sync_summary: summary,
+      bittel_last_sync_at: new Date().toISOString(),
+      bittel_last_sync_status: status,
+      bittel_last_sync_summary: summary,
     },
     { onConflict: "id" },
   );
 
-  emitCondexProgress(onProgress, {
+  emitBittelProgress(onProgress, {
     phase: "done",
-    message: `Готово: ${summary.created} климатици (нови), ${summary.updated} (обновени); ${summary.accessoriesCreated} аксесоара (нови), ${summary.accessoriesUpdated} (обновени); ${summary.skipped} пропуснати; доставчик: ${summary.supplierId ? "Кондекс" : "липсва"}${summary.supplierBackfilled ? ` (+${summary.supplierBackfilled} попълнени)` : ""}; ${summary.errors.length} грешки`,
+    message: `Готово: ${summary.created} климатици (нови), ${summary.updated} (обновени); ${summary.accessoriesCreated} аксесоара (нови), ${summary.accessoriesUpdated} (обновени); ${summary.skipped} пропуснати; доставчик: ${summary.supplierId ? "Биттел" : "липсва"}${summary.supplierBackfilled ? ` (+${summary.supplierBackfilled} попълнени)` : ""}; ${summary.errors.length} грешки`,
     discovered: entries.length,
     current: entries.length,
     total: entries.length,

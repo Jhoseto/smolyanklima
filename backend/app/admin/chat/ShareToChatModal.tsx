@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { X, MessageCircle, Loader2, User, Clock, CheckCircle2, Search } from "lucide-react";
+import { CatalogProductImage } from "@/app/admin/components/CatalogProductImage";
 
 type ActiveChat = { id: string; visitor_name: string; status: string; last_message_at?: string | null };
 
@@ -87,7 +88,7 @@ export function ShareToChatModal({ product, onClose }: Props) {
         <div className="flex items-center gap-3 px-5 py-3 bg-slate-50 border-b border-slate-100">
           {product.image_url && (
             <div className="w-14 h-14 rounded-xl bg-white border border-slate-200 overflow-hidden shrink-0">
-              <img src={product.image_url} alt={product.name} className="w-full h-full object-contain p-1" />
+              <CatalogProductImage src={product.image_url} alt={product.name} fade="thumb" className="w-full h-full p-1" />
             </div>
           )}
           <div>

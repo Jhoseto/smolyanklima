@@ -5,6 +5,7 @@ import {
   MessageCircle, Send, X, CheckCircle2, Clock, Loader2,
   AlertCircle, Wifi, WifiOff, XCircle, Headphones, Bot, Star, ExternalLink,
 } from "lucide-react";
+import { CatalogProductImage } from "../catalog/CatalogProductImage";
 
 type ChatMsg = {
   id: string;
@@ -631,7 +632,7 @@ function ProductCardMessage({ product, onNavigate, isAdmin }: { product: Product
       >
         {product.image_url && (
           <div className="w-full h-32 bg-slate-100 overflow-hidden">
-            <img src={product.image_url} alt={product.name} className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300" />
+            <CatalogProductImage src={product.image_url} alt={product.name} className="w-full h-full p-2 group-hover:scale-105 transition-transform duration-300" />
           </div>
         )}
         <div className="px-3 py-2.5">

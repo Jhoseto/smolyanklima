@@ -51,7 +51,7 @@ export function extractClimacomEnergyClasses(html: string): { cool: string | nul
       .toLowerCase();
 
   for (const block of html.match(/<table[\s\S]*?<\/table>/gi) ?? []) {
-    if (!/охлажд|seer|scop|енерги/i.test(block)) continue;
+    if (!/охлажд|seer|scop|енерги|cooling|heating|energy efficiency/i.test(block)) continue;
     for (const row of block.match(/<tr[\s\S]*?<\/tr>/gi) ?? []) {
       const cells: string[] = [];
       for (const td of row.matchAll(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi)) {
@@ -65,10 +65,10 @@ export function extractClimacomEnergyClasses(html: string): { cool: string | nul
         .filter(Boolean)
         .join(" ");
 
-      if (/енергиен клас/.test(label) && /охл/.test(label)) {
+      if ((/енергиен клас|energy efficiency/.test(label)) && /охл|cooling/.test(label)) {
         cool = parseEnergyClassFromHtmlFragment(valueHtml) ?? cool;
       }
-      if (/енергиен клас/.test(label) && /отопл/.test(label)) {
+      if ((/енергиен клас|energy efficiency/.test(label)) && /отопл|heating/.test(label)) {
         heat = parseEnergyClassFromHtmlFragment(valueHtml) ?? heat;
       }
       if (label.includes("seer") && !label.includes("енергиен")) {

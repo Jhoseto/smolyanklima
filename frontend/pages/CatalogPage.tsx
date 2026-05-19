@@ -183,6 +183,11 @@ const CatalogPage = () => {
   const [allAccessories, setAllAccessories] = useState<CatalogProduct[]>([]);
   const [accessoriesLoaded, setAccessoriesLoaded] = useState(false);
   const prevListFiltersSigRef = useRef<string | null>(null);
+  const catalogToolsRef = useRef<HTMLDivElement>(null);
+  const catalogTopAnchorRef = useRef<HTMLDivElement>(null);
+  const pendingPageScrollRef = useRef(false);
+  // Когато е true — картите се показват без enter анимации (само при пагинация)
+  const [suppressCardAnims, setSuppressCardAnims] = useState(false);
   
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -411,7 +416,27 @@ const CatalogPage = () => {
           setTotal(0);
         }
       } finally {
-        if (!cancelled) setListLoading(false);
+        if (!cancelled) {
+          setListLoading(false);
+          // Скрол при пагинация — след два browser paint-а (гарантирано рендирани карти)
+          if (pendingPageScrollRef.current) {
+            pendingPageScrollRef.current = false;
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                // catalogTopAnchorRef НЕ е sticky, getBoundingClientRect().top е реалната позиция
+                const anchor = catalogTopAnchorRef.current;
+                const navH = parseFloat(
+                  getComputedStyle(document.documentElement).getPropertyValue('--navbar-height'),
+                ) || 72;
+                const y = anchor
+                  ? anchor.getBoundingClientRect().top + window.scrollY - navH
+                  : 0;
+                window.scrollTo({ top: Math.max(0, y), behavior: 'auto' });
+                setSuppressCardAnims(false);
+              });
+            });
+          }
+        }
       }
     })();
     return () => {
@@ -454,6 +479,41 @@ const CatalogPage = () => {
     if (page > 1) params.set('page', String(page));
     setSearchParams(params, { replace: true });
   }, [activeTab, effectiveCondition, search, category, brands, btus, energyClasses, features, priceRange, sortBy, effectivePriceMin, effectivePriceMax, page, setSearchParams]);
+
+  const scrollToCatalogTools = useCallback(() => {
+    const el = catalogToolsRef.current;
+    const navH =
+      parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--navbar-height')) || 72;
+    if (!el) {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      return;
+    }
+    const y = el.getBoundingClientRect().top + window.scrollY - navH;
+    window.scrollTo({ top: Math.max(0, y), left: 0, behavior: 'auto' });
+  }, []);
+
+  const goToPage = useCallback((nextPage: number) => {
+    pendingPageScrollRef.current = true;
+    setSuppressCardAnims(true);
+    setPage(nextPage);
+  }, []);
+
+  useEffect(() => {
+    const el = catalogToolsRef.current;
+    if (!el) return;
+    const syncOffset = () => {
+      const navH =
+        parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--navbar-height')) || 72;
+      document.documentElement.style.setProperty(
+        '--catalog-sticky-offset',
+        `${navH + el.offsetHeight}px`,
+      );
+    };
+    syncOffset();
+    const ro = new ResizeObserver(syncOffset);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [search, debouncedSearch, brands, btus, energyClasses, features, activeTab, sortBy]);
 
   // ── Scroll Progress (target = positioned page root for Motion offset) ──
   const pageRef = useRef<HTMLDivElement>(null);
@@ -605,11 +665,10 @@ const CatalogPage = () => {
       {/* Trust Bar */}
       <TrustBar />
 
-      {/* Main Content */}
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Pre-sticky content (wizard, recently viewed) */}
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-8">
         {activeTab === 'climate' && (
           <>
-            {/* Guided Buying Wizard */}
             <GuidedBuyingWizard
               onQuickView={(p: CatalogProduct) => {
                 setQuickViewProduct(p);
@@ -619,8 +678,6 @@ const CatalogPage = () => {
               onFavoriteToggle={handleFavoriteToggle}
               onShare={handleShare}
             />
-
-            {/* Recently Viewed */}
             <RecentlyViewed
               viewedIds={viewedIds}
               onPruneViewedIds={pruneViewedIds}
@@ -631,9 +688,16 @@ const CatalogPage = () => {
             />
           </>
         )}
+        {/* Anchor за скрол при пагинация — НЕ е sticky */}
+        <div ref={catalogTopAnchorRef} className="h-0 pointer-events-none" aria-hidden="true" />
+      </div>
 
-        {/* Sticky Search + Sort */}
-        <div className="mb-6 sticky top-[72px] z-40 -mx-4 sm:mx-0">
+      {/* Sticky Search — само картата, без фон на wrapper; top = точна височина на navbar */}
+      <div
+        ref={catalogToolsRef}
+        className="sticky top-[var(--navbar-height,72px)] z-[190] w-full"
+      >
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
           <SearchSortBar
             search={search}
             onSearchChange={setSearch}
@@ -641,10 +705,40 @@ const CatalogPage = () => {
             onSortChange={setSortBy}
             viewMode={viewMode}
             onViewModeChange={setViewMode}
-            totalCount={effectiveCategoryCounts.all ?? 0}
-            filteredCount={total}
             onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
             sidebarOpen={sidebarOpen}
+            categoryChipsSlot={
+              activeTab === 'climate' ? (
+                <CategoryChips
+                  compact
+                  selected={category}
+                  onChange={setCategory}
+                  counts={effectiveCategoryCounts}
+                />
+              ) : (
+                <div className="flex w-full min-w-0 gap-1.5 overflow-x-auto lg:overflow-x-visible scrollbar-hide">
+                  {ACCESSORY_CATEGORIES.map((cat) => {
+                    const isActive = category === cat.id;
+                    const count = effectiveCategoryCounts[cat.id] ?? 0;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setCategory(cat.id)}
+                        className={`flex-1 min-w-0 shrink-0 lg:shrink px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all whitespace-nowrap justify-center ${
+                          isActive
+                            ? 'bg-gradient-to-r from-[#FF4D00] to-[#FF2A4D] text-white border-transparent'
+                            : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-white'
+                        }`}
+                      >
+                        {cat.label}
+                        {count > 0 ? ` ${count}` : ''}
+                      </button>
+                    );
+                  })}
+                </div>
+              )
+            }
             activeFiltersSlot={
               <ActiveFilters
                 compact
@@ -663,8 +757,11 @@ const CatalogPage = () => {
             }
           />
         </div>
+      </div>
 
-        <div className="mb-5 flex items-center gap-3">
+      {/* Main Content */}
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+        <div className="mb-5 mt-4 flex items-center gap-3">
           <button
             type="button"
             onClick={() => handleTabChange('climate')}
@@ -687,38 +784,6 @@ const CatalogPage = () => {
           >
             Аксесоари
           </button>
-        </div>
-
-        {/* Category Chips */}
-        <div className="mb-5">
-          {activeTab === 'climate' ? (
-            <CategoryChips
-              selected={category}
-              onChange={setCategory}
-              counts={effectiveCategoryCounts}
-            />
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {ACCESSORY_CATEGORIES.map((cat) => {
-                const isActive = category === cat.id;
-                const count = effectiveCategoryCounts[cat.id] ?? 0;
-                return (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => setCategory(cat.id)}
-                    className={`px-4 py-2 rounded-full text-sm font-semibold border transition-all ${
-                      isActive
-                        ? 'bg-gradient-to-r from-[#FF4D00] to-[#FF2A4D] text-white border-transparent shadow-md'
-                        : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    {cat.label} {count > 0 ? `(${count})` : ''}
-                  </button>
-                );
-              })}
-            </div>
-          )}
         </div>
 
         {/* Layout: Sidebar + Grid */}
@@ -816,7 +881,7 @@ const CatalogPage = () => {
               </div>
             ) : (
               <motion.div
-                layout
+                layout={!suppressCardAnims}
                 className={`grid gap-4 lg:gap-5 ${
                   viewMode === 'grid'
                     ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
@@ -846,6 +911,7 @@ const CatalogPage = () => {
                           key={product.id}
                           product={product}
                           index={index}
+                          noEnterAnim={suppressCardAnims}
                           onQuickView={(p) => {
                             if (activeTab === 'accessories') {
                               navigate(`/aksesoar/${p.id}`);
@@ -887,7 +953,7 @@ const CatalogPage = () => {
                     <button
                       type="button"
                       disabled={page <= 1 || listLoading}
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      onClick={() => goToPage(Math.max(1, page - 1))}
                       className="px-4 py-2 rounded-xl text-sm font-semibold border border-gray-200 bg-white text-gray-700 disabled:opacity-40 hover:border-[#00B4D8] hover:text-[#00B4D8] transition-colors"
                     >
                       Предишна
@@ -898,7 +964,7 @@ const CatalogPage = () => {
                     <button
                       type="button"
                       disabled={page >= totalPages || listLoading}
-                      onClick={() => setPage((p) => p + 1)}
+                      onClick={() => goToPage(Math.min(totalPages, page + 1))}
                       className="px-4 py-2 rounded-xl text-sm font-semibold border border-gray-200 bg-white text-gray-700 disabled:opacity-40 hover:border-[#00B4D8] hover:text-[#00B4D8] transition-colors"
                     >
                       Следваща

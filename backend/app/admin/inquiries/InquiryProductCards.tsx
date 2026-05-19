@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChevronRight, Wind } from "lucide-react";
 import { ProductQuickViewModal } from "../ProductQuickView";
+import { CatalogProductImage } from "@/app/admin/components/CatalogProductImage";
 
 export type InquiryProductCardItem = {
   id: string;
@@ -53,7 +54,7 @@ export function InquiryProductCards({
               >
                 <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-slate-100 bg-slate-50">
                   {p.image_url ? (
-                    <img src={p.image_url} alt="" className="h-full w-full object-contain p-0.5" />
+                    <CatalogProductImage src={p.image_url} alt="" fade="thumb" className="h-full w-full p-0.5" />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center text-[#00B4D8]">
                       <Wind className="h-4 w-4" />
@@ -92,10 +93,10 @@ export function InquiryProductCards({
             >
               <div className="relative h-36 w-full overflow-hidden bg-gradient-to-b from-slate-50 to-white">
                 {p.image_url ? (
-                  <img
+                  <CatalogProductImage
                     src={p.image_url}
                     alt=""
-                    className="h-full w-full object-contain p-3 transition-transform duration-500 group-hover:scale-105"
+                    className="h-full w-full p-3 transition-transform duration-500 group-hover:scale-105"
                   />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-[#00B4D8]/50">

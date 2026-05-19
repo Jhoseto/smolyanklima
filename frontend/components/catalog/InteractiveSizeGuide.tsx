@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Ruler, User } from 'lucide-react';
 import type { CatalogProduct } from '../../data/types/product';
+import { CatalogProductImage } from './CatalogProductImage';
 
 export const InteractiveSizeGuide = ({ product }: { product: CatalogProduct }) => {
   const [personHeight, setPersonHeight] = useState(175); // cm
@@ -38,7 +39,7 @@ export const InteractiveSizeGuide = ({ product }: { product: CatalogProduct }) =
             minWidth: '80px'
           }}
         >
-          <img src={product.image} alt="AC" className="w-full h-full object-contain mix-blend-multiply" />
+          <CatalogProductImage src={product.image} alt="AC" className="w-full h-full" />
           {/* Labels inside the visible area to avoid overflow */}
           <div className="absolute -top-5 left-0 right-0 flex justify-center">
             <span className="text-[9px] font-bold text-gray-400 bg-white/80 px-1 rounded">~{acWidthCm} см</span>

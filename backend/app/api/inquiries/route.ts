@@ -18,7 +18,7 @@ const BodySchema = z
     message: z.string().max(2000).optional(),
     productSlug: z.string().min(1).optional(),
     productName: z.string().min(1).max(200).optional(),
-    serviceType: z.enum(["sale", "installation", "maintenance", "repair"]).optional(),
+    serviceType: z.enum(["consultation", "sale", "installation", "maintenance", "repair"]).optional(),
     includeInstallation: z.boolean().optional(),
     /** Honeypot — must be empty (bots often fill hidden fields). */
     website: z.string().optional(),

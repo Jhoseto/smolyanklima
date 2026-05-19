@@ -107,7 +107,7 @@ export const FilterSidebar = ({
   const brandsAreDynamic = brandsOptions !== undefined;
   const availableBtus = btuOptions;
   return (
-    <aside className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sticky top-[120px] max-h-[calc(100vh-140px)] overflow-y-auto">
+    <aside className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sticky top-[var(--catalog-sticky-offset,10rem)] max-h-[calc(100vh-var(--catalog-sticky-offset,10rem)-1rem)] overflow-y-auto">
 
       {/* Header */}
       <div className="flex items-center justify-between mb-5">

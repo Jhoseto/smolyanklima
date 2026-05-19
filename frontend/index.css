@@ -19,6 +19,11 @@
 }
 
 @layer base {
+  :root {
+    --navbar-height: 72px;
+    --catalog-sticky-offset: 10rem;
+  }
+
   html {
     position: relative;
     scroll-behavior: smooth;
@@ -48,4 +53,32 @@
 .chat-input {
   @apply w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm
          focus:outline-none focus:border-[#FF4D00] focus:ring-2 focus:ring-[#FF4D00]/20 transition;
+}
+
+/* Плавен fade на ръбовете — бял фон от доставчик → фон на контейнера */
+.catalog-product-image-fade {
+  -webkit-mask-image: radial-gradient(
+    ellipse 84% 84% at 50% 50%,
+    #000 44%,
+    transparent 100%
+  );
+  mask-image: radial-gradient(ellipse 84% 84% at 50% 50%, #000 44%, transparent 100%);
+}
+
+.catalog-product-image-fade-soft {
+  -webkit-mask-image: radial-gradient(
+    ellipse 90% 90% at 50% 50%,
+    #000 52%,
+    transparent 100%
+  );
+  mask-image: radial-gradient(ellipse 90% 90% at 50% 50%, #000 52%, transparent 100%);
+}
+
+.catalog-product-image-fade-thumb {
+  -webkit-mask-image: radial-gradient(
+    ellipse 78% 78% at 50% 50%,
+    #000 38%,
+    transparent 100%
+  );
+  mask-image: radial-gradient(ellipse 78% 78% at 50% 50%, #000 38%, transparent 100%);
 }

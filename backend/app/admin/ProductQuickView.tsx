@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Check, ExternalLink, Ruler, ShieldCheck, Star, Volume2, Weight, Wifi, Wind, X, Zap } from "lucide-react";
 import { publicProductPageUrl } from "@/lib/publicCatalogUrl";
+import { CatalogProductImage } from "@/app/admin/components/CatalogProductImage";
 
 type ProductQuickViewData = {
   id: string;
@@ -197,12 +198,12 @@ export function AccessoryQuickViewModal({ accessoryId, onClose }: { accessoryId:
                 <div className="absolute left-4 top-4 z-10 rounded-full bg-white/90 px-3 py-1 text-xs font-black text-violet-700 shadow-sm">
                   {accessoryKindLabel(accessory.kind)}
                 </div>
-                <div className="flex aspect-square items-center justify-center rounded-3xl bg-white p-5 shadow-sm">
+                <div className="flex aspect-square items-center justify-center rounded-3xl bg-slate-50 p-6 shadow-sm">
                   {mainImage && !imageFailed ? (
-                    <img
+                    <CatalogProductImage
                       src={mainImage}
                       alt={accessory.name}
-                      className="max-h-full max-w-full object-contain"
+                      className="max-h-full max-w-full"
                       onError={() => setImageFailed(true)}
                     />
                   ) : (
@@ -216,7 +217,7 @@ export function AccessoryQuickViewModal({ accessoryId, onClose }: { accessoryId:
                   <div className="mt-4 flex justify-center gap-2">
                     {images.slice(0, 4).map((image) => (
                       <div key={image.url} className="h-12 w-12 rounded-xl border border-gray-100 bg-white p-1 shadow-sm">
-                        <img src={image.url} alt="" className="h-full w-full object-contain" />
+                        <CatalogProductImage src={image.url} alt="" fade="thumb" className="h-full w-full" />
                       </div>
                     ))}
                   </div>
@@ -385,12 +386,12 @@ export function ProductQuickViewModal({ productId, onClose }: { productId: strin
                     {specs.energy_class_cool}
                   </div>
                 )}
-                <div className="flex aspect-square items-center justify-center rounded-3xl bg-white p-5 shadow-sm">
+                <div className="flex aspect-square items-center justify-center rounded-3xl bg-slate-50 p-6 shadow-sm">
                   {mainImage && !imageFailed ? (
-                    <img
+                    <CatalogProductImage
                       src={mainImage}
                       alt={product.name}
-                      className="max-h-full max-w-full object-contain"
+                      className="max-h-full max-w-full"
                       onError={() => setImageFailed(true)}
                     />
                   ) : (
@@ -407,7 +408,7 @@ export function ProductQuickViewModal({ productId, onClose }: { productId: strin
                   <div className="mt-4 flex justify-center gap-2">
                     {images.slice(0, 4).map((image) => (
                       <div key={image.url} className="h-14 w-14 rounded-xl border border-gray-100 bg-white p-1 shadow-sm">
-                        <img src={image.url} alt="" className="h-full w-full object-contain" />
+                        <CatalogProductImage src={image.url} alt="" fade="thumb" className="h-full w-full" />
                       </div>
                     ))}
                   </div>

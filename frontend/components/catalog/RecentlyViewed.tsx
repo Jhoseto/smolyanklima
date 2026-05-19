@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Clock } from 'lucide-react';
 import type { CatalogProduct } from '../../data/types/product';
+import { CatalogProductImage } from './CatalogProductImage';
 import { getProductById } from '../../data/productService';
 
 const STORAGE_KEY = 'sk_recently_viewed';
@@ -94,7 +95,7 @@ export const RecentlyViewed = ({
             className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 cursor-pointer transition-colors group border border-transparent hover:border-gray-100"
           >
             <div className="w-12 h-12 rounded-lg bg-gray-50 p-1 shrink-0 group-hover:scale-105 transition-transform">
-              <img src={p.image} alt={p.model} className="w-full h-full object-contain mix-blend-multiply" />
+              <CatalogProductImage src={p.image} alt={p.model} fade="thumb" className="w-full h-full" />
             </div>
             <div className="min-w-0">
               <p className="text-[10px] text-[#00B4D8] font-bold truncate">{p.brand}</p>

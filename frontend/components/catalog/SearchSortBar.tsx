@@ -18,11 +18,11 @@ interface SearchSortBarProps {
   onSortChange: (v: SortOption) => void;
   viewMode: 'grid' | 'list';
   onViewModeChange: (v: 'grid' | 'list') => void;
-  totalCount: number;
-  filteredCount: number;
   onToggleSidebar: () => void;
   sidebarOpen: boolean;
-  /** Активни филтри — показват се под броя „X от Y“. */
+  /** Категории (климатици / аксесоари) — един ред до сортирането */
+  categoryChipsSlot?: React.ReactNode;
+  /** Активни филтри — под категориите */
   activeFiltersSlot?: React.ReactNode;
 }
 
@@ -33,14 +33,13 @@ export const SearchSortBar = ({
   onSortChange,
   viewMode,
   onViewModeChange,
-  totalCount,
-  filteredCount,
   onToggleSidebar,
   sidebarOpen,
+  categoryChipsSlot,
   activeFiltersSlot,
 }: SearchSortBarProps) => {
   return (
-    <div className="bg-white/90 backdrop-blur-md border border-gray-100 sm:rounded-2xl shadow-sm transition-all">
+    <div className="bg-white border border-gray-100 rounded-2xl shadow-sm transition-all">
       <div className="px-3 sm:px-6 py-3">
         {/* Row 1: Filter toggle + Search + View toggle */}
         <div className="flex items-center gap-2 sm:gap-3">
@@ -96,26 +95,20 @@ export const SearchSortBar = ({
           </div>
         </div>
 
-        {/* Row 2: Count + Sort (always visible, second row) */}
-        <div className="flex items-center gap-3 mt-2 pt-2 border-t border-gray-100/70">
-          <span className="text-xs text-gray-500 font-medium whitespace-nowrap flex-1">
-            {filteredCount === totalCount
-              ? `${totalCount} продукта`
-              : `${filteredCount} от ${totalCount}`}
-          </span>
-
-          {/* Sort Dropdown */}
-          <div className="relative shrink-0">
+        {/* Row 2: Категории (flex-1) + сортиране вдясно */}
+        <div className="flex items-center gap-3 mt-2.5 pt-2.5 border-t border-gray-100/70">
+          <div className="flex-1 min-w-0">{categoryChipsSlot}</div>
+          <div className="relative shrink-0 w-[11.5rem] sm:w-auto sm:min-w-[11.5rem]">
             <select
               value={sortBy}
               onChange={(e) => onSortChange(e.target.value as SortOption)}
-              className="appearance-none pl-3 pr-7 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#00B4D8]/30 focus:border-[#00B4D8] cursor-pointer transition-all max-w-[180px] sm:max-w-none"
+              className="w-full appearance-none pl-3 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs sm:text-sm text-gray-700 font-semibold focus:outline-none focus:ring-2 focus:ring-[#00B4D8]/30 focus:border-[#00B4D8] cursor-pointer transition-all"
             >
               {SORT_OPTIONS.map(opt => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>
-            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
           </div>
         </div>
 

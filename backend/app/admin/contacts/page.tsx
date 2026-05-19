@@ -7,6 +7,7 @@ import { ChevronDown, ChevronUp, Search, UserPlus, Users, Activity, FileText, Ph
 import { ProductQuickViewButton } from "../ProductQuickView";
 import { useDebounce } from "@/lib/hooks/useDebounce";
 import { assertNoContactPrimaryPhoneDuplicate } from "@/lib/admin/contactPhoneConflictClient";
+import { inquiryServiceTypeLabel } from "@/lib/inquiry/serviceTypeLabels";
 
 type ContactKind = "client" | "supplier";
 
@@ -1285,7 +1286,7 @@ function AdminContactsPageInner() {
                             </span>
                           </Td>
                           <Td className="font-medium text-slate-900">
-                            {r.source === "inquiry" ? `Запитване${r.service_type ? ` - ${r.service_type}` : ""}` : r.title}
+                            {r.source === "inquiry" ? `Запитване${r.service_type ? ` — ${inquiryServiceTypeLabel(r.service_type)}` : ""}` : r.title}
                           </Td>
                           <Td><span className={statusBadgeClass(r.status)}>{statusLabel(r.status)}</span></Td>
                           <Td>
@@ -1312,7 +1313,7 @@ function AdminContactsPageInner() {
                     <div key={r.id} className="bg-white rounded-xl border border-slate-200 p-3">
                       <div className="flex items-start justify-between gap-2 mb-1.5">
                         <div className="font-semibold text-slate-900 text-sm leading-snug">
-                          {r.source === "inquiry" ? `Запитване${r.service_type ? ` - ${r.service_type}` : ""}` : r.title}
+                          {r.source === "inquiry" ? `Запитване${r.service_type ? ` — ${inquiryServiceTypeLabel(r.service_type)}` : ""}` : r.title}
                         </div>
                         {r.total_amount != null && (
                           <span className="font-black text-slate-900 text-sm shrink-0">€{Number(r.total_amount).toLocaleString()}</span>

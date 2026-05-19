@@ -74,7 +74,7 @@ async function loadRefs(supabase: SupabaseClient): Promise<RefMaps> {
     typeByName.set(name.toLowerCase(), t.id as string);
     if (!defaultTypeId) defaultTypeId = t.id as string;
     if (/стен/i.test(name)) defaultTypeId = t.id as string;
-    if (/мульти|multi/i.test(name)) multisplitTypeId = t.id as string;
+    if (/мулти|multi/i.test(name)) multisplitTypeId = t.id as string;
   }
   if (!defaultTypeId && types.data?.[0]) defaultTypeId = types.data[0].id as string;
   if (!multisplitTypeId) multisplitTypeId = defaultTypeId;
@@ -115,7 +115,7 @@ function resolveTypeId(refs: RefMaps, hint: string | null): string {
     for (const [name, id] of refs.typeByName) {
       if (name.includes(hint.toLowerCase()) || hint.toLowerCase().includes(name)) return id;
     }
-    if (/мульти|multi/i.test(hint)) return refs.multisplitTypeId;
+    if (/мулти|multi/i.test(hint)) return refs.multisplitTypeId;
   }
   return refs.defaultTypeId;
 }

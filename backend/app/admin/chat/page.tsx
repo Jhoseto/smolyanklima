@@ -8,6 +8,7 @@ import {
   ChevronRight, Headphones, Globe, Zap, ExternalLink,
 } from "lucide-react";
 import { SectionTitle } from "../ui";
+import { CatalogProductImage } from "@/app/admin/components/CatalogProductImage";
 
 type ProductCardData = {
   id: string; name: string; slug: string;
@@ -643,7 +644,7 @@ function AdminChatBubble({ msg, grouped }: { msg: ChatMsg & { metadata?: { type?
         {!isAdmin && <div className="w-7 h-7 rounded-full bg-gradient-to-br from-slate-300 to-slate-400 flex items-center justify-center shrink-0 self-end mb-1"><User className="w-3.5 h-3.5 text-white" /></div>}
         <a href={`/product/${p.slug}`} target="_blank" rel="noopener noreferrer"
           className="max-w-[75%] bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:border-brand-blue-200 transition-all">
-          {p.image_url && <div className="w-full h-24 bg-slate-50"><img src={p.image_url} alt={p.name} className="w-full h-full object-contain p-2" /></div>}
+          {p.image_url && <div className="w-full h-24 bg-slate-50"><CatalogProductImage src={p.image_url} alt={p.name} className="w-full h-full p-2" /></div>}
           <div className="px-3 py-2">
             {p.brand_name && <p className="text-[10px] font-semibold text-brand-blue-500 uppercase">{p.brand_name}</p>}
             <p className="text-xs font-bold text-slate-900">{p.name}</p>

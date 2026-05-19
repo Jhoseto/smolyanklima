@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ChevronLeft, ChevronRight, Expand, X } from 'lucide-react';
+import { CatalogProductImage } from '../catalog/CatalogProductImage';
 
 type Props = {
   images: string[];
@@ -75,16 +76,20 @@ export function PremiumImageGallery({ images, alt, badgeText, badgeClassName, en
           className="relative w-full aspect-square p-8 md:p-10 flex items-center justify-center group focus:outline-none"
           aria-label="Отвори галерия"
         >
-          <motion.img
+          <motion.div
             key={current}
             initial={{ opacity: 0, scale: 0.985 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.22 }}
-            src={imgError[currentIdx] ? '/images/hero-ac.jpg' : current}
-            alt={alt}
-            onError={() => setImgError((m) => ({ ...m, [currentIdx]: true }))}
-            className="w-full h-full object-contain mix-blend-multiply drop-shadow-[0_30px_70px_rgba(0,0,0,.12)] group-hover:scale-[1.03] transition-transform duration-500"
-          />
+            className="w-full h-full flex items-center justify-center group-hover:scale-[1.03] transition-transform duration-500"
+          >
+            <CatalogProductImage
+              src={imgError[currentIdx] ? '/images/hero-ac.jpg' : current}
+              alt={alt}
+              onError={() => setImgError((m) => ({ ...m, [currentIdx]: true }))}
+              className="w-full h-full drop-shadow-[0_30px_70px_rgba(0,0,0,.12)]"
+            />
+          </motion.div>
 
           <div className="absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(0,180,216,0.18),rgba(255,255,255,0)_55%)]" />
@@ -138,7 +143,7 @@ export function PremiumImageGallery({ images, alt, badgeText, badgeClassName, en
                     }`}
                     aria-label={`Снимка ${i + 1}`}
                   >
-                    <img src={src} alt="" className="w-full h-full object-contain mix-blend-multiply" />
+                    <CatalogProductImage src={src} alt="" fade="thumb" className="w-full h-full" />
                     {active && <div className="absolute inset-0 bg-[#00B4D8]/5" />}
                   </button>
                 );
@@ -191,10 +196,10 @@ export function PremiumImageGallery({ images, alt, badgeText, badgeClassName, en
               </div>
 
               <div className="relative flex-1 bg-gradient-to-b from-gray-50 to-white flex items-center justify-center p-6">
-                <img
+                <CatalogProductImage
                   src={imgError[currentIdx] ? '/images/hero-ac.jpg' : current}
                   alt={alt}
-                  className="max-w-full max-h-full object-contain mix-blend-multiply drop-shadow-[0_40px_100px_rgba(0,0,0,.14)]"
+                  className="max-w-full max-h-full drop-shadow-[0_40px_100px_rgba(0,0,0,.14)]"
                 />
 
                 {showThumbs && (
@@ -236,7 +241,7 @@ export function PremiumImageGallery({ images, alt, badgeText, badgeClassName, en
                           }`}
                           aria-label={`Снимка ${i + 1}`}
                         >
-                          <img src={src} alt="" className="w-full h-full object-contain mix-blend-multiply" />
+                          <CatalogProductImage src={src} alt="" fade="thumb" className="w-full h-full" />
                         </button>
                       );
                     })}

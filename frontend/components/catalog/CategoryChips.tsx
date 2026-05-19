@@ -1,8 +1,7 @@
 import React, { useRef } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { LayoutGrid, Layers, Home, Building2, ArrowDown, Briefcase } from 'lucide-react';
 import { CATEGORIES } from '../../data/productService';
-import type { CategoryMeta } from '../../data/types/product';
 
 const ICON_MAP: Record<string, React.ReactNode> = {
   LayoutGrid: <LayoutGrid className="w-4 h-4" />,
@@ -17,20 +16,27 @@ interface CategoryChipsProps {
   selected: string;
   onChange: (id: string) => void;
   counts: Record<string, number>;
+  /** Компактен ред в search bar */
+  compact?: boolean;
 }
 
-export const CategoryChips = ({ selected, onChange, counts }: CategoryChipsProps) => {
+export const CategoryChips = ({ selected, onChange, counts, compact = false }: CategoryChipsProps) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   return (
-    <div className="relative">
-      {/* Fade edges for horizontal scroll hint */}
-      <div className="absolute left-0 top-0 bottom-0 w-6 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none" />
-      <div className="absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none" />
+    <div className="relative min-w-0 flex-1">
+      {!compact && (
+        <>
+          <div className="absolute left-0 top-0 bottom-0 w-6 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none" />
+          <div className="absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none" />
+        </>
+      )}
 
       <div
         ref={scrollRef}
-        className="flex gap-2 overflow-x-auto scrollbar-hide px-2 pb-1"
+        className={`flex w-full min-w-0 scrollbar-hide ${
+          compact ? 'gap-1.5 overflow-x-auto lg:overflow-x-visible' : 'gap-2 overflow-x-auto px-2 pb-1'
+        }`}
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       >
         {CATEGORIES.map((cat) => {
@@ -38,42 +44,44 @@ export const CategoryChips = ({ selected, onChange, counts }: CategoryChipsProps
           const count = counts[cat.id] ?? 0;
 
           return (
-            <motion.button
+            <button
               key={cat.id}
+              type="button"
               onClick={() => onChange(cat.id)}
-              whileTap={{ scale: 0.95 }}
               className={`
-                relative flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold
-                whitespace-nowrap transition-all duration-200 shrink-0 border
+                relative flex items-center justify-center border transition-all duration-200
+                ${compact
+                  ? 'shrink-0 lg:flex-1 lg:min-w-0 gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold whitespace-nowrap [&_svg]:w-3.5 [&_svg]:h-3.5'
+                  : 'shrink-0 gap-2 px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap [&_svg]:w-4 [&_svg]:h-4'
+                }
                 ${isActive
-                  ? 'text-white border-transparent shadow-md'
-                  : 'text-gray-600 bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                  ? 'text-white border-transparent shadow-sm'
+                  : 'text-gray-600 bg-gray-50 border-gray-200 hover:border-gray-300 hover:bg-white'
                 }
               `}
               style={isActive ? {
-                background: `linear-gradient(135deg, #FF4D00, #FF2A4D)`,
-                boxShadow: `0 4px 15px rgba(255, 77, 0, 0.3)`,
+                background: 'linear-gradient(135deg, #FF4D00, #FF2A4D)',
+                boxShadow: compact ? undefined : '0 4px 15px rgba(255, 77, 0, 0.3)',
               } : {}}
             >
               <span className={isActive ? 'text-white' : ''} style={!isActive ? { color: cat.accentColor } : {}}>
                 {ICON_MAP[cat.icon]}
               </span>
-              {cat.label}
+              <span>{cat.label}</span>
               {count > 0 && (
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                  isActive ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
-                }`}>
+                <span className={`font-bold rounded-full shrink-0 ${
+                  compact ? 'text-[10px] px-1' : 'text-[10px] px-1.5 py-0.5'
+                } ${isActive ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'}`}>
                   {count}
                 </span>
               )}
-              {/* Active underline indicator */}
-              {isActive && (
+              {isActive && !compact && (
                 <motion.div
                   layoutId="category-indicator"
                   className="absolute -bottom-1 left-4 right-4 h-0.5 bg-white/60 rounded-full"
                 />
               )}
-            </motion.button>
+            </button>
           );
         })}
       </div>
