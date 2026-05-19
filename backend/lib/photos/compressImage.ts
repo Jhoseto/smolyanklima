@@ -42,7 +42,10 @@ export async function compressImage(file: File, opts: CompressOptions = {}): Pro
 
   // OffscreenCanvas където е достъпен → не блокира main thread.
   const canvas = createCanvas(width, height);
-  const ctx = canvas.getContext("2d");
+  const ctx = canvas.getContext("2d") as
+    | CanvasRenderingContext2D
+    | OffscreenCanvasRenderingContext2D
+    | null;
   if (!ctx) {
     bitmap.close();
     throw new Error("Браузърът не поддържа 2D canvas.");

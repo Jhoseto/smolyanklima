@@ -61,11 +61,13 @@ type ProductEmbed = {
   supplier?: SupplierJoin;
 };
 
-type ContactJoin = {
+type ContactRow = {
   full_name?: string | null;
   phone?: string | null;
   address?: string | null;
-} | ContactJoin[] | null;
+};
+
+type ContactJoin = ContactRow | ContactRow[] | null;
 
 function pickOne<T>(v: T | T[] | null | undefined): T | null {
   if (!v) return null;
@@ -202,10 +204,10 @@ async function fetchAllSales(supabase: SupabaseClient): Promise<Record<string, u
       throw new Error(error.message);
     }
 
-    const batch = (data ?? []) as Record<string, unknown>[];
+    const batch = (data ?? []) as unknown as Record<string, unknown>[];
     for (const raw of batch) {
       const product = pickOne(raw.products as ProductEmbed | ProductEmbed[] | null);
-      const contact = withContact ? pickOne(raw.contacts as ContactJoin) : null;
+      const contact = withContact ? pickOne(raw.contacts as ContactRow | ContactRow[] | null) : null;
       const salePrice = raw.total_amount ?? raw.unit_price ?? product?.price ?? null;
 
       const row: Record<string, unknown> = {
@@ -272,7 +274,7 @@ async function fetchInStockProducts(supabase: SupabaseClient): Promise<Record<st
       throw new Error(error.message);
     }
 
-    const batch = (data ?? []) as Record<string, unknown>[];
+    const batch = (data ?? []) as unknown as Record<string, unknown>[];
     for (const raw of batch) {
       const product = raw as ProductEmbed;
       const row: Record<string, unknown> = {

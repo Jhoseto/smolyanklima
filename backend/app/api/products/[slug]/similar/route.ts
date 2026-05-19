@@ -171,11 +171,14 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
       ? await supabase.from("features").select("id,slug,name").in("id", featureIds)
       : ({ data: [], error: null } as any);
   if (featRes.error) return withCors(req, NextResponse.json({ error: featRes.error.message }, { status: 500 }));
-  const featById = new Map((featRes.data ?? []).map((f: any) => [f.id, f]));
+  type FeatureRow = { id: string; slug: string; name: string };
+  const featById = new Map<string, FeatureRow>(
+    ((featRes.data ?? []) as FeatureRow[]).map((f) => [f.id, f]),
+  );
   const featsByProduct = new Map<string, any[]>();
   for (const link of pfRes.data ?? []) {
     const pid = (link as any).product_id as string;
-    const f = featById.get((link as any).feature_id);
+    const f = featById.get((link as any).feature_id as string);
     if (!f) continue;
     const arr = featsByProduct.get(pid) ?? [];
     arr.push({ features: { slug: f.slug, name: f.name } });
