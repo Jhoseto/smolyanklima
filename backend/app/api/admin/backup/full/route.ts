@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
 
       return withCors(
         req,
-        new NextResponse(buffer, {
+        new NextResponse(new Uint8Array(buffer), {
           status: 200,
           headers: {
             "Content-Type": "application/vnd.ms-excel; charset=utf-8",

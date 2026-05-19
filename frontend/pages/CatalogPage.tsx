@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowUp, SlidersHorizontal, PackageX, ShieldCheck, Wrench, Clock, BadgeCheck } from 'lucide-react';
+import { ArrowUp, SlidersHorizontal, PackageX } from 'lucide-react';
 
 import { CatalogHero }    from '../components/catalog/CatalogHero';
 import { SearchSortBar }  from '../components/catalog/SearchSortBar';
@@ -31,27 +31,6 @@ import type { CatalogProduct, SortOption } from '../data/types/product';
 
 // ─────────────────────────────────────────
 // TRUST BAR
-// ─────────────────────────────────────────
-const TrustBar = () => (
-  <div className="bg-white border-y border-gray-100 py-4">
-    <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
-      <div className="flex flex-wrap justify-center gap-x-8 gap-y-3">
-        {[
-          { icon: <BadgeCheck className="w-4 h-4 text-[#00B4D8]" />, text: 'Официална гаранция' },
-          { icon: <Clock className="w-4 h-4 text-[#FF4D00]" />, text: 'Монтаж до 48ч' },
-          { icon: <ShieldCheck className="w-4 h-4 text-green-500" />, text: 'Безплатна консултация' },
-          { icon: <Wrench className="w-4 h-4 text-purple-500" />, text: 'Сервиз след продажба' },
-        ].map((item, i) => (
-          <div key={i} className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-            {item.icon}
-            {item.text}
-          </div>
-        ))}
-      </div>
-    </div>
-  </div>
-);
-
 // ─────────────────────────────────────────
 // WHY US BANNER (inserted between products)
 // ─────────────────────────────────────────
@@ -659,11 +638,8 @@ const CatalogPage = () => {
         style={{ scaleX }}
       />
 
-      {/* Hero */}
-      <CatalogHero />
-
-      {/* Trust Bar */}
-      <TrustBar />
+      {/* Hero + Trust Bar */}
+      <CatalogHero productCount={categoryCounts.all} />
 
       {/* Pre-sticky content (wizard, recently viewed) */}
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-8">
