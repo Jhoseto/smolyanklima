@@ -54,6 +54,12 @@ const TONE_STYLES = {
     badge: "bg-slate-100 text-slate-700 border-slate-200",
     itemHover: "hover:border-slate-300 hover:bg-white",
   },
+  today: {
+    accent: "border-l-emerald-500",
+    header: "bg-emerald-50/60",
+    badge: "bg-emerald-50 text-emerald-800 border-emerald-200",
+    itemHover: "hover:border-emerald-300 hover:bg-emerald-50/40",
+  },
   info: {
     accent: "border-l-brand-blue-500",
     header: "bg-brand-blue-50/50",
@@ -71,6 +77,12 @@ const TONE_STYLES = {
     header: "bg-red-50/50",
     badge: "bg-red-50 text-red-800 border-red-200",
     itemHover: "hover:border-red-300 hover:bg-red-50/40",
+  },
+  supplier: {
+    accent: "border-l-violet-500",
+    header: "bg-violet-50/60",
+    badge: "bg-violet-50 text-violet-800 border-violet-200",
+    itemHover: "hover:border-violet-300 hover:bg-violet-50/40",
   },
 } as const;
 
@@ -93,7 +105,7 @@ export function DashboardPanel({
   empty: string;
   badge: number;
   items: DashboardPanelItem[];
-  tone?: "neutral" | "info" | "warning" | "danger";
+  tone?: "neutral" | "today" | "info" | "warning" | "danger" | "supplier";
   readOnly?: boolean;
   onRequestCompleteConsultation?: (item: DashboardPanelItem) => void;
   completingConsultationId?: string | null;

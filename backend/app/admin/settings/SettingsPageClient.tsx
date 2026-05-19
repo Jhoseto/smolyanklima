@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { SectionTitle, Card, Input, Button } from "../ui";
-import { RefreshCw, Save, Database, Download, FolderOpen, CloudDownload } from "lucide-react";
+import { RefreshCw, Save, Database, Download, FolderOpen, CloudDownload, Layers } from "lucide-react";
 import type { BulclimaSyncProgressEvent } from "@/lib/import/bulclima/bulclimaSyncProgress";
 import type { ClimacomSyncProgressEvent } from "@/lib/import/climacom/climacomSyncProgress";
 import type { CondexSyncProgressEvent } from "@/lib/import/condex/condexSyncProgress";
@@ -14,6 +14,13 @@ import {
 } from "@/lib/client/pickLocalFolder";
 
 const MAX_SYNC_LOG_LINES = 300;
+
+const ALL_CATALOG_SYNC_STEPS = [
+  { id: "bulclima", label: "Булклима" },
+  { id: "climacom", label: "Климаком" },
+  { id: "condex", label: "Кондекс" },
+  { id: "bittel", label: "Биттел" },
+] as const;
 
 /** Очакван брой Condex продукти (за crawl прогрес преди финален брой). */
 const CONDEX_ESTIMATED_PRODUCTS = 120;
@@ -301,6 +308,20 @@ export default function SettingsPageClient() {
     status: string | null;
     summary: Record<string, unknown> | null;
   } | null>(null);
+  const [allCatalogSyncing, setAllCatalogSyncing] = useState(false);
+  const [allCatalogSyncStep, setAllCatalogSyncStep] = useState(0);
+  const [allCatalogSyncLog, setAllCatalogSyncLog] = useState<string[]>([]);
+  const allCatalogSyncLogEndRef = useRef<HTMLDivElement>(null);
+
+  const anyCatalogSyncing =
+    bulclimaSyncing || climacomSyncing || condexSyncing || bittelSyncing || allCatalogSyncing;
+
+  function appendAllCatalogSyncLog(line: string) {
+    setAllCatalogSyncLog((prev) => {
+      const next = [...prev, line];
+      return next.length > MAX_SYNC_LOG_LINES ? next.slice(-MAX_SYNC_LOG_LINES) : next;
+    });
+  }
 
   function appendBulclimaLog(line: string) {
     setBulclimaLog((prev) => {
@@ -571,7 +592,7 @@ export default function SettingsPageClient() {
     }
   }
 
-  async function syncClimacomCatalog() {
+  async function syncClimacomCatalog(): Promise<boolean> {
     setClimacomSyncing(true);
     setError(null);
     setClimacomLog([]);
@@ -594,15 +615,17 @@ export default function SettingsPageClient() {
         appendClimacomLog("Синхронизацията приключи.");
       }
       await loadClimacomStatus();
+      return true;
     } catch (e: unknown) {
       setError(String(e instanceof Error ? e.message : e));
+      return false;
     } finally {
       setClimacomSyncing(false);
       setClimacomProgress(null);
     }
   }
 
-  async function syncCondexCatalog() {
+  async function syncCondexCatalog(): Promise<boolean> {
     setCondexSyncing(true);
     setError(null);
     setCondexLog([]);
@@ -636,15 +659,17 @@ export default function SettingsPageClient() {
         appendCondexLog("Синхронизацията приключи.");
       }
       await loadCondexStatus();
+      return true;
     } catch (e: unknown) {
       setError(String(e instanceof Error ? e.message : e));
+      return false;
     } finally {
       setCondexSyncing(false);
       setCondexProgress((prev) => (prev ? { ...prev, phase: "done" } : null));
     }
   }
 
-  async function syncBittelCatalog() {
+  async function syncBittelCatalog(): Promise<boolean> {
     setBittelSyncing(true);
     setError(null);
     setBittelLog([]);
@@ -678,15 +703,17 @@ export default function SettingsPageClient() {
         appendBittelLog("Синхронизацията приключи.");
       }
       await loadBittelStatus();
+      return true;
     } catch (e: unknown) {
       setError(String(e instanceof Error ? e.message : e));
+      return false;
     } finally {
       setBittelSyncing(false);
       setBittelProgress((prev) => (prev ? { ...prev, phase: "done" } : null));
     }
   }
 
-  async function syncBulclimaCatalog() {
+  async function syncBulclimaCatalog(): Promise<boolean> {
     setBulclimaSyncing(true);
     setError(null);
     setBulclimaLog([]);
@@ -709,13 +736,62 @@ export default function SettingsPageClient() {
         appendBulclimaLog("Синхронизацията приключи.");
       }
       await loadBulclimaStatus();
+      return true;
     } catch (e: unknown) {
       setError(String(e instanceof Error ? e.message : e));
+      return false;
     } finally {
       setBulclimaSyncing(false);
       setBulclimaProgress(null);
     }
   }
+
+  async function syncAllCatalogs() {
+    if (anyCatalogSyncing || reclassifying) return;
+    setAllCatalogSyncing(true);
+    setAllCatalogSyncStep(0);
+    setAllCatalogSyncLog([]);
+    setError(null);
+    const runners: Record<(typeof ALL_CATALOG_SYNC_STEPS)[number]["id"], () => Promise<boolean>> = {
+      bulclima: syncBulclimaCatalog,
+      climacom: syncClimacomCatalog,
+      condex: syncCondexCatalog,
+      bittel: syncBittelCatalog,
+    };
+    appendAllCatalogSyncLog(
+      `[${new Date().toLocaleTimeString("bg-BG")}] Започва обща синхронизация (${ALL_CATALOG_SYNC_STEPS.length} доставчика, последователно)…`,
+    );
+    let failedAt: string | null = null;
+    for (let i = 0; i < ALL_CATALOG_SYNC_STEPS.length; i++) {
+      const step = ALL_CATALOG_SYNC_STEPS[i];
+      setAllCatalogSyncStep(i + 1);
+      appendAllCatalogSyncLog(
+        `[${new Date().toLocaleTimeString("bg-BG")}] (${i + 1}/${ALL_CATALOG_SYNC_STEPS.length}) ${step.label}…`,
+      );
+      const ok = await runners[step.id]();
+      if (!ok) {
+        failedAt = step.label;
+        appendAllCatalogSyncLog(
+          `[${new Date().toLocaleTimeString("bg-BG")}] Грешка при ${step.label} — спиране на опашката.`,
+        );
+        break;
+      }
+      appendAllCatalogSyncLog(
+        `[${new Date().toLocaleTimeString("bg-BG")}] ${step.label} — готово.`,
+      );
+    }
+    if (!failedAt) {
+      appendAllCatalogSyncLog(
+        `[${new Date().toLocaleTimeString("bg-BG")}] Всички каталози са синхронизирани успешно.`,
+      );
+    }
+    setAllCatalogSyncStep(0);
+    setAllCatalogSyncing(false);
+  }
+
+  useEffect(() => {
+    allCatalogSyncLogEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [allCatalogSyncLog]);
 
   useEffect(() => {
     bulclimaLogEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -1044,6 +1120,81 @@ export default function SettingsPageClient() {
 
       {activeTab === "catalog" && (
         <>
+        <Card className="p-3 md:p-5 border-brand-blue-200 bg-gradient-to-br from-white to-brand-blue-50/50 mb-4 shadow-sm">
+          <div className="flex items-start gap-3 mb-3">
+            <div className="w-11 h-11 rounded-xl bg-brand-blue-100 text-brand-blue-700 flex items-center justify-center shrink-0">
+              <Layers className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm md:text-base font-black text-slate-900 tracking-tight">
+                Синхронизация на всички доставчици
+              </div>
+              <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
+                Обновява последователно четирите каталога: <strong>Булклима</strong> → <strong>Климаком</strong> →{" "}
+                <strong>Кондекс</strong> → <strong>Биттел</strong>. Продуктите влизат със статус <strong>По поръчка</strong> и
+                по подразбиране са скрити от публичния сайт — включвате ги ръчно от списъка продукти. Общото време е
+                обикновено <strong>30–60 минути</strong> (зависи от сайтовете). При грешка на един доставчик опашката спира;
+                останалите можете да пуснете поотделно по-долу.
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="primary"
+            size="lg"
+            onClick={() => void syncAllCatalogs()}
+            disabled={anyCatalogSyncing || reclassifying}
+            className="gap-2 w-full sm:w-auto shadow-sm"
+          >
+            {allCatalogSyncing ? (
+              <RefreshCw className="w-5 h-5 animate-spin" />
+            ) : (
+              <Layers className="w-5 h-5" />
+            )}
+            {allCatalogSyncing
+              ? allCatalogSyncStep > 0
+                ? `Синхронизирам (${allCatalogSyncStep}/${ALL_CATALOG_SYNC_STEPS.length})…`
+                : "Подготвям…"
+              : "Синхронизирай всички каталози"}
+          </Button>
+          {allCatalogSyncing && allCatalogSyncStep > 0 && (
+            <div className="mt-3 space-y-1">
+              <div className="flex justify-between text-[10px] font-bold text-slate-600">
+                <span>
+                  Текущ: {ALL_CATALOG_SYNC_STEPS[allCatalogSyncStep - 1]?.label ?? "—"}
+                </span>
+                <span>
+                  {allCatalogSyncStep} / {ALL_CATALOG_SYNC_STEPS.length}
+                </span>
+              </div>
+              <div className="h-2 rounded-full bg-brand-blue-100 overflow-hidden">
+                <div
+                  className="h-full bg-brand-blue-600 transition-all duration-500"
+                  style={{
+                    width: `${Math.round((allCatalogSyncStep / ALL_CATALOG_SYNC_STEPS.length) * 100)}%`,
+                  }}
+                />
+              </div>
+            </div>
+          )}
+          {(allCatalogSyncing || allCatalogSyncLog.length > 0) && (
+            <div className="mt-4 space-y-2 border-t border-brand-blue-200/60 pt-4">
+              <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Общ дневник</div>
+              <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 bg-slate-900/95 p-2 font-mono text-[10px] leading-relaxed text-slate-100">
+                {allCatalogSyncLog.length === 0 ? (
+                  <div className="text-slate-400">Очакване…</div>
+                ) : (
+                  allCatalogSyncLog.map((line, i) => (
+                    <div key={`all-${i}`} className="whitespace-pre-wrap break-all py-0.5">
+                      {line}
+                    </div>
+                  ))
+                )}
+                <div ref={allCatalogSyncLogEndRef} />
+              </div>
+            </div>
+          )}
+        </Card>
+
         <Card className="p-3 md:p-4 border-orange-200 bg-gradient-to-br from-white to-orange-50/40 mb-4">
           <div className="flex items-start gap-3 mb-3">
             <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-700 flex items-center justify-center shrink-0">
@@ -1069,7 +1220,7 @@ export default function SettingsPageClient() {
             <Button
               variant="primary"
               onClick={() => void syncBulclimaCatalog()}
-              disabled={bulclimaSyncing || climacomSyncing || condexSyncing || bittelSyncing || reclassifying}
+              disabled={anyCatalogSyncing || reclassifying}
               className="gap-2"
             >
               {bulclimaSyncing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CloudDownload className="w-4 h-4" />}
@@ -1078,7 +1229,7 @@ export default function SettingsPageClient() {
             <Button
               variant="secondary"
               onClick={() => void reclassifyMisplacedAccessories(true)}
-              disabled={bulclimaSyncing || climacomSyncing || condexSyncing || bittelSyncing || reclassifying}
+              disabled={anyCatalogSyncing || reclassifying}
               className="gap-2"
             >
               {reclassifying ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
@@ -1087,7 +1238,7 @@ export default function SettingsPageClient() {
             <Button
               variant="secondary"
               onClick={() => void reclassifyMisplacedAccessories(false)}
-              disabled={bulclimaSyncing || climacomSyncing || condexSyncing || bittelSyncing || reclassifying}
+              disabled={anyCatalogSyncing || reclassifying}
               className="gap-2"
             >
               Премести грешно внесени в аксесоари
@@ -1158,7 +1309,7 @@ export default function SettingsPageClient() {
           <Button
             variant="primary"
             onClick={() => void syncClimacomCatalog()}
-            disabled={bulclimaSyncing || climacomSyncing || condexSyncing || bittelSyncing || reclassifying}
+            disabled={anyCatalogSyncing || reclassifying}
             className="gap-2"
           >
             {climacomSyncing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CloudDownload className="w-4 h-4" />}
@@ -1219,7 +1370,7 @@ export default function SettingsPageClient() {
           <Button
             variant="primary"
             onClick={() => void syncCondexCatalog()}
-            disabled={bulclimaSyncing || climacomSyncing || condexSyncing || bittelSyncing || reclassifying}
+            disabled={anyCatalogSyncing || reclassifying}
             className="gap-2"
           >
             {condexSyncing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CloudDownload className="w-4 h-4" />}
@@ -1275,7 +1426,7 @@ export default function SettingsPageClient() {
           <Button
             variant="primary"
             onClick={() => void syncBittelCatalog()}
-            disabled={bulclimaSyncing || climacomSyncing || condexSyncing || bittelSyncing || reclassifying}
+            disabled={anyCatalogSyncing || reclassifying}
             className="gap-2"
           >
             {bittelSyncing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CloudDownload className="w-4 h-4" />}

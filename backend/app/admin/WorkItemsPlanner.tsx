@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, Button, Select, Input, Textarea } from "./ui";
 import { ContactPersonPicker } from "./ContactPersonPicker";
 import { InstallationMountDetailModal } from "./InstallationMountDetailModal";
@@ -15,7 +15,8 @@ type EventCode =
   | "service_maintenance"
   | "service_on_site"
   | "service_in_shop"
-  | "consultation";
+  | "consultation"
+  | "supplier_order";
 
 type WorkItem = {
   id: string;
@@ -82,6 +83,61 @@ const PLANNER_CREATABLE_EVENT_OPTIONS: Array<{ id: EventCode; label: string; typ
   { id: "service_in_shop", label: "Сервиз в склад", type: "service" },
   { id: "consultation", label: "Консултация", type: "task" },
 ];
+
+/** Типове събития в календара — multi on/off филтри (по подразбиране всички включени). */
+const CALENDAR_EVENT_FILTERS: Array<{ id: EventCode; label: string }> = [
+  { id: "item_added", label: "Добавяне на продукт" },
+  { id: "item_removed", label: "Премахване на продукт" },
+  { id: "service_installation", label: "Монтаж" },
+  { id: "service_maintenance", label: "Профилактика" },
+  { id: "service_on_site", label: "Сервиз на терен" },
+  { id: "service_in_shop", label: "Сервиз в склад" },
+  { id: "consultation", label: "Консултация" },
+];
+
+const ALL_CALENDAR_FILTER_IDS = CALENDAR_EVENT_FILTERS.map((f) => f.id);
+
+/** Запомня избора между табове/екрани; липса на ключ = първо посещение → всички включени. */
+const CALENDAR_EVENT_FILTERS_STORAGE_KEY = "sk-admin-calendar-event-filters";
+
+function createAllCalendarFiltersEnabled(): Set<EventCode> {
+  return new Set(ALL_CALENDAR_FILTER_IDS);
+}
+
+function areAllCalendarFiltersEnabled(enabled: Set<EventCode>) {
+  return ALL_CALENDAR_FILTER_IDS.every((id) => enabled.has(id));
+}
+
+function isCalendarFilterId(value: unknown): value is EventCode {
+  return typeof value === "string" && ALL_CALENDAR_FILTER_IDS.includes(value as EventCode);
+}
+
+function loadCalendarEventFiltersFromStorage(): Set<EventCode> {
+  if (typeof window === "undefined") return createAllCalendarFiltersEnabled();
+  try {
+    const raw = localStorage.getItem(CALENDAR_EVENT_FILTERS_STORAGE_KEY);
+    if (raw === null) return createAllCalendarFiltersEnabled();
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return createAllCalendarFiltersEnabled();
+    const ids = parsed.filter(isCalendarFilterId);
+    return new Set(ids);
+  } catch {
+    return createAllCalendarFiltersEnabled();
+  }
+}
+
+function saveCalendarEventFiltersToStorage(enabled: Set<EventCode>) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(CALENDAR_EVENT_FILTERS_STORAGE_KEY, JSON.stringify([...enabled]));
+  } catch {
+    /* localStorage пълен или блокиран */
+  }
+}
+
+function readInitialCalendarEventFilters(): Set<EventCode> {
+  return loadCalendarEventFiltersFromStorage();
+}
 
 function createDefaultForm(date = ""): WorkForm {
   return {
@@ -157,16 +213,20 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<WorkForm>(createDefaultForm());
   const [savingBusy, setSavingBusy] = useState(false);
-  const [viewMode, setViewMode] = useState<
-    | "all"
-    | "item_added"
-    | "item_removed"
-    | "service_installation"
-    | "service_maintenance"
-    | "service_on_site"
-    | "service_in_shop"
-    | "consultation"
-  >("all");
+  const [enabledEventFilters, setEnabledEventFilters] = useState<Set<EventCode>>(createAllCalendarFiltersEnabled);
+  const calendarFiltersHydrated = useRef(false);
+
+  useEffect(() => {
+    setEnabledEventFilters(loadCalendarEventFiltersFromStorage());
+  }, []);
+
+  useEffect(() => {
+    if (!calendarFiltersHydrated.current) {
+      calendarFiltersHydrated.current = true;
+      return;
+    }
+    saveCalendarEventFiltersToStorage(enabledEventFilters);
+  }, [enabledEventFilters]);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmCompleteItem, setConfirmCompleteItem] = useState<WorkItem | null>(null);
   const [displayMode, setDisplayMode] = useState<"calendar" | "agenda">("calendar");
@@ -213,7 +273,10 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
 
   /** Продажбите не се показват в оперативния календар — само панел „Продажби“. */
   const plannerItems = useMemo(
-    () => items.filter((item) => item.event_code !== "sale" && item.type !== "sale"),
+    () => items.filter((item) =>
+      item.event_code !== "sale" &&
+      (item.type !== "sale" || item.event_code === "supplier_order"),
+    ),
     [items],
   );
 
@@ -229,12 +292,17 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
     return map;
   }, [plannerItems]);
 
+  const enabledFiltersKey = useMemo(
+    () => ALL_CALENDAR_FILTER_IDS.filter((id) => enabledEventFilters.has(id)).join(","),
+    [enabledEventFilters],
+  );
+
   const agendaItems = useMemo(() => {
     return [...plannerItems]
       .filter(matchesViewMode)
       .sort((a, b) => String(a.due_date ?? "").localeCompare(String(b.due_date ?? "")));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plannerItems, viewMode]);
+  }, [plannerItems, enabledFiltersKey]);
 
   const agendaByDate = useMemo(() => {
     const map = new Map<string, WorkItem[]>();
@@ -262,9 +330,31 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
   }, [monthStart.getTime(), monthEnd.getTime()]);
 
   function matchesViewMode(item: WorkItem) {
-    if (viewMode === "all") return true;
-    return item.event_code === viewMode;
+    const code = item.event_code;
+    if (!code) return enabledEventFilters.size > 0;
+    const inFilterList = ALL_CALENDAR_FILTER_IDS.includes(code);
+    if (!inFilterList) {
+      return areAllCalendarFiltersEnabled(enabledEventFilters);
+    }
+    return enabledEventFilters.has(code);
   }
+
+  function toggleAllEventFilters() {
+    setEnabledEventFilters((prev) =>
+      areAllCalendarFiltersEnabled(prev) ? new Set() : createAllCalendarFiltersEnabled(),
+    );
+  }
+
+  function toggleEventFilter(code: EventCode) {
+    setEnabledEventFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  }
+
+  const allEventFiltersOn = areAllCalendarFiltersEnabled(enabledEventFilters);
 
   const selectedItems = selectedDate ? (byDate.get(selectedDate) ?? []).filter(matchesViewMode) : [];
 
@@ -470,33 +560,36 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
         </div>
       </div>
 
-      {/* View mode filters */}
+      {/* Multi on/off филтри по тип събитие */}
       <div className="flex gap-1 mb-2 flex-wrap">
-        {(
-          [
-            { id: "all" as const, label: "Всички" },
-            { id: "item_added" as const, label: "Добавяне на продукт" },
-            { id: "item_removed" as const, label: "Премахване на продукт" },
-            { id: "service_installation" as const, label: "Монтаж" },
-            { id: "service_maintenance" as const, label: "Профилактика" },
-            { id: "service_on_site" as const, label: "Сервиз на терен" },
-            { id: "service_in_shop" as const, label: "Сервиз в склад" },
-            { id: "consultation" as const, label: "Консултация" },
-          ] as const
-        ).map((m) => (
-          <button
-            key={m.id}
-            type="button"
-            onClick={() => setViewMode(m.id)}
-            className={`rounded-full px-2 py-0.5 text-[10px] font-bold border transition-colors ${
-              viewMode === m.id
-                ? "border-brand-blue-500 bg-brand-blue-50 text-brand-blue-700"
-                : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-            }`}
-          >
-            {m.label}
-          </button>
-        ))}
+        <button
+          type="button"
+          onClick={toggleAllEventFilters}
+          className={`rounded-full px-2 py-0.5 text-[10px] font-bold border transition-colors ${
+            allEventFiltersOn
+              ? "border-brand-blue-500 bg-brand-blue-50 text-brand-blue-700"
+              : "border-slate-300 bg-white text-slate-500 hover:bg-slate-50"
+          }`}
+        >
+          Всички
+        </button>
+        {CALENDAR_EVENT_FILTERS.map((m) => {
+          const on = enabledEventFilters.has(m.id);
+          return (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => toggleEventFilter(m.id)}
+              className={`rounded-full px-2 py-0.5 text-[10px] font-bold border transition-colors ${
+                on
+                  ? "border-brand-blue-500 bg-brand-blue-50 text-brand-blue-700"
+                  : "border-slate-300 bg-white text-slate-500 hover:bg-slate-50 opacity-60"
+              }`}
+            >
+              {m.label}
+            </button>
+          );
+        })}
       </div>
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-2 mb-2 text-xs font-medium">{error}</div>}
@@ -996,6 +1089,8 @@ function eventCodeLabel(item: WorkItem): string {
       return "Сервиз в склад";
     case "consultation":
       return "Консултация";
+    case "supplier_order":
+      return "Поръчка от доставчик";
     default:
       return `${TYPE_LABEL[item.type]}: ${item.title}`;
   }

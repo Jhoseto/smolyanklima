@@ -608,6 +608,8 @@ type Props = {
   onPendingPhotosChange?: (count: number) => void;
   /** Само преглед: всички полета извън секцията „Снимки“ са неактивни (сервиз). */
   readOnly?: boolean;
+  /** highlight delivery fields */
+  highlightDelivery?: boolean;
 };
 
 export function ProductFormFields({
@@ -624,6 +626,7 @@ export function ProductFormFields({
   autoPriceWithMountFromCatalog = false,
   onPendingPhotosChange,
   readOnly = false,
+  highlightDelivery = false,
 }: Props) {
   const ro = Boolean(readOnly);
   /** Локален overlay за марки, създадени по време на тази сесия чрез
@@ -1777,7 +1780,13 @@ export function ProductFormFields({
       </div>
 
       <CollapsibleSection title="Серийни номера и доставчик" badge="вътрешен запис, не се показва публично">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-3 gap-y-2.5 md:gap-x-4 md:gap-y-3">
+        {highlightDelivery && (
+            <div className="mb-3 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800">
+              <span className="mt-0.5 text-red-500">&#9888;</span>
+              <span>Попълнете <strong>серийните номера</strong>, <strong>дата на доставка</strong> и <strong>номер на фактура</strong> за да завършите записа.</span>
+            </div>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-3 gap-y-2.5 md:gap-x-4 md:gap-y-3">
           <label className="block">
             <div className="flex items-center justify-between gap-2 mb-1 leading-tight">
               <div>
@@ -1805,7 +1814,7 @@ export function ProductFormFields({
                 if (isAiField("indoorUnitSerial")) clearAiFlag("indoorUnitSerial");
               }}
               placeholder="напр. T000532"
-              className={`${indoorDup.length > 0 ? "border-amber-400 focus:ring-amber-400" : ""} ${isAiField("indoorUnitSerial") ? "border-emerald-300 bg-emerald-50/40" : ""}`}
+              className={`${indoorDup.length > 0 ? "border-amber-400 focus:ring-amber-400" : ""} ${isAiField("indoorUnitSerial") ? "border-emerald-300 bg-emerald-50/40" : ""} ${highlightDelivery && !form.indoorUnitSerial.trim() ? "border-red-400 ring-2 ring-red-300/50" : ""}`}
             />
             <SerialDuplicateNotice matches={indoorDup} label="вътрешно" />
           </label>
@@ -1836,7 +1845,7 @@ export function ProductFormFields({
                 if (isAiField("outdoorUnitSerial")) clearAiFlag("outdoorUnitSerial");
               }}
               placeholder="напр. T001024"
-              className={`${outdoorDup.length > 0 ? "border-amber-400 focus:ring-amber-400" : ""} ${isAiField("outdoorUnitSerial") ? "border-emerald-300 bg-emerald-50/40" : ""}`}
+              className={`${outdoorDup.length > 0 ? "border-amber-400 focus:ring-amber-400" : ""} ${isAiField("outdoorUnitSerial") ? "border-emerald-300 bg-emerald-50/40" : ""} ${highlightDelivery && !form.outdoorUnitSerial.trim() ? "border-red-400 ring-2 ring-red-300/50" : ""}`}
             />
             <SerialDuplicateNotice matches={outdoorDup} label="външно" />
           </label>
@@ -1869,11 +1878,11 @@ export function ProductFormFields({
           </label>
           <label className="block">
             <FieldTitle label="Закупено на" info="Дата на покупка (YYYY-MM-DD)." />
-            <Input type="date" value={form.purchasedAt} onChange={(e) => setForm({ ...form, purchasedAt: e.target.value })} />
+            <Input type="date" value={form.purchasedAt} onChange={(e) => setForm({ ...form, purchasedAt: e.target.value })} className={highlightDelivery && !form.purchasedAt.trim() ? "border-red-400 ring-2 ring-red-300/50" : ""} />
           </label>
           <label className="block">
             <FieldTitle label="Фактура № (доставчик)" info="Номер на фактура от доставчика." />
-            <Input value={form.supplierInvoiceNumber} onChange={(e) => setForm({ ...form, supplierInvoiceNumber: e.target.value })} placeholder="напр. 0000123456" />
+            <Input value={form.supplierInvoiceNumber} onChange={(e) => setForm({ ...form, supplierInvoiceNumber: e.target.value })} placeholder="напр. 0000123456" className={highlightDelivery && !form.supplierInvoiceNumber.trim() ? "border-red-400 ring-2 ring-red-300/50" : ""} />
           </label>
           <label className="block">
             <FieldTitle label="Закупна цена (EUR)" info="Цена от доставчика (не продажната). Само главен админ." />

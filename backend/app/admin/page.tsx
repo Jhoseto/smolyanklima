@@ -4,6 +4,7 @@ import { SectionTitle, Card } from "./ui";
 import { DashboardPanel } from "./DashboardPanel";
 import { CallFollowUpsPanel } from "./CallFollowUpsPanel";
 import { WorkItemsPlanner } from "./WorkItemsPlanner";
+import { SupplierOrdersPanel } from "./SupplierOrdersPanel";
 import { fetchCallFollowUpPanelItems } from "@/lib/admin/call-follow-up-items";
 import { inquiryServiceTypeLabel } from "@/lib/inquiry/serviceTypeLabels";
 
@@ -27,6 +28,8 @@ export default async function AdminDashboardPage() {
     overdueItems,
     failedEmails,
     callPanelItems,
+    supplierOrdersResult,
+    supplierOrderCount,
   ] = await Promise.all([
     supabase.from("products").select("id", { count: "exact", head: true }),
     supabase.from("inquiries").select("id", { count: "exact", head: true }).eq("status", "new"),
@@ -36,12 +39,14 @@ export default async function AdminDashboardPage() {
       .from("work_items")
       .select("id", { count: "exact", head: true })
       .eq("due_date", today)
-      .in("status", ["planned", "in_progress"]),
+      .in("status", ["planned", "in_progress"])
+      .neq("event_code", "supplier_order"),
     supabase
       .from("work_items")
       .select("id", { count: "exact", head: true })
       .lt("due_date", today)
-      .in("status", ["planned", "in_progress"]),
+      .in("status", ["planned", "in_progress"])
+      .neq("event_code", "supplier_order"),
     supabase
       .from("inquiries")
       .select("id,customer_name,customer_phone,service_type,created_at")
@@ -53,6 +58,7 @@ export default async function AdminDashboardPage() {
       .select("id,title,status,priority,event_code,customer_name,customer_phone,due_date")
       .eq("due_date", today)
       .in("status", ["planned", "in_progress"])
+      .neq("event_code", "supplier_order")
       .order("priority", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(6),
@@ -61,6 +67,7 @@ export default async function AdminDashboardPage() {
       .select("id,title,status,priority,event_code,customer_name,customer_phone,due_date")
       .lt("due_date", today)
       .in("status", ["planned", "in_progress"])
+      .neq("event_code", "supplier_order")
       .order("due_date", { ascending: true })
       .limit(6),
     supabase
@@ -70,6 +77,24 @@ export default async function AdminDashboardPage() {
       .order("created_at", { ascending: false })
       .limit(4),
     fetchCallFollowUpPanelItems(supabase, today),
+    supabase
+      .from("work_items")
+      .select(
+        `id, title, status, due_date, customer_name, customer_phone, customer_address,
+         unit_price, notes, created_at, product_id, contact_id,
+         products:product_id (id, name, model_code, brand_id, brands:brand_id (name)),
+         contacts:contact_id (id, full_name, phone)`,
+      )
+      .eq("event_code", "supplier_order")
+      .not("status", "in", '("done","cancelled")')
+      .order("due_date", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(50),
+    supabase
+      .from("work_items")
+      .select("id", { count: "exact", head: true })
+      .eq("event_code", "supplier_order")
+      .not("status", "in", '("done","cancelled")'),
   ]);
 
   const nProducts = products.count ?? 0;
@@ -78,6 +103,9 @@ export default async function AdminDashboardPage() {
   const nFailedEmails = outboxFailed.count ?? 0;
   const nWorkToday = workToday.count ?? 0;
   const nWorkOverdue = workOverdue.count ?? 0;
+  const nSupplierOrders = supplierOrderCount.count ?? 0;
+  // Panel зарежда пълните данни от GET /api/admin/supplier-orders при mount
+  const supplierOrderRows: Parameters<typeof SupplierOrdersPanel>[0]["initialRows"] = [];
 
   return (
     <div className="w-full space-y-3">
@@ -102,26 +130,28 @@ export default async function AdminDashboardPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: "Продукти", value: String(nProducts) },
-          { label: "Нови запитвания", value: String(nInquiries) },
-          { label: "Днес / просрочени", value: `${nWorkToday} / ${nWorkOverdue}` },
+          { label: "Продукти", value: String(nProducts), accent: "" },
+          { label: "Нови запитвания", value: String(nInquiries), accent: nInquiries > 0 ? "border-t-2 border-t-brand-blue-400" : "" },
+          { label: "Днес / просрочени", value: `${nWorkToday} / ${nWorkOverdue}`, accent: nWorkOverdue > 0 ? "border-t-2 border-t-red-400" : "" },
+          { label: "По поръчка", value: String(nSupplierOrders), accent: nSupplierOrders > 0 ? "border-t-2 border-t-violet-400" : "" },
         ].map((card) => (
-          <Card key={card.label} className="p-4 shadow-sm ring-1 ring-slate-200/70 bg-white">
+          <Card key={card.label} className={`p-4 shadow-sm ring-1 ring-slate-200/70 bg-white ${card.accent}`}>
             <div className="text-[10px] md:text-xs font-semibold text-slate-500 uppercase tracking-wider leading-tight">{card.label}</div>
             <div className="text-2xl md:text-3xl font-bold text-slate-900 mt-1 md:mt-2 tabular-nums">{card.value}</div>
           </Card>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 items-stretch">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 items-stretch">
         <DashboardPanel
           title="Днес"
           description="Задачи и събития, които трябва да се обработят днес."
           href="/admin/history"
           empty="Няма задачи за днес."
           badge={nWorkToday}
+          tone={nWorkToday > 0 ? "today" : "neutral"}
           readOnly={readOnlyDashboard}
           items={(todaysItems.data ?? []).map((item) => ({
             title: item.title,
@@ -188,6 +218,11 @@ export default async function AdminDashboardPage() {
             },
           }))}
         />
+        <SupplierOrdersPanel
+          initialRows={supplierOrderRows}
+          readOnly={readOnlyDashboard}
+          frontendOrigin={(process.env.FRONTEND_ORIGIN ?? "http://localhost:3000").replace(/\/$/, "")}
+        />
       </div>
 
       <CallFollowUpsPanel initialItems={callPanelItems} readOnly={readOnlyDashboard} />
@@ -248,6 +283,7 @@ function eventLabel(value: string | null | undefined) {
   if (value === "service_on_site") return "Сервиз на терен";
   if (value === "service_in_shop") return "Сервиз в склад";
   if (value === "consultation") return "Консултация";
+  if (value === "supplier_order") return "Поръчка от доставчик";
   return "Задача";
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   ProductFormFields,
   emptyProductForm,
@@ -19,6 +19,8 @@ type SupplierRow = { id: string; full_name: string };
 export default function EditProductPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const highlightDelivery = searchParams.get("highlight") === "delivery";
   const id = params.id;
 
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -94,7 +96,7 @@ export default function EditProductPage() {
         setToast({ kind: "err", text: msg });
         return json;
       }
-      setToast({ kind: "ok", text: "Запазено" });
+      router.push("/admin/products");
       return json;
     } finally {
       setSaving(false);
@@ -170,6 +172,22 @@ export default function EditProductPage() {
         </div>
       )}
 
+      {highlightDelivery && (
+        <div className="flex items-start gap-3 rounded-xl border-2 border-red-300 bg-red-50 p-4 shadow-sm">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-500 text-white">
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+            </svg>
+          </div>
+          <div>
+            <div className="text-sm font-bold text-red-900">Попълнете данните за доставената единица</div>
+            <div className="mt-1 text-xs text-red-700">
+              Намерете секцията <strong>„Серийни номера и доставчик"</strong> по-долу и попълнете серийните номера (вътрешно / външно тяло), дата на доставка и номер на фактура. След запис продуктът ще е готов за продажба.
+            </div>
+          </div>
+        </div>
+      )}
+
       <Card className="p-2 sm:p-3 md:p-6 shadow-sm border-slate-200/90 max-md:rounded-lg">
         <ProductFormFields
           brands={brands}
@@ -183,6 +201,7 @@ export default function EditProductPage() {
           currentProductId={id}
           onPendingPhotosChange={setPendingPhotos}
           readOnly={readOnly}
+          highlightDelivery={highlightDelivery}
         />
       </Card>
 

@@ -14,6 +14,7 @@ const WORK_ITEM_EVENT_CODES = [
   "service_on_site",
   "service_in_shop",
   "consultation",
+  "supplier_order",
 ] as const;
 
 const UpdateSchema = z.object({
