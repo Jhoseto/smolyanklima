@@ -20,7 +20,8 @@ import { ContactInfoSection } from './components/sections/ContactInfoSection';
 import { FAQSection } from './components/sections/FAQSection';
 import { BrandsSection } from './components/sections/BrandsSection';
 import { Footer } from './components/layout/Footer';
-import { GradientMeshMorphing, BokehOrbs } from './components/effects';
+import { BokehOrbs } from './components/effects';
+import { HeroBackground } from './components/sections/HeroBackground';
 import { AIChatWidget } from './components/ai-assistant';
 import { LiveChatWidget } from './components/live-chat/LiveChatWidget';
 
@@ -39,9 +40,7 @@ const HomePage = ({ onOpenAssistantChat }: { onOpenAssistantChat?: () => void })
     <main>
       {/* Hero с Gradient Mesh — ефектът само на десктоп */}
       <section className="relative min-h-screen overflow-hidden">
-        <div className="hidden md:block">
-          <GradientMeshMorphing intensity="normal" />
-        </div>
+        <HeroBackground />
         <div className="relative z-10">
           <HeroSection onFreeConsultationClick={onOpenAssistantChat} />
         </div>

@@ -23,19 +23,11 @@ export const HeroSection = ({ onFreeConsultationClick }: HeroSectionProps) => {
 
   return (
     <section id="home" className="relative pt-32 pb-12 lg:pt-40 lg:pb-16 overflow-hidden">
-      {/* Background Soft Glow — само на десктоп */}
-      <div className="hidden md:block absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-red-50/80 rounded-full blur-[100px] pointer-events-none z-0" />
-
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <div className="grid lg:grid-cols-2 gap-16 lg:gap-12 items-center mb-16 lg:mb-24">
 
           {/* Left Content */}
-          <motion.div
-            initial={{ opacity: 0, x: -30 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.6 }}
-            className="w-full min-w-0 lg:max-w-[650px]"
-          >
+          <div className="w-full min-w-0 lg:max-w-[650px]">
             {/* PWA — Android: инсталация; iPhone: същият банер → модал със стъпки „Добавяне към началния екран“ */}
             <AnimatePresence>
               {showHeroBanner && (
@@ -97,8 +89,7 @@ export const HeroSection = ({ onFreeConsultationClick }: HeroSectionProps) => {
                 Климатици за
               </span> <br />
               <span className="relative inline-block my-1">
-                <span className="absolute -inset-1 blur-lg bg-gradient-to-r from-[#FF4D00]/30 to-[#FF2A4D]/30 opacity-70"></span>
-                <span className="relative text-transparent bg-clip-text bg-gradient-to-r from-[#FF4D00] via-[#FF6A00] to-[#FF2A4D] drop-shadow-sm">
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#FF4D00] via-[#FF6A00] to-[#FF2A4D]">
                   Смолян и региона
                 </span>
               </span> <br />
@@ -150,23 +141,22 @@ export const HeroSection = ({ onFreeConsultationClick }: HeroSectionProps) => {
               )}
             </div>
 
-          </motion.div>
+          </div>
 
           {/* Right Image Content */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-            className="relative w-full min-w-0 max-w-[600px] mx-auto lg:mx-0 lg:ml-auto"
-          >
-            <div className="relative rounded-[2.5rem] overflow-hidden shadow-2xl">
+          <div className="relative w-full min-w-0 max-w-[600px] mx-auto lg:mx-0 lg:ml-auto">
+            <div className="relative rounded-[2.5rem] overflow-hidden shadow-xl">
               <img
                 src="/images/hero-ac.jpg"
                 alt="Климатик в модерен интериор"
+                width={800}
+                height={550}
+                decoding="async"
+                fetchPriority="high"
                 className="w-full h-[300px] sm:h-[420px] lg:h-[550px] object-cover"
               />
 
-              <div className="absolute bottom-0 left-0 right-0 bg-black/40 backdrop-blur-md px-8 py-6 rounded-b-[2.5rem] border-t border-white/10">
+              <div className="absolute bottom-0 left-0 right-0 bg-[#1a1a1a]/75 px-8 py-6 rounded-b-[2.5rem] border-t border-white/10">
                 <div className="grid grid-cols-3 divide-x divide-white/20">
                   <div className="text-center">
                     <div className="text-white text-2xl font-black mb-1">3000+</div>
@@ -184,33 +174,21 @@ export const HeroSection = ({ onFreeConsultationClick }: HeroSectionProps) => {
               </div>
             </div>
 
-            <motion.div
-              animate={{ y: [-5, 5, -5] }}
-              transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
-              className="hidden lg:flex absolute top-8 -left-8 bg-white/95 backdrop-blur-sm shadow-xl rounded-full px-5 py-3 border border-gray-100 items-center gap-2"
-            >
+            <div className="hidden lg:flex absolute top-8 -left-8 bg-white shadow-lg rounded-full px-5 py-3 border border-gray-100 items-center gap-2">
               <Zap className="w-5 h-5 text-[#FF5722] fill-[#FF5722]/20" />
               <span className="text-sm font-bold text-gray-800">Монтаж до 48ч</span>
-            </motion.div>
+            </div>
 
-            <motion.div
-              animate={{ y: [5, -5, 5] }}
-              transition={{ repeat: Infinity, duration: 5, ease: "easeInOut" }}
-              className="hidden lg:flex absolute top-1/2 -right-8 -translate-y-1/2 bg-white/95 backdrop-blur-sm shadow-xl rounded-full px-5 py-3 border border-gray-100 items-center gap-2"
-            >
+            <div className="hidden lg:flex absolute top-1/2 -right-8 -translate-y-1/2 bg-white shadow-lg rounded-full px-5 py-3 border border-gray-100 items-center gap-2">
               <ShieldCheck className="w-5 h-5 text-[#00B4D8]" />
               <span className="text-sm font-bold text-gray-800">2г. гаранция</span>
-            </motion.div>
+            </div>
 
-            <motion.div
-              animate={{ y: [-5, 5, -5] }}
-              transition={{ repeat: Infinity, duration: 4.5, ease: "easeInOut", delay: 1 }}
-              className="hidden lg:flex absolute bottom-28 -left-6 bg-white/95 backdrop-blur-sm shadow-xl rounded-full px-5 py-3 border border-gray-100 items-center gap-2"
-            >
+            <div className="hidden lg:flex absolute bottom-28 -left-6 bg-white shadow-lg rounded-full px-5 py-3 border border-gray-100 items-center gap-2">
               <BadgeCheck className="w-5 h-5 text-[#00A8E8]" />
               <span className="text-sm font-bold text-gray-800">Сертифициран сервиз</span>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
 
         </div>
       </div>
