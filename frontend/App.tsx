@@ -39,9 +39,9 @@ const HomePage = ({ onOpenAssistantChat }: { onOpenAssistantChat?: () => void })
   <div className="min-h-screen bg-[#FAFAFA] font-sans selection:bg-[#FF4D00]/20 selection:text-[#FF4D00]">
     <main>
       {/* Hero с Gradient Mesh — ефектът само на десктоп */}
-      <section className="relative min-h-screen overflow-hidden">
+      <section className="relative min-h-[100dvh] overflow-hidden">
         <HeroBackground />
-        <div className="relative z-10">
+        <div className="relative z-10 flex min-h-[100dvh] flex-col">
           <HeroSection onFreeConsultationClick={onOpenAssistantChat} />
         </div>
       </section>

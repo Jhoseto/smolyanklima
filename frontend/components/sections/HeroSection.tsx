@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { Phone, ArrowRight, Zap, ShieldCheck, BadgeCheck, Smartphone, Download, X } from 'lucide-react';
 import { BrandsSection } from './BrandsSection';
 import { usePWAInstall } from '../../lib/usePWAInstall';
+import { HeroImageRotator } from './HeroImageRotator';
 import { PWAInstallGuideModal } from '../pwa/PWAInstallGuideModal';
 
 export interface HeroSectionProps {
@@ -22,9 +23,12 @@ export const HeroSection = ({ onFreeConsultationClick }: HeroSectionProps) => {
   } = usePWAInstall();
 
   return (
-    <section id="home" className="relative pt-32 pb-12 lg:pt-40 lg:pb-16 overflow-hidden">
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        <div className="grid lg:grid-cols-2 gap-16 lg:gap-12 items-center mb-16 lg:mb-24">
+    <section
+      id="home"
+      className="relative flex min-h-[100dvh] flex-col pt-[calc(var(--navbar-height)+1.25rem)] overflow-hidden"
+    >
+      <div className="flex flex-1 items-center w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+        <div className="grid lg:grid-cols-2 gap-8 lg:gap-10 items-center w-full">
 
           {/* Left Content */}
           <div className="w-full min-w-0 lg:max-w-[650px]">
@@ -78,14 +82,14 @@ export const HeroSection = ({ onFreeConsultationClick }: HeroSectionProps) => {
             </AnimatePresence>
 
             {/* Top Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#FFF5ED] border border-[#FFDCC2] rounded-full mb-8">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#FFF5ED] border border-[#FFDCC2] rounded-full mb-5">
               <div className="w-2 h-2 rounded-full bg-[#FF5722]" />
               <span className="text-[#FF5722] text-sm font-semibold tracking-wide">№1 Доказан лидер на местния пазар</span>
             </div>
 
             {/* Headline */}
-            <h1 className="text-[2.5rem] sm:text-[3rem] lg:text-[3.75rem] font-extrabold leading-[1.05] tracking-tight mb-8">
-              <span className="text-transparent bg-clip-text bg-gradient-to-br from-gray-900 via-gray-800 to-gray-600 drop-shadow-sm">
+            <h1 className="text-[2.5rem] sm:text-[3rem] lg:text-[3.75rem] font-extrabold leading-[1.05] tracking-tight mb-5">
+              <span className="font-light text-transparent bg-clip-text bg-gradient-to-br from-gray-900 via-gray-800 to-gray-600 drop-shadow-sm">
                 Климатици за
               </span> <br />
               <span className="relative inline-block my-1">
@@ -94,7 +98,7 @@ export const HeroSection = ({ onFreeConsultationClick }: HeroSectionProps) => {
                 </span>
               </span> <br />
               <div className="mt-2">
-                <span className="text-transparent bg-clip-text bg-gradient-to-br from-gray-900 via-gray-800 to-gray-600 drop-shadow-sm mr-3">
+                <span className="font-light text-transparent bg-clip-text bg-gradient-to-br from-gray-900 via-gray-800 to-gray-600 drop-shadow-sm mr-3">
                   с монтаж
                 </span>
                 <span className="relative inline-block">
@@ -107,12 +111,12 @@ export const HeroSection = ({ onFreeConsultationClick }: HeroSectionProps) => {
             </h1>
 
             {/* Description */}
-            <p className="text-[1.1rem] text-[#374151] mb-10 leading-relaxed font-medium">
+            <p className="text-[1.1rem] text-[#374151] mb-6 leading-relaxed font-medium">
               Продажба, монтаж и сервиз на климатици от водещи марки. Над 25 години опит, стотици доволни клиенти от цялата страна.
             </p>
 
             {/* Buttons */}
-            <div className="flex flex-wrap items-center gap-4 mb-12">
+            <div className="flex flex-wrap items-center gap-4 mb-4">
               <Link 
                 to="/catalog"
                 className="h-14 px-8 rounded-full bg-gradient-to-r from-[#FF5722] to-[#FF2A4D] text-white font-bold text-lg flex items-center gap-2 hover:shadow-lg hover:shadow-red-500/30 hover:scale-[1.02] transition-all"
@@ -143,20 +147,24 @@ export const HeroSection = ({ onFreeConsultationClick }: HeroSectionProps) => {
 
           </div>
 
-          {/* Right Image Content */}
-          <div className="relative w-full min-w-0 max-w-[600px] mx-auto lg:mx-0 lg:ml-auto">
-            <div className="relative rounded-[2.5rem] overflow-hidden shadow-xl">
-              <img
-                src="/images/hero-ac.jpg"
-                alt="Климатик в модерен интериор"
-                width={800}
-                height={550}
-                decoding="async"
-                fetchPriority="high"
-                className="w-full h-[300px] sm:h-[420px] lg:h-[550px] object-cover"
-              />
+          {/* Right Image Content — по-голям панел, прозрачни ръбове към фона */}
+          <div className="relative w-full min-w-0 max-w-[720px] mx-auto lg:mx-0 lg:ml-auto xl:max-w-[780px]">
+            <div className="relative overflow-hidden rounded-[2.5rem]">
+              <div
+                className="relative"
+                style={{
+                  WebkitMaskImage:
+                    'linear-gradient(to bottom, transparent 0%, #000 24%), linear-gradient(to right, transparent 0%, #000 34%), linear-gradient(to left, transparent 0%, #000 34%)',
+                  maskImage:
+                    'linear-gradient(to bottom, transparent 0%, #000 24%), linear-gradient(to right, transparent 0%, #000 34%), linear-gradient(to left, transparent 0%, #000 34%)',
+                  WebkitMaskComposite: 'source-in',
+                  maskComposite: 'intersect',
+                }}
+              >
+                <HeroImageRotator className="h-[340px] sm:h-[440px] lg:h-[clamp(480px,calc(100dvh-var(--navbar-height)-180px),620px)]" />
+              </div>
 
-              <div className="absolute bottom-0 left-0 right-0 bg-[#1a1a1a]/75 px-8 py-6 rounded-b-[2.5rem] border-t border-white/10">
+              <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-20 bg-[#1a1a1a]/75 px-8 py-6 border-t border-white/10">
                 <div className="grid grid-cols-3 divide-x divide-white/20">
                   <div className="text-center">
                     <div className="text-white text-2xl font-black mb-1">3000+</div>
@@ -181,7 +189,7 @@ export const HeroSection = ({ onFreeConsultationClick }: HeroSectionProps) => {
 
             <div className="hidden lg:flex absolute top-1/2 -right-8 -translate-y-1/2 bg-white shadow-lg rounded-full px-5 py-3 border border-gray-100 items-center gap-2">
               <ShieldCheck className="w-5 h-5 text-[#00B4D8]" />
-              <span className="text-sm font-bold text-gray-800">2г. гаранция</span>
+              <span className="text-sm font-bold text-gray-800">3г. гаранция</span>
             </div>
 
             <div className="hidden lg:flex absolute bottom-28 -left-6 bg-white shadow-lg rounded-full px-5 py-3 border border-gray-100 items-center gap-2">
@@ -193,8 +201,8 @@ export const HeroSection = ({ onFreeConsultationClick }: HeroSectionProps) => {
         </div>
       </div>
 
-      {/* Brands Carousel - извън контейнера за пълна ширина и прозрачен фон */}
-      <div className="mt-0 lg:mt-[-20px] relative z-20 w-full bg-transparent">
+      {/* Brands Carousel — долу в hero, до края на екрана */}
+      <div className="relative z-20 w-full shrink-0 pb-3 sm:pb-4 bg-transparent">
         <BrandsSection />
       </div>
 

@@ -82,3 +82,31 @@
   );
   mask-image: radial-gradient(ellipse 78% 78% at 50% 50%, #000 38%, transparent 100%);
 }
+
+/* Hero image crossfade — GPU opacity/scale only, no JS animation library */
+.hero-slide-layer {
+  --hero-fade-duration: 5.5s;
+  will-change: opacity, transform;
+  opacity: 0;
+  transform: scale(1.018);
+  transition:
+    opacity var(--hero-fade-duration) cubic-bezier(0.33, 0, 0.15, 1),
+    transform var(--hero-fade-duration) cubic-bezier(0.33, 0, 0.15, 1);
+}
+
+.hero-slide-layer.is-active {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.hero-slide-layer.is-idle {
+  opacity: 0;
+  transform: scale(1.012);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-slide-layer {
+    transition: none;
+    transform: none;
+  }
+}
