@@ -4,11 +4,14 @@
  */
 
 import type { Conversation, UserContext, Product, EmotionType } from '../types';
+import { buildCatalogContext } from '../data/catalogContextBuilder';
 
 interface PromptContext {
   conversation: Conversation;
   userContext: UserContext;
   relevantProducts?: Product[];
+  userQuery?: string;
+  catalogLoadedAt?: number;
   userIntent?: string;
   emotion?: EmotionType;
 }
@@ -33,7 +36,7 @@ class PromptBuilder {
       this.baseIdentity,
       this.salesPsychology,
       this.buildDynamicContext(context),
-      this.buildProductContext(context.relevantProducts),
+      this.buildProductContext(context),
       this.buildEmotionalContext(context.emotion),
       this.guardrails,
     ];
@@ -173,54 +176,24 @@ class PromptBuilder {
   }
 
   /**
-   * Layer 4: Product Context
+   * Layer 4: Product Context — live public catalog
    */
-  private buildProductContext(products?: Product[]): string {
+  private buildProductContext(context: PromptContext): string {
+    const products = context.relevantProducts;
     if (!products || products.length === 0) {
       return '';
     }
 
-    const parts: string[] = [
-      'НАЛИЧНИ ПРОДУКТИ (ползвай само тези данни):',
-    ];
+    const history = context.conversation.messages
+      .filter((m) => m.role === 'user')
+      .slice(-4)
+      .map((m) => m.content);
 
-    // Production каталогът е много по-голям от локалния — пълният списък надхвърля лимита на API (~24k).
-    const MAX_PRODUCT_SECTION_CHARS = 14_000;
-    let usedChars = parts.join('\n').length;
-    let included = 0;
-    const sorted = [...products].sort((a, b) => {
-      if (a.inStock !== b.inStock) return a.inStock ? -1 : 1;
-      return a.price - b.price;
+    return buildCatalogContext(products, {
+      userQuery: context.userQuery,
+      history,
+      loadedAt: context.catalogLoadedAt,
     });
-
-    for (const product of sorted) {
-      const block = `
-${included + 1}. ${product.name} (${product.brand})
-   - Цена: ${product.price} €${product.oldPrice ? ` (стара: ${product.oldPrice} €)` : ''}
-   - Мощност: ${product.specs.power}
-   - Квадратура: ${product.specs.coverage} кв.м.
-   - Шум: ${product.specs.noiseLevel} dB
-   - Енергиен клас: ${product.energyClass}
-   - За наличност и срок: насочи клиента към запитване (не обещавай складов статус)
-   - Гаранция: ${product.warranty.years} години
-   - Особености: ${product.features.join(', ')}
-      `.trim();
-      if (usedChars + block.length + 2 > MAX_PRODUCT_SECTION_CHARS) break;
-      parts.push(block);
-      usedChars += block.length + 1;
-      included += 1;
-    }
-
-    if (included < products.length) {
-      parts.push(
-        `\n(Показани ${included} от ${products.length} модела. При нужда от друг модел — попитай за мощност/бюджет или предложи контакт с консултант.)`,
-      );
-    }
-
-    parts.push('\nВАЖНО: Използвай САМО тези продукти и цени. НЕ измисляй други.');
-    parts.push('\nКогато препоръчваш продукти, винаги споменавай ПЪЛНОТО ИМЕ на продукта (напр. "Daikin Perfera FTXF35D") за да могат да се покажат клиенту.');
-
-    return parts.join('\n');
   }
 
   /**
@@ -272,10 +245,9 @@ ${included + 1}. ${product.name} (${product.brand})
    ✗ НЕ питай "за кой магазин" - има само един
 
 2. ЦЕНИ И ФАКТИ:
-   ✓ Цитирай цени САМО от предоставените продукти
-   ✓ Гаранции: Daikin = 36 месеца, Mitsubishi Electric = 36 месеца, Mitsubishi Heavy = 36 месеца, други = 24 месеца
-   ✓ Монтаж: ~205-308 € в зависимост от трудността
-   ✓ Доставка: безплатна над 513 €
+   ✓ Цитирай цени и характеристики САМО от блока „ПУБЛИЧЕН КАТАЛОГ“
+   ✓ Препоръчвай само модели, които реално присъстват в каталога
+   ✓ При сравнение ползвай SEER, SCOP, dB, kW, m², WiFi, хладagent от данните
 
 3. ЗАБРАНЕНИ ТЕМИ:
    ✗ Политика, религия, философски дискусии

@@ -125,12 +125,14 @@ type ApiProduct = {
   name: string;
   description?: string | null;
   price: number;
+  price_with_mount?: number | null;
   product_condition?: "new" | "used" | null;
   rating?: number | null;
   reviews_count?: number | null;
   brands?: { name: string } | null;
   product_types?: { name: string } | null;
   product_specs?: Array<{
+    btu?: number | null;
     coverage_m2?: number | null;
     noise_db?: number | null;
     cooling_power_kw?: number | null;
@@ -251,7 +253,10 @@ function mapApiToCatalogProduct(raw: ApiProduct): CatalogProduct {
     scop: numOrUndef(specs0?.scop),
 
     price: Number(raw.price),
-    priceWithMount: resolveInstallPrice({ type, price: Number(raw.price) }),
+    priceWithMount:
+      raw.price_with_mount != null && Number.isFinite(Number(raw.price_with_mount))
+        ? Number(raw.price_with_mount)
+        : resolveInstallPrice({ type, price: Number(raw.price) }),
 
     rating,
     reviews,

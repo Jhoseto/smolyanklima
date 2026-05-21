@@ -83,6 +83,20 @@
   mask-image: radial-gradient(ellipse 78% 78% at 50% 50%, #000 38%, transparent 100%);
 }
 
+/* About page — fade като home hero, слива се с hero-back фона */
+.about-founder-image-mask {
+  -webkit-mask-image:
+    linear-gradient(to bottom, transparent 0%, #000 18%),
+    linear-gradient(to right, transparent 0%, #000 22%),
+    linear-gradient(to left, transparent 0%, #000 22%);
+  mask-image:
+    linear-gradient(to bottom, transparent 0%, #000 18%),
+    linear-gradient(to right, transparent 0%, #000 22%),
+    linear-gradient(to left, transparent 0%, #000 22%);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+
 /* Hero image crossfade — GPU opacity/scale only, no JS animation library */
 .hero-slide-layer {
   --hero-fade-duration: 5.5s;

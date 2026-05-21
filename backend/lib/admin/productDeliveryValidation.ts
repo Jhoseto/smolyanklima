@@ -14,7 +14,9 @@ export type SerialConflict = {
   field: "indoor" | "outdoor" | "both";
 };
 
-export function trimDeliveryFields(raw: Partial<DeliveryFields>): DeliveryFields {
+export function trimDeliveryFields(
+  raw: Partial<{ [K in keyof DeliveryFields]: string | null | undefined }>,
+): DeliveryFields {
   return {
     indoorUnitSerial: String(raw.indoorUnitSerial ?? "").trim(),
     outdoorUnitSerial: String(raw.outdoorUnitSerial ?? "").trim(),

@@ -47,6 +47,7 @@ export const Footer = () => {
               {[
                 { name: 'Начало', href: '#home' },
                 { name: 'Каталог', href: '/catalog' },
+                { name: 'За нас', href: '/za-nas' },
                 { name: 'Услуги', href: '#services' },
                 { name: 'Проекти', href: '#projects' },
                 { name: 'FAQ', href: '#faq' },

@@ -32,6 +32,7 @@ const ContactPage = lazy(() => import('./pages/ContactPage'));
 const ServicesPage = lazy(() => import('./pages/ServicesPage'));
 const BlogHomePage = lazy(() => import('./pages/BlogHomePage'));
 const BlogArticlePage = lazy(() => import('./pages/BlogArticlePage'));
+const AboutPage = lazy(() => import('./pages/AboutPage'));
 const AccessoryDetailsPage = lazy(() => import('./pages/AccessoryDetailsPage'));
 
 // ── Главна страница ──────────────────────────────────
@@ -162,6 +163,7 @@ function App() {
           <Route path="/product/:id" element={<PageTransition><ProductDetailsPage /></PageTransition>} />
           <Route path="/contact" element={<PageTransition><ContactPage /></PageTransition>} />
           <Route path="/services" element={<PageTransition><ServicesPage /></PageTransition>} />
+          <Route path="/za-nas" element={<PageTransition><AboutPage /></PageTransition>} />
           <Route path="/blog" element={<PageTransition><BlogHomePage /></PageTransition>} />
           <Route path="/blog/kategoria/:slug" element={<PageTransition><BlogHomePage /></PageTransition>} />
           <Route path="/blog/tag/:slug" element={<PageTransition><BlogHomePage /></PageTransition>} />
