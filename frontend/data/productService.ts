@@ -440,20 +440,38 @@ export async function fetchCatalogBtuOptions(
   return (json.data ?? []) as Array<{ btu: number; productCount: number }>;
 }
 
-/** Брой продукти по категория (без други филтри), за чиповете. */
+/** Брой уникални модели по категория (един API вместо 6× /api/products). */
 export async function fetchCategoryProductCounts(cond?: "new" | "used"): Promise<Record<string, number>> {
-  const counts: Record<string, number> = { all: 0 };
-  const [allRes, ...perCat] = await Promise.all([
-    fetchProductsCatalogPage({ cond, page: 1, perPage: 1 }),
-    ...CATEGORIES.filter((c) => c.id !== "all").map((c) =>
-      fetchProductsCatalogPage({ cond, cat: c.id, page: 1, perPage: 1 }),
-    ),
-  ]);
-  counts.all = allRes.meta.total;
-  CATEGORIES.filter((c) => c.id !== "all").forEach((c, i) => {
-    counts[c.id] = perCat[i]?.meta.total ?? 0;
-  });
-  return counts;
+  const sp = cond ? `?cond=${cond}` : "";
+  const res = await fetch(`/api/catalog/category-counts${sp}`);
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Грешка при броене по категории");
+  return (json.data ?? { all: 0 }) as Record<string, number>;
+}
+
+export type CatalogMeta = {
+  priceBounds: { min: number; max: number };
+  categoryCounts: Record<string, number>;
+  brandOptions: Array<{ name: string; productCount: number }>;
+  btuOptions: Array<{ btu: number; productCount: number }>;
+};
+
+/** Sidebar meta: цени, категории, марки, BTU — един HTTP round-trip. */
+export async function fetchCatalogMeta(cond?: "new" | "used"): Promise<CatalogMeta> {
+  const sp = cond ? `?cond=${cond}` : "";
+  const res = await fetch(`/api/catalog/meta${sp}`);
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Грешка при зареждане на филтрите");
+  const data = json.data as CatalogMeta;
+  const min = Number(data.priceBounds?.min) || 0;
+  let max = Number(data.priceBounds?.max) || 0;
+  if (min === 0 && max === 0) max = 50_000;
+  return {
+    priceBounds: { min, max },
+    categoryCounts: data.categoryCounts ?? { all: 0 },
+    brandOptions: data.brandOptions ?? [],
+    btuOptions: data.btuOptions ?? [],
+  };
 }
 
 // ──────────────────────────────────────

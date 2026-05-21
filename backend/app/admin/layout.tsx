@@ -13,7 +13,7 @@ import { AdminLogo } from "./AdminLogo";
 import {
   LayoutDashboard, Package, Users, FileText, Star,
   Activity, Settings, LogOut,
-  ShieldCheck, FolderOpen, Receipt,
+  ShieldCheck, FolderOpen, Receipt, Truck,
   UserCircle,
 } from "lucide-react";
 
@@ -103,7 +103,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                 <InquiriesNavBadge />
                 <NavLink href="/admin/products" label="Продукти" icon={<Package className="w-4 h-4" />} />
                 {showSales && (
-                  <NavLink href="/admin/history" label="Продажби" icon={<Receipt className="w-4 h-4" />} />
+                  <>
+                    <NavLink href="/admin/history" label="Продажби" icon={<Receipt className="w-4 h-4" />} />
+                    <NavLink href="/admin/supplier-orders" label="Поръчки" icon={<Truck className="w-4 h-4" />} />
+                  </>
                 )}
                 <NavLink href="/admin/articles" label="Статии" icon={<FileText className="w-4 h-4" />} />
               </>

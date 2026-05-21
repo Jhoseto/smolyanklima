@@ -12,6 +12,13 @@ import { logAdminActivity } from "@/lib/admin/audit";
 import { insertProductCatalogStockCalendarEvent } from "@/lib/admin/productCatalogWorkItems";
 import { detachProductsBeforeDelete } from "@/lib/admin/detachProductReferences";
 import { formatSupabaseError, mapProductDbError } from "@/lib/admin/productDbErrors";
+import {
+  findSerialConflicts,
+  formatSerialConflictError,
+  isDeliveredProductInstance,
+  mergeDeliveryFields,
+  validateDeliveryFieldsComplete,
+} from "@/lib/admin/productDeliveryValidation";
 import { enforceStockStatusAfterSale } from "@/lib/admin/productSaleStock";
 import { replaceProductImages, upsertProductSpecs, type ImageInput, type SpecsInput } from "@/lib/admin/syncProductChildren";
 
@@ -47,9 +54,9 @@ const MAX_IMAGES = 4;
 // Включваме `model_code` (миграция 0038). Колоната е по избор —
 // при липсваща се прави fallback към варианти без нея.
 const ADMIN_PRODUCT_DETAIL_SELECT_WITH_LOCATION =
-  "id,slug,name,model_code,brand_id,type_id,product_condition,description,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,show_in_public_catalog,stock_status,stock_location,stock_quantity,sold_quantity,product_region";
+  "id,slug,name,model_code,brand_id,type_id,product_condition,description,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,show_in_public_catalog,stock_status,stock_location,stock_quantity,sold_quantity,product_region,supplier_order_work_item_id";
 const ADMIN_PRODUCT_DETAIL_SELECT_BASE =
-  "id,slug,name,model_code,brand_id,type_id,product_condition,description,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,show_in_public_catalog,stock_status,stock_quantity,sold_quantity,product_region";
+  "id,slug,name,model_code,brand_id,type_id,product_condition,description,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,show_in_public_catalog,stock_status,stock_quantity,sold_quantity,product_region,supplier_order_work_item_id";
 const ADMIN_PRODUCT_DETAIL_SELECT_NO_REGION =
   "id,slug,name,model_code,brand_id,type_id,product_condition,description,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,stock_status,stock_location,stock_quantity,sold_quantity";
 const ADMIN_PRODUCT_DETAIL_SELECT_NO_REGION_NO_LOC =
@@ -227,6 +234,80 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   }
   if (parsed.data.stockQuantity !== undefined) patch.stock_quantity = parsed.data.stockQuantity;
   if (parsed.data.soldQuantity !== undefined) patch.sold_quantity = parsed.data.soldQuantity;
+
+  const touchesDelivery =
+    parsed.data.indoorUnitSerial !== undefined ||
+    parsed.data.outdoorUnitSerial !== undefined ||
+    parsed.data.purchasedAt !== undefined ||
+    parsed.data.supplierInvoiceNumber !== undefined ||
+    parsed.data.stockStatus !== undefined ||
+    parsed.data.showInPublicCatalog !== undefined;
+
+  if (Object.keys(patch).length > 0 || touchesDelivery) {
+    const { data: currentRow, error: curErr } = await supabase
+      .from("products")
+      .select(
+        "id,brand_id,model_code,stock_status,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,purchased_at,supplier_order_work_item_id,show_in_public_catalog",
+      )
+      .eq("id", id)
+      .maybeSingle();
+    if (curErr) return withCors(req, NextResponse.json({ error: curErr.message }, { status: 500 }));
+    if (!currentRow) return withCors(req, NextResponse.json({ error: "Not found" }, { status: 404 }));
+
+    const current = currentRow as {
+      brand_id: string | null;
+      model_code: string | null;
+      stock_status: string | null;
+      indoor_unit_serial: string | null;
+      outdoor_unit_serial: string | null;
+      supplier_invoice_number: string | null;
+      purchased_at: string | null;
+      supplier_order_work_item_id: string | null;
+      show_in_public_catalog: boolean | null;
+    };
+
+    if (isDeliveredProductInstance(current) && parsed.data.showInPublicCatalog === true) {
+      return withCors(
+        req,
+        NextResponse.json(
+          { error: "Доставените бройки не се публикуват в каталога — остава само шаблонът за поръчка." },
+          { status: 400 },
+        ),
+      );
+    }
+
+    const mergedDelivery = mergeDeliveryFields(current, parsed.data);
+    const deliveryTouched =
+      parsed.data.indoorUnitSerial !== undefined ||
+      parsed.data.outdoorUnitSerial !== undefined ||
+      parsed.data.purchasedAt !== undefined ||
+      parsed.data.supplierInvoiceNumber !== undefined;
+
+    if (isDeliveredProductInstance(current)) {
+      const deliveryErr = validateDeliveryFieldsComplete(mergedDelivery);
+      if (deliveryErr) {
+        return withCors(req, NextResponse.json({ error: deliveryErr }, { status: 400 }));
+      }
+    }
+
+    if (deliveryTouched) {
+      try {
+        const conflicts = await findSerialConflicts(supabase, {
+          indoor: mergedDelivery.indoorUnitSerial,
+          outdoor: mergedDelivery.outdoorUnitSerial,
+          excludeId: id,
+        });
+        if (conflicts.length > 0) {
+          return withCors(
+            req,
+            NextResponse.json({ error: formatSerialConflictError(conflicts) }, { status: 409 }),
+          );
+        }
+      } catch (e) {
+        return withCors(req, NextResponse.json({ error: String((e as Error).message) }, { status: 500 }));
+      }
+    }
+  }
 
   if (Object.keys(patch).length > 0) {
     let { data, error } = await supabase.from("products").update(patch).eq("id", id).select("id,slug").maybeSingle();

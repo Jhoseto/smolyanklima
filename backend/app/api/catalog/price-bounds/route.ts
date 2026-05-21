@@ -49,5 +49,7 @@ export async function GET(req: NextRequest) {
   if (desc.error) return withCors(req, NextResponse.json({ error: desc.error.message }, { status: 500 }));
   const min = Number(asc.data?.[0]?.price ?? 0);
   const max = Number(desc.data?.[0]?.price ?? 0);
-  return withCors(req, NextResponse.json({ min, max }));
+  const res = withCors(req, NextResponse.json({ min, max }));
+  res.headers.set("Cache-Control", "public, max-age=120, stale-while-revalidate=300");
+  return res;
 }

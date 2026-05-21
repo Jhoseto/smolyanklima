@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
-import { applyPublicCatalogFilter } from "@/lib/catalog/publicProductVisibility";
+import { fetchPublicCatalogRepresentatives } from "@/lib/catalog/publicCatalogDedup";
 
 /**
  * Връща списък от активни марки от базата (`brands.is_active = true`),
@@ -91,5 +91,7 @@ export async function GET(req: NextRequest) {
     result = result.filter((b) => b.productCount > 0);
   }
 
-  return withCors(req, NextResponse.json({ data: result }));
+  const res = withCors(req, NextResponse.json({ data: result }));
+  res.headers.set("Cache-Control", "public, max-age=120, stale-while-revalidate=300");
+  return res;
 }

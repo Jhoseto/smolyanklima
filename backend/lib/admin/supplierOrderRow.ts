@@ -30,6 +30,23 @@ export type NormalizedSupplierOrderProduct = {
   } | null;
 };
 
+export type SupplierOrderDeliveredProduct = {
+  id: string;
+  name: string;
+  slug: string | null;
+  price: number | null;
+  purchase_price: number | null;
+  stock_status: string;
+  sold_quantity: number;
+  model_code: string | null;
+  brand_id: string | null;
+  stock_quantity: number;
+  indoor_unit_serial: string | null;
+  outdoor_unit_serial: string | null;
+  supplier_invoice_number: string | null;
+  purchased_at: string | null;
+};
+
 export type NormalizedSupplierOrderRow = {
   id: string;
   title: string;
@@ -42,8 +59,11 @@ export type NormalizedSupplierOrderRow = {
   unit_price: number | null;
   notes: string | null;
   product_id: string | null;
+  contact_id: string | null;
   products: NormalizedSupplierOrderProduct | null;
-  contacts: { id?: string; full_name?: string; phone?: string } | null;
+  contacts: { id?: string; full_name?: string; phone?: string; email?: string; address?: string } | null;
+  /** Складова бройка след „Доставен“ — за продажба от панела. */
+  delivered_product?: SupplierOrderDeliveredProduct | null;
 };
 
 export function normalizeSupplierOrderRow(row: Record<string, unknown>): NormalizedSupplierOrderRow {
@@ -114,15 +134,50 @@ export function normalizeSupplierOrderRow(row: Record<string, unknown>): Normali
     unit_price: row.unit_price != null ? Number(row.unit_price) : null,
     notes: (row.notes as string | null) ?? null,
     product_id: (row.product_id as string | null) ?? null,
+    contact_id: (row.contact_id as string | null) ?? null,
     products,
     contacts: contactRaw
       ? {
           id: contactRaw.id as string | undefined,
           full_name: (contactRaw.full_name as string | null) ?? undefined,
           phone: (contactRaw.phone as string | null) ?? undefined,
+          email: (contactRaw.email as string | null) ?? undefined,
+          address: (contactRaw.address as string | null) ?? undefined,
         }
       : null,
+    delivered_product: null,
   };
+}
+
+export function attachDeliveredProductsToOrders(
+  orders: NormalizedSupplierOrderRow[],
+  instances: Array<Record<string, unknown>>,
+): NormalizedSupplierOrderRow[] {
+  const byOrderId = new Map<string, SupplierOrderDeliveredProduct>();
+  for (const raw of instances) {
+    const orderId = raw.supplier_order_work_item_id as string | undefined;
+    if (!orderId) continue;
+    byOrderId.set(orderId, {
+      id: String(raw.id ?? ""),
+      name: String(raw.name ?? ""),
+      slug: (raw.slug as string | null) ?? null,
+      price: raw.price != null ? Number(raw.price) : null,
+      purchase_price: raw.purchase_price != null ? Number(raw.purchase_price) : null,
+      stock_status: String(raw.stock_status ?? ""),
+      sold_quantity: Number(raw.sold_quantity ?? 0),
+      model_code: (raw.model_code as string | null) ?? null,
+      brand_id: (raw.brand_id as string | null) ?? null,
+      stock_quantity: Number(raw.stock_quantity ?? 0),
+      indoor_unit_serial: (raw.indoor_unit_serial as string | null) ?? null,
+      outdoor_unit_serial: (raw.outdoor_unit_serial as string | null) ?? null,
+      supplier_invoice_number: (raw.supplier_invoice_number as string | null) ?? null,
+      purchased_at: (raw.purchased_at as string | null) ?? null,
+    });
+  }
+  return orders.map((o) => ({
+    ...o,
+    delivered_product: byOrderId.get(o.id) ?? null,
+  }));
 }
 
 export const SUPPLIER_ORDER_SELECT = `

@@ -5,6 +5,7 @@ import { ArrowUp, SlidersHorizontal, PackageX } from 'lucide-react';
 import { CatalogHero }    from '../components/catalog/CatalogHero';
 import { SearchSortBar }  from '../components/catalog/SearchSortBar';
 import { CategoryChips }  from '../components/catalog/CategoryChips';
+import { CatalogPagination } from '../components/catalog/CatalogPagination';
 import { FilterSidebar }  from '../components/catalog/FilterSidebar';
 import { ActiveFilters }  from '../components/catalog/ActiveFilters';
 import { ProductCard }    from '../components/catalog/ProductCard';
@@ -20,14 +21,12 @@ import { useScroll, useSpring } from 'motion/react';
 
 import {
   fetchProductsCatalogPage,
-  fetchCatalogPriceBounds,
-  fetchCategoryProductCounts,
-  fetchCatalogBrandOptions,
-  fetchCatalogBtuOptions,
+  fetchCatalogMeta,
 } from '../data/productService';
 import { getAllAccessories } from '../data/accessoryService';
 import { postPublicInquiry } from '../data/postInquiry';
 import type { CatalogProduct, SortOption } from '../data/types/product';
+import { parseSortOption } from '../data/types/product';
 
 // ─────────────────────────────────────────
 // TRUST BAR
@@ -150,7 +149,7 @@ const CatalogPage = () => {
   const [energyClasses, setEnergyClasses] = useState<string[]>(searchParams.get('e')?.split(',').filter(Boolean) || []);
   const [features, setFeatures] = useState<string[]>(searchParams.get('f')?.split(',').filter(Boolean) || []);
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 0]);
-  const [sortBy, setSortBy] = useState<SortOption>((searchParams.get('s') as SortOption) || 'recommended');
+  const [sortBy, setSortBy] = useState<SortOption>(() => parseSortOption(searchParams.get('s')));
   const [page, setPage] = useState(() => {
     const raw = Number(searchParams.get('page'));
     return raw >= 1 && Number.isFinite(raw) ? Math.floor(raw) : 1;
@@ -227,32 +226,15 @@ const CatalogPage = () => {
     let cancelled = false;
     (async () => {
       try {
-        const [boundsRes, countsRes, brandRes, btuRes] = await Promise.allSettled([
-          fetchCatalogPriceBounds(effectiveCondition),
-          fetchCategoryProductCounts(effectiveCondition),
-          fetchCatalogBrandOptions(effectiveCondition),
-          fetchCatalogBtuOptions(effectiveCondition),
-        ]);
+        const meta = await fetchCatalogMeta(effectiveCondition);
         if (cancelled) return;
-        if (boundsRes.status === 'fulfilled') {
-          const { min: minP, max: maxP } = boundsRes.value;
-          setPriceMin(minP);
-          setPriceMax(maxP);
-          setPriceRange([minP, maxP]);
-        }
-        if (countsRes.status === 'fulfilled') {
-          setCategoryCounts(countsRes.value);
-        }
-        if (brandRes.status === 'fulfilled') {
-          setClimateBrandOptions(brandRes.value);
-        } else {
-          setClimateBrandOptions([]);
-        }
-        if (btuRes.status === 'fulfilled') {
-          setClimateBtuOptions(btuRes.value);
-        } else {
-          setClimateBtuOptions([]);
-        }
+        const { min: minP, max: maxP } = meta.priceBounds;
+        setPriceMin(minP);
+        setPriceMax(maxP);
+        setPriceRange([minP, maxP]);
+        setCategoryCounts(meta.categoryCounts);
+        setClimateBrandOptions(meta.brandOptions);
+        setClimateBtuOptions(meta.btuOptions);
       } catch {
         /* отделните заявки се обработват с allSettled */
       }
@@ -379,6 +361,7 @@ const CatalogPage = () => {
           if (sortBy === 'recommended') {
             return (b.reviews - a.reviews) || (b.rating - a.rating);
           }
+          if (sortBy === 'name-asc') return a.name.localeCompare(b.name, 'bg');
           return a.name.localeCompare(b.name, 'bg');
         });
 
@@ -737,29 +720,31 @@ const CatalogPage = () => {
 
       {/* Main Content */}
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pb-8">
-        <div className="mb-5 mt-4 flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => handleTabChange('climate')}
-            className={`px-5 py-2.5 rounded-full text-sm font-bold border transition-all ${
-              activeTab === 'climate'
-                ? 'bg-gradient-to-r from-[#00B4D8] to-[#0077B6] text-white border-transparent shadow-md'
-                : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
-            }`}
-          >
-            Климатици
-          </button>
-          <button
-            type="button"
-            onClick={() => handleTabChange('accessories')}
-            className={`px-5 py-2.5 rounded-full text-sm font-bold border transition-all ${
-              activeTab === 'accessories'
-                ? 'bg-gradient-to-r from-[#FF4D00] to-[#FF2A4D] text-white border-transparent shadow-md'
-                : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
-            }`}
-          >
-            Аксесоари
-          </button>
+        <div className="mb-5 mt-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => handleTabChange('climate')}
+              className={`px-5 py-2.5 rounded-full text-sm font-bold border transition-all ${
+                activeTab === 'climate'
+                  ? 'bg-gradient-to-r from-[#00B4D8] to-[#0077B6] text-white border-transparent shadow-md'
+                  : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              Климатици
+            </button>
+            <button
+              type="button"
+              onClick={() => handleTabChange('accessories')}
+              className={`px-5 py-2.5 rounded-full text-sm font-bold border transition-all ${
+                activeTab === 'accessories'
+                  ? 'bg-gradient-to-r from-[#FF4D00] to-[#FF2A4D] text-white border-transparent shadow-md'
+                  : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              Аксесоари
+            </button>
+          </div>
         </div>
 
         {/* Layout: Sidebar + Grid */}
@@ -847,6 +832,19 @@ const CatalogPage = () => {
 
           {/* ── PRODUCT GRID ─────────────────────── */}
           <div className="flex-1 min-w-0">
+            {!showSkeleton && products.length > 0 && total > 0 && (
+              <div className="mb-4 flex justify-end">
+                <CatalogPagination
+                  compact
+                  page={page}
+                  totalPages={totalPages}
+                  total={total}
+                  perPage={PER_PAGE}
+                  loading={listLoading}
+                  onPageChange={goToPage}
+                />
+              </div>
+            )}
             {showSkeleton ? (
               <div className={`grid gap-4 lg:gap-5 ${
                 viewMode === 'grid'
@@ -914,39 +912,16 @@ const CatalogPage = () => {
               </motion.div>
             )}
 
-            {/* Result count at bottom */}
             {!showSkeleton && products.length > 0 && total > 0 && (
-              <div className="mt-10 space-y-4">
-                <p className="text-center text-sm text-gray-400">
-                  Показани{' '}
-                  <strong className="text-gray-600">
-                    {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, total)}
-                  </strong>{' '}
-                  от <strong className="text-gray-600">{total}</strong> продукта
-                </p>
-                {totalPages > 1 && (
-                  <div className="flex flex-wrap items-center justify-center gap-2">
-                    <button
-                      type="button"
-                      disabled={page <= 1 || listLoading}
-                      onClick={() => goToPage(Math.max(1, page - 1))}
-                      className="px-4 py-2 rounded-xl text-sm font-semibold border border-gray-200 bg-white text-gray-700 disabled:opacity-40 hover:border-[#00B4D8] hover:text-[#00B4D8] transition-colors"
-                    >
-                      Предишна
-                    </button>
-                    <span className="text-sm text-gray-500 px-2">
-                      Страница {page} от {totalPages}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={page >= totalPages || listLoading}
-                      onClick={() => goToPage(Math.min(totalPages, page + 1))}
-                      className="px-4 py-2 rounded-xl text-sm font-semibold border border-gray-200 bg-white text-gray-700 disabled:opacity-40 hover:border-[#00B4D8] hover:text-[#00B4D8] transition-colors"
-                    >
-                      Следваща
-                    </button>
-                  </div>
-                )}
+              <div className="mt-10 flex justify-center">
+                <CatalogPagination
+                  page={page}
+                  totalPages={totalPages}
+                  total={total}
+                  perPage={PER_PAGE}
+                  loading={listLoading}
+                  onPageChange={goToPage}
+                />
               </div>
             )}
           </div>

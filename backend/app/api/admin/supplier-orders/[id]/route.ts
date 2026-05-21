@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
-import { normalizeSupplierOrderRow, SUPPLIER_ORDER_SELECT } from "@/lib/admin/supplierOrderRow";
+import {
+  attachDeliveredProductsToOrders,
+  normalizeSupplierOrderRow,
+  SUPPLIER_ORDER_SELECT,
+} from "@/lib/admin/supplierOrderRow";
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflight(req);
@@ -34,8 +38,19 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   if (!data) return withCors(req, NextResponse.json({ error: "Поръчката не е намерена" }, { status: 404 }));
 
-  return withCors(
-    req,
-    NextResponse.json({ data: normalizeSupplierOrderRow(data as Record<string, unknown>) }),
-  );
+  let row = normalizeSupplierOrderRow(data as Record<string, unknown>);
+  if (row.status === "done") {
+    const { data: instance } = await supabase
+      .from("products")
+      .select(
+        "id, name, slug, price, purchase_price, stock_status, sold_quantity, model_code, brand_id, stock_quantity, indoor_unit_serial, outdoor_unit_serial, supplier_invoice_number, purchased_at, supplier_order_work_item_id",
+      )
+      .eq("supplier_order_work_item_id", id)
+      .maybeSingle();
+    if (instance) {
+      [row] = attachDeliveredProductsToOrders([row], [instance as Record<string, unknown>]);
+    }
+  }
+
+  return withCors(req, NextResponse.json({ data: row }));
 }

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminDb } from "@/lib/admin/db";
+import { findSerialConflicts } from "@/lib/admin/productDeliveryValidation";
 
 /**
  * Проверка за дубликат на сериен номер на вътрешно/външно тяло.
@@ -41,36 +42,14 @@ export async function GET(req: NextRequest) {
   const excludeId = parsed.data.excludeId;
 
   const supabase = await adminDb();
-  const escaped = serial.replace(/[%,]/g, " ").trim();
-  let query = supabase
-    .from("products")
-    .select("id,name,slug,indoor_unit_serial,outdoor_unit_serial")
-    .or(`indoor_unit_serial.ilike.${escaped},outdoor_unit_serial.ilike.${escaped}`)
-    .limit(10);
-  if (excludeId) query = query.neq("id", excludeId);
-
-  const { data, error } = await query;
-  if (error) {
-    return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
+  try {
+    const matches = await findSerialConflicts(supabase, {
+      indoor: serial,
+      outdoor: serial,
+      excludeId,
+    });
+    return withCors(req, NextResponse.json({ data: matches satisfies Match[] }));
+  } catch (e) {
+    return withCors(req, NextResponse.json({ error: String((e as Error).message) }, { status: 500 }));
   }
-
-  const needle = serial.toLowerCase();
-  const matches: Match[] = (data ?? [])
-    .map((row) => {
-      const indoor = String(row.indoor_unit_serial ?? "").trim().toLowerCase();
-      const outdoor = String(row.outdoor_unit_serial ?? "").trim().toLowerCase();
-      const hitIndoor = indoor === needle;
-      const hitOutdoor = outdoor === needle;
-      if (!hitIndoor && !hitOutdoor) return null;
-      return {
-        id: row.id as string,
-        name: row.name as string,
-        slug: (row.slug as string | null) ?? null,
-        field: hitIndoor && hitOutdoor ? "both" : hitIndoor ? "indoor" : "outdoor",
-      } satisfies Match;
-    })
-    .filter((m): m is Match => Boolean(m))
-    .slice(0, 5);
-
-  return withCors(req, NextResponse.json({ data: matches }));
 }

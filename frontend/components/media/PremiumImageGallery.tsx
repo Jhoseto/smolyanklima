@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { ChevronLeft, ChevronRight, Expand, X } from 'lucide-react';
 import { CatalogProductImage } from '../catalog/CatalogProductImage';
@@ -42,6 +43,15 @@ export function PremiumImageGallery({ images, alt, badgeText, badgeClassName, en
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, currentIdx, count]);
+
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
 
   const showThumbs = safeImages.length > 1;
 
@@ -158,29 +168,30 @@ export function PremiumImageGallery({ images, alt, badgeText, badgeClassName, en
         )}
       </div>
 
-      {/* Lightbox */}
-      <AnimatePresence>
-        {open && (
-          <>
-            <motion.div
-              key="backdrop"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[800]"
-              onClick={() => setOpen(false)}
-            />
-            <motion.div
-              key="panel"
-              initial={{ opacity: 0, y: 24, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 24, scale: 0.98 }}
-              transition={{ type: 'spring', stiffness: 420, damping: 32 }}
-              className="fixed inset-4 md:inset-10 z-[801] bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col"
-              role="dialog"
-              aria-modal="true"
-              aria-label="Галерия"
-            >
+      {typeof document !== 'undefined' &&
+        createPortal(
+          <AnimatePresence>
+            {open && (
+              <>
+                <motion.div
+                  key="backdrop"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 bg-black/75 backdrop-blur-md z-[1300]"
+                  onClick={() => setOpen(false)}
+                />
+                <motion.div
+                  key="panel"
+                  initial={{ opacity: 0, y: 24, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 24, scale: 0.98 }}
+                  transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+                  className="fixed inset-4 md:inset-10 z-[1301] bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col isolate"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Галерия"
+                >
               <div className="p-4 border-b border-gray-100 flex items-center justify-between">
                 <div className="text-sm font-black text-gray-800">
                   {currentIdx + 1} / {count}
@@ -195,11 +206,11 @@ export function PremiumImageGallery({ images, alt, badgeText, badgeClassName, en
                 </button>
               </div>
 
-              <div className="relative flex-1 bg-gradient-to-b from-gray-50 to-white flex items-center justify-center p-6">
+              <div className="relative z-10 flex-1 bg-gradient-to-b from-gray-50 to-white flex items-center justify-center p-6 min-h-0">
                 <CatalogProductImage
                   src={imgError[currentIdx] ? '/images/hero-ac.jpg' : current}
                   alt={alt}
-                  className="max-w-full max-h-full drop-shadow-[0_40px_100px_rgba(0,0,0,.14)]"
+                  className="relative z-10 max-w-full max-h-full object-contain drop-shadow-[0_40px_100px_rgba(0,0,0,.14)]"
                 />
 
                 {showThumbs && (
@@ -248,10 +259,12 @@ export function PremiumImageGallery({ images, alt, badgeText, badgeClassName, en
                   </div>
                 </div>
               )}
-            </motion.div>
-          </>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>,
+          document.body,
         )}
-      </AnimatePresence>
     </div>
   );
 }

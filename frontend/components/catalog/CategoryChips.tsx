@@ -34,14 +34,15 @@ export const CategoryChips = ({ selected, onChange, counts, compact = false }: C
 
       <div
         ref={scrollRef}
-        className={`flex w-full min-w-0 scrollbar-hide ${
-          compact ? 'gap-1.5 overflow-x-auto lg:overflow-x-visible' : 'gap-2 overflow-x-auto px-2 pb-1'
+        className={`flex w-full min-w-0 ${
+          compact ? 'flex-wrap gap-1.5 content-start' : 'gap-2 overflow-x-auto scrollbar-hide px-2 pb-1'
         }`}
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       >
         {CATEGORIES.map((cat) => {
           const isActive = selected === cat.id;
           const count = counts[cat.id] ?? 0;
+          const isAll = cat.id === 'all';
 
           return (
             <button
@@ -51,7 +52,9 @@ export const CategoryChips = ({ selected, onChange, counts, compact = false }: C
               className={`
                 relative flex items-center justify-center border transition-all duration-200
                 ${compact
-                  ? 'shrink-0 lg:flex-1 lg:min-w-0 gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold whitespace-nowrap [&_svg]:w-3.5 [&_svg]:h-3.5'
+                  ? isAll
+                    ? 'shrink-0 gap-0.5 px-1.5 sm:px-2 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold whitespace-nowrap [&_svg]:w-3.5 [&_svg]:h-3.5'
+                    : 'shrink-0 gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold whitespace-nowrap [&_svg]:w-3.5 [&_svg]:h-3.5 [&_svg]:shrink-0'
                   : 'shrink-0 gap-2 px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap [&_svg]:w-4 [&_svg]:h-4'
                 }
                 ${isActive
@@ -64,7 +67,7 @@ export const CategoryChips = ({ selected, onChange, counts, compact = false }: C
                 boxShadow: compact ? undefined : '0 4px 15px rgba(255, 77, 0, 0.3)',
               } : {}}
             >
-              <span className={isActive ? 'text-white' : ''} style={!isActive ? { color: cat.accentColor } : {}}>
+              <span className={`shrink-0 ${isActive ? 'text-white' : ''}`} style={!isActive ? { color: cat.accentColor } : {}}>
                 {ICON_MAP[cat.icon]}
               </span>
               <span>{cat.label}</span>

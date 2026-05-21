@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
@@ -41,6 +41,13 @@ import {
 import { useDebounce } from "@/lib/hooks/useDebounce";
 import { assertNoContactPrimaryPhoneDuplicate } from "@/lib/admin/contactPhoneConflictClient";
 import {
+  agreedPriceAfterDiscount,
+  discountPercentFromAgreedPrice,
+  formatAgreedPriceInput,
+  parseDecimalInput,
+} from "@/lib/admin/agreedPriceDiscount";
+import { notifyAdminCalendarReload } from "@/lib/admin/calendarReload";
+import {
   normalizeProductStockLocation,
   productStockLocationLabel,
   type ProductStockLocation,
@@ -49,10 +56,19 @@ import {
   productRegionLabel,
   type ProductRegion,
 } from "@/lib/admin/productRegion";
+import {
+  clearAdminProductsListFilters,
+  DEFAULT_ADMIN_PRODUCTS_LIST_FILTERS,
+  loadAdminProductsListFilters,
+  saveAdminProductsListFilters,
+  PRODUCTS_PER_PAGE_OPTS,
+  type CatalogKindFilter,
+  type ProductsPerPage,
+  type SortDir,
+  type SortField,
+} from "./productsListFiltersStorage";
 
 export const dynamic = "force-dynamic";
-
-type CatalogKindFilter = "climatics" | "accessories" | "all";
 
 type ProductRow = {
   catalog_item?: "product" | "accessory";
@@ -92,8 +108,6 @@ type ProductRow = {
 
 type OptionRow = { id: string; name: string };
 type ContactChoice = { id: string; full_name: string; phone: string; email?: string | null; address?: string | null };
-type SortField = "name" | "price" | "purchase_price" | "product_condition" | "purchased_at";
-type SortDir = "asc" | "desc";
 
 function isAccessoryRow(p: Pick<ProductRow, "catalog_item">): boolean {
   return p.catalog_item === "accessory";
@@ -129,16 +143,6 @@ function bulkDeleteWarning(items: ProductRow[], selected: string[]) {
     return "Ще се изтрият избраните климатици (снимки, спецификации) и аксесоари (снимки).";
   }
   return "Заедно с продуктите ще се изтрият: снимки, характеристики, оценки и история на запитванията за тях.";
-}
-
-const PRODUCTS_PER_PAGE_OPTS = [10, 20, 50, 100] as const;
-const PRODUCTS_PER_PAGE_STORAGE = "admin-products-per-page";
-type ProductsPerPage = (typeof PRODUCTS_PER_PAGE_OPTS)[number];
-
-function readProductsPerPage(): ProductsPerPage {
-  if (typeof window === "undefined") return 20;
-  const n = Number(localStorage.getItem(PRODUCTS_PER_PAGE_STORAGE));
-  return (PRODUCTS_PER_PAGE_OPTS as readonly number[]).includes(n) ? (n as ProductsPerPage) : 20;
 }
 
 /**
@@ -231,10 +235,19 @@ function emptySaleModalForm() {
     customerEmail: "",
     notes: "",
     agreedPrice: "",
+    agreedPriceDiscountPct: "",
     mountDate: defaultNextMountDate(),
     mountTimeFrom: "09:00",
     mountTimeTo: "13:00",
   };
+}
+
+function saleModalFormForProduct(p: ProductRow) {
+  const base = emptySaleModalForm();
+  if (p.stock_status !== "on_order") return base;
+  const catalog = Number(p.price);
+  if (!Number.isFinite(catalog) || catalog < 0) return base;
+  return { ...base, agreedPrice: formatAgreedPriceInput(catalog) };
 }
 
 /** Локална дата + час → ISO за `scheduled_start` / `scheduled_end`. */
@@ -535,7 +548,7 @@ export default function AdminProductsPage() {
   const [sortBy, setSortBy] = useState<SortField>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [page, setPage] = useState(1);
-  const [perPage, setPerPage] = useState<ProductsPerPage>(() => readProductsPerPage());
+  const [perPage, setPerPage] = useState<ProductsPerPage>(20);
   const [meta, setMeta] = useState({ page: 1, perPage: 20, total: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -554,6 +567,7 @@ export default function AdminProductsPage() {
   const [saleSuccess, setSaleSuccess] = useState<{ productName: string; customerName: string; amount: number; isBackOrder?: boolean } | null>(null);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [listFiltersReady, setListFiltersReady] = useState(false);
   const [catalogSettingsOpen, setCatalogSettingsOpen] = useState(false);
   const [locationBusyId, setLocationBusyId] = useState<string | null>(null);
   const [suppliersById, setSuppliersById] = useState<Record<string, string>>({});
@@ -625,12 +639,61 @@ export default function AdminProductsPage() {
   function handlePerPageChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const n = Number(e.target.value) as ProductsPerPage;
     setPerPage(n);
-    try {
-      localStorage.setItem(PRODUCTS_PER_PAGE_STORAGE, String(n));
-    } catch {
-      /* ignore */
-    }
     setPage(1);
+  }
+
+  function applySavedListFilters() {
+    const s = loadAdminProductsListFilters();
+    setQ(s.q);
+    setCatalogKind(s.catalogKind);
+    setCondition(s.condition);
+    setFeatured(s.featured);
+    setPublicCatalog(s.publicCatalog);
+    setStockStatus(s.stockStatus);
+    setStockLocationFilter(s.stockLocationFilter);
+    setProductRegionFilter(s.productRegionFilter);
+    setBrandId(s.brandId);
+    setBtuFilter(s.btuFilter);
+    setTypeId(s.typeId);
+    setSupplierId(s.supplierId);
+    setPriceRange(s.priceRange);
+    setHasSerial(s.hasSerial);
+    setHasPurchasePrice(s.hasPurchasePrice);
+    setPurchasedFrom(s.purchasedFrom);
+    setPurchasedTo(s.purchasedTo);
+    setSortBy(s.sortBy);
+    setSortDir(s.sortDir);
+    setPage(s.page);
+    setPerPage(s.perPage);
+    setFiltersOpen(s.filtersOpen);
+  }
+
+  function snapshotListFilters() {
+    return {
+      version: 1 as const,
+      q,
+      catalogKind,
+      condition,
+      featured,
+      publicCatalog,
+      stockStatus,
+      stockLocationFilter,
+      productRegionFilter,
+      brandId,
+      btuFilter,
+      typeId,
+      supplierId,
+      priceRange,
+      hasSerial,
+      hasPurchasePrice,
+      purchasedFrom,
+      purchasedTo,
+      sortBy,
+      sortDir,
+      page,
+      perPage,
+      filtersOpen,
+    };
   }
 
   async function loadMeta() {
@@ -696,35 +759,70 @@ export default function AdminProductsPage() {
   }
 
   useEffect(() => {
+    applySavedListFilters();
+    setListFiltersReady(true);
     void loadMeta();
   }, []);
 
   useEffect(() => {
+    if (!listFiltersReady) return;
+    saveAdminProductsListFilters(snapshotListFilters());
+  }, [
+    listFiltersReady,
+    q,
+    catalogKind,
+    condition,
+    featured,
+    publicCatalog,
+    stockStatus,
+    stockLocationFilter,
+    productRegionFilter,
+    brandId,
+    btuFilter,
+    typeId,
+    supplierId,
+    priceRange,
+    hasSerial,
+    hasPurchasePrice,
+    purchasedFrom,
+    purchasedTo,
+    sortBy,
+    sortDir,
+    page,
+    perPage,
+    filtersOpen,
+  ]);
+
+  useEffect(() => {
+    if (!listFiltersReady) return;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qs]);
+  }, [qs, listFiltersReady]);
 
   function resetFilters() {
-    setQ("");
-    setCatalogKind("climatics");
-    setCondition("");
-    setFeatured("");
-    setPublicCatalog("");
-    setStockStatus("");
-    setStockLocationFilter("");
-    setProductRegionFilter("");
-    setBrandId("");
-    setBtuFilter("");
-    setTypeId("");
-    setSupplierId("");
-    setPriceRange([ADMIN_PRICE_FILTER_MIN, ADMIN_PRICE_FILTER_MAX]);
-    setHasSerial("");
-    setHasPurchasePrice("");
-    setPurchasedFrom("");
-    setPurchasedTo("");
-    setSortBy("name");
-    setSortDir("asc");
-    setPage(1);
+    const d = DEFAULT_ADMIN_PRODUCTS_LIST_FILTERS;
+    setQ(d.q);
+    setCatalogKind(d.catalogKind);
+    setCondition(d.condition);
+    setFeatured(d.featured);
+    setPublicCatalog(d.publicCatalog);
+    setStockStatus(d.stockStatus);
+    setStockLocationFilter(d.stockLocationFilter);
+    setProductRegionFilter(d.productRegionFilter);
+    setBrandId(d.brandId);
+    setBtuFilter(d.btuFilter);
+    setTypeId(d.typeId);
+    setSupplierId(d.supplierId);
+    setPriceRange(d.priceRange);
+    setHasSerial(d.hasSerial);
+    setHasPurchasePrice(d.hasPurchasePrice);
+    setPurchasedFrom(d.purchasedFrom);
+    setPurchasedTo(d.purchasedTo);
+    setSortBy(d.sortBy);
+    setSortDir(d.sortDir);
+    setPage(d.page);
+    setPerPage(d.perPage);
+    clearAdminProductsListFilters();
   }
 
   // Превключване на сортирането от клик върху заглавие на колона:
@@ -1048,6 +1146,7 @@ export default function AdminProductsPage() {
       if (!res.ok) {
         throw new Error((json as { error?: string }).error || "Грешка при запис на поръчка");
       }
+      notifyAdminCalendarReload();
       return true;
     } catch (e: unknown) {
       setError(String(e instanceof Error ? e.message : e));
@@ -1910,7 +2009,7 @@ export default function AdminProductsPage() {
                     <Button
                       variant="secondary"
                       size="sm"
-                      onClick={() => { setSaleFor(p); setSaleForm(emptySaleModalForm()); setContactQuery(""); setContactResults([]); }}
+                      onClick={() => { setSaleFor(p); setSaleForm(saleModalFormForProduct(p)); setContactQuery(""); setContactResults([]); }}
                       disabled={!canRecordSale(p)}
                       className={`!p-1 shrink-0 ${p.stock_status === "on_order" ? "!text-violet-700 !border-violet-300 !bg-violet-50 hover:!bg-violet-100" : ""}`}
                       title={p.stock_status === "on_order" ? "Поръчай от доставчик" : saleButtonTitle(p)}
@@ -2183,7 +2282,7 @@ export default function AdminProductsPage() {
                   type="button"
                   onClick={() => {
                     setSaleFor(p);
-                    setSaleForm(emptySaleModalForm());
+                    setSaleForm(saleModalFormForProduct(p));
                     setContactQuery("");
                     setContactResults([]);
                   }}
@@ -2353,16 +2452,60 @@ export default function AdminProductsPage() {
               {isBackOrder ? (
                 <div className="col-span-full border-t border-slate-100 pt-3 mt-1">
                   <div className="text-xs font-black uppercase tracking-wide text-violet-700 mb-2">Договорена цена</div>
+                  <p className="mb-2 text-xs text-slate-500">
+                    Каталог:{" "}
+                    <span className="font-bold text-slate-800">
+                      €{Number(saleFor.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <label className="grid gap-1.5 sm:col-span-2">
+                    <label className="grid gap-1.5">
+                      <span className="text-xs font-bold text-slate-600">Отстъпка (%)</span>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={saleForm.agreedPriceDiscountPct}
+                        onChange={(e) => {
+                          const pctStr = e.target.value;
+                          const catalog = Number(saleFor.price);
+                          const pct = parseDecimalInput(pctStr);
+                          const nextPrice =
+                            pctStr.trim() === "" || !Number.isFinite(catalog)
+                              ? saleForm.agreedPrice
+                              : formatAgreedPriceInput(agreedPriceAfterDiscount(catalog, pct));
+                          setSaleForm((s) => ({
+                            ...s,
+                            agreedPriceDiscountPct: pctStr,
+                            agreedPrice: nextPrice,
+                          }));
+                        }}
+                        placeholder="0"
+                      />
+                    </label>
+                    <label className="grid gap-1.5">
                       <span className="text-xs font-bold text-slate-600">Цена (€)</span>
                       <Input
                         type="number"
                         min="0"
                         step="0.01"
                         value={saleForm.agreedPrice}
-                        onChange={(e) => setSaleForm((s) => ({ ...s, agreedPrice: e.target.value }))}
-                        placeholder={String(Number(saleFor.price).toLocaleString())}
+                        onChange={(e) => {
+                          const agreedStr = e.target.value;
+                          const catalog = Number(saleFor.price);
+                          const agreed = parseDecimalInput(agreedStr);
+                          const pctStr =
+                            agreedStr.trim() === "" || !Number.isFinite(catalog)
+                              ? ""
+                              : discountPercentFromAgreedPrice(catalog, agreed);
+                          setSaleForm((s) => ({
+                            ...s,
+                            agreedPrice: agreedStr,
+                            agreedPriceDiscountPct: pctStr,
+                          }));
+                        }}
+                        placeholder={formatAgreedPriceInput(Number(saleFor.price))}
                       />
                     </label>
                   </div>
@@ -2525,7 +2668,7 @@ export default function AdminProductsPage() {
               </div>
               {saleSuccess.isBackOrder ? (
                 <div className="rounded-2xl border border-violet-100 bg-violet-50 p-4 text-sm font-semibold leading-6 text-violet-900">
-                  Поръчката е записана в панела <strong>Поръчки от доставчик</strong>. След доставката попълнете серийните номера и насрочете монтаж.
+                  Поръчката е записана в панела <strong>Поръчки</strong>. След доставката попълнете серийните номера и насрочете монтаж.
                 </div>
               ) : (
                 <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-semibold leading-6 text-emerald-900">

@@ -7,6 +7,7 @@ import { normalizeProductRegion } from "@/lib/admin/productRegion";
 import { isPostgrestMissingColumn } from "@/lib/admin/pgMissingColumn";
 import { logAdminActivity } from "@/lib/admin/audit";
 import { mapProductDbError } from "@/lib/admin/productDbErrors";
+import { findSerialConflicts, formatSerialConflictError } from "@/lib/admin/productDeliveryValidation";
 import { insertProductCatalogStockCalendarEvent } from "@/lib/admin/productCatalogWorkItems";
 import { replaceProductImages, upsertProductSpecs, type ImageInput, type SpecsInput } from "@/lib/admin/syncProductChildren";
 import * as catalogBtu from "@/lib/catalog/productBtu";
@@ -423,6 +424,25 @@ export async function POST(req: NextRequest) {
   const loc =
     canEditProductStockLocation(session.role) ? normalizeProductStockLocation(parsed.data.stockLocation) : "warehouse";
   const reg = normalizeProductRegion(parsed.data.productRegion);
+
+  const indoorSerial = parsed.data.indoorUnitSerial?.trim() || "";
+  const outdoorSerial = parsed.data.outdoorUnitSerial?.trim() || "";
+  if (indoorSerial || outdoorSerial) {
+    try {
+      const conflicts = await findSerialConflicts(supabase, {
+        indoor: indoorSerial || null,
+        outdoor: outdoorSerial || null,
+      });
+      if (conflicts.length > 0) {
+        return withCors(
+          req,
+          NextResponse.json({ error: formatSerialConflictError(conflicts) }, { status: 409 }),
+        );
+      }
+    } catch (e) {
+      return withCors(req, NextResponse.json({ error: String((e as Error).message) }, { status: 500 }));
+    }
+  }
 
   const insertBase = {
     slug: parsed.data.slug ?? null,

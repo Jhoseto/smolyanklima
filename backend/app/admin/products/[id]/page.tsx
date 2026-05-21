@@ -38,6 +38,7 @@ export default function EditProductPage() {
   // Брой неприбрани (preview, но не качени) снимки.
   const [pendingPhotos, setPendingPhotos] = useState(0);
   const [pendingPhotosConfirm, setPendingPhotosConfirm] = useState<null | { proceed: () => void }>(null);
+  const [isDeliveredInstance, setIsDeliveredInstance] = useState(false);
 
   useEffect(() => {
     if (!toast) return;
@@ -73,14 +74,78 @@ export default function EditProductPage() {
       setCanEditPrice(r === "master_admin");
       setCanEditStockLocation(r === "master_admin" || r === "office_staff");
       if (!pRes.ok) throw new Error(p.error || "Failed to load product");
-      setForm(mapLoadedProductToForm(p.data));
+      const productData = p.data as {
+        purchase_price?: number | null;
+        supplier_order_work_item_id?: string | null;
+      };
+      let nextForm = mapLoadedProductToForm(p.data);
+      const orderWorkItemId = productData.supplier_order_work_item_id;
+      const missingPurchase =
+        productData.purchase_price == null || !Number.isFinite(Number(productData.purchase_price));
+      if (orderWorkItemId && missingPurchase) {
+        const oRes = await fetch(`/api/admin/work-items/${orderWorkItemId}`, { credentials: "include" });
+        const oJson = (await oRes.json().catch(() => ({}))) as {
+          data?: { work_item?: { unit_price?: number | null } };
+        };
+        const agreed = oJson.data?.work_item?.unit_price;
+        if (typeof agreed === "number" && Number.isFinite(agreed) && agreed >= 0) {
+          nextForm = { ...nextForm, purchasePrice: String(agreed) };
+        }
+      }
+      setForm(nextForm);
+      setIsDeliveredInstance(Boolean(orderWorkItemId));
     })()
       .catch((e) => setError(String(e?.message ?? e)))
       .finally(() => setLoading(false));
   }, [id]);
 
+  async function checkSerialDup(serial: string): Promise<boolean> {
+    if (!serial.trim()) return false;
+    const url = new URL("/api/admin/products/check-serial", window.location.origin);
+    url.searchParams.set("serial", serial.trim());
+    url.searchParams.set("excludeId", id);
+    const res = await fetch(url.toString(), { credentials: "include" });
+    const json = (await res.json().catch(() => ({}))) as { data?: unknown[] };
+    return Array.isArray(json.data) && json.data.length > 0;
+  }
+
   async function doSave() {
     setError(null);
+
+    const needsDelivery = isDeliveredInstance || highlightDelivery;
+    if (needsDelivery) {
+      if (!form.indoorUnitSerial.trim()) {
+        setError("Въведете сериен номер на вътрешното тяло.");
+        setToast({ kind: "err", text: "Въведете сериен номер на вътрешното тяло." });
+        return;
+      }
+      if (!form.outdoorUnitSerial.trim()) {
+        setError("Въведете сериен номер на външното тяло.");
+        setToast({ kind: "err", text: "Въведете сериен номер на външното тяло." });
+        return;
+      }
+      if (!form.purchasedAt.trim()) {
+        setError("Въведете дата на доставка.");
+        setToast({ kind: "err", text: "Въведете дата на доставка." });
+        return;
+      }
+      if (!form.supplierInvoiceNumber.trim()) {
+        setError("Въведете номер на фактура от доставчик.");
+        setToast({ kind: "err", text: "Въведете номер на фактура от доставчик." });
+        return;
+      }
+      const [indoorDup, outdoorDup] = await Promise.all([
+        checkSerialDup(form.indoorUnitSerial),
+        checkSerialDup(form.outdoorUnitSerial),
+      ]);
+      if (indoorDup || outdoorDup) {
+        const msg = "Сериен номерът вече е записан при друг продукт.";
+        setError(msg);
+        setToast({ kind: "err", text: msg });
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       const res = await fetch(`/api/admin/products/${id}`, {
@@ -172,7 +237,7 @@ export default function EditProductPage() {
         </div>
       )}
 
-      {highlightDelivery && (
+      {(highlightDelivery || isDeliveredInstance) && (
         <div className="flex items-start gap-3 rounded-xl border-2 border-red-300 bg-red-50 p-4 shadow-sm">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-500 text-white">
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -201,7 +266,7 @@ export default function EditProductPage() {
           currentProductId={id}
           onPendingPhotosChange={setPendingPhotos}
           readOnly={readOnly}
-          highlightDelivery={highlightDelivery}
+          highlightDelivery={highlightDelivery || isDeliveredInstance}
         />
       </Card>
 

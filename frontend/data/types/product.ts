@@ -132,11 +132,42 @@ export interface CatalogFilters {
 
 export type SortOption =
   | 'recommended'
+  | 'rating-desc'
   | 'price-asc'
   | 'price-desc'
+  | 'kw-asc'
+  | 'kw-desc'
+  | 'btu-asc'
+  | 'btu-desc'
+  | 'coverage-asc'
+  | 'coverage-desc'
+  | 'seer-desc'
+  | 'scop-desc'
+  | 'name-asc'
   | 'energy-class'
-  | 'noise-asc'
-  | 'rating-desc';
+  | 'noise-asc';
+
+export const CATALOG_SORT_OPTIONS: SortOption[] = [
+  'recommended',
+  'rating-desc',
+  'price-asc',
+  'price-desc',
+  'kw-asc',
+  'btu-asc',
+  'coverage-asc',
+  'seer-desc',
+  'scop-desc',
+  'name-asc',
+  'energy-class',
+  'noise-asc',
+];
+
+export function parseSortOption(raw: string | null | undefined): SortOption {
+  if (raw && (CATALOG_SORT_OPTIONS as readonly string[]).includes(raw)) {
+    return raw as SortOption;
+  }
+  return 'recommended';
+}
 
 // ──────────────────────────────────────
 // CATEGORY & BRAND METADATA

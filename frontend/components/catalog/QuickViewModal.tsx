@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Star, Check, Wifi, ShieldCheck, Zap, Volume2, Wind, ChevronDown, ChevronRight, Ruler, Weight } from 'lucide-react';
@@ -61,6 +62,15 @@ export const QuickViewModal = ({
   const [votedStars, setVotedStars] = useState<number | null>(null);
 
   useEffect(() => {
+    if (!product) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [product]);
+
+  useEffect(() => {
     setAlreadyRated(false);
     setRatingBusy(false);
     setRatingNotice(null);
@@ -119,29 +129,28 @@ export const QuickViewModal = ({
     }, 3000);
   };
 
-  return (
-    <AnimatePresence>
-      {product && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            key="backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[500]"
-          />
+  const overlay =
+    typeof document !== 'undefined' ? (
+      <AnimatePresence>
+        {product && (
+          <>
+            <motion.div
+              key="backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={onClose}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1200]"
+            />
 
-          {/* Modal */}
-          <motion.div
-            key="modal"
-            initial={{ opacity: 0, y: 60 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 60 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-            className="fixed bottom-0 left-0 right-0 max-h-[93vh] md:inset-8 md:bottom-auto md:left-auto md:right-auto lg:inset-auto lg:top-1/2 lg:left-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:w-[900px] lg:max-h-[90vh] bg-white rounded-t-3xl md:rounded-3xl shadow-2xl z-[501] overflow-hidden flex flex-col"
-          >
+            <motion.div
+              key="modal"
+              initial={{ opacity: 0, y: 60 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 60 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+              className="fixed bottom-0 left-0 right-0 max-h-[93vh] md:inset-8 md:bottom-auto md:left-auto md:right-auto lg:inset-auto lg:top-1/2 lg:left-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:w-[900px] lg:max-h-[90vh] bg-white rounded-t-3xl md:rounded-3xl shadow-2xl z-[1201] overflow-hidden flex flex-col isolate"
+            >
             {/* Mobile drag handle */}
             <div className="flex justify-center pt-3 pb-1 md:hidden shrink-0">
               <div className="w-10 h-1 rounded-full bg-gray-200" />
@@ -149,7 +158,7 @@ export const QuickViewModal = ({
             {/* Close button */}
             <button
               onClick={onClose}
-              className="absolute top-4 right-4 z-10 w-9 h-9 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors"
+              className="absolute top-4 right-4 z-30 w-9 h-9 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors"
             >
               <X className="w-5 h-5 text-gray-600" />
             </button>
@@ -157,8 +166,8 @@ export const QuickViewModal = ({
             <div className="flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden flex-1">
 
               {/* LEFT – Image + link to full product page */}
-              <div className="lg:w-[420px] shrink-0 bg-gray-50 flex flex-col border-r border-gray-100">
-                <div className="flex items-center justify-center p-4 md:p-6 pb-2 md:pb-3 max-h-[220px] md:max-h-none overflow-hidden flex-1 min-h-0">
+              <div className="lg:w-[420px] shrink-0 bg-gray-50 flex flex-col border-r border-gray-100 relative z-10">
+                <div className="relative z-10 flex items-center justify-center p-4 md:p-6 pb-2 md:pb-3 max-h-[220px] md:max-h-none overflow-hidden flex-1 min-h-0">
                   <PremiumImageGallery
                     className="w-full"
                     images={(product.images?.length ? product.images : [product.image]).filter(Boolean)}
@@ -429,5 +438,7 @@ export const QuickViewModal = ({
         </>
       )}
     </AnimatePresence>
-  );
+    ) : null;
+
+  return overlay ? createPortal(overlay, document.body) : null;
 };

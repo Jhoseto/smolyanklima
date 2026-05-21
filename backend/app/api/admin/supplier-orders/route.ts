@@ -1,15 +1,33 @@
+import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
-import { normalizeSupplierOrderRow, SUPPLIER_ORDER_SELECT } from "@/lib/admin/supplierOrderRow";
+import { adminLocalDateKey } from "@/lib/admin/localDateKey";
+import {
+  attachDeliveredProductsToOrders,
+  normalizeSupplierOrderRow,
+  SUPPLIER_ORDER_SELECT,
+} from "@/lib/admin/supplierOrderRow";
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflight(req);
 }
 
+const ListQuerySchema = z.object({
+  q: z.string().optional(),
+  /** planned | in_progress | done | cancelled */
+  status: z.enum(["planned", "in_progress", "done", "cancelled"]).optional(),
+  /** ordered = чака доставка; delivered = доставена; cancelled; all = без филтър */
+  phase: z.enum(["ordered", "delivered", "cancelled", "active", "all"]).optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
+  page: z.coerce.number().int().min(1).optional(),
+  perPage: z.coerce.number().int().min(1).max(100).optional(),
+});
+
 /**
  * GET /api/admin/supplier-orders
- * Returns all non-done supplier_order work items with full product info.
+ * Без page: активни поръчки (табло). С page + филтри: пълна хронология.
  */
 export async function GET(req: NextRequest) {
   let session;
@@ -24,21 +42,77 @@ export async function GET(req: NextRequest) {
     return withCors(req, NextResponse.json({ error: "Нямате достъп." }, { status: 403 }));
   }
 
+  const params = Object.fromEntries(req.nextUrl.searchParams.entries());
+  const parsed = ListQuerySchema.safeParse(params);
+  if (!parsed.success) {
+    return withCors(req, NextResponse.json({ error: "Невалидни параметри" }, { status: 400 }));
+  }
+
   const supabase = session.db;
-  const { data, error } = await supabase
+  const historyMode = parsed.data.page != null || req.nextUrl.searchParams.has("phase");
+
+  if (!historyMode) {
+    const { data, error } = await supabase
+      .from("work_items")
+      .select(SUPPLIER_ORDER_SELECT)
+      .eq("event_code", "supplier_order")
+      .neq("status", "done")
+      .neq("status", "cancelled")
+      .order("due_date", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(200);
+
+    if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
+
+    const rows = (data ?? []).map((row) => normalizeSupplierOrderRow(row as Record<string, unknown>));
+    return withCors(req, NextResponse.json({ data: rows }));
+  }
+
+  const { q, status, phase, from, to, page = 1, perPage = 30 } = parsed.data;
+
+  let query = supabase
     .from("work_items")
-    .select(SUPPLIER_ORDER_SELECT)
+    .select(SUPPLIER_ORDER_SELECT, { count: "exact" })
     .eq("event_code", "supplier_order")
-    .neq("status", "done")
-    .neq("status", "cancelled")
-    .order("due_date", { ascending: true, nullsFirst: false })
-    .order("created_at", { ascending: false })
-    .limit(200);
+    .order("due_date", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false });
+
+  if (q?.trim()) {
+    query = query.or(
+      `title.ilike.%${q.trim()}%,customer_name.ilike.%${q.trim()}%,customer_phone.ilike.%${q.trim()}%,customer_address.ilike.%${q.trim()}%`,
+    );
+  }
+  if (status) query = query.eq("status", status);
+  else if (phase === "ordered" || phase === "active") {
+    query = query.in("status", ["planned", "in_progress"]);
+  } else if (phase === "delivered") {
+    query = query.eq("status", "done");
+  } else if (phase === "cancelled") {
+    query = query.eq("status", "cancelled");
+  }
+
+  if (from) query = query.gte("due_date", from);
+  if (to) query = query.lte("due_date", to);
+
+  const offset = (page - 1) * perPage;
+  const { data, error, count } = await query.range(offset, offset + perPage - 1);
 
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
 
-  const rows = (data ?? []).map((row) => normalizeSupplierOrderRow(row as Record<string, unknown>));
-  return withCors(req, NextResponse.json({ data: rows }));
+  let rows = (data ?? []).map((row) => normalizeSupplierOrderRow(row as Record<string, unknown>));
+
+  const doneIds = rows.filter((r) => r.status === "done").map((r) => r.id);
+  if (doneIds.length > 0) {
+    const { data: instances } = await supabase
+      .from("products")
+      .select(
+        "id, name, slug, price, purchase_price, stock_status, sold_quantity, model_code, brand_id, stock_quantity, indoor_unit_serial, outdoor_unit_serial, supplier_invoice_number, purchased_at, supplier_order_work_item_id",
+      )
+      .in("supplier_order_work_item_id", doneIds);
+    rows = attachDeliveredProductsToOrders(rows, (instances ?? []) as Record<string, unknown>[]);
+  }
+
+  return withCors(req, NextResponse.json({ data: rows, meta: { page, perPage, total: count ?? 0 } }));
 }
 
 /**
@@ -103,7 +177,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = adminLocalDateKey();
   const unitPrice = typeof agreedPrice === "number" && agreedPrice >= 0 ? agreedPrice : Number(product.price);
 
   const { data: workItem, error: wiErr } = await supabase

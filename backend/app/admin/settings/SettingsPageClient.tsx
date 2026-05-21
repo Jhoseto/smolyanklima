@@ -143,6 +143,25 @@ function CondexSyncProgressBar({
   );
 }
 
+function parseSseBlock<T extends { message: string }>(
+  block: string,
+  onProgress: (ev: T) => void,
+): Record<string, unknown> | null {
+  if (!block.trim() || block.startsWith(":")) return null;
+  let event = "message";
+  let data = "";
+  for (const line of block.split("\n")) {
+    if (line.startsWith("event:")) event = line.slice(6).trim();
+    else if (line.startsWith("data:")) data += line.slice(5).trim();
+  }
+  if (!data) return null;
+  const parsed = JSON.parse(data) as { error?: string; data?: Record<string, unknown> };
+  if (event === "progress") onProgress(parsed as T);
+  else if (event === "done") return parsed.data ?? {};
+  else if (event === "error") throw new Error(parsed.error || "Грешка при синхронизация");
+  return null;
+}
+
 async function consumeCatalogSyncStream<T extends { message: string }>(
   res: Response,
   onProgress: (ev: T) => void,
@@ -153,26 +172,32 @@ async function consumeCatalogSyncStream<T extends { message: string }>(
   let buffer = "";
   let summary: Record<string, unknown> | null = null;
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
+  const flushBlocks = (blocks: string[]) => {
+    for (const block of blocks) {
+      const result = parseSseBlock<T>(block, onProgress);
+      if (result !== null) summary = result;
+    }
+  };
+
+  const drainBuffer = () => {
     const chunks = buffer.split("\n\n");
     buffer = chunks.pop() ?? "";
-    for (const block of chunks) {
-      if (!block.trim() || block.startsWith(":")) continue;
-      let event = "message";
-      let data = "";
-      for (const line of block.split("\n")) {
-        if (line.startsWith("event:")) event = line.slice(6).trim();
-        else if (line.startsWith("data:")) data += line.slice(5).trim();
-      }
-      if (!data) continue;
-      const parsed = JSON.parse(data) as { error?: string; data?: Record<string, unknown> };
-      if (event === "progress") onProgress(parsed as T);
-      else if (event === "done") summary = parsed.data ?? null;
-      else if (event === "error") throw new Error(parsed.error || "Грешка при синхронизация");
+    flushBlocks(chunks);
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (value) {
+      buffer += decoder.decode(value, { stream: true });
+      drainBuffer();
     }
+    if (done) break;
+  }
+  buffer += decoder.decode();
+  drainBuffer();
+  if (buffer.trim()) {
+    const tail = parseSseBlock<T>(buffer.trim(), onProgress);
+    if (tail !== null && typeof tail === "object") summary = tail;
   }
   if (!summary) throw new Error("Синхронизацията приключи без обобщение");
   return summary;
@@ -215,7 +240,7 @@ const LS_LAST_BACKUP = "smolyanklima_last_full_backup_at";
 
 const TABS: { id: SettingsTab; label: string; hint: string }[] = [
   { id: "general", label: "Общи", hint: "Общи настройки — засега празно" },
-  { id: "catalog", label: "Каталог", hint: "Импорт от Булклима и Климаком (Climacom)" },
+  { id: "catalog", label: "Каталог", hint: "Импорт на каталози от доставчици" },
   { id: "backup", label: "Резервно копие", hint: "Пълен JSON архив на базата данни" },
 ];
 
@@ -312,6 +337,7 @@ export default function SettingsPageClient() {
   const [allCatalogSyncStep, setAllCatalogSyncStep] = useState(0);
   const [allCatalogSyncLog, setAllCatalogSyncLog] = useState<string[]>([]);
   const allCatalogSyncLogEndRef = useRef<HTMLDivElement>(null);
+  const syncAllLockRef = useRef(false);
 
   const anyCatalogSyncing =
     bulclimaSyncing || climacomSyncing || condexSyncing || bittelSyncing || allCatalogSyncing;
@@ -746,47 +772,70 @@ export default function SettingsPageClient() {
     }
   }
 
+  async function runCatalogSyncStep(stepId: (typeof ALL_CATALOG_SYNC_STEPS)[number]["id"]): Promise<boolean> {
+    switch (stepId) {
+      case "bulclima":
+        return syncBulclimaCatalog();
+      case "climacom":
+        return syncClimacomCatalog();
+      case "condex":
+        return syncCondexCatalog();
+      case "bittel":
+        return syncBittelCatalog();
+      default:
+        return false;
+    }
+  }
+
   async function syncAllCatalogs() {
-    if (anyCatalogSyncing || reclassifying) return;
+    if (syncAllLockRef.current || reclassifying) return;
+    syncAllLockRef.current = true;
     setAllCatalogSyncing(true);
     setAllCatalogSyncStep(0);
     setAllCatalogSyncLog([]);
     setError(null);
-    const runners: Record<(typeof ALL_CATALOG_SYNC_STEPS)[number]["id"], () => Promise<boolean>> = {
-      bulclima: syncBulclimaCatalog,
-      climacom: syncClimacomCatalog,
-      condex: syncCondexCatalog,
-      bittel: syncBittelCatalog,
-    };
-    appendAllCatalogSyncLog(
-      `[${new Date().toLocaleTimeString("bg-BG")}] Започва обща синхронизация (${ALL_CATALOG_SYNC_STEPS.length} доставчика, последователно)…`,
-    );
+
+    const ts = () => new Date().toLocaleTimeString("bg-BG");
     let failedAt: string | null = null;
-    for (let i = 0; i < ALL_CATALOG_SYNC_STEPS.length; i++) {
-      const step = ALL_CATALOG_SYNC_STEPS[i];
-      setAllCatalogSyncStep(i + 1);
+
+    try {
       appendAllCatalogSyncLog(
-        `[${new Date().toLocaleTimeString("bg-BG")}] (${i + 1}/${ALL_CATALOG_SYNC_STEPS.length}) ${step.label}…`,
+        `[${ts()}] Започва обща синхронизация — ${ALL_CATALOG_SYNC_STEPS.length} доставчика, един след друг.`,
       );
-      const ok = await runners[step.id]();
-      if (!ok) {
-        failedAt = step.label;
-        appendAllCatalogSyncLog(
-          `[${new Date().toLocaleTimeString("bg-BG")}] Грешка при ${step.label} — спиране на опашката.`,
-        );
-        break;
+
+      for (let i = 0; i < ALL_CATALOG_SYNC_STEPS.length; i++) {
+        const step = ALL_CATALOG_SYNC_STEPS[i];
+        setAllCatalogSyncStep(i + 1);
+        appendAllCatalogSyncLog(`[${ts()}] (${i + 1}/${ALL_CATALOG_SYNC_STEPS.length}) Старт: ${step.label}`);
+
+        const ok = await runCatalogSyncStep(step.id);
+
+        if (!ok) {
+          failedAt = step.label;
+          appendAllCatalogSyncLog(`[${ts()}] Грешка при ${step.label} — спиране.`);
+          break;
+        }
+
+        appendAllCatalogSyncLog(`[${ts()}] ${step.label} — завърши.`);
+
+        if (i < ALL_CATALOG_SYNC_STEPS.length - 1) {
+          appendAllCatalogSyncLog(`[${ts()}] Изчакване преди следващия доставчик…`);
+          await new Promise((r) => setTimeout(r, 800));
+        }
       }
-      appendAllCatalogSyncLog(
-        `[${new Date().toLocaleTimeString("bg-BG")}] ${step.label} — готово.`,
-      );
+
+      if (!failedAt) {
+        appendAllCatalogSyncLog(`[${ts()}] Всички каталози са синхронизирани успешно.`);
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+      appendAllCatalogSyncLog(`[${ts()}] Неочаквана грешка: ${msg}`);
+    } finally {
+      setAllCatalogSyncStep(0);
+      setAllCatalogSyncing(false);
+      syncAllLockRef.current = false;
     }
-    if (!failedAt) {
-      appendAllCatalogSyncLog(
-        `[${new Date().toLocaleTimeString("bg-BG")}] Всички каталози са синхронизирани успешно.`,
-      );
-    }
-    setAllCatalogSyncStep(0);
-    setAllCatalogSyncing(false);
   }
 
   useEffect(() => {

@@ -1,20 +1,32 @@
+import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
+import {
+  findIncompleteDeliveredInstanceForModel,
+  findSerialConflicts,
+  formatSerialConflictError,
+  trimDeliveryFields,
+  validateDeliveryFieldsComplete,
+} from "@/lib/admin/productDeliveryValidation";
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflight(req);
 }
 
+const FulfillBodySchema = z.object({
+  indoorUnitSerial: z.string().min(1).max(200),
+  outdoorUnitSerial: z.string().min(1).max(200),
+  supplierInvoiceNumber: z.string().min(1).max(120),
+  purchasedAt: z.string().min(1).max(32),
+});
+
 /**
  * POST /api/admin/supplier-orders/[id]/fulfill
  *
- * Marks the product as delivered:
- * 1. Clones the template product into a new instance (stock_status=in_stock,
- *    show_in_public_catalog=false). Serial numbers, invoice, and delivery date
- *    are left empty — admin fills them in the product edit page.
- * 2. Marks the supplier_order work item as done.
- * Returns { productInstanceId } so the caller can navigate to the edit page.
+ * Маркира поръчката като доставена и създава складова инстанция само ако са
+ * попълнени серийни номера, дата на доставка и номер на фактура, и серийните
+ * не съществуват при друг продукт.
  */
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   let session;
@@ -29,10 +41,30 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     return withCors(req, NextResponse.json({ error: "Само офис и администратор могат да изпълняват поръчки." }, { status: 403 }));
   }
 
+  const json = await req.json().catch(() => null);
+  const parsedBody = FulfillBodySchema.safeParse(json);
+  if (!parsedBody.success) {
+    return withCors(
+      req,
+      NextResponse.json(
+        {
+          error:
+            "Попълнете серийните номера, датата на доставка и номера на фактурата преди да отбележите доставката.",
+        },
+        { status: 400 },
+      ),
+    );
+  }
+
+  const delivery = trimDeliveryFields(parsedBody.data);
+  const deliveryErr = validateDeliveryFieldsComplete(delivery);
+  if (deliveryErr) {
+    return withCors(req, NextResponse.json({ error: deliveryErr }, { status: 400 }));
+  }
+
   const { id } = await ctx.params;
   const supabase = session.db;
 
-  // Load the supplier_order work item
   const { data: order, error: orderErr } = await supabase
     .from("work_items")
     .select("id, status, event_code, product_id, contact_id, customer_name, customer_phone, customer_address, unit_price, notes, title")
@@ -66,7 +98,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     return withCors(req, NextResponse.json({ error: "Поръчката няма свързан продукт" }, { status: 400 }));
   }
 
-  // Load the template product to clone
   const { data: template, error: tplErr } = await supabase
     .from("products")
     .select("*")
@@ -77,17 +108,64 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   if (!template) return withCors(req, NextResponse.json({ error: "Шаблонният продукт не е намерен" }, { status: 404 }));
 
   const tpl = template as Record<string, unknown>;
+  const brandId = tpl.brand_id as string | null;
+  const modelCode = String(tpl.model_code ?? "").trim();
 
-  // Create the delivered product instance (serials/invoice/delivery filled later via edit page)
+  try {
+    const serialConflicts = await findSerialConflicts(supabase, {
+      indoor: delivery.indoorUnitSerial,
+      outdoor: delivery.outdoorUnitSerial,
+    });
+    if (serialConflicts.length > 0) {
+      return withCors(
+        req,
+        NextResponse.json({ error: formatSerialConflictError(serialConflicts) }, { status: 409 }),
+      );
+    }
+
+    if (brandId && modelCode) {
+      const incomplete = await findIncompleteDeliveredInstanceForModel(supabase, {
+        brandId,
+        modelCode,
+      });
+      if (incomplete) {
+        return withCors(
+          req,
+          NextResponse.json(
+            {
+              error: `Има незавършена доставена бройка за този модел („${incomplete.name}“). Попълнете серийните номера, фактурата и датата преди нова доставка.`,
+            },
+            { status: 409 },
+          ),
+        );
+      }
+    }
+  } catch (e) {
+    return withCors(req, NextResponse.json({ error: String((e as Error).message) }, { status: 500 }));
+  }
+
+  const agreedFromOrder =
+    typeof orderRow.unit_price === "number" && Number.isFinite(orderRow.unit_price) && orderRow.unit_price >= 0
+      ? orderRow.unit_price
+      : null;
+  const purchaseFromOrder =
+    agreedFromOrder ??
+    (tpl.purchase_price != null && Number.isFinite(Number(tpl.purchase_price))
+      ? Number(tpl.purchase_price)
+      : null);
+
   const { data: newProduct, error: prodErr } = await supabase
     .from("products")
     .insert({
       name: tpl.name,
       slug: null,
       description: tpl.description ?? null,
-      price: typeof orderRow.unit_price === "number" && orderRow.unit_price >= 0 ? orderRow.unit_price : Number(tpl.price ?? 0),
+      price:
+        agreedFromOrder != null
+          ? agreedFromOrder
+          : Number(tpl.price ?? 0),
       price_with_mount: tpl.price_with_mount ?? null,
-      purchase_price: tpl.purchase_price ?? null,
+      purchase_price: purchaseFromOrder,
       brand_id: tpl.brand_id ?? null,
       type_id: tpl.type_id ?? null,
       product_condition: tpl.product_condition ?? "new",
@@ -101,10 +179,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       supplier_id: tpl.supplier_id ?? null,
       source_url: tpl.source_url ?? null,
       product_region: tpl.product_region ?? null,
-      indoor_unit_serial: null,
-      outdoor_unit_serial: null,
-      supplier_invoice_number: null,
-      purchased_at: null,
+      indoor_unit_serial: delivery.indoorUnitSerial,
+      outdoor_unit_serial: delivery.outdoorUnitSerial,
+      supplier_invoice_number: delivery.supplierInvoiceNumber,
+      purchased_at: delivery.purchasedAt,
       supplier_order_work_item_id: id,
     })
     .select("id, name")
@@ -114,7 +192,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
   const newProductId = (newProduct as { id: string }).id;
 
-  // Mark the supplier_order work item as done
   const { error: updateErr } = await supabase
     .from("work_items")
     .update({
@@ -124,7 +201,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     .eq("id", id);
 
   if (updateErr) {
-    // Rollback: remove the newly created product
     await supabase.from("products").delete().eq("id", newProductId);
     return withCors(req, NextResponse.json({ error: updateErr.message }, { status: 500 }));
   }

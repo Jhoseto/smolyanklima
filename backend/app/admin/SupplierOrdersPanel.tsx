@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ChevronRight, Truck } from "lucide-react";
 import { Card } from "./ui";
 import { SupplierOrderDetailModal } from "./SupplierOrderDetailModal";
+import { notifyAdminCalendarReload } from "@/lib/admin/calendarReload";
 import type { NormalizedSupplierOrderRow } from "@/lib/admin/supplierOrderRow";
 
 function displayName(row: NormalizedSupplierOrderRow): string {
@@ -60,6 +61,7 @@ export function SupplierOrdersPanel({
     setSelectedOrderId(null);
     setRows((prev) => prev.filter((r) => r.id !== orderId));
     void refresh();
+    notifyAdminCalendarReload();
   }
 
   const count = rows.length;
@@ -73,7 +75,7 @@ export function SupplierOrdersPanel({
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <Truck className="h-4 w-4 shrink-0 text-violet-600" />
-                <div className="text-sm font-bold text-slate-900">Поръчки от доставчик</div>
+                <div className="text-sm font-bold text-slate-900">Поръчки</div>
               </div>
               <p className="mt-1 text-xs leading-relaxed text-slate-600">
                 Климатици чакащи доставка. Кликнете върху поръчка за подробности.
@@ -125,10 +127,10 @@ export function SupplierOrdersPanel({
               <p className="text-xs text-slate-400">Пълният списък е достъпен за офис и администратор.</p>
             ) : (
               <a
-                href="/admin/history"
+                href="/admin/supplier-orders"
                 className="inline-flex items-center gap-1 text-xs font-semibold text-violet-700 hover:text-violet-800"
               >
-                Отвори архива
+                Пълна хронология
                 <ChevronRight className="h-3.5 w-3.5" />
               </a>
             )}
@@ -143,6 +145,12 @@ export function SupplierOrdersPanel({
           onCancelled={handleCancelled}
           onUpdated={(updated) => {
             setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+            notifyAdminCalendarReload();
+          }}
+          onFulfilled={() => {
+            setSelectedOrderId(null);
+            void refresh();
+            notifyAdminCalendarReload();
           }}
           frontendOrigin={frontendOrigin}
         />

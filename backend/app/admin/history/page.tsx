@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { SectionTitle, Card, Input, Select, Button, Table, Th, Td } from "../ui";
 import { RefreshCw, CheckCircle2, Ban } from "lucide-react";
+import { ProductQuickViewButton } from "../ProductQuickView";
 
 type EventCode =
   | "item_added"
@@ -210,8 +211,12 @@ export default function AdminHistoryPage() {
               const showActions = canPendingActions(row);
               return (
                 <tr key={row.id} className="hover:bg-slate-50 transition-colors">
-                  <Td className="font-semibold text-slate-800 max-w-[200px] truncate" title={productName}>
-                    {productName}
+                  <Td className="max-w-[200px] min-w-0">
+                    <ProductQuickViewButton
+                      productId={row.products?.id}
+                      productName={productName}
+                      className="block truncate text-sm font-semibold text-slate-800"
+                    />
                   </Td>
                   <Td>
                     <span className={mountPhasePillClass(row)}>{mountPhaseLabel(row)}</span>
@@ -289,7 +294,11 @@ export default function AdminHistoryPage() {
             <div key={row.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
               <div className="flex items-start justify-between gap-3 mb-2">
                 <div className="min-w-0">
-                  <div className="text-[11px] font-bold uppercase text-slate-500 truncate">{productName}</div>
+                  <ProductQuickViewButton
+                    productId={row.products?.id}
+                    productName={productName}
+                    className="block truncate text-[11px] font-bold uppercase text-slate-500"
+                  />
                   <div className="font-bold text-slate-900 text-sm">{row.customer_name || "Неизвестен клиент"}</div>
                   {row.customer_phone && (
                     <a href={`tel:${row.customer_phone}`} className="text-xs text-brand-blue-500 font-medium mt-0.5 block">

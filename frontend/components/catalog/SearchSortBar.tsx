@@ -3,12 +3,18 @@ import { Search, SlidersHorizontal, LayoutGrid, LayoutList, X, ChevronDown } fro
 import type { SortOption } from '../../data/types/product';
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
-  { value: 'recommended', label: 'По оценка (бр. отзиви)' },
-  { value: 'price-asc',   label: 'Цена: ниска → висока' },
-  { value: 'price-desc',  label: 'Цена: висока → ниска' },
+  { value: 'recommended', label: 'Препоръчани (отзиви и избрани)' },
+  { value: 'rating-desc', label: 'По рейтинг (звезди)' },
+  { value: 'price-asc', label: 'Цена: ниска → висока' },
+  { value: 'price-desc', label: 'Цена: висока → ниска' },
+  { value: 'kw-asc', label: 'Мощност (kW): ниска → висока' },
+  { value: 'btu-asc', label: 'BTU: 7K → 24K' },
+  { value: 'coverage-asc', label: 'Площ (m²): малка → голяма' },
+  { value: 'seer-desc', label: 'По SEER (икономичност)' },
+  { value: 'scop-desc', label: 'По SCOP (икономичност)' },
+  { value: 'name-asc', label: 'По име (А–Я)' },
   { value: 'energy-class', label: 'Енергиен клас' },
-  { value: 'noise-asc',   label: 'Ниво на шум' },
-  { value: 'rating-desc', label: 'Най-висок рейтинг' },
+  { value: 'noise-asc', label: 'Ниво на шум' },
 ];
 
 interface SearchSortBarProps {
@@ -96,19 +102,21 @@ export const SearchSortBar = ({
         </div>
 
         {/* Row 2: Категории (flex-1) + сортиране вдясно */}
-        <div className="flex items-center gap-3 mt-2.5 pt-2.5 border-t border-gray-100/70">
+        <div className="flex items-start gap-3 mt-2.5 pt-2.5 border-t border-gray-100/70">
           <div className="flex-1 min-w-0">{categoryChipsSlot}</div>
-          <div className="relative shrink-0 w-[11.5rem] sm:w-auto sm:min-w-[11.5rem]">
+          <div className="relative shrink-0 w-[9.5rem] sm:w-auto sm:min-w-[9.5rem] lg:min-w-[10.5rem]">
             <select
               value={sortBy}
               onChange={(e) => onSortChange(e.target.value as SortOption)}
-              className="w-full appearance-none pl-3 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs sm:text-sm text-gray-700 font-semibold focus:outline-none focus:ring-2 focus:ring-[#00B4D8]/30 focus:border-[#00B4D8] cursor-pointer transition-all"
+              className="w-full appearance-none pl-2 pr-6 py-1 bg-gray-50 border border-gray-200 rounded-lg text-[10px] leading-tight text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#00B4D8]/30 focus:border-[#00B4D8] cursor-pointer transition-all"
             >
               {SORT_OPTIONS.map(opt => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                <option key={opt.value} value={opt.value} className="text-[10px]">
+                  {opt.label}
+                </option>
               ))}
             </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
           </div>
         </div>
 

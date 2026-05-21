@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, Button, Select, Input, Textarea } from "./ui";
 import { ContactPersonPicker } from "./ContactPersonPicker";
 import { InstallationMountDetailModal } from "./InstallationMountDetailModal";
+import { SupplierOrderDetailModal } from "./SupplierOrderDetailModal";
 import { CalendarDays, CheckCircle2, List } from "lucide-react";
 import { notifyFollowUpCallsChanged } from "@/lib/admin/follow-up-calls-events";
 
@@ -93,6 +94,7 @@ const CALENDAR_EVENT_FILTERS: Array<{ id: EventCode; label: string }> = [
   { id: "service_on_site", label: "Сервиз на терен" },
   { id: "service_in_shop", label: "Сервиз в склад" },
   { id: "consultation", label: "Консултация" },
+  { id: "supplier_order", label: "Поръчка от доставчик" },
 ];
 
 const ALL_CALENDAR_FILTER_IDS = CALENDAR_EVENT_FILTERS.map((f) => f.id);
@@ -120,7 +122,14 @@ function loadCalendarEventFiltersFromStorage(): Set<EventCode> {
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return createAllCalendarFiltersEnabled();
     const ids = parsed.filter(isCalendarFilterId);
-    return new Set(ids);
+    const set = new Set(ids);
+    // Нови типове събития (напр. поръчка от доставчик) — включени по подразбиране при стар запис
+    if (ids.length > 0) {
+      for (const id of ALL_CALENDAR_FILTER_IDS) {
+        if (!parsed.includes(id)) set.add(id);
+      }
+    }
+    return set;
   } catch {
     return createAllCalendarFiltersEnabled();
   }
@@ -231,6 +240,7 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
   const [confirmCompleteItem, setConfirmCompleteItem] = useState<WorkItem | null>(null);
   const [displayMode, setDisplayMode] = useState<"calendar" | "agenda">("calendar");
   const [mountDetailId, setMountDetailId] = useState<string | null>(null);
+  const [supplierOrderDetailId, setSupplierOrderDetailId] = useState<string | null>(null);
 
   const now = useMemo(() => {
     const d = new Date();
@@ -251,13 +261,35 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
 
   async function load() {
     setError(null);
-    const workRes = await fetch(`/api/admin/work-items?from=${monthFrom}&to=${monthTo}&perPage=500`, { credentials: "include" });
-    const workJson = await workRes.json().catch(() => ({}));
-    if (!workRes.ok) {
-      setError((workJson as any).error || "Грешка при зареждане");
-      return;
+    const perPage = 500;
+    const collected: WorkItem[] = [];
+    let page = 1;
+    let total = 0;
+    try {
+      // Месецът може да има >500 събития (напр. масови item_removed) — дърпаме всички страници.
+      do {
+        const workRes = await fetch(
+          `/api/admin/work-items?from=${monthFrom}&to=${monthTo}&perPage=${perPage}&page=${page}`,
+          { credentials: "include" },
+        );
+        const workJson = (await workRes.json().catch(() => ({}))) as {
+          error?: string;
+          data?: WorkItem[];
+          meta?: { total?: number };
+        };
+        if (!workRes.ok) {
+          setError(workJson.error || "Грешка при зареждане");
+          return;
+        }
+        const batch = workJson.data ?? [];
+        total = workJson.meta?.total ?? batch.length;
+        collected.push(...batch);
+        page += 1;
+      } while (collected.length < total && page <= 40);
+      setItems(collected);
+    } catch (e: unknown) {
+      setError(String((e as Error)?.message ?? e));
     }
-    setItems((workJson as any).data ?? []);
   }
 
   useEffect(() => {
@@ -266,17 +298,26 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
   }, [monthOffset]);
 
   useEffect(() => {
+    const onReload = () => void load();
+    window.addEventListener("sk-admin-calendar-reload", onReload);
+    return () => window.removeEventListener("sk-admin-calendar-reload", onReload);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthFrom, monthTo]);
+
+  useEffect(() => {
     if (!readOnly) return;
     setEditingId(null);
     setConfirmDeleteId(null);
   }, [readOnly]);
 
-  /** Продажбите не се показват в оперативния календар — само панел „Продажби“. */
+  /** Продажбите не се показват в календара; поръчките от доставчик (supplier_order) — да. */
   const plannerItems = useMemo(
-    () => items.filter((item) =>
-      item.event_code !== "sale" &&
-      (item.type !== "sale" || item.event_code === "supplier_order"),
-    ),
+    () =>
+      items.filter((item) => {
+        if (item.event_code === "supplier_order") return true;
+        if (item.event_code === "sale" || item.type === "sale") return false;
+        return true;
+      }),
     [items],
   );
 
@@ -330,6 +371,7 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
   }, [monthStart.getTime(), monthEnd.getTime()]);
 
   function matchesViewMode(item: WorkItem) {
+    if (item.event_code === "supplier_order") return true;
     const code = item.event_code;
     if (!code) return enabledEventFilters.size > 0;
     const inFilterList = ALL_CALENDAR_FILTER_IDS.includes(code);
@@ -373,6 +415,10 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
       setError(
         "Добавянето и премахването на продукт в календара се записват автоматично при нов продукт или изтриване от каталога.",
       );
+      return false;
+    }
+    if (localForm.eventCode === "supplier_order") {
+      setError('Поръчките от доставчик се записват от каталога („По поръчка“ → Поръчване), не ръчно от календара.');
       return false;
     }
     const cid = localForm.contactId.trim();
@@ -449,7 +495,8 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
     if (!title || !editForm.dueDate) return;
     const catalogStock =
       editForm.eventCode === "item_added" || editForm.eventCode === "item_removed";
-    if (!catalogStock) {
+    const supplierOrder = editForm.eventCode === "supplier_order";
+    if (!catalogStock && !supplierOrder) {
       const ecid = editForm.contactId.trim();
       if (!ecid || !isContactUuid(ecid)) {
         setError("За запис е задължителен избран контакт от CRM (синьото поле по-горе).");
@@ -650,6 +697,7 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" /> Сервиз на терен</span>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-500 shrink-0" /> Сервиз в склад</span>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-pink-500 shrink-0" /> Консултация</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-600 shrink-0" /> Поръчка от доставчик</span>
         </div>
       </div>
 
@@ -716,6 +764,18 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
                             className="shrink-0 self-center px-2 py-2 text-[10px] font-bold uppercase text-brand-blue-700 bg-brand-blue-50 rounded-lg border border-brand-blue-100"
                           >
                             Инфо
+                          </button>
+                        )}
+                        {item.event_code === "supplier_order" && item.status !== "done" && item.status !== "cancelled" && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSupplierOrderDetailId(item.id);
+                            }}
+                            className="shrink-0 self-center px-2 py-2 text-[10px] font-bold uppercase text-violet-800 bg-violet-50 rounded-lg border border-violet-200"
+                          >
+                            Детайли
                           </button>
                         )}
                       </div>
@@ -803,6 +863,19 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
                               Детайли монтаж
                             </Button>
                           )}
+                          {item.event_code === "supplier_order" && item.status !== "done" && item.status !== "cancelled" && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSupplierOrderDetailId(item.id);
+                              }}
+                            >
+                              Поръчка
+                            </Button>
+                          )}
                           {!readOnly && (
                             <>
                               <Button variant="secondary" size="sm" onClick={() => startEdit(item)}>
@@ -827,7 +900,9 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
                               form={editForm}
                               setForm={setEditForm}
                               catalogEventLocked={
-                                item.event_code === "item_added" || item.event_code === "item_removed"
+                                item.event_code === "item_added" ||
+                                item.event_code === "item_removed" ||
+                                item.event_code === "supplier_order"
                               }
                             />
                           </FormField>
@@ -920,6 +995,22 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
         onCompleted={() => void load()}
       />
 
+      {supplierOrderDetailId && (
+        <SupplierOrderDetailModal
+          orderId={supplierOrderDetailId}
+          onClose={() => setSupplierOrderDetailId(null)}
+          onCancelled={() => {
+            setSupplierOrderDetailId(null);
+            void load();
+          }}
+          onUpdated={() => void load()}
+          onFulfilled={() => {
+            setSupplierOrderDetailId(null);
+            void load();
+          }}
+        />
+      )}
+
       {confirmCompleteItem && (
         <WorkItemCompleteConfirmModal
           item={confirmCompleteItem}
@@ -968,13 +1059,21 @@ function EventSelect({
     const label =
       form.eventCode === "item_added"
         ? "Добавяне на продукт"
-        : "Премахване на продукт";
+        : form.eventCode === "item_removed"
+          ? "Премахване на продукт"
+          : form.eventCode === "supplier_order"
+            ? "Поръчка от доставчик"
+            : form.eventCode;
+    const hint =
+      form.eventCode === "supplier_order"
+        ? "Записва се при поръчване от каталога (продукт „По поръчка“); типът не се сменя оттук."
+        : "Автоматично от каталога с продукти; типът не се сменя оттук.";
     return (
       <div className="grid gap-1">
         <Select value={form.eventCode} disabled className="opacity-90">
           <option value={form.eventCode}>{label}</option>
         </Select>
-        <p className="text-[10px] leading-snug text-slate-500">Автоматично от каталога с продукти; типът не се сменя оттук.</p>
+        <p className="text-[10px] leading-snug text-slate-500">{hint}</p>
       </div>
     );
   }
@@ -1263,6 +1362,7 @@ function WorkItemCompleteControl({
   onRequestComplete: () => void;
 }) {
   if (readOnly || item.status === "cancelled") return null;
+  if (item.event_code === "supplier_order") return null;
 
   const done = item.status === "done";
   const label = completeActionLabel(item.event_code, done);
@@ -1339,5 +1439,6 @@ function eventColor(item: WorkItem): string {
   if (item.event_code === "service_in_shop") return "#a855f7";
   if (item.status === "done") return "#22c55e";
   if (item.event_code === "consultation") return "#ec4899";
+  if (item.event_code === "supplier_order") return "#7c3aed";
   return TYPE_COLOR[item.type];
 }

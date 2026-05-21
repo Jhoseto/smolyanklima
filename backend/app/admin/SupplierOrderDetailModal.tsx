@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   X,
   ExternalLink,
@@ -17,9 +18,20 @@ import {
   Save,
   Loader2,
   Wind,
+  Receipt,
+  Hash,
+  Mail,
 } from "lucide-react";
+import { canRecordProductSale } from "@/lib/admin/recordProductSale";
 import { Button, Input } from "./ui";
 import { CatalogProductImage } from "@/app/admin/components/CatalogProductImage";
+import { ProductQuickViewButton } from "./ProductQuickView";
+import {
+  agreedPriceAfterDiscount,
+  discountPercentFromAgreedPrice,
+  formatAgreedPriceInput,
+  parseDecimalInput,
+} from "@/lib/admin/agreedPriceDiscount";
 import type { NormalizedSupplierOrderRow } from "@/lib/admin/supplierOrderRow";
 
 function formatBgDate(value: string | null | undefined) {
@@ -72,6 +84,34 @@ function publicProductUrl(frontendOrigin: string, prod: NormalizedSupplierOrderR
   return `${base}/catalog`;
 }
 
+type SerialMatch = { id: string; name: string; slug: string | null; field: "indoor" | "outdoor" | "both" };
+
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(t);
+  }, [value, delayMs]);
+  return debounced;
+}
+
+function SerialDupNotice({ matches }: { matches: SerialMatch[] }) {
+  if (matches.length === 0) return null;
+  return (
+    <p className="mt-1 text-[11px] font-medium text-amber-800">
+      Вече записан при:{" "}
+      {matches.map((m, i) => (
+        <span key={m.id}>
+          {i > 0 ? ", " : null}
+          <Link href={`/admin/products/${m.id}`} className="underline hover:text-amber-950" target="_blank">
+            {m.name}
+          </Link>
+        </span>
+      ))}
+    </p>
+  );
+}
+
 function FieldLabel({
   label,
   icon,
@@ -89,17 +129,41 @@ function FieldLabel({
   );
 }
 
+function InfoRow({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string | null | undefined;
+  mono?: boolean;
+}) {
+  return (
+    <div>
+      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</p>
+      <p className={`mt-0.5 font-semibold text-slate-800 ${mono ? "font-mono text-xs" : "text-sm"}`}>
+        {value?.trim() ? value : "—"}
+      </p>
+    </div>
+  );
+}
+
 export function SupplierOrderDetailModal({
   orderId,
   onClose,
   onCancelled,
   onUpdated,
+  onFulfilled,
+  onRequestSale,
   frontendOrigin = "http://localhost:3000",
 }: {
   orderId: string;
   onClose: () => void;
   onCancelled: (orderId: string) => void;
   onUpdated?: (order: NormalizedSupplierOrderRow) => void;
+  /** След доставка — остава в панела вместо redirect към продукт. */
+  onFulfilled?: (productInstanceId: string) => void;
+  onRequestSale?: (order: NormalizedSupplierOrderRow) => void;
   frontendOrigin?: string;
 }) {
   const router = useRouter();
@@ -108,12 +172,21 @@ export function SupplierOrderDetailModal({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [imgError, setImgError] = useState(false);
   const [agreedDraft, setAgreedDraft] = useState("");
+  const [agreedDiscountPct, setAgreedDiscountPct] = useState("");
   const [savingPrice, setSavingPrice] = useState(false);
   const [priceSaved, setPriceSaved] = useState(false);
   const [delivering, setDelivering] = useState(false);
   const [cancelStep, setCancelStep] = useState<"idle" | "confirm">("idle");
   const [cancelling, setCancelling] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [indoorSerial, setIndoorSerial] = useState("");
+  const [outdoorSerial, setOutdoorSerial] = useState("");
+  const [invoiceNumber, setInvoiceNumber] = useState("");
+  const [purchasedAt, setPurchasedAt] = useState(() => new Date().toISOString().slice(0, 10));
+  const [indoorDup, setIndoorDup] = useState<SerialMatch[]>([]);
+  const [outdoorDup, setOutdoorDup] = useState<SerialMatch[]>([]);
+  const debouncedIndoor = useDebouncedValue(indoorSerial.trim(), 350);
+  const debouncedOutdoor = useDebouncedValue(outdoorSerial.trim(), 350);
 
   useEffect(() => {
     let cancelled = false;
@@ -122,6 +195,12 @@ export function SupplierOrderDetailModal({
     setImgError(false);
     setCancelStep("idle");
     setActionError(null);
+    setIndoorSerial("");
+    setOutdoorSerial("");
+    setInvoiceNumber("");
+    setPurchasedAt(new Date().toISOString().slice(0, 10));
+    setIndoorDup([]);
+    setOutdoorDup([]);
     (async () => {
       const res = await fetch(`/api/admin/supplier-orders/${orderId}`, { credentials: "include" });
       const json = await res.json().catch(() => ({}));
@@ -132,7 +211,14 @@ export function SupplierOrderDetailModal({
       } else {
         const row = (json as { data?: NormalizedSupplierOrderRow }).data ?? null;
         setOrder(row);
-        setAgreedDraft(row?.unit_price != null ? String(row.unit_price) : "");
+        const catalog = row?.products?.price != null ? Number(row.products.price) : NaN;
+        const agreed = row?.unit_price != null ? Number(row.unit_price) : NaN;
+        setAgreedDraft(Number.isFinite(agreed) ? formatAgreedPriceInput(agreed) : "");
+        setAgreedDiscountPct(
+          Number.isFinite(catalog) && Number.isFinite(agreed)
+            ? discountPercentFromAgreedPrice(catalog, agreed)
+            : "",
+        );
       }
       setLoading(false);
     })();
@@ -140,6 +226,50 @@ export function SupplierOrderDetailModal({
       cancelled = true;
     };
   }, [orderId]);
+
+  useEffect(() => {
+    if (!debouncedIndoor) {
+      setIndoorDup([]);
+      return;
+    }
+    const ctrl = new AbortController();
+    const url = new URL("/api/admin/products/check-serial", window.location.origin);
+    url.searchParams.set("serial", debouncedIndoor);
+    fetch(url.toString(), { credentials: "include", signal: ctrl.signal })
+      .then((r) => (r.ok ? r.json() : Promise.resolve({ data: [] })))
+      .then((j: { data?: SerialMatch[] }) => setIndoorDup(j.data ?? []))
+      .catch(() => undefined);
+    return () => ctrl.abort();
+  }, [debouncedIndoor]);
+
+  useEffect(() => {
+    if (!debouncedOutdoor) {
+      setOutdoorDup([]);
+      return;
+    }
+    const ctrl = new AbortController();
+    const url = new URL("/api/admin/products/check-serial", window.location.origin);
+    url.searchParams.set("serial", debouncedOutdoor);
+    fetch(url.toString(), { credentials: "include", signal: ctrl.signal })
+      .then((r) => (r.ok ? r.json() : Promise.resolve({ data: [] })))
+      .then((j: { data?: SerialMatch[] }) => setOutdoorDup(j.data ?? []))
+      .catch(() => undefined);
+    return () => ctrl.abort();
+  }, [debouncedOutdoor]);
+
+  const deliveryIncomplete =
+    !indoorSerial.trim() ||
+    !outdoorSerial.trim() ||
+    !invoiceNumber.trim() ||
+    !purchasedAt.trim();
+  const deliveryHasDup = indoorDup.length > 0 || outdoorDup.length > 0;
+  const canMarkDelivered = !deliveryIncomplete && !deliveryHasDup;
+
+  const deliveryHint = useMemo(() => {
+    if (deliveryHasDup) return "Серийните номера вече съществуват при друг продукт.";
+    if (deliveryIncomplete) return "Попълнете всички полета за доставка преди да отбележите получаване.";
+    return null;
+  }, [deliveryHasDup, deliveryIncomplete]);
 
   const prod = order?.products;
   const specs = prod?.product_specs;
@@ -191,6 +321,10 @@ export function SupplierOrderDetailModal({
 
   async function handleDelivered() {
     if (!order) return;
+    if (!canMarkDelivered) {
+      setActionError(deliveryHint ?? "Попълнете данните за доставка.");
+      return;
+    }
     setActionError(null);
     setDelivering(true);
     try {
@@ -198,7 +332,12 @@ export function SupplierOrderDetailModal({
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({
+          indoorUnitSerial: indoorSerial.trim(),
+          outdoorUnitSerial: outdoorSerial.trim(),
+          supplierInvoiceNumber: invoiceNumber.trim(),
+          purchasedAt: purchasedAt.trim(),
+        }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -206,9 +345,14 @@ export function SupplierOrderDetailModal({
         return;
       }
       const productInstanceId = (json as { data?: { productInstanceId?: string } }).data?.productInstanceId;
-      onClose();
-      if (productInstanceId) {
-        router.push(`/admin/products/${productInstanceId}?highlight=delivery`);
+      if (productInstanceId && onFulfilled) {
+        onFulfilled(productInstanceId);
+        onClose();
+      } else {
+        onClose();
+        if (productInstanceId) {
+          router.push(`/admin/products/${productInstanceId}`);
+        }
       }
     } catch (e) {
       setActionError(String((e as Error)?.message ?? "Неочаквана грешка"));
@@ -252,8 +396,18 @@ export function SupplierOrderDetailModal({
   const customerPhone = order?.customer_phone ?? order?.contacts?.phone ?? null;
   const customerAddress = order?.customer_address ?? null;
   const catalogPrice = prod?.price ?? null;
-  const purchasePrice = prod?.purchase_price ?? null;
   const headerDate = order?.due_date ? formatBgDate(order.due_date) : order ? formatBgDateTime(order.created_at) : "";
+  const isArchived = order?.status === "done" || order?.status === "cancelled";
+  const delivered = order?.delivered_product ?? null;
+
+  const phaseLabel =
+    order?.status === "cancelled" ? "Отказана" : order?.status === "done" ? "Доставена" : "Поръчана";
+  const phaseClass =
+    order?.status === "done"
+      ? "bg-green-100 text-green-800 border-green-200"
+      : order?.status === "cancelled"
+        ? "bg-red-100 text-red-800 border-red-200"
+        : "bg-violet-100 text-violet-900 border-violet-200";
 
   const linkBtnClass =
     "inline-flex flex-1 min-w-0 items-center justify-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 px-2.5 py-2 text-[11px] font-bold text-violet-800 shadow-sm transition-colors hover:border-violet-300 hover:bg-violet-100";
@@ -273,7 +427,9 @@ export function SupplierOrderDetailModal({
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <Truck className="h-5 w-5 shrink-0 text-violet-600" />
-              <h2 className="text-base font-bold text-slate-900">Поръчка от доставчик</h2>
+              <h2 className="text-base font-bold text-slate-900">
+                {isArchived ? "Детайли за поръчка" : "Поръчка от доставчик"}
+              </h2>
             </div>
             {!loading && !loadError && order && (
               <p className="mt-0.5 pl-7 text-xs text-slate-500">{headerDate}</p>
@@ -331,9 +487,11 @@ export function SupplierOrderDetailModal({
                       {prod.brand_name}
                     </p>
                   )}
-                  <p className="line-clamp-2 text-sm font-bold leading-snug text-slate-900">
-                    {prod?.name ?? order.title}
-                  </p>
+                  <ProductQuickViewButton
+                    productId={order.product_id ?? prod?.id ?? null}
+                    productName={prod?.name ?? order.title}
+                    className="line-clamp-2 text-sm font-bold leading-snug text-slate-900"
+                  />
                   {prod?.product_type_name && (
                     <p className="mt-0.5 text-xs text-slate-500">{prod.product_type_name}</p>
                   )}
@@ -391,15 +549,40 @@ export function SupplierOrderDetailModal({
                 )}
               </div>
 
+              {/* Статус и идентификатор */}
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${phaseClass}`}>
+                    {phaseLabel}
+                  </span>
+                  <span className="inline-flex rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-[11px] font-semibold text-slate-600">
+                    {order.status === "done"
+                      ? "Изпълнена"
+                      : order.status === "cancelled"
+                        ? "Отказана"
+                        : order.status === "in_progress"
+                          ? "В процес"
+                          : "Планирана"}
+                  </span>
+                </div>
+                <div className="mt-2 space-y-1 text-xs text-slate-500">
+                  <p className="flex items-center gap-1.5">
+                    <Hash className="h-3 w-3 shrink-0" />
+                    <span className="font-mono text-slate-600">{order.id}</span>
+                  </p>
+                  <p className="flex items-center gap-1.5">
+                    <Calendar className="h-3 w-3 shrink-0" />
+                    Създадена: {formatBgDateTime(order.created_at)}
+                    {order.due_date ? ` · Поръчана за: ${formatBgDate(order.due_date)}` : ""}
+                  </p>
+                </div>
+              </div>
+
               {/* Supplier */}
               <div className="rounded-2xl border border-slate-100 bg-slate-50/60 px-4 py-3">
                 <FieldLabel label="Доставчик" icon={<Store className="h-3 w-3" />} />
                 <p className="mt-1 text-sm font-semibold text-slate-900">
                   {prod?.supplier_name ?? "—"}
-                </p>
-                <p className="mt-2 text-xs text-slate-500">
-                  Доставна цена:{" "}
-                  <span className="font-bold text-slate-800">{fmtMoney(purchasePrice)}</span>
                 </p>
               </div>
 
@@ -411,32 +594,75 @@ export function SupplierOrderDetailModal({
                 </div>
                 <div className="rounded-2xl border border-violet-200 bg-violet-50/40 px-3 py-2.5">
                   <FieldLabel label="Договорена цена" className="text-violet-600" />
-                  <div className="mt-1 flex gap-2">
-                    <Input
-                      type="text"
-                      inputMode="decimal"
-                      value={agreedDraft}
-                      onChange={(e) => setAgreedDraft(e.target.value)}
-                      placeholder="0"
-                      className="text-sm"
-                    />
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => void saveAgreedPrice()}
-                      disabled={savingPrice}
-                      className="shrink-0 gap-1"
-                    >
-                      {savingPrice ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Save className="h-3.5 w-3.5" />
+                  {isArchived ? (
+                    <p className="mt-1 text-lg font-black text-violet-900">
+                      {order.unit_price != null ? fmtMoney(order.unit_price) : "—"}
+                    </p>
+                  ) : (
+                    <>
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        <label className="grid gap-1">
+                          <span className="text-[10px] font-bold text-violet-800/80">Отстъпка (%)</span>
+                          <Input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.1"
+                            value={agreedDiscountPct}
+                            onChange={(e) => {
+                              const pctStr = e.target.value;
+                              setAgreedDiscountPct(pctStr);
+                              const catalog = catalogPrice ?? NaN;
+                              const pct = parseDecimalInput(pctStr);
+                              if (pctStr.trim() === "" || !Number.isFinite(catalog)) return;
+                              setAgreedDraft(formatAgreedPriceInput(agreedPriceAfterDiscount(catalog, pct)));
+                            }}
+                            placeholder="0"
+                            className="text-sm"
+                          />
+                        </label>
+                        <label className="grid gap-1">
+                          <span className="text-[10px] font-bold text-violet-800/80">Цена (€)</span>
+                          <Input
+                            type="text"
+                            inputMode="decimal"
+                            value={agreedDraft}
+                            onChange={(e) => {
+                              const agreedStr = e.target.value;
+                              setAgreedDraft(agreedStr);
+                              const catalog = catalogPrice ?? NaN;
+                              const agreed = parseDecimalInput(agreedStr);
+                              if (agreedStr.trim() === "" || !Number.isFinite(catalog)) {
+                                setAgreedDiscountPct("");
+                                return;
+                              }
+                              setAgreedDiscountPct(discountPercentFromAgreedPrice(catalog, agreed));
+                            }}
+                            placeholder="0"
+                            className="text-sm"
+                          />
+                        </label>
+                      </div>
+                      <div className="mt-2 flex gap-2">
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => void saveAgreedPrice()}
+                          disabled={savingPrice}
+                          className="shrink-0 gap-1"
+                        >
+                          {savingPrice ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Save className="h-3.5 w-3.5" />
+                          )}
+                          Запази
+                        </Button>
+                      </div>
+                      {priceSaved && (
+                        <p className="mt-1 text-[11px] font-semibold text-emerald-600">Записано.</p>
                       )}
-                      Запази
-                    </Button>
-                  </div>
-                  {priceSaved && (
-                    <p className="mt-1 text-[11px] font-semibold text-emerald-600">Записано.</p>
+                    </>
                   )}
                 </div>
               </div>
@@ -462,22 +688,51 @@ export function SupplierOrderDetailModal({
                     {customerAddress}
                   </p>
                 ) : null}
-              </div>
-
-              {/* Order meta */}
-              <div className="space-y-1 text-sm text-slate-600">
-                <p className="flex items-center gap-1.5">
-                  <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                  <span className="font-semibold text-slate-700">Дата на поръчка:</span>{" "}
-                  {order.due_date ? formatBgDate(order.due_date) : formatBgDateTime(order.created_at)}
-                </p>
-                {order.notes?.trim() ? (
-                  <div className="mt-2 rounded-xl border border-amber-100 bg-amber-50/60 px-3 py-2">
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-amber-700">Бележки</p>
-                    <p className="mt-0.5 whitespace-pre-wrap text-sm text-amber-900">{order.notes.trim()}</p>
-                  </div>
+                {order.contacts?.email ? (
+                  <a
+                    href={`mailto:${order.contacts.email}`}
+                    className="inline-flex items-center gap-1.5 text-sm text-slate-600 hover:text-[#0077B6]"
+                  >
+                    <Mail className="h-3.5 w-3.5" />
+                    {order.contacts.email}
+                  </a>
                 ) : null}
               </div>
+
+              {delivered && (
+                <div className="space-y-3 rounded-2xl border border-green-200 bg-green-50/40 px-4 py-3">
+                  <FieldLabel label="Доставена бройка" className="text-green-800" />
+                  <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+                    <InfoRow label="Сериен № вътрешно" value={delivered.indoor_unit_serial} mono />
+                    <InfoRow label="Сериен № външно" value={delivered.outdoor_unit_serial} mono />
+                    <InfoRow
+                      label="Дата на доставка"
+                      value={delivered.purchased_at ? formatBgDate(delivered.purchased_at) : null}
+                    />
+                    <InfoRow label="Фактура доставчик" value={delivered.supplier_invoice_number} />
+                    <InfoRow
+                      label="Закупна цена"
+                      value={delivered.purchase_price != null ? fmtMoney(delivered.purchase_price) : null}
+                    />
+                    <InfoRow label="Продажна цена" value={delivered.price != null ? fmtMoney(delivered.price) : null} />
+                    <InfoRow label="Склад" value={delivered.stock_status} />
+                  </div>
+                  <Link
+                    href={`/admin/products/${delivered.id}`}
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-green-800 hover:underline"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Отвори складовата бройка
+                  </Link>
+                </div>
+              )}
+
+              {order.notes?.trim() ? (
+                <div className="rounded-xl border border-amber-100 bg-amber-50/60 px-3 py-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-amber-700">Бележки</p>
+                  <p className="mt-0.5 whitespace-pre-wrap text-sm text-amber-900">{order.notes.trim()}</p>
+                </div>
+              ) : null}
 
               {actionError && (
                 <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
@@ -488,14 +743,84 @@ export function SupplierOrderDetailModal({
           )}
         </div>
 
-        {/* Footer */}
+        {/* Footer — действия само за активни поръчки */}
         {!loading && !loadError && order && (
-          <div className="shrink-0 space-y-2 border-t border-slate-100 bg-slate-50/50 px-5 py-4">
-            {cancelStep === "confirm" && (
+          <div className="shrink-0 space-y-3 border-t border-slate-100 bg-slate-50/50 px-5 py-4">
+            {isArchived && delivered && onRequestSale && canRecordProductSale(delivered.stock_status) && (
+              <Button
+                variant="primary"
+                size="md"
+                className="w-full gap-1.5"
+                onClick={() => onRequestSale(order)}
+              >
+                <Receipt className="h-4 w-4" />
+                Запиши продажба
+              </Button>
+            )}
+            {isArchived && (
+              <Button variant="secondary" size="md" className="w-full" onClick={onClose}>
+                Затвори
+              </Button>
+            )}
+            {!isArchived && (
+            <div className="rounded-2xl border border-violet-200 bg-white px-3 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-violet-700">
+                Данни при получаване (задължителни)
+              </p>
+              <p className="mt-1 text-[11px] text-slate-500">
+                Без серийни номера, дата и фактура не се създава нова складова бройка — избягва се дублиране на модела.
+              </p>
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div>
+                  <FieldLabel label="Сериен № вътрешно" className="text-slate-500" />
+                  <Input
+                    value={indoorSerial}
+                    onChange={(e) => setIndoorSerial(e.target.value)}
+                    placeholder="от табелката"
+                    className={indoorDup.length > 0 ? "border-amber-400" : deliveryIncomplete && !indoorSerial.trim() ? "border-red-400" : ""}
+                  />
+                  <SerialDupNotice matches={indoorDup} />
+                </div>
+                <div>
+                  <FieldLabel label="Сериен № външно" className="text-slate-500" />
+                  <Input
+                    value={outdoorSerial}
+                    onChange={(e) => setOutdoorSerial(e.target.value)}
+                    placeholder="от табелката"
+                    className={outdoorDup.length > 0 ? "border-amber-400" : deliveryIncomplete && !outdoorSerial.trim() ? "border-red-400" : ""}
+                  />
+                  <SerialDupNotice matches={outdoorDup} />
+                </div>
+                <div>
+                  <FieldLabel label="Дата на доставка" className="text-slate-500" />
+                  <Input
+                    type="date"
+                    value={purchasedAt}
+                    onChange={(e) => setPurchasedAt(e.target.value)}
+                    className={deliveryIncomplete && !purchasedAt.trim() ? "border-red-400" : ""}
+                  />
+                </div>
+                <div>
+                  <FieldLabel label="Фактура доставчик" className="text-slate-500" />
+                  <Input
+                    value={invoiceNumber}
+                    onChange={(e) => setInvoiceNumber(e.target.value)}
+                    placeholder="напр. 0000123456"
+                    className={deliveryIncomplete && !invoiceNumber.trim() ? "border-red-400" : ""}
+                  />
+                </div>
+              </div>
+              {deliveryHint && (
+                <p className="mt-2 text-[11px] font-semibold text-amber-800">{deliveryHint}</p>
+              )}
+            </div>
+            )}
+            {!isArchived && cancelStep === "confirm" && (
               <p className="text-center text-xs font-semibold text-red-700">
                 Сигурни ли сте? Поръчката ще бъде отказана.
               </p>
             )}
+            {!isArchived && (
             <div className="flex flex-wrap gap-2">
               <Button
                 variant="danger"
@@ -514,7 +839,8 @@ export function SupplierOrderDetailModal({
                 size="md"
                 className="flex-1 min-w-[160px] gap-1.5 bg-violet-600 hover:bg-violet-700 focus:ring-violet-500"
                 onClick={() => void handleDelivered()}
-                disabled={delivering || cancelling}
+                disabled={delivering || cancelling || !canMarkDelivered}
+                title={!canMarkDelivered ? (deliveryHint ?? undefined) : undefined}
               >
                 {delivering ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -524,6 +850,7 @@ export function SupplierOrderDetailModal({
                 Продуктът е доставен
               </Button>
             </div>
+            )}
           </div>
         )}
       </div>

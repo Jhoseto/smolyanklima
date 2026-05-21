@@ -6,6 +6,14 @@ import { withCloudinaryWebOptimization } from "@/lib/services/cloudinaryService"
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { parseBtuCsvParam, resolveProductIdsForBtuList } from "@/lib/catalog/productBtu";
 import { applyPublicCatalogFilter } from "@/lib/catalog/publicProductVisibility";
+import { CATEGORY_TYPE_FALLBACK } from "@/lib/catalog/publicCatalogDedup";
+import {
+  CATALOG_SORT_VALUES,
+  fetchSpecSortMap,
+  needsSpecSort,
+  sortRepresentatives,
+  type CatalogRepresentativeRow,
+} from "@/lib/catalog/catalogProductSort";
 
 const QuerySchema = z.object({
   q: z.string().optional(),
@@ -18,9 +26,7 @@ const QuerySchema = z.object({
   cond: z.enum(["new", "used"]).optional(),
   /** Номинали BTU (хиляди), CSV: 7,9,12 */
   btu: z.string().optional(),
-  s: z
-    .enum(["recommended", "price-asc", "price-desc", "energy-class", "noise-asc", "rating-desc"])
-    .optional(),
+  s: z.enum(CATALOG_SORT_VALUES).optional(),
   page: z.coerce.number().int().min(1).optional(),
   perPage: z.coerce.number().int().min(1).max(100).optional(),
 });
@@ -38,13 +44,34 @@ function intersectIds(a: string[], b: string[]): string[] {
   return a.filter((id) => setB.has(id));
 }
 
-const CATEGORY_TYPE_FALLBACK: Record<string, string[]> = {
-  wall: ["Стенен климатик", "Дизайнерски климатик"],
-  multi: ["Мулти-сплит система"],
-  cassette: ["Касетъчен климатик"],
-  floor: ["Подов климатик"],
-  ceiling: ["Таванен климатик"],
-};
+const MAX_PRODUCT_ID_IN = 100;
+
+function chunkIds(ids: string[], size = MAX_PRODUCT_ID_IN): string[][] {
+  const out: string[][] = [];
+  for (let i = 0; i < ids.length; i += size) out.push(ids.slice(i, i + size));
+  return out;
+}
+
+/** Публични id от списък — на парчета, без един огромен `.in()`. */
+async function filterPublicProductIds(
+  supabase: ReturnType<typeof createSupabaseServiceRoleClient>,
+  ids: string[],
+): Promise<string[]> {
+  if (ids.length === 0) return [];
+  const found: string[] = [];
+  for (const chunk of chunkIds(ids)) {
+    const { data, error } = await applyPublicCatalogFilter(supabase.from("products").select("id")).in(
+      "id",
+      chunk,
+    );
+    if (error) throw error;
+    for (const row of data ?? []) {
+      const id = (row as { id?: string }).id;
+      if (id) found.push(id);
+    }
+  }
+  return found;
+}
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflight(req);
@@ -67,6 +94,9 @@ export async function GET(req: NextRequest) {
 
   /** `null` = no id restriction; non-null array = restrict to these ids; `empty` = impossible match */
   let idRestriction: string[] | null | "empty" = null;
+  /** Филтър по тип/марка директно в заявката — без хиляди UUID в `.in(id, …)`. */
+  let filterTypeIds: string[] | null = null;
+  let filterBrandIds: string[] | null = null;
 
   function mergeProductIds(ids: string[]): void {
     if (ids.length === 0) {
@@ -96,7 +126,12 @@ export async function GET(req: NextRequest) {
     } else {
       ids = (searchRows ?? []).map((r: { id: string }) => r.id).filter(Boolean);
     }
-    mergeProductIds(ids);
+    try {
+      mergeProductIds(await filterPublicProductIds(supabase, ids));
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      return withCors(req, NextResponse.json({ error: message }, { status: 500 }));
+    }
   }
 
   // Category slug → product_type ids
@@ -116,29 +151,17 @@ export async function GET(req: NextRequest) {
         mergeProductIds([]);
       } else {
         const { data: types } = await supabase.from("product_types").select("id").in("name", typeNames);
-        const typeIds = (types ?? []).map((t: { id: string }) => t.id);
-        const { data: prows } = await applyPublicCatalogFilter(supabase.from("products").select("id")).in(
-          "type_id",
-          typeIds,
-        );
-        mergeProductIds((prows ?? []).map((p: { id: string }) => p.id));
+        filterTypeIds = (types ?? []).map((t: { id: string }) => t.id);
+        if (filterTypeIds.length === 0) mergeProductIds([]);
       }
     }
   }
 
-  // Brand names → brand_id → product ids
+  // Brand names → brand_id (филтър в dedup заявката)
   if (brandNames.length > 0) {
     const { data: brows } = await supabase.from("brands").select("id").in("name", brandNames);
-    const brandIds = (brows ?? []).map((r: { id: string }) => r.id);
-    if (brandIds.length === 0) {
-      mergeProductIds([]);
-    } else {
-      const { data: prows } = await applyPublicCatalogFilter(supabase.from("products").select("id")).in(
-        "brand_id",
-        brandIds,
-      );
-      mergeProductIds((prows ?? []).map((p: { id: string }) => p.id));
-    }
+    filterBrandIds = (brows ?? []).map((r: { id: string }) => r.id);
+    if (filterBrandIds.length === 0) mergeProductIds([]);
   }
 
   if (btuFilters.length > 0) {
@@ -146,22 +169,42 @@ export async function GET(req: NextRequest) {
     if (specIds.length === 0) {
       mergeProductIds([]);
     } else {
-      const { data: prows } = await applyPublicCatalogFilter(supabase.from("products").select("id")).in(
-        "id",
-        specIds,
-      );
-      mergeProductIds((prows ?? []).map((p: { id: string }) => p.id));
+      try {
+        const publicIds = await filterPublicProductIds(supabase, specIds);
+        mergeProductIds(publicIds);
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        return withCors(req, NextResponse.json({ error: message }, { status: 500 }));
+      }
     }
   }
 
-  // Energy classes via product_specs
+  // Energy classes via product_specs (само публични продукти, на парчета)
   if (energyClasses.length > 0) {
-    const { data: srows } = await supabase
-      .from("product_specs")
-      .select("product_id")
-      .in("energy_class_cool", energyClasses);
-    const ids = [...new Set((srows ?? []).map((r: { product_id: string }) => r.product_id).filter(Boolean))];
-    mergeProductIds(ids);
+    const specProductIds = new Set<string>();
+    let offset = 0;
+    const pageSize = 1000;
+    while (true) {
+      const { data: srows, error: sErr } = await supabase
+        .from("product_specs")
+        .select("product_id")
+        .in("energy_class_cool", energyClasses)
+        .range(offset, offset + pageSize - 1);
+      if (sErr) return withCors(req, NextResponse.json({ error: sErr.message }, { status: 500 }));
+      const batch = (srows ?? []) as Array<{ product_id?: string }>;
+      for (const row of batch) {
+        if (row.product_id) specProductIds.add(row.product_id);
+      }
+      if (batch.length < pageSize) break;
+      offset += pageSize;
+    }
+    try {
+      const publicIds = await filterPublicProductIds(supabase, [...specProductIds]);
+      mergeProductIds(publicIds);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      return withCors(req, NextResponse.json({ error: message }, { status: 500 }));
+    }
   }
 
   // Features: AND — product must match every term (ilike on feature name)
@@ -174,7 +217,12 @@ export async function GET(req: NextRequest) {
     }
     const { data: links } = await supabase.from("product_features").select("product_id").in("feature_id", featIds);
     const ids = [...new Set((links ?? []).map((r: { product_id: string }) => r.product_id))];
-    mergeProductIds(ids);
+    try {
+      mergeProductIds(await filterPublicProductIds(supabase, ids));
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      return withCors(req, NextResponse.json({ error: message }, { status: 500 }));
+    }
   }
 
   if (idRestriction === "empty") {
@@ -206,77 +254,116 @@ export async function GET(req: NextRequest) {
   //  Записи без `model_code` (legacy/per-record) остават неdedupнати —
   //  всеки запис е своят собствен „модел“.
   // ===================================================================
-  const dedupSelect = "id,brand_id,model_code,stock_status,price,sold_quantity,created_at,product_condition,is_featured,rating,reviews_count";
-  const buildDedupQuery = (includeCondition: boolean) => {
+  const dedupSelect =
+    "id,name,brand_id,model_code,stock_status,price,sold_quantity,created_at,product_condition,is_featured,rating,reviews_count";
+  const buildDedupQuery = (includeCondition: boolean, restrictIds: string[] | null | "empty" = idRestriction) => {
     let q = applyPublicCatalogFilter(
       (supabase.from("products") as any).select(
         includeCondition ? dedupSelect : dedupSelect.replace(",product_condition", ""),
       ),
     );
-    if (idRestriction !== null && idRestriction !== "empty") q = q.in("id", idRestriction);
+    if (filterTypeIds && filterTypeIds.length > 0) q = q.in("type_id", filterTypeIds);
+    if (filterBrandIds && filterBrandIds.length > 0) q = q.in("brand_id", filterBrandIds);
+    if (restrictIds !== null && restrictIds !== "empty" && restrictIds.length <= MAX_PRODUCT_ID_IN) {
+      q = q.in("id", restrictIds);
+    }
     if (typeof min === "number") q = q.gte("price", min);
     if (typeof max === "number") q = q.lte("price", max);
     if (includeCondition && cond) q = q.eq("product_condition", cond);
-    // Sort: in_stock пред on_order; sold_quantity ASC (предпочитаме нови
-    // непродадени); created_at ASC (best stable representative).
-    switch (s) {
-      case "price-asc":
-        q = q.order("price", { ascending: true });
-        break;
-      case "price-desc":
-        q = q.order("price", { ascending: false });
-        break;
-      case "rating-desc":
-        q = q.order("rating", { ascending: false }).order("reviews_count", { ascending: false });
-        break;
-      case "energy-class":
-      case "noise-asc":
-        // Sort по specs се прави по-късно — тук само стабилен fallback.
-        q = q.order("is_featured", { ascending: false }).order("rating", { ascending: false });
-        break;
-      default:
-        q = q
-          .order("reviews_count", { ascending: false })
-          .order("rating", { ascending: false })
-          .order("is_featured", { ascending: false });
-    }
-    // Tie-break: предпочитаме in_stock пред on_order, най-малко продаден,
-    // най-стар по дата (стабилен представител на модела).
+    // Редът за dedup fallback; финалното сортиране е в sortRepresentatives().
     q = q.order("stock_status", { ascending: true });
     q = q.order("sold_quantity", { ascending: true, nullsFirst: true });
     q = q.order("created_at", { ascending: true });
     return q.limit(2000); // safety upper bound — магазинът няма столько публични артикули.
   };
 
-  let dedupRes: any = await buildDedupQuery(true);
-  if (
-    dedupRes.error &&
-    (String(dedupRes.error.code ?? "") === "42703" ||
-      /product_condition|model_code|sold_quantity/.test(String(dedupRes.error.message ?? "")))
-  ) {
-    // Fallback за DB без миграция 0038 (липсва model_code) или 0007 (product_condition).
-    dedupRes = await buildDedupQuery(false);
-    if (dedupRes.error && /model_code/.test(String(dedupRes.error.message ?? ""))) {
-      // Като последна резерва — само ID и stock_status, без dedup (legacy DB).
-      dedupRes = await applyPublicCatalogFilter(
-        (supabase.from("products") as any).select("id,stock_status,price"),
-      ).limit(2000);
+  async function fetchDedupRows(includeCondition: boolean): Promise<{
+    data: Array<Record<string, unknown>>;
+    error: { message?: string; code?: string } | null;
+  }> {
+    const largeIdList =
+      idRestriction !== null && idRestriction !== "empty" && idRestriction.length > MAX_PRODUCT_ID_IN
+        ? idRestriction
+        : null;
+
+    if (!largeIdList) {
+      let res: any = await buildDedupQuery(includeCondition);
+      if (
+        res.error &&
+        includeCondition &&
+        (String(res.error.code ?? "") === "42703" ||
+          /product_condition|model_code|sold_quantity/.test(String(res.error.message ?? "")))
+      ) {
+        res = await buildDedupQuery(false);
+      }
+      if (res.error && /model_code/.test(String(res.error.message ?? ""))) {
+        res = await applyPublicCatalogFilter(
+          (supabase.from("products") as any).select("id,stock_status,price"),
+        ).limit(2000);
+      }
+      return { data: (res.data ?? []) as Array<Record<string, unknown>>, error: res.error };
     }
+
+    const merged: Array<Record<string, unknown>> = [];
+    for (const chunk of chunkIds(largeIdList)) {
+      let res: any = await buildDedupQuery(includeCondition, chunk);
+      if (
+        res.error &&
+        includeCondition &&
+        (String(res.error.code ?? "") === "42703" ||
+          /product_condition|model_code|sold_quantity/.test(String(res.error.message ?? "")))
+      ) {
+        res = await buildDedupQuery(false, chunk);
+      }
+      if (res.error) return { data: [], error: res.error };
+      merged.push(...((res.data ?? []) as Array<Record<string, unknown>>));
+    }
+    return { data: merged, error: null };
   }
+
+  let dedupRes = await fetchDedupRows(true);
   if (dedupRes.error) {
     return withCors(req, NextResponse.json({ error: dedupRes.error.message }, { status: 500 }));
   }
 
   const dedupSeen = new Set<string>();
-  const representativeIds: string[] = [];
-  for (const row of (dedupRes.data ?? []) as Array<Record<string, unknown>>) {
+  const representatives: CatalogRepresentativeRow[] = [];
+  for (const row of dedupRes.data) {
     const brand = String(row.brand_id ?? "");
     const model = String(row.model_code ?? "").trim().toLowerCase();
     const key = brand && model ? `${brand}:${model}` : `__instance:${row.id}`;
     if (dedupSeen.has(key)) continue;
     dedupSeen.add(key);
-    representativeIds.push(String(row.id));
+    representatives.push({
+      id: String(row.id),
+      name: (row.name as string | null) ?? null,
+      brand_id: (row.brand_id as string | null) ?? null,
+      model_code: (row.model_code as string | null) ?? null,
+      stock_status: (row.stock_status as string | null) ?? null,
+      price: row.price != null ? Number(row.price) : null,
+      sold_quantity: row.sold_quantity != null ? Number(row.sold_quantity) : null,
+      created_at: (row.created_at as string | null) ?? null,
+      is_featured: row.is_featured != null ? Boolean(row.is_featured) : null,
+      rating: row.rating != null ? Number(row.rating) : null,
+      reviews_count: row.reviews_count != null ? Number(row.reviews_count) : null,
+    });
   }
+
+  let specById = new Map();
+  try {
+    if (needsSpecSort(s)) {
+      specById = await fetchSpecSortMap(
+        supabase,
+        representatives.map((r) => r.id),
+      );
+    }
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e);
+    return withCors(req, NextResponse.json({ error: message }, { status: 500 }));
+  }
+
+  const sortedRepresentatives = sortRepresentatives(representatives, specById, s);
+  const representativeIds = sortedRepresentatives.map((r) => r.id);
 
   const totalRepresentatives = representativeIds.length;
   if (totalRepresentatives === 0) {
@@ -369,28 +456,6 @@ export async function GET(req: NextRequest) {
     return ai - bi;
   });
 
-  // Client-visible sort for specs-backed fields (same-page only; total count still correct)
-  if ((s === "noise-asc" || s === "energy-class") && rows.length > 1) {
-    const pids = rows.map((r) => r.id as string);
-    const { data: specRows } = await supabase
-      .from("product_specs")
-      .select("product_id,noise_db,energy_class_cool")
-      .in("product_id", pids);
-    const specByPid = new Map((specRows ?? []).map((r: any) => [r.product_id as string, r]));
-    rows = [...rows].sort((a, b) => {
-      const sa = specByPid.get(a.id as string);
-      const sb = specByPid.get(b.id as string);
-      if (s === "noise-asc") {
-        const na = Number(sa?.noise_db ?? 999);
-        const nb = Number(sb?.noise_db ?? 999);
-        return na - nb;
-      }
-      const ea = String(sa?.energy_class_cool ?? "");
-      const eb = String(sb?.energy_class_cool ?? "");
-      return eb.localeCompare(ea);
-    });
-  }
-
   const brandIds = Array.from(new Set(rows.map((r) => r.brand_id).filter(Boolean))) as string[];
   const typeIds = Array.from(new Set(rows.map((r) => r.type_id).filter(Boolean))) as string[];
   const productIds = rows.map((r) => r.id as string);
@@ -481,11 +546,15 @@ export async function GET(req: NextRequest) {
     product_features: featsByProduct.get(r.id as string) ?? [],
   }));
 
-  return withCors(
+  const res = withCors(
     req,
     NextResponse.json({
       data: stitched,
       meta: { page, perPage, total: count ?? 0 },
     }),
   );
+  if (!q?.trim()) {
+    res.headers.set("Cache-Control", "private, max-age=15, stale-while-revalidate=60");
+  }
+  return res;
 }

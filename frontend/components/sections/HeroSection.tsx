@@ -159,7 +159,6 @@ export const HeroSection = ({ onFreeConsultationClick }: HeroSectionProps) => {
             transition={{ duration: 0.8, delay: 0.2 }}
             className="relative w-full min-w-0 max-w-[600px] mx-auto lg:mx-0 lg:ml-auto"
           >
-            {/* Main Image */}
             <div className="relative rounded-[2.5rem] overflow-hidden shadow-2xl">
               <img
                 src="/images/hero-ac.jpg"
@@ -167,7 +166,6 @@ export const HeroSection = ({ onFreeConsultationClick }: HeroSectionProps) => {
                 className="w-full h-[300px] sm:h-[420px] lg:h-[550px] object-cover"
               />
 
-              {/* Glass Stats Banner (Inside image at bottom) */}
               <div className="absolute bottom-0 left-0 right-0 bg-black/40 backdrop-blur-md px-8 py-6 rounded-b-[2.5rem] border-t border-white/10">
                 <div className="grid grid-cols-3 divide-x divide-white/20">
                   <div className="text-center">
@@ -186,7 +184,6 @@ export const HeroSection = ({ onFreeConsultationClick }: HeroSectionProps) => {
               </div>
             </div>
 
-            {/* Floating Badges — само на десктоп (безкрайни анимации + backdrop-blur са тежки на мобилен) */}
             <motion.div
               animate={{ y: [-5, 5, -5] }}
               transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
@@ -213,7 +210,6 @@ export const HeroSection = ({ onFreeConsultationClick }: HeroSectionProps) => {
               <BadgeCheck className="w-5 h-5 text-[#00A8E8]" />
               <span className="text-sm font-bold text-gray-800">Сертифициран сервиз</span>
             </motion.div>
-
           </motion.div>
 
         </div>
