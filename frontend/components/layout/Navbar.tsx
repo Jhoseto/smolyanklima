@@ -94,23 +94,27 @@ export const Navbar = () => {
         paddingBottom: isCatalog && isScrolled ? 10 : isScrolled ? 10 : 16,
       }}
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between gap-3 min-w-0 w-full">
+      <div className="w-full px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-[1fr_auto] md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-x-4 w-full">
 
-          {/* Logo — full reload on click */}
-          <a href="/" onClick={handleLogoClick} className="flex min-w-0 flex-1 md:flex-none items-center cursor-pointer">
+          {/* Logo — крайно вляво */}
+          <a
+            href="/"
+            onClick={handleLogoClick}
+            className="justify-self-start flex shrink-0 items-center cursor-pointer min-w-0"
+          >
             <Logo size="sm" />
           </a>
 
-          {/* Desktop Nav */}
-          <nav className="hidden md:flex items-center gap-8">
+          {/* Desktop Nav — центриран */}
+          <nav className="hidden md:flex justify-self-center items-center gap-8 md:col-start-2 md:row-start-1">
             {navLinks.map((link) => (
               link.isRouter ? (
                 <Link
                   key={link.name}
                   to={link.href}
                   onClick={link.name === 'Начало' ? handleHomeClick : undefined}
-                  className={`text-sm font-semibold transition-colors ${
+                  className={`text-sm font-semibold transition-colors whitespace-nowrap ${
                     location.pathname === link.href
                       ? 'text-[#FF4D00]'
                       : 'text-gray-700 hover:text-[#FF4D00]'
@@ -122,7 +126,7 @@ export const Navbar = () => {
                 <a
                   key={link.name}
                   href={link.href}
-                  className="text-sm font-semibold text-gray-700 hover:text-[#FF4D00] transition-colors"
+                  className="text-sm font-semibold text-gray-700 hover:text-[#FF4D00] transition-colors whitespace-nowrap"
                 >
                   {link.name}
                 </a>
@@ -130,25 +134,25 @@ export const Navbar = () => {
             ))}
           </nav>
 
-          {/* Desktop Actions */}
-          <div className="hidden md:flex items-center gap-4">
+          {/* Desktop Actions — крайно вдясно */}
+          <div className="hidden md:flex justify-self-end items-center gap-4 md:col-start-3 md:row-start-1 shrink-0">
             <a
               href="tel:+359888585816"
-              className="hidden lg:flex items-center gap-2 text-gray-700 font-bold text-sm hover:text-[#FF4D00] transition-colors"
+              className="hidden lg:flex items-center gap-2 text-gray-700 font-bold text-sm hover:text-[#FF4D00] transition-colors whitespace-nowrap"
             >
               <Phone className="w-4 h-4 text-[#FF4D00]" />
               0888 58 58 16
             </a>
-            <Button size="sm" className="hidden lg:flex" onClick={handleServiceRequestClick}>
+            <Button size="sm" className="hidden lg:flex shrink-0" onClick={handleServiceRequestClick}>
               Заяви услуга
             </Button>
           </div>
 
-          {/* Mobile Menu Button — винаги видим и кликваем */}
+          {/* Mobile Menu Button */}
           <button
             type="button"
             aria-label={mobileMenuOpen ? 'Затвори меню' : 'Отвори меню'}
-            className={`md:hidden shrink-0 p-2 rounded-xl transition-colors touch-manipulation ring-1 ring-black/5 ${isScrolled ? 'text-gray-800 hover:bg-gray-100 bg-transparent' : 'text-gray-800 hover:bg-black/5 shadow-sm bg-white/95'}`}
+            className={`md:hidden justify-self-end col-start-2 row-start-1 shrink-0 p-2 rounded-xl transition-colors touch-manipulation ring-1 ring-black/5 ${isScrolled ? 'text-gray-800 hover:bg-gray-100 bg-transparent' : 'text-gray-800 hover:bg-black/5 shadow-sm bg-white/95'}`}
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           >
             {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" strokeWidth={2.25} />}

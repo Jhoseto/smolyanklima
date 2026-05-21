@@ -11,6 +11,7 @@ import { emotionalIntelligence } from '../core/EmotionalIntelligence';
 import { createHallucinationGuard } from '../security/HallucinationGuard';
 import { getAllProducts } from '../../../data/productService';
 import { catalogProductsToAI } from '../data/catalogToAIProducts';
+import { rankProductsForQuery } from '../data/catalogContextBuilder';
 import type {
   Message,
   Conversation,
@@ -31,6 +32,7 @@ import {
 import { callBackendAIChat } from '../lib/aiChatApi';
 
 const MAX_USER_MESSAGE_CHARS = 1000;
+const CATALOG_REFRESH_MS = 45_000;
 
 const BROADCAST_CHANNEL_NAME = 'smolyan-klima-ai-chat';
 
@@ -93,6 +95,8 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
   const [actions, setActions] = useState<AIAction[]>([]);
 
   const aiProductsRef = useRef<Product[]>([]);
+  const catalogLoadedAtRef = useRef(0);
+  const catalogLoadingRef = useRef<Promise<Product[]> | null>(null);
   const hallucinationGuard = useRef(createHallucinationGuard([]));
   const messagesRef = useRef<Message[]>(initial.messages);
   const conversationRef = useRef<Conversation | null>(initial.conversation);
@@ -107,20 +111,51 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
   /** След apply от друг таб пропускаме един publish цикъл (иначе се получава ехо към BroadcastChannel). */
   const mutationSourceRef = useRef<'local' | 'remote'>('local');
 
-  useEffect(() => {
-    let cancelled = false;
-    getAllProducts()
-      .then((all) => {
-        if (cancelled) return;
+  const loadCatalog = useCallback(async (): Promise<Product[]> => {
+    if (catalogLoadingRef.current) return catalogLoadingRef.current;
+
+    catalogLoadingRef.current = (async () => {
+      try {
+        const all = await getAllProducts();
         const mapped = catalogProductsToAI(all);
         aiProductsRef.current = mapped;
-        hallucinationGuard.current = createHallucinationGuard(mapped);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
+        catalogLoadedAtRef.current = Date.now();
+        hallucinationGuard.current.updateProducts(mapped);
+        return mapped;
+      } catch (err) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[useAIChat] Catalog load failed:', err);
+        }
+        return aiProductsRef.current;
+      } finally {
+        catalogLoadingRef.current = null;
+      }
+    })();
+
+    return catalogLoadingRef.current;
   }, []);
+
+  const ensureFreshCatalog = useCallback(async (): Promise<Product[]> => {
+    const age = Date.now() - catalogLoadedAtRef.current;
+    if (aiProductsRef.current.length > 0 && age < CATALOG_REFRESH_MS) {
+      return aiProductsRef.current;
+    }
+    return loadCatalog();
+  }, [loadCatalog]);
+
+  useEffect(() => {
+    void loadCatalog();
+  }, [loadCatalog]);
+
+  useEffect(() => {
+    const onFocus = () => {
+      if (Date.now() - catalogLoadedAtRef.current >= CATALOG_REFRESH_MS) {
+        void loadCatalog();
+      }
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [loadCatalog]);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -329,8 +364,13 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
 
       setConversation(updatedConversation);
 
-      // Build system prompt with context
-      const catalogProducts = aiProductsRef.current;
+      // Build system prompt with live catalog context
+      const catalogProducts = await ensureFreshCatalog();
+      const historyQueries = updatedMessages
+        .filter((m) => m.role === 'user')
+        .slice(-4)
+        .map((m) => m.content);
+
       const systemPrompt = promptBuilder.buildPrompt({
         conversation: updatedConversation,
         userContext: optionsRef.current.userContext as UserContext || {
@@ -345,6 +385,8 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
           device: { type: 'desktop', viewport: { width: 1920, height: 1080 }, touch: false, language: 'bg' },
         },
         relevantProducts: catalogProducts,
+        userQuery: trimmed,
+        catalogLoadedAt: catalogLoadedAtRef.current,
         userIntent: intent.type,
         emotion: emotionDetection.confidence > 0.3 ? emotionDetection.emotion : undefined,
       });
@@ -401,8 +443,9 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
         },
       };
 
-      // Extract suggested products from response
-      const extractedProducts = extractProductsFromResponse(finalContent, catalogProducts);
+      // Extract suggested products from response (prefer query-ranked matches)
+      const ranked = rankProductsForQuery(catalogProducts, trimmed, historyQueries, 8);
+      const extractedProducts = extractProductsFromResponse(finalContent, catalogProducts, ranked);
       if (extractedProducts.length > 0) {
         setSuggestedProducts(extractedProducts);
       }
@@ -437,7 +480,7 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
       setIsLoading(false);
       isSendingRef.current = false;
     }
-  }, [conversation]);
+  }, [conversation, ensureFreshCatalog]);
 
   // Reset conversation
   const resetConversation = useCallback(() => {
@@ -531,19 +574,45 @@ function determineConversationStage(
 }
 
 // Helper function to extract products from response
-function extractProductsFromResponse(response: string, products: Product[]): Product[] {
+function extractProductsFromResponse(
+  response: string,
+  products: Product[],
+  rankedHint: Product[] = [],
+): Product[] {
   const mentionedProducts: Product[] = [];
-  
-  products.forEach((product) => {
+  const responseLower = response.toLowerCase();
+  const seen = new Set<string>();
+
+  const tryAdd = (product: Product) => {
+    if (seen.has(product.id)) return;
+    seen.add(product.id);
+    mentionedProducts.push(product);
+  };
+
+  for (const product of products) {
+    const nameLower = product.name.toLowerCase();
+    const slugLower = (product.slug ?? product.id).toLowerCase();
+    const brandLower = product.brand.toLowerCase();
+
     if (
-      response.toLowerCase().includes(product.name.toLowerCase()) ||
-      response.toLowerCase().includes(product.model.toLowerCase())
+      responseLower.includes(nameLower) ||
+      responseLower.includes(slugLower) ||
+      (nameLower.length > 12 && responseLower.includes(nameLower.slice(0, Math.min(nameLower.length, 24))))
     ) {
-      mentionedProducts.push(product);
+      tryAdd(product);
+    } else if (responseLower.includes(brandLower)) {
+      const modelPart = nameLower.replace(brandLower, '').trim();
+      if (modelPart.length >= 4 && responseLower.includes(modelPart.slice(0, 12))) {
+        tryAdd(product);
+      }
     }
-  });
-  
-  return mentionedProducts;
+  }
+
+  if (mentionedProducts.length === 0 && rankedHint.length > 0) {
+    for (const p of rankedHint.slice(0, 3)) tryAdd(p);
+  }
+
+  return mentionedProducts.slice(0, 4);
 }
 
 export default useAIChat;

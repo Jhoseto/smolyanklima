@@ -94,15 +94,22 @@ export async function fetchSpecSortMap(
 
   const cols = "product_id,btu,cooling_power_kw,heating_power_kw,coverage_m2,seer,scop,noise_db,energy_class_cool";
   for (const chunk of chunkIds(productIds)) {
-    let res = await supabase.from("product_specs").select(cols).in("product_id", chunk);
-    if (res.error && /btu/.test(String(res.error.message ?? ""))) {
-      res = await supabase
+    const primary = await supabase.from("product_specs").select(cols).in("product_id", chunk);
+    let rows: CatalogSpecSortRow[];
+
+    if (primary.error && /btu/.test(String(primary.error.message ?? ""))) {
+      const fallback = await supabase
         .from("product_specs")
         .select("product_id,cooling_power_kw,heating_power_kw,coverage_m2,seer,scop,noise_db,energy_class_cool")
         .in("product_id", chunk);
+      if (fallback.error) throw new Error(fallback.error.message);
+      rows = (fallback.data ?? []) as CatalogSpecSortRow[];
+    } else {
+      if (primary.error) throw new Error(primary.error.message);
+      rows = (primary.data ?? []) as CatalogSpecSortRow[];
     }
-    if (res.error) throw new Error(res.error.message);
-    for (const row of (res.data ?? []) as CatalogSpecSortRow[]) {
+
+    for (const row of rows) {
       if (row.product_id) map.set(row.product_id, row);
     }
   }

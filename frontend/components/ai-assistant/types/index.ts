@@ -194,11 +194,15 @@ export type ActionType =
 
 export interface Product {
   id: string;
+  slug?: string;
   name: string;
   brand: string;
   model: string;
+  type?: string;
+  condition?: 'new' | 'used';
   price: number;
   oldPrice?: number;
+  priceWithMount?: number;
   image: string;
   description?: string;
   specs: ProductSpecs;
@@ -208,6 +212,11 @@ export interface Product {
   rating: number;
   reviewCount: number;
   energyClass: string;
+  energyClassHeat?: string;
+  refrigerant?: string;
+  wifi?: boolean;
+  dimensions?: string;
+  weights?: string;
   installationPrice?: number;
   warranty: WarrantyInfo;
   suitableFor: RoomType[];
@@ -222,11 +231,17 @@ export interface ProductSpecs {
   noiseLevel: number;
   energyEfficiency: number;
   seer: number;
+  scop: number;
   coverage: number;
+  btu?: number;
+  refrigerant?: string;
+  wifi?: boolean;
+  energyClassHeat?: string;
 }
 
 export interface WarrantyInfo {
   years: number;
+  months: number;
   compressor: number;
   parts: number;
   labor: number;

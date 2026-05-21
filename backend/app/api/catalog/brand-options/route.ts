@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
-import { fetchPublicCatalogRepresentatives } from "@/lib/catalog/publicCatalogDedup";
+import { applyPublicCatalogFilter } from "@/lib/catalog/publicProductVisibility";
 
 /**
  * Връща списък от активни марки от базата (`brands.is_active = true`),

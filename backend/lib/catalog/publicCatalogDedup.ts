@@ -33,25 +33,34 @@ export async function fetchPublicCatalogRepresentatives(
   let q = applyPublicCatalogFilter(supabase.from("products").select(selectCols));
   if (opts?.cond) q = q.eq("product_condition", opts.cond);
 
-  let res = await q.limit(2500);
+  let primary = await q.limit(2500);
+  let rows: DedupRow[];
+
   if (
-    res.error &&
+    primary.error &&
     opts?.cond &&
-    (String(res.error.code ?? "") === "42703" ||
-      String(res.error.message ?? "").includes("product_condition"))
+    (String(primary.error.code ?? "") === "42703" ||
+      String(primary.error.message ?? "").includes("product_condition"))
   ) {
-    res = await applyPublicCatalogFilter(supabase.from("products").select("id,brand_id,model_code,type_id")).limit(
-      2500,
-    );
+    const fallback = await applyPublicCatalogFilter(
+      supabase.from("products").select("id,brand_id,model_code,type_id"),
+    ).limit(2500);
+    if (fallback.error) throw new Error(fallback.error.message);
+    rows = (fallback.data ?? []) as DedupRow[];
+  } else if (primary.error && /model_code/.test(String(primary.error.message ?? ""))) {
+    const fallback = await applyPublicCatalogFilter(
+      supabase.from("products").select("id,brand_id,type_id"),
+    ).limit(2500);
+    if (fallback.error) throw new Error(fallback.error.message);
+    rows = (fallback.data ?? []) as DedupRow[];
+  } else {
+    if (primary.error) throw new Error(primary.error.message);
+    rows = (primary.data ?? []) as DedupRow[];
   }
-  if (res.error && /model_code/.test(String(res.error.message ?? ""))) {
-    res = await applyPublicCatalogFilter(supabase.from("products").select("id,brand_id,type_id")).limit(2500);
-  }
-  if (res.error) throw new Error(res.error.message);
 
   const seen = new Set<string>();
   const out: DedupRepresentative[] = [];
-  for (const row of (res.data ?? []) as DedupRow[]) {
+  for (const row of rows) {
     const brand = String(row.brand_id ?? "");
     const model = String(row.model_code ?? "").trim().toLowerCase();
     const key = brand && model ? `${brand}:${model}` : `__instance:${row.id}`;
