@@ -9,4 +9,4 @@ Disallow: /admin/
 Disallow: /api/
 Disallow: /*?*
 
-Sitemap: https://smolyanklima.bg/sitemap.xml
+Sitemap: https://smolyanklima.com/sitemap.xml

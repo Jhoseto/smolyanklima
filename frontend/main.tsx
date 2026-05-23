@@ -3,14 +3,17 @@ import {createRoot} from 'react-dom/client';
 import {BrowserRouter} from 'react-router-dom';
 import App from './App.tsx';
 import { ServiceRequestModalProvider } from './context/ServiceRequestModalContext';
+import { ConsentProvider } from './lib/consent/ConsentProvider';
 import './index.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
-      <ServiceRequestModalProvider>
-        <App />
-      </ServiceRequestModalProvider>
+      <ConsentProvider>
+        <ServiceRequestModalProvider>
+          <App />
+        </ServiceRequestModalProvider>
+      </ConsentProvider>
     </BrowserRouter>
   </StrictMode>,
 );

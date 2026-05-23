@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Send, Clock, ShieldCheck, CheckCircle, Check } from 'lucide-react';
 import { postPublicInquiry } from '../../data/postInquiry';
+import { PrivacyCheckbox } from '../consent/PrivacyCheckbox';
+import { trackGenerateLead } from '../../lib/analytics/events';
 
 const CONTACT_SERVICE_OPTIONS: { label: string; value: 'consultation' | 'installation' | 'maintenance' | 'repair' }[] = [
   { label: 'Консултация', value: 'consultation' },
@@ -37,6 +39,7 @@ export const ServiceRequestContent = ({
   const [honeypot, setHoneypot] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
 
   const nameId = `${formIdPrefix}-name`;
   const phoneId = `${formIdPrefix}-phone`;
@@ -51,6 +54,10 @@ export const ServiceRequestContent = ({
     e.preventDefault();
     setSubmitError(null);
     if (honeypot.trim()) return;
+    if (!privacyAccepted) {
+      setSubmitError('Моля, приемете Политиката за поверителност.');
+      return;
+    }
     setSubmitting(true);
     try {
       const r = await postPublicInquiry({
@@ -66,10 +73,12 @@ export const ServiceRequestContent = ({
         return;
       }
       setIsSubmitted(true);
+      trackGenerateLead('contact');
       setName('');
       setPhone('');
       setMessage('');
       setHoneypot('');
+      setPrivacyAccepted(false);
     } finally {
       setSubmitting(false);
     }
@@ -266,6 +275,12 @@ export const ServiceRequestContent = ({
                     {submitError}
                   </p>
                 )}
+                <PrivacyCheckbox
+                  id={`${formIdPrefix}-privacy`}
+                  checked={privacyAccepted}
+                  onChange={setPrivacyAccepted}
+                  className="px-1"
+                />
                 <motion.button
                   type="submit"
                   disabled={submitting}

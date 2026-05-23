@@ -8,7 +8,7 @@
 # Runtime тайни през Secret Manager (--set-secrets), не в substitution текста.
 #
 # Trigger (Cloud Build → Triggers → Substitution variables):
-#   _PUBLIC_URL = публичният домейн на сайта, напр. https://smolyanklima.bg (без / накрая)
+#   _PUBLIC_URL = публичният домейн на сайта, напр. https://smolyanklima.com (без / накрая)
 #   НЕ ползвайте само *.run.app ако посетителите влизат през custom domain — FRONTEND_ORIGIN трябва да съвпада.
 #   при нужда: _REGION, _SERVICE
 #

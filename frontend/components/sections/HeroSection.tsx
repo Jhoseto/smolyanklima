@@ -111,8 +111,9 @@ export const HeroSection = ({ onFreeConsultationClick }: HeroSectionProps) => {
             </h1>
 
             {/* Description */}
-            <p className="text-[1.1rem] text-[#374151] mb-6 leading-relaxed font-medium">
-              Продажба, монтаж и сервиз на климатици от водещи марки. Над 25 години опит, стотици доволни клиенти от цялата страна.
+            <p className="text-[1.1rem] text-[#374151] mb-6 leading-relaxed font-light">
+              Продажба, монтаж и сервиз на климатици от водещи марки. <br />
+              Над 25 години опит, стотици доволни клиенти от цялата страна.
             </p>
 
             {/* Buttons */}

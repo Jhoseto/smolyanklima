@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Mail, CheckCircle, Sparkles } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { PrivacyCheckbox } from '../consent/PrivacyCheckbox';
+import { trackNewsletterSignup } from '../../lib/analytics/events';
 
 export const NewsletterSection: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -8,10 +11,15 @@ export const NewsletterSection: React.FC = () => {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
+    if (!privacyAccepted) {
+      setFormError('Моля, приемете Политиката за поверителност.');
+      return;
+    }
     setFormError(null);
     setIsLoading(true);
     try {
@@ -30,6 +38,7 @@ export const NewsletterSection: React.FC = () => {
         return;
       }
       setIsSubscribed(true);
+      trackNewsletterSignup();
     } catch {
       setFormError('Мрежова грешка. Опитайте отново.');
     } finally {
@@ -87,8 +96,9 @@ export const NewsletterSection: React.FC = () => {
                   viewport={{ once: true }}
                   transition={{ delay: 0.2 }}
                   onSubmit={handleSubmit}
-                  className="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto"
+                  className="flex flex-col gap-4 max-w-lg mx-auto"
                 >
+                  <div className="flex flex-col sm:flex-row gap-4">
                   <input
                     type="text"
                     name="website"
@@ -121,6 +131,13 @@ export const NewsletterSection: React.FC = () => {
                       </>
                     )}
                   </button>
+                  </div>
+                  <PrivacyCheckbox
+                    id="newsletter-privacy"
+                    checked={privacyAccepted}
+                    onChange={setPrivacyAccepted}
+                    className="text-left justify-start"
+                  />
                 </motion.form>
                 {formError ? <p className="text-center text-sm text-red-600 mt-3">{formError}</p> : null}
 
@@ -131,7 +148,11 @@ export const NewsletterSection: React.FC = () => {
                   transition={{ delay: 0.3 }}
                   className="text-sm text-gray-500 mt-6"
                 >
-                  Присъединявайки се, се съгласявате с нашата политика за поверителност. Ще получите имейл за потвърждение, ако е настроен сървърът.
+                  Ще получите имейл за потвърждение, ако е настроен сървърът. Вижте{' '}
+                  <Link to="/politika-za-poveritelnost" className="text-[#00B4D8] hover:underline">
+                    Политиката за поверителност
+                  </Link>
+                  .
                 </motion.p>
               </>
             ) : (

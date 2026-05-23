@@ -14,6 +14,7 @@ import { QuickReplyButtons } from './QuickReplyButtons';
 import { TypingIndicator as TypingIndicatorComponent } from './TypingIndicator';
 import { ProductCard } from './ProductCard';
 import { PrivacyConsent } from './PrivacyConsent';
+import { useConsent } from '../../../lib/consent/ConsentProvider';
 
 export interface AIChatWidgetProps {
   position?: 'bottom-right' | 'bottom-left' | 'bottom-center';
@@ -61,6 +62,7 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
   const [unreadCount, setUnreadCount] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
   const [consentGiven, setConsentGiven] = useState(false);
+  const { functional: siteFunctionalConsent } = useConsent();
   const [showConsent, setShowConsent] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -106,10 +108,14 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Load consent from localStorage (best-effort)
+  // Load consent from localStorage or site-wide functional consent
   useEffect(() => {
     try {
       if (typeof window === 'undefined') return;
+      if (siteFunctionalConsent) {
+        setConsentGiven(true);
+        return;
+      }
       const raw = localStorage.getItem(consentStorageKeyRef.current);
       if (!raw) return;
       const parsed = JSON.parse(raw) as { given?: boolean };
@@ -117,7 +123,15 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
     } catch {
       // ignore
     }
-  }, []);
+  }, [siteFunctionalConsent]);
+
+  useEffect(() => {
+    const onConsentUpdate = () => {
+      if (siteFunctionalConsent) setConsentGiven(true);
+    };
+    window.addEventListener('sk-consent-updated', onConsentUpdate);
+    return () => window.removeEventListener('sk-consent-updated', onConsentUpdate);
+  }, [siteFunctionalConsent]);
 
   // Auto-scroll to bottom
   useEffect(() => {

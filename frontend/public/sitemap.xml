@@ -2,37 +2,37 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <!-- Static Pages -->
   <url>
-    <loc>https://smolyanklima.bg/</loc>
+    <loc>https://smolyanklima.com/</loc>
     <lastmod>2026-05-01</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://smolyanklima.bg/blog</loc>
+    <loc>https://smolyanklima.com/blog</loc>
     <lastmod>2026-05-01</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://smolyanklima.bg/catalog</loc>
+    <loc>https://smolyanklima.com/catalog</loc>
     <lastmod>2026-05-01</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://smolyanklima.bg/services</loc>
+    <loc>https://smolyanklima.com/services</loc>
     <lastmod>2026-05-01</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://smolyanklima.bg/za-nas</loc>
+    <loc>https://smolyanklima.com/za-nas</loc>
     <lastmod>2026-05-21</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.85</priority>
   </url>
   <url>
-    <loc>https://smolyanklima.bg/contact</loc>
+    <loc>https://smolyanklima.com/contact</loc>
     <lastmod>2026-05-01</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
@@ -40,49 +40,49 @@
   
   <!-- Blog Categories -->
   <url>
-    <loc>https://smolyanklima.bg/blog/kategoria/saveti-pri-izbor</loc>
+    <loc>https://smolyanklima.com/blog/kategoria/saveti-pri-izbor</loc>
     <lastmod>2026-05-01</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://smolyanklima.bg/blog/kategoria/sravneniya</loc>
+    <loc>https://smolyanklima.com/blog/kategoria/sravneniya</loc>
     <lastmod>2026-05-01</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://smolyanklima.bg/blog/kategoria/montaj</loc>
+    <loc>https://smolyanklima.com/blog/kategoria/montaj</loc>
     <lastmod>2026-05-01</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://smolyanklima.bg/blog/kategoria/profilaktika</loc>
+    <loc>https://smolyanklima.com/blog/kategoria/profilaktika</loc>
     <lastmod>2026-05-01</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://smolyanklima.bg/blog/kategoria/remont</loc>
+    <loc>https://smolyanklima.com/blog/kategoria/remont</loc>
     <lastmod>2026-05-01</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://smolyanklima.bg/blog/kategoria/energiya</loc>
+    <loc>https://smolyanklima.com/blog/kategoria/energiya</loc>
     <lastmod>2026-05-01</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://smolyanklima.bg/blog/kategoria/novini</loc>
+    <loc>https://smolyanklima.com/blog/kategoria/novini</loc>
     <lastmod>2026-05-01</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://smolyanklima.bg/blog/kategoria/regionalni</loc>
+    <loc>https://smolyanklima.com/blog/kategoria/regionalni</loc>
     <lastmod>2026-05-01</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
@@ -90,73 +90,73 @@
   
   <!-- Blog Articles -->
   <url>
-    <loc>https://smolyanklima.bg/blog/kak-da-izberem-klimatik-za-25-kv-m</loc>
+    <loc>https://smolyanklima.com/blog/kak-da-izberem-klimatik-za-25-kv-m</loc>
     <lastmod>2026-04-28</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://smolyanklima.bg/blog/naj-dobrite-klimatici-za-smolyan</loc>
+    <loc>https://smolyanklima.com/blog/naj-dobrite-klimatici-za-smolyan</loc>
     <lastmod>2026-04-28</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://smolyanklima.bg/blog/montaj-na-klimatik-smolyan-ceni</loc>
+    <loc>https://smolyanklima.com/blog/montaj-na-klimatik-smolyan-ceni</loc>
     <lastmod>2026-04-28</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://smolyanklima.bg/blog/klimatik-teche-voda-prichini-resheniya</loc>
+    <loc>https://smolyanklima.com/blog/klimatik-teche-voda-prichini-resheniya</loc>
     <lastmod>2026-04-28</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://smolyanklima.bg/blog/kolko-tok-harchi-klimatik-kalkulator</loc>
+    <loc>https://smolyanklima.com/blog/kolko-tok-harchi-klimatik-kalkulator</loc>
     <lastmod>2026-04-28</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://smolyanklima.bg/blog/profilaktika-na-klimatik-kalendar</loc>
+    <loc>https://smolyanklima.com/blog/profilaktika-na-klimatik-kalendar</loc>
     <lastmod>2026-04-28</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://smolyanklima.bg/blog/invertoren-vs-konvencionalen-klimatik-izbor</loc>
+    <loc>https://smolyanklima.com/blog/invertoren-vs-konvencionalen-klimatik-izbor</loc>
     <lastmod>2026-04-30</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://smolyanklima.bg/blog/klimatik-vtora-upotreba-vs-nov-sravnenie</loc>
+    <loc>https://smolyanklima.com/blog/klimatik-vtora-upotreba-vs-nov-sravnenie</loc>
     <lastmod>2026-04-30</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://smolyanklima.bg/blog/naj-tihite-klimatici-za-spalnya-top-5-2026</loc>
+    <loc>https://smolyanklima.com/blog/naj-tihite-klimatici-za-spalnya-top-5-2026</loc>
     <lastmod>2026-04-30</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://smolyanklima.bg/blog/klimatik-ne-ohlazhda-prichini-resheniya</loc>
+    <loc>https://smolyanklima.com/blog/klimatik-ne-ohlazhda-prichini-resheniya</loc>
     <lastmod>2026-04-30</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://smolyanklima.bg/blog/wi-fi-klimatik-smart-upravlenie-prilojeniya</loc>
+    <loc>https://smolyanklima.com/blog/wi-fi-klimatik-smart-upravlenie-prilojeniya</loc>
     <lastmod>2026-05-01</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://smolyanklima.bg/blog/klimatik-za-otoplenie-zima-stoinost-sravnenie</loc>
+    <loc>https://smolyanklima.com/blog/klimatik-za-otoplenie-zima-stoinost-sravnenie</loc>
     <lastmod>2026-05-01</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>

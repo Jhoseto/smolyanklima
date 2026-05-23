@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Share2, Facebook, Twitter, Linkedin, Link2, Check, MessageCircle } from 'lucide-react';
+import { absoluteUrl } from '../../lib/site';
 
 interface SocialShareProps {
   url: string;
@@ -14,7 +15,7 @@ export const SocialShare: React.FC<SocialShareProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   
-  const fullUrl = `https://smolyanklima.bg${url}`;
+  const fullUrl = absoluteUrl(url);
   const encodedUrl = encodeURIComponent(fullUrl);
   const encodedTitle = encodeURIComponent(title);
   const encodedDesc = encodeURIComponent(description);

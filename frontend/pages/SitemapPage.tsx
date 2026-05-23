@@ -5,6 +5,7 @@
 
 import { articles } from '../data/blog';
 import { categories } from '../data/blog/categories';
+import { absoluteUrl } from '../lib/site';
 
 export default function SitemapPage() {
   // Static pages
@@ -22,7 +23,7 @@ export default function SitemapPage() {
   <!-- Static Pages -->
   ${staticPages.map(page => `
   <url>
-    <loc>https://smolyanklima.bg${page.url}</loc>
+    <loc>${absoluteUrl(page.url)}</loc>
     <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
     <changefreq>${page.changefreq}</changefreq>
     <priority>${page.priority}</priority>
@@ -32,7 +33,7 @@ export default function SitemapPage() {
   <!-- Blog Categories -->
   ${categories.map(category => `
   <url>
-    <loc>https://smolyanklima.bg/blog/kategoria/${category.slug}</loc>
+    <loc>${absoluteUrl(`/blog/kategoria/${category.slug}`)}</loc>
     <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
@@ -42,7 +43,7 @@ export default function SitemapPage() {
   <!-- Blog Articles -->
   ${articles.map(article => `
   <url>
-    <loc>https://smolyanklima.bg/blog/${article.slug}</loc>
+    <loc>${absoluteUrl(`/blog/${article.slug}`)}</loc>
     <lastmod>${article.modifiedAt}</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -71,19 +72,19 @@ export function generateSitemapXML(): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${staticPages.map(page => `  <url>
-    <loc>https://smolyanklima.bg${page.url}</loc>
+    <loc>${absoluteUrl(page.url)}</loc>
     <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
     <changefreq>${page.changefreq}</changefreq>
     <priority>${page.priority}</priority>
   </url>`).join('\n')}
 ${categories.map(category => `  <url>
-    <loc>https://smolyanklima.bg/blog/kategoria/${category.slug}</loc>
+    <loc>${absoluteUrl(`/blog/kategoria/${category.slug}`)}</loc>
     <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>`).join('\n')}
 ${articles.map(article => `  <url>
-    <loc>https://smolyanklima.bg/blog/${article.slug}</loc>
+    <loc>${absoluteUrl(`/blog/${article.slug}`)}</loc>
     <lastmod>${article.modifiedAt}</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>

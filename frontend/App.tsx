@@ -24,6 +24,7 @@ import { BokehOrbs } from './components/effects';
 import { HeroBackground } from './components/sections/HeroBackground';
 import { AIChatWidget } from './components/ai-assistant';
 import { LiveChatWidget } from './components/live-chat/LiveChatWidget';
+import { AnalyticsPageTracker } from './lib/consent/ConsentProvider';
 
 // Lazy load страници за по-бързо начално зареждане
 const CatalogPage = lazy(() => import('./pages/CatalogPage'));
@@ -34,6 +35,9 @@ const BlogHomePage = lazy(() => import('./pages/BlogHomePage'));
 const BlogArticlePage = lazy(() => import('./pages/BlogArticlePage'));
 const AboutPage = lazy(() => import('./pages/AboutPage'));
 const AccessoryDetailsPage = lazy(() => import('./pages/AccessoryDetailsPage'));
+const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'));
+const CookiePolicyPage = lazy(() => import('./pages/CookiePolicyPage'));
+const TermsPage = lazy(() => import('./pages/TermsPage'));
 
 // ── Главна страница ──────────────────────────────────
 const HomePage = ({ onOpenAssistantChat }: { onOpenAssistantChat?: () => void }) => (
@@ -153,8 +157,11 @@ function App() {
     setAssistantOpenSignal((n) => n + 1);
   };
 
+  const pagePath = location.pathname + location.search;
+
   return (
     <Suspense fallback={<PageLoader />}>
+      <AnalyticsPageTracker pathname={pagePath} />
       <Navbar />
       <AnimatePresence mode="wait">
         <Routes location={location}>
@@ -171,6 +178,9 @@ function App() {
           <Route path="/blog/:slug" element={<PageTransition><BlogArticlePage /></PageTransition>} />
           <Route path="/aksesoari" element={<Navigate to="/catalog?tab=accessories" replace />} />
           <Route path="/aksesoar/:id" element={<PageTransition><AccessoryDetailsPage /></PageTransition>} />
+          <Route path="/politika-za-poveritelnost" element={<PageTransition><PrivacyPolicyPage /></PageTransition>} />
+          <Route path="/biskvitki" element={<PageTransition><CookiePolicyPage /></PageTransition>} />
+          <Route path="/obshti-usloviya" element={<PageTransition><TermsPage /></PageTransition>} />
           <Route path="*" element={<PageTransition><HomePage onOpenAssistantChat={openAssistantFromHero} /></PageTransition>} />
         </Routes>
       </AnimatePresence>

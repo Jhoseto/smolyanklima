@@ -1,5 +1,7 @@
 import React from 'react';
 import type { Article } from '../../data/blog';
+import { LEGAL_COMPANY } from '../../data/legal/company';
+import { absoluteUrl, SITE_ORIGIN } from '../../lib/site';
 
 interface FAQItem {
   question: string;
@@ -33,20 +35,20 @@ export const SchemaMarkup: React.FC<SchemaMarkupProps> = ({
           author: {
             '@type': 'Person',
             name: article.schema.author.name,
-            url: `https://smolyanklima.bg${article.schema.author.url}`
+            url: absoluteUrl(article.schema.author.url)
           },
           publisher: {
             '@type': 'Organization',
             name: 'Smolyan Klima',
-            url: 'https://smolyanklima.bg',
+            url: SITE_ORIGIN,
             logo: {
               '@type': 'ImageObject',
-              url: 'https://smolyanklima.bg/logo.png'
+              url: absoluteUrl('/logo.png')
             }
           },
           mainEntityOfPage: {
             '@type': 'WebPage',
-            '@id': `https://smolyanklima.bg/blog/${article.slug}`
+            '@id': absoluteUrl(`/blog/${article.slug}`)
           }
         };
 
@@ -59,19 +61,19 @@ export const SchemaMarkup: React.FC<SchemaMarkupProps> = ({
               '@type': 'ListItem',
               position: 1,
               name: 'Начало',
-              item: 'https://smolyanklima.bg/'
+              item: absoluteUrl('/')
             },
             {
               '@type': 'ListItem',
               position: 2,
               name: 'Блог',
-              item: 'https://smolyanklima.bg/blog'
+              item: absoluteUrl('/blog')
             },
             ...breadcrumbs.map((crumb, index) => ({
               '@type': 'ListItem',
               position: index + 3,
               name: crumb.name,
-              item: `https://smolyanklima.bg${crumb.url}`
+              item: absoluteUrl(crumb.url)
             }))
           ]
         };
@@ -95,18 +97,20 @@ export const SchemaMarkup: React.FC<SchemaMarkupProps> = ({
           '@context': 'https://schema.org',
           '@type': 'Organization',
           name: 'Smolyan Klima',
-          url: 'https://smolyanklima.bg',
-          logo: 'https://smolyanklima.bg/logo.png',
+          url: SITE_ORIGIN,
+          logo: absoluteUrl('/logo.png'),
           description: 'Специализиран магазин за климатици в Смолян - продажба, монтаж и сервиз на климатични системи.',
           address: {
             '@type': 'PostalAddress',
+            streetAddress: LEGAL_COMPANY.tradeAddress,
             addressLocality: 'Смолян',
-            addressRegion: 'Родопи',
+            postalCode: LEGAL_COMPANY.postalCode,
             addressCountry: 'BG'
           },
           contactPoint: {
             '@type': 'ContactPoint',
-            telephone: '+359-XXX-XXX-XXX',
+            telephone: LEGAL_COMPANY.phoneE164,
+            email: LEGAL_COMPANY.email,
             contactType: 'sales',
             areaServed: 'BG',
             availableLanguage: 'Bulgarian'
@@ -159,14 +163,14 @@ export const SEOMetaTags: React.FC<SEOMetaTagsProps> = ({
       {keywords.length > 0 && <meta name="keywords" content={keywords.join(', ')} />}
       
       {/* Canonical */}
-      {canonicalUrl && <link rel="canonical" href={`https://smolyanklima.bg${canonicalUrl}`} />}
+      {canonicalUrl && <link rel="canonical" href={absoluteUrl(canonicalUrl)} />}
       
       {/* Open Graph */}
       <meta property="og:title" content={title} />
       <meta property="og:description" content={description} />
       <meta property="og:type" content={ogType} />
-      <meta property="og:url" content={canonicalUrl ? `https://smolyanklima.bg${canonicalUrl}` : 'https://smolyanklima.bg'} />
-      <meta property="og:image" content={`https://smolyanklima.bg${ogImage}`} />
+      <meta property="og:url" content={canonicalUrl ? absoluteUrl(canonicalUrl) : SITE_ORIGIN} />
+      <meta property="og:image" content={absoluteUrl(ogImage)} />
       <meta property="og:site_name" content="Smolyan Klima" />
       <meta property="og:locale" content="bg_BG" />
       
@@ -174,13 +178,13 @@ export const SEOMetaTags: React.FC<SEOMetaTagsProps> = ({
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content={title} />
       <meta name="twitter:description" content={description} />
-      <meta name="twitter:image" content={`https://smolyanklima.bg${ogImage}`} />
+      <meta name="twitter:image" content={absoluteUrl(ogImage)} />
       
       {/* Robots */}
       <meta name="robots" content="index, follow" />
       
       {/* RSS Feed */}
-      <link rel="alternate" type="application/rss+xml" title="Smolyan Klima Blog" href="https://smolyanklima.bg/rss.xml" />
+      <link rel="alternate" type="application/rss+xml" title="Smolyan Klima Blog" href={absoluteUrl('/rss.xml')} />
       
       {/* Preconnect for performance */}
       <link rel="preconnect" href="https://images.unsplash.com" />

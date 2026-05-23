@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { ArrowLeft, Star, Phone, ShieldCheck, Clock, Check, Zap, Volume2, Wind, Ruler, Weight, ChevronDown } from 'lucide-react';
 import { getProductById, getSimilarProducts, rateProduct, publicProductDescription } from '../data/productService';
 import type { CatalogProduct } from '../data/types/product';
+import { trackViewItem } from '../lib/analytics/events';
 import { ProductCard } from '../components/catalog/ProductCard';
 import { PremiumImageGallery } from '../components/media/PremiumImageGallery';
 import { ProductInquiryModal } from '../components/catalog/ProductInquiryModal';
@@ -33,6 +34,7 @@ export default function ProductDetailsPage() {
       
       if (found) {
         setProduct(found);
+        trackViewItem(found.id, found.name);
         const relatedProds = await getSimilarProducts(found.id, 3);
         setRelated(relatedProds);
       }

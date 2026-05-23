@@ -4,6 +4,8 @@ import { CatalogProductImage } from './CatalogProductImage';
 import { X, Send, Wind, CheckCircle2 } from 'lucide-react';
 import type { CatalogProduct } from '../../data/types/product';
 import { postPublicInquiry } from '../../data/postInquiry';
+import { PrivacyCheckbox } from '../consent/PrivacyCheckbox';
+import { trackGenerateLead } from '../../lib/analytics/events';
 
 const SUCCESS_MESSAGE =
   'Запитването е подадено успешно! В най-скоро с вас ще се свърже представител на Смолян Клима.';
@@ -25,6 +27,7 @@ export function ProductInquiryModal({ product, onClose, onSuccess, onError }: Pr
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [mountError, setMountError] = useState(false);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
 
   const handleClose = useCallback(() => {
     if (done) onSuccess?.(SUCCESS_MESSAGE);
@@ -40,6 +43,7 @@ export function ProductInquiryModal({ product, onClose, onSuccess, onError }: Pr
     setBusy(false);
     setDone(false);
     setMountError(false);
+    setPrivacyAccepted(false);
   }, [product?.id]);
 
   useEffect(() => {
@@ -64,6 +68,10 @@ export function ProductInquiryModal({ product, onClose, onSuccess, onError }: Pr
       setMountError(true);
       return;
     }
+    if (!privacyAccepted) {
+      onError?.('Моля, приемете Политиката за поверителност.');
+      return;
+    }
     setMountError(false);
     setBusy(true);
     const includeInstallation = mountChoice === 'with';
@@ -83,6 +91,7 @@ export function ProductInquiryModal({ product, onClose, onSuccess, onError }: Pr
       return;
     }
     setDone(true);
+    trackGenerateLead('product', product.id);
   };
 
   return (
@@ -260,6 +269,12 @@ export function ProductInquiryModal({ product, onClose, onSuccess, onError }: Pr
                     <p className="text-xs font-semibold text-red-600">Моля, изберете една от опциите.</p>
                   )}
                 </fieldset>
+
+                <PrivacyCheckbox
+                  id="product-inquiry-privacy"
+                  checked={privacyAccepted}
+                  onChange={setPrivacyAccepted}
+                />
 
                 <p className="text-[11px] leading-relaxed text-slate-500">
                   Ще се свържем с вас за оферта и наличност по избрания модел. Без ангажимент.

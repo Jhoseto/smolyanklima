@@ -4,6 +4,8 @@
  */
 
 import type { AnalyticsEvent, AnalyticsEventType, ConversationMetrics } from '../types';
+import { trackAiEvent } from '../../../lib/analytics/events';
+import { readConsent } from '../../../lib/consent/storage';
 
 class AIAnalytics {
   private events: AnalyticsEvent[] = [];
@@ -43,8 +45,9 @@ class AIAnalytics {
       console.log('[AI Analytics]', event);
     }
 
-    // In production, send to your analytics endpoint
-    // this.sendToAnalyticsEndpoint(event);
+    if (readConsent()?.analytics) {
+      trackAiEvent(eventType, metadata);
+    }
   }
 
   /**

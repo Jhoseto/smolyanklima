@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Phone, Mail, MapPin, Clock, Navigation } from 'lucide-react';
+import { Phone, Mail, MapPin, Clock, Navigation, Map } from 'lucide-react';
+import { useConsent } from '../../lib/consent/ConsentProvider';
+import { LEGAL_COMPANY } from '../../data/legal/company';
+
+const MAP_EMBED_SRC =
+  'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d10000.564603335378!2d24.73404725883082!3d41.56851624537425!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x14ac50b6e42fae4f%3A0xdb4fcdc658cc6bda!2z0KHQvNC-0LvRj9C9INCa0LvQuNC80LAg0JXQntCe0JQ!5e0!3m2!1sen!2sbg!4v1777175712092!5m2!1sen!2sbg';
 
 const SOFIA_TZ = 'Europe/Sofia';
 
@@ -109,31 +114,38 @@ const useShopStatus = (): ShopStatus => {
 
 export const ContactInfoSection = () => {
   const shopStatus = useShopStatus();
+  const { marketing, openSettings } = useConsent();
+  const [mapEnabled, setMapEnabled] = useState(marketing);
+
+  useEffect(() => {
+    if (marketing) setMapEnabled(true);
+  }, [marketing]);
+
   const mapLink = "https://www.google.com/maps/dir//%D0%A1%D0%BC%D0%BE%D0%BB%D1%8F%D0%BD+%D0%9A%D0%BB%D0%B8%D0%BC%D0%B0+%D0%95%D0%9E%D0%9E%D0%94,+Raykovo,+ul.+%22Natalia%22+19,+4701+Smolyan/@41.5782786,24.7136256,14z/data=!4m8!4m7!1m0!1m5!1m1!1s0x14ac50b6e42fae4f:0xdb4fcdc658cc6bda!2m2!1d24.7339985!2d41.5685312?entry=ttu&g_ep=EgoyMDI2MDQyMi4wIKXMDSoASAFQAw%3D%3D";
 
   const contactCards = [
     {
       icon: Phone,
       title: "Телефон",
-      content: "0888 58 58 16",
+      content: LEGAL_COMPANY.phone,
       subtext: "Понеделник - Събота",
-      href: "tel:0888585816",
+      href: `tel:${LEGAL_COMPANY.phoneE164}`,
       color: "from-[#FF4D00] to-[#FF2A4D]",
       shadow: "shadow-[#FF4D00]/20"
     },
     {
       icon: Mail,
       title: "Имейл",
-      content: "office@smolyanklima.bg",
+      content: LEGAL_COMPANY.email,
       subtext: "Отговаряме до 2 часа",
-      href: "mailto:office@smolyanklima.bg",
+      href: `mailto:${LEGAL_COMPANY.email}`,
       color: "from-[#00B4D8] to-[#0077B6]",
       shadow: "shadow-[#00B4D8]/20"
     },
     {
       icon: MapPin,
       title: "Офис & Магазин",
-      content: "ул. Наталия 19",
+      content: 'ул. „Наталия" № 19',
       subtext: "кв. Райково, гр. Смолян",
       href: mapLink,
       color: "from-[#FF4D00] via-[#FF6A00] to-[#FF2A4D]",
@@ -279,14 +291,48 @@ export const ContactInfoSection = () => {
           >
             {/* The Map */}
             <div className="relative w-full h-full rounded-[2.5rem] overflow-hidden flex-grow group">
-              {/* Note: Iframe uses the exact embed code provided by the user, zoomed out slightly */}
-              <iframe
-                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d10000.564603335378!2d24.73404725883082!3d41.56851624537425!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x14ac50b6e42fae4f%3A0xdb4fcdc658cc6bda!2z0KHQvNC-0LvRj9C9INCa0LvQuNC80LAg0JXQntCe0JQ!5e0!3m2!1sen!2sbg!4v1777175712092!5m2!1sen!2sbg"
-                className="absolute inset-0 w-full h-full border-0 grayscale-[20%] contrast-125 transition-all duration-700 group-hover:grayscale-0 group-hover:scale-105"
-                allowFullScreen={false}
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-              />
+              {mapEnabled ? (
+                <iframe
+                  src={MAP_EMBED_SRC}
+                  title="Карта — офис Смолян Клима"
+                  className="absolute inset-0 w-full h-full border-0 grayscale-[20%] contrast-125 transition-all duration-700 group-hover:grayscale-0 group-hover:scale-105"
+                  allowFullScreen={false}
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                />
+              ) : (
+                <div className="absolute inset-0 bg-gradient-to-br from-gray-100 via-gray-50 to-gray-200 flex flex-col items-center justify-center p-8 text-center">
+                  <div className="w-16 h-16 rounded-full bg-white shadow-lg flex items-center justify-center mb-4">
+                    <Map className="w-8 h-8 text-[#FF4D00]" aria-hidden />
+                  </div>
+                  <p className="text-gray-700 font-medium mb-2 max-w-sm">
+                    Интерактивната карта използва бисквитки на Google
+                  </p>
+                  <p className="text-sm text-gray-500 mb-6 max-w-sm">
+                    Можете да активирате картата или да отворите насоки в Google Maps
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        openSettings();
+                      }}
+                      className="px-6 py-3 rounded-full bg-gradient-to-r from-[#FF4D00] to-[#FF2A4D] text-white text-sm font-bold hover:shadow-lg transition-shadow"
+                    >
+                      Активирай картата
+                    </button>
+                    <a
+                      href={mapLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-6 py-3 rounded-full border border-gray-300 text-gray-700 text-sm font-bold hover:border-[#00B4D8] hover:text-[#00B4D8] transition-colors inline-flex items-center justify-center gap-2"
+                    >
+                      <Navigation className="w-4 h-4" />
+                      Отвори в Google Maps
+                    </a>
+                  </div>
+                </div>
+              )}
 
               {/* Glass Overlay Top */}
               <div className="absolute top-4 left-4 sm:left-6 flex justify-between items-start pointer-events-none z-10">

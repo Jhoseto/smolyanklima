@@ -1,6 +1,7 @@
 import React from 'react';
 import { Facebook, Instagram, Lock, Mail, MapPin, Phone } from 'lucide-react';
 import { Logo } from '../ui/Logo';
+import { LEGAL_COMPANY } from '../../data/legal/company';
 
 function adminLoginHref(): string {
   const fromEnv = import.meta.env.VITE_ADMIN_ORIGIN?.trim().replace(/\/$/, '');
@@ -10,6 +11,7 @@ function adminLoginHref(): string {
 }
 
 export const Footer = () => {
+  const c = LEGAL_COMPANY;
   return (
     <footer className="bg-gray-900 text-white pt-20 pb-10 border-t border-gray-800">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -82,18 +84,22 @@ export const Footer = () => {
             <ul className="space-y-4">
               <li className="flex gap-3 text-gray-400">
                 <MapPin className="w-5 h-5 text-[#FF4D00] shrink-0" />
-                <span className="text-sm">гр. Смолян, п.к. 4700<br />ул. Примерна 1</span>
+                <span className="text-sm">
+                  {c.tradeAddress}
+                  <br />
+                  п.к. {c.postalCode}
+                </span>
               </li>
               <li className="flex gap-3 text-gray-400">
                 <Phone className="w-5 h-5 text-[#FF4D00] shrink-0 mt-0.5" />
-                <a href="tel:+359888585816" className="text-sm hover:text-white transition-colors">
-                  0888 58 58 16
+                <a href={`tel:${c.phoneE164}`} className="text-sm hover:text-white transition-colors">
+                  {c.phone}
                 </a>
               </li>
               <li className="flex gap-3 text-gray-400">
                 <Mail className="w-5 h-5 text-[#FF4D00] shrink-0 mt-0.5" />
-                <a href="mailto:office@smolyanklima.bg" className="text-sm hover:text-white transition-colors">
-                  office@smolyanklima.bg
+                <a href={`mailto:${c.email}`} className="text-sm hover:text-white transition-colors">
+                  {c.email}
                 </a>
               </li>
             </ul>
@@ -103,9 +109,17 @@ export const Footer = () => {
 
         <div className="pt-8 border-t border-gray-800 text-center md:flex justify-between items-center text-sm text-gray-500">
           <p>© {new Date().getFullYear()} Смолян Клима. Всички права запазени.</p>
-          <div className="flex gap-4 mt-4 md:mt-0 justify-center">
-            <a href="#" className="hover:text-white transition-colors">Политика за поверителност</a>
-            <a href="#" className="hover:text-white transition-colors">Общи условия</a>
+          <div className="flex flex-wrap gap-x-4 gap-y-2 mt-4 md:mt-0 justify-center">
+            <a href="/politika-za-poveritelnost" className="hover:text-white transition-colors">Политика за поверителност</a>
+            <a href="/biskvitki" className="hover:text-white transition-colors">Бисквитки</a>
+            <a href="/obshti-usloviya" className="hover:text-white transition-colors">Общи условия</a>
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new Event('sk-open-cookie-settings'))}
+              className="hover:text-white transition-colors"
+            >
+              Управление на бисквитки
+            </button>
             <a href="#" className="hover:text-white transition-colors">Developed by K. Serezliev</a>
           </div>
         </div>
