@@ -50,6 +50,18 @@ export const article25kvm: Article = {
 - **Енергиен клас**: A++
 - **Особености**: Бюджетен вариант с Wi-Fi
 
+## Модели от нашия каталог
+
+[[product:daikin-perfera-ftxm25a|Daikin Perfera FTXM25A — 9000 BTU, A+++]]
+
+[[product:mitsubishi-msz-ap25vg|Mitsubishi Electric MSZ-AP25VG — 9000 BTU, премиум]]
+
+[[product:invertoren-klimatik-toshiba-essento-ras-b10b2kv2g-e-ras-10b2avg-e2|Toshiba Essento — надежден среден клас]]
+
+[[product:invertoren-klimatik-toshiba-yukai-ras-b10s4kvg-e-ras-10e2avg-e|Toshiba Yukai — икономичен за спални]]
+
+[[product:gwh09atcxb-k5dna1b|Gree GWH09ATCXB — бюджетен инверторен с Wi-Fi]]
+
 ## Какви функции са важни за 25 кв.м.?
 
 ### Инверторна технология (ЗАДЪЛЖИТЕЛНО)

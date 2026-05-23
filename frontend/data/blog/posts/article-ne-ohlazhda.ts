@@ -272,7 +272,13 @@ export const articleNeOhlazhda: Article = {
 
 О: Ако климатикът е над 8 години и ремонтът е над €200-300, новият е по-добра инвестиция. Новият ще спести €400+ годишно от ток.
 
----
+## Ако е време за нов климатик
+
+[[product:invertoren-klimatik-nippon-npc-09-t-pro-nordic|9000 BTU за спалня и малки стаи]]
+
+[[product:invertoren-klimatik-nippon-npc-12-t-pro-nordic|12000 BTU — ако старият е твърде слаб за помещението]]
+
+[[product:daikin-perfera-ftxm25a|Daikin Perfera — енергийно ефективна замяна]]
 
 ## Заключение
 

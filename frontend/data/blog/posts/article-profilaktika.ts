@@ -239,6 +239,12 @@ export const articleProfilaktika: Article = {
 
 ---
 
+## Модели за лесна поддръжка от каталога
+
+[[product:daikin-perfera-ftxm25a|Daikin Perfera — лесен достъп до филтри]]
+
+[[product:mitsubishi-msz-ap25vg|Mitsubishi MSZ-AP25VG — надежден при редовна профилактика]]
+
 ## Заключение
 
 **Ключови правила за дълъг живот:**

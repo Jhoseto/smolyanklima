@@ -227,6 +227,14 @@ export const articleVtoraUpotreba: Article = {
 
 ---
 
+## Препоръчани нови модели вместо втора употреба
+
+[[product:gwh09atcxb-k5dna1b|Gree 9000 BTU — най-достъпен нов инвертор]]
+
+[[product:invertoren-klimatik-nippon-npc-09-t-pro-nordic|Nippon 9000 BTU — разумен бюджет с гаранция]]
+
+[[product:daikin-perfera-ftxm25a|Daikin Perfera — препоръчителна дългосрочна инвестиция]]
+
 ## Заключение
 
 Климатикът втора употреба може да изглежда изгоден на пръв поглед, но **реалната сметка показва обратното**.

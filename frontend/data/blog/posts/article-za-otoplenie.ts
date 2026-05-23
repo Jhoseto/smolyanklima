@@ -286,6 +286,18 @@ export const articleZaOtoplenie: Article = {
 
 ---
 
+## Модели за отопление от каталога
+
+[[product:msz-ln35vgw-muz-ln35vghz|Mitsubishi MSZ-LN35 Hyper Heating — до -25°C]]
+
+[[product:daikin-comfora-ftxp35m|Daikin Comfora 12000 BTU — силен COP зимата]]
+
+[[product:mitsubishi-msz-ap35vg|Mitsubishi MSZ-AP35VG — 12000 BTU премиум]]
+
+[[product:msz-fh35ve-muz-fh35vehz|MSZ-FH35 Hyper Heating]]
+
+[[product:invertoren-klimatik-nippon-npc-18-t-pro-nordic|Nippon 18 T Pro Nordic — за по-студени зими]]
+
 ## Съвети за ефективно отопление с климатик
 
 ### 1. Оптимална температура

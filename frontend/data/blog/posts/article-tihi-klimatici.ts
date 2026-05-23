@@ -122,6 +122,18 @@ export const articleTihiKlimatici: Article = {
 
 ---
 
+## Модели от каталога
+
+[[product:msz-ln25vgw-muz-ln25vg|Mitsubishi MSZ-LN25 — 19 dB, премиум за спалня]]
+
+[[product:daikin-perfera-ftxm25a|Daikin Perfera — Night Quiet режим]]
+
+[[product:daikin-stylish-ftxa25aw|Daikin Stylish — тих и дизайнерски]]
+
+[[product:invertoren-klimatik-toshiba-yukai-ras-b10s4kvg-e-ras-10e2avg-e|Toshiba Yukai — тих инверторен за спалня]]
+
+[[product:aa09sp-ns1-aa09sp-u18|LG AI Air — Sleep режим и ThinQ]]
+
 ## Сравнителна таблица
 
 | Модел | dB (Silent) | dB (Нормален) | Цена | Рейтинг |

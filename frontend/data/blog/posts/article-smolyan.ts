@@ -105,6 +105,18 @@ export const articleSmolyan: Article = {
 - По-натоварени екипи
 - Цени се запазват
 
+## Препоръчани модели от каталога
+
+[[product:msz-ln25vgw-muz-ln25vghz|Mitsubishi MSZ-LN25 — премиум с работа до -25°C]]
+
+[[product:daikin-perfera-ftxm25a|Daikin Perfera — Winter Ready отопление]]
+
+[[product:msz-fh25ve-muz-fh25vehz|Mitsubishi MSZ-FH25 — Hyper Heating серия]]
+
+[[product:invertoren-klimatik-nippon-npc-12-t-pro-nordic|Nippon NPC 12 T Pro Nordic — силен зимен клас]]
+
+[[product:invertoren-klimatik-toshiba-yukai-ras-b10s4kvg-e-ras-10e2avg-e|Toshiba Yukai — надежден среден клас]]
+
 ## Заключение
 
 За Смолян изберете климатик с **зимен пакет** и работа до минимум -20°C. Препоръчваме Mitsubishi Electric или Daikin за максимална надеждност в планинския климат.

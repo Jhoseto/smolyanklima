@@ -218,6 +218,18 @@ export const articleWifiSmart: Article = {
 
 ---
 
+## Wi-Fi модели от каталога
+
+[[product:daikin-perfera-ftxm25a|Daikin Perfera + Onecta приложение]]
+
+[[product:msz-ln25vgw-muz-ln25vg|Mitsubishi MSZ-LN25 + MELCloud]]
+
+[[product:aa09sp-ns1-aa09sp-u18|LG AI Air + ThinQ]]
+
+[[product:gwh09atcxb-k5dna1b|Gree с Gree+ приложение]]
+
+[[product:wi-fi-upravlenie-za-klimatik-prez-internet-smart-wifi|Wi-Fi модул за по-стари модели]]
+
 ## Сигурност и лични данни
 
 ### Въпроси за сигурността:

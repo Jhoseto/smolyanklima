@@ -182,6 +182,18 @@ export const articleInvertorVsKonvencionalen: Article = {
 
 ---
 
+## Реални модели от каталога
+
+**Инверторен (препоръчителен):**
+
+[[product:daikin-perfera-ftxm25a|Daikin Perfera — инверторен A+++]]
+
+[[product:invertoren-klimatik-nippon-npc-09-t-pro-nordic|Nippon NPC 09 T Pro — достъпен инверторен]]
+
+**Бюджетен инвертор (златна среда):**
+
+[[product:invertoren-klimatik-toshiba-essento-ras-b10b2kv2g-e-ras-10b2avg-e2|Toshiba Essento — отлично съотношение цена/качество]]
+
 ## Нашата препоръка за 2026
 
 **Изберете инверторен климатик ако:**
