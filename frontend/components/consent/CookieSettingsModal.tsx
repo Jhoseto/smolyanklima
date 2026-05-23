@@ -19,7 +19,7 @@ const CATEGORIES = [
   {
     key: 'functional' as const,
     label: 'Функционални',
-    description: 'AI асистент, live chat, любими продукти и наскоро разгледани.',
+    description: 'AI асистент, live chat, любими продукти, наскоро разгледани и PWA подсказка (iOS).',
     locked: false,
   },
   {

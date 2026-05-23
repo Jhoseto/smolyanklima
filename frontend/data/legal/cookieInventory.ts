@@ -82,10 +82,10 @@ export const COOKIE_INVENTORY: CookieInventoryRow[] = [
   {
     name: 'pwa-ios-hint-dismiss',
     type: 'sessionStorage',
-    category: 'Необходими',
-    duration: 'Сесия на таба в браузъра',
+    category: 'Функционални',
+    duration: 'Сесия на таба в браузъра (изчиства се при затваряне на таба)',
     provider: FIRST_PARTY,
-    purpose: 'Запомняне дали потребителят е затворил подсказката за добавяне на сайта към началния екран (iOS).',
+    purpose: 'Запомняне дали потребителят е затворил подсказката за добавяне на сайта към началния екран (iOS). Не съхранява лични данни.',
   },
   {
     name: '_ga, _ga_*',

@@ -19,6 +19,8 @@ export const LEGAL_COMPANY = {
 
   managingDirector: 'Атанас Георгиев',
   privacyContactName: 'Костадин Георгиев',
+  /** Тема на имейл за GDPR заявки */
+  gdprEmailSubject: 'GDPR',
 
   email: 'smolyanklima@gmail.com',
   phone: '0888 58 58 16',
