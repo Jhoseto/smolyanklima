@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { notifyAdminsLiveChat } from "@/lib/admin-web-push";
+import { allowPublicPost, getClientIdFromRequest } from "@/lib/rate-limit";
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflight(req);
@@ -17,22 +18,27 @@ const StartSchema = z.object({
     .array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().max(2000) }))
     .max(20)
     .optional(),
+  /** Resume only when caller proves ownership with prior session token (never by email alone). */
+  resume_chat_id: z.string().uuid().optional(),
+  resume_session_token: z.string().uuid().optional(),
 });
 
-/** Намери най-скорошния чат по имейл (отворен ИЛИ затворен). */
-async function findLatestChatByEmail(supabase: ReturnType<typeof createSupabaseServiceRoleClient>, email: string) {
+async function resolveOwnedChat(
+  supabase: ReturnType<typeof createSupabaseServiceRoleClient>,
+  chatId: string,
+  sessionToken: string,
+) {
   const { data } = await supabase
     .from("live_chats")
-    .select("id, session_token, visitor_name, status, created_at")
-    .eq("visitor_email", email)
-    .order("created_at", { ascending: false })
-    .limit(1)
+    .select("id, session_token, visitor_name, visitor_email, status, created_at")
+    .eq("id", chatId)
     .maybeSingle();
-  return data ?? null;
+  if (!data || data.session_token !== sessionToken) return null;
+  return data;
 }
 
 function greetingText(name: string): string {
-  return `Здравейте, ${name}! Добре дошли в чата на Смолян Клима. С какво можем да ви бъдем полезни ? 🙂`;
+  return `Здравейте, ${name}! Добре дошли в чата на Смолян Klima. С какво можем да ви бъдем полезни ? 🙂`;
 }
 
 function continuationText(name: string, prevDate: string): string {
@@ -41,60 +47,71 @@ function continuationText(name: string, prevDate: string): string {
 }
 
 export async function POST(req: NextRequest) {
+  const clientId = getClientIdFromRequest(req);
+  if (!allowPublicPost(`chat-start:${clientId}`, 12, 60 * 60 * 1000)) {
+    return withCors(req, NextResponse.json({ error: "RATE_LIMIT_EXCEEDED" }, { status: 429 }));
+  }
+
   const json = await req.json().catch(() => null);
   const parsed = StartSchema.safeParse(json);
   if (!parsed.success) {
     return withCors(req, NextResponse.json({ error: "INVALID_REQUEST" }, { status: 400 }));
   }
 
-  const { visitor_name, visitor_email, visitor_phone, visitor_page_url, ai_context } = parsed.data;
+  const {
+    visitor_name,
+    visitor_email,
+    visitor_phone,
+    visitor_page_url,
+    ai_context,
+    resume_chat_id,
+    resume_session_token,
+  } = parsed.data;
   const supabase = createSupabaseServiceRoleClient();
   const email = visitor_email || null;
 
-  // ── Проверяваме за предишен чат по имейл ──────────────────────────────────
-  if (email) {
-    const existing = await findLatestChatByEmail(supabase, email);
-
-    if (existing) {
-      // ── Активен/чакащ чат — подновяваме session token ────────────────────
-      if (existing.status !== "closed") {
+  // ── Resume only with valid chat id + session token (never email alone) ─────
+  if (resume_chat_id && resume_session_token) {
+    const owned = await resolveOwnedChat(supabase, resume_chat_id, resume_session_token);
+    if (owned) {
+      if (owned.status !== "closed") {
         const newToken = crypto.randomUUID();
         await supabase
           .from("live_chats")
           .update({
             session_token: newToken,
-            visitor_name,  // обновяваме ако е сменил
+            visitor_name,
             visitor_phone: visitor_phone || null,
             last_message_at: new Date().toISOString(),
           })
-          .eq("id", existing.id);
+          .eq("id", owned.id);
 
         await supabase.from("live_chat_messages").insert({
-          chat_id: existing.id,
+          chat_id: owned.id,
           sender_role: "system",
           content: `— Посетителят се свърза отново (${new Date().toLocaleString("bg-BG")}) —`,
         });
 
         return withCors(req, NextResponse.json({
-          chatId: existing.id,
+          chatId: owned.id,
           sessionToken: newToken,
           visitorName: visitor_name,
-          status: existing.status,
+          status: owned.status,
           resumed: true,
         }));
       }
 
-      // ── Затворен чат — нов чат с история ─────────────────────────────────
+      // Closed chat — new chat with history (owner proved via token)
       const { data: newChat, error: insertErr } = await supabase
         .from("live_chats")
         .insert({
           visitor_name,
-          visitor_email: email,
+          visitor_email: email ?? owned.visitor_email,
           visitor_phone: visitor_phone || null,
           ai_context: ai_context ?? null,
           status: "waiting",
           last_message_at: new Date().toISOString(),
-          previous_chat_id: existing.id,
+          previous_chat_id: owned.id,
           visitor_page_url: visitor_page_url ?? null,
         })
         .select("id, session_token, visitor_name, status")
@@ -104,27 +121,24 @@ export async function POST(req: NextRequest) {
         return withCors(req, NextResponse.json({ error: "DB_ERROR" }, { status: 500 }));
       }
 
-      // Копираме историята на предишния разговор
       const { data: prevMsgs } = await supabase
         .from("live_chat_messages")
         .select("sender_role, content, created_at")
-        .eq("chat_id", existing.id)
+        .eq("chat_id", owned.id)
         .order("created_at", { ascending: true });
 
       const historyRows: Array<{ chat_id: string; sender_role: string; content: string }> = [];
-
       historyRows.push({
         chat_id: newChat.id,
         sender_role: "system",
-        content: continuationText(visitor_name, existing.created_at),
+        content: continuationText(visitor_name, owned.created_at),
       });
 
       for (const m of prevMsgs ?? []) {
-        if (m.sender_role === "system" && m.content.startsWith("—")) continue; // пропуски системни разделители
+        if (m.sender_role === "system" && m.content.startsWith("—")) continue;
         historyRows.push({ chat_id: newChat.id, sender_role: m.sender_role, content: m.content });
       }
 
-      // Разделител "край на историята / начало на новия разговор"
       historyRows.push({
         chat_id: newChat.id,
         sender_role: "system",
@@ -135,14 +149,12 @@ export async function POST(req: NextRequest) {
         await supabase.from("live_chat_messages").insert(historyRows);
       }
 
-      // Greeting за новия разговор
       await supabase.from("live_chat_messages").insert({
         chat_id: newChat.id,
         sender_role: "system",
         content: greetingText(visitor_name),
       });
 
-      // AI контекст ако е подаден
       if (ai_context && ai_context.length > 0) {
         await supabase.from("live_chat_messages").insert({
           chat_id: newChat.id,
@@ -169,7 +181,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── Нов чат (без предишен или без имейл) ──────────────────────────────────
+  // ── New chat ──────────────────────────────────────────────────────────────
   const { data: chat, error } = await supabase
     .from("live_chats")
     .insert({
@@ -188,14 +200,12 @@ export async function POST(req: NextRequest) {
     return withCors(req, NextResponse.json({ error: "DB_ERROR" }, { status: 500 }));
   }
 
-  // Greeting
   await supabase.from("live_chat_messages").insert({
     chat_id: chat.id,
     sender_role: "system",
     content: greetingText(visitor_name),
   });
 
-  // AI контекст
   if (ai_context && ai_context.length > 0) {
     await supabase.from("live_chat_messages").insert({
       chat_id: chat.id,

@@ -97,7 +97,7 @@ const PageLoader = () => (
 );
 
 const LIVE_SESSION_KEY = "smolyan-klima-live-chat-v1";
-const LIVE_API = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";
+const LIVE_API = import.meta.env.VITE_API_BASE_URL ?? "";
 
 function loadLiveChatSession() {
   try {

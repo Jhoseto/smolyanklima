@@ -2,6 +2,7 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminDb } from "@/lib/admin/db";
+import { authErrorResponse, requireOfficeStaffSession } from "@/lib/admin/authGuard";
 import { logAdminActivity } from "@/lib/admin/audit";
 
 const BodySchema = z.object({
@@ -14,6 +15,13 @@ export async function OPTIONS(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  let session;
+  try {
+    session = await requireOfficeStaffSession();
+  } catch (e) {
+    const err = authErrorResponse(e);
+    return withCors(req, NextResponse.json({ error: err.message }, { status: err.status }));
+  }
   const json = await req.json().catch(() => null);
   const parsed = BodySchema.safeParse(json);
   if (!parsed.success) return withCors(req, NextResponse.json({ error: "Невалидни данни" }, { status: 400 }));
@@ -23,7 +31,7 @@ export async function POST(req: NextRequest) {
     return withCors(req, NextResponse.json({ error: "Избрани са еднакви контакти" }, { status: 400 }));
   }
 
-  const supabase = await adminDb();
+  const supabase = session.db;
 
   const [{ data: target, error: tErr }, { data: source, error: sErr }] = await Promise.all([
     supabase.from("contacts").select("*").eq("id", targetId).maybeSingle(),

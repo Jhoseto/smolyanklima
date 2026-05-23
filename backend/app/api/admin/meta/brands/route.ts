@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminDb } from "@/lib/admin/db";
+import { authErrorResponse, requireOfficeStaffSession } from "@/lib/admin/authGuard";
 import { logAdminActivity } from "@/lib/admin/audit";
 
 export async function OPTIONS(req: NextRequest) {
@@ -49,6 +50,13 @@ const CreateBrandSchema = z.object({
  * при реално създаване.
  */
 export async function POST(req: NextRequest) {
+  let session;
+  try {
+    session = await requireOfficeStaffSession();
+  } catch (e) {
+    const err = authErrorResponse(e);
+    return withCors(req, NextResponse.json({ error: err.message }, { status: err.status }));
+  }
   const json = await req.json().catch(() => null);
   const parsed = CreateBrandSchema.safeParse(json);
   if (!parsed.success) {
@@ -62,7 +70,7 @@ export async function POST(req: NextRequest) {
   }
 
   const name = parsed.data.name;
-  const supabase = await adminDb();
+  const supabase = session.db;
 
   // 1. Случай „вече съществува“ → idempotent: връщаме съществуващия id.
   //    ilike() за case-insensitive match (PostgreSQL).

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
-import { adminDb } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
+import { authErrorResponse, requireOfficeStaffSession } from "@/lib/admin/authGuard";
 
 // Утилитарен административен endpoint: маркира ВСИЧКИ продукти в БД като
 // видими публично (`is_active = true`, `stock_status = 'in_stock'`).
@@ -17,7 +17,14 @@ export async function OPTIONS(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = await adminDb();
+  let session;
+  try {
+    session = await requireOfficeStaffSession();
+  } catch (e) {
+    const err = authErrorResponse(e);
+    return withCors(req, NextResponse.json({ error: err.message }, { status: err.status }));
+  }
+  const supabase = session.db;
 
   // Update само на тези редове, които реално се нуждаят от промяна, за да
   // избегнем ненужни write-ове и трикгер на updated_at.

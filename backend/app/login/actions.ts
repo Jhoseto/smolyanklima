@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { safeRedirectPath } from "@/lib/security/safeRedirect";
 
 const Schema = z.object({
   email: z.string().min(1),
@@ -58,8 +59,11 @@ export async function loginAction(formData: FormData) {
     .maybeSingle();
 
   if (adminErr || !adminRow || !adminRow.is_active) {
-    redirect(`/login?reason=not_admin&next=${encodeURIComponent(parsed.data.next || "/admin")}`);
+    const safeNext = safeRedirectPath(parsed.data.next, "/admin");
+    redirect(`/login?reason=not_admin&next=${encodeURIComponent(safeNext)}`);
   }
+
+  const safeNext = safeRedirectPath(parsed.data.next, "/admin");
 
   // service_staff goes directly to their task view
   if (!parsed.data.next || parsed.data.next === "/admin") {
@@ -68,7 +72,7 @@ export async function loginAction(formData: FormData) {
     }
   }
 
-  redirect(parsed.data.next || "/admin");
+  redirect(safeNext);
 }
 
 export async function logoutAction() {

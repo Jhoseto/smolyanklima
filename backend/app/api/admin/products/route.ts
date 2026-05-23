@@ -12,6 +12,7 @@ import { insertProductCatalogStockCalendarEvent } from "@/lib/admin/productCatal
 import { replaceProductImages, upsertProductSpecs, type ImageInput, type SpecsInput } from "@/lib/admin/syncProductChildren";
 import * as catalogBtu from "@/lib/catalog/productBtu";
 import { listAdminAccessories, listAdminCatalogMerged } from "@/lib/admin/adminCatalogList";
+import { sanitizeIlikeTerm } from "@/lib/security/sanitizeSearchTerm";
 
 const SpecsSchema = z.object({
   coverage_m2: z.number().nonnegative().nullable().optional(),
@@ -229,17 +230,19 @@ export async function GET(req: NextRequest) {
       // блок) и номер на фактура от доставчик. Запетайките в `q` се
       // премахват, защото PostgREST ползва запетая като разделител в
       // `or` израза и невалиден синтаксис би върнал 400.
-      const t = q.trim().replace(/,/g, " ");
-      const searchFields = applySupplyFields
-        ? [
-            `name.ilike.%${t}%`,
-            `slug.ilike.%${t}%`,
-            `indoor_unit_serial.ilike.%${t}%`,
-            `outdoor_unit_serial.ilike.%${t}%`,
-            `supplier_invoice_number.ilike.%${t}%`,
-          ]
-        : [`name.ilike.%${t}%`, `slug.ilike.%${t}%`];
-      query = query.or(searchFields.join(","));
+      const t = sanitizeIlikeTerm(q);
+      if (t) {
+        const searchFields = applySupplyFields
+          ? [
+              `name.ilike.%${t}%`,
+              `slug.ilike.%${t}%`,
+              `indoor_unit_serial.ilike.%${t}%`,
+              `outdoor_unit_serial.ilike.%${t}%`,
+              `supplier_invoice_number.ilike.%${t}%`,
+            ]
+          : [`name.ilike.%${t}%`, `slug.ilike.%${t}%`];
+        query = query.or(searchFields.join(","));
+      }
     }
     if (condition) query = query.eq("product_condition", condition);
     if (featured === "featured") query = query.eq("is_featured", true);
@@ -285,16 +288,18 @@ export async function GET(req: NextRequest) {
       let stubQuery = supabase.from("products").select(stubSelect, { count: "exact" });
       if (btuProductIds) stubQuery = stubQuery.in("id", btuProductIds);
       if (q?.trim()) {
-        const t = q.trim().replace(/,/g, " ");
-        stubQuery = stubQuery.or(
-          [
-            `name.ilike.%${t}%`,
-            `slug.ilike.%${t}%`,
-            `indoor_unit_serial.ilike.%${t}%`,
-            `outdoor_unit_serial.ilike.%${t}%`,
-            `supplier_invoice_number.ilike.%${t}%`,
-          ].join(","),
-        );
+        const t = sanitizeIlikeTerm(q);
+        if (t) {
+          stubQuery = stubQuery.or(
+            [
+              `name.ilike.%${t}%`,
+              `slug.ilike.%${t}%`,
+              `indoor_unit_serial.ilike.%${t}%`,
+              `outdoor_unit_serial.ilike.%${t}%`,
+              `supplier_invoice_number.ilike.%${t}%`,
+            ].join(","),
+          );
+        }
       }
       if (condition) stubQuery = stubQuery.eq("product_condition", condition);
       if (featured === "featured") stubQuery = stubQuery.eq("is_featured", true);

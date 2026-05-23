@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 const PutSchema = z.object({
   name: z.string().min(2).max(80).optional(),
   phone: z.union([z.string().max(40), z.literal(""), z.null()]).optional(),
-  password: z.string().min(4).max(128).optional(),
+  password: z.string().min(12).max(128).optional(),
   avatar_url: z.union([z.string().url("Невалиден URL").max(2048), z.null()]).optional(),
 });
 

@@ -44,8 +44,8 @@ export const Footer = () => {
 
           {/* Links */}
           <div>
-            <h3 className="text-lg font-bold mb-6">Бързи връзки</h3>
-            <ul className="space-y-4">
+            <h3 className="text-lg font-bold mb-4">Бързи връзки</h3>
+            <ul className="space-y-2">
               {[
                 { name: 'Начало', href: '#home' },
                 { name: 'Каталог', href: '/catalog' },
@@ -66,8 +66,8 @@ export const Footer = () => {
 
           {/* Services */}
           <div>
-            <h3 className="text-lg font-bold mb-6">Услуги</h3>
-            <ul className="space-y-4">
+            <h3 className="text-lg font-bold mb-4">Услуги</h3>
+            <ul className="space-y-2">
               {['Продажба на климатици', 'Професионален монтаж', 'Профилактика и почистване', 'Сервиз и ремонт', 'Оглед и консултация'].map((item) => (
                 <li key={item}>
                   <a href="#services" className="text-gray-400 hover:text-[#FF4D00] transition-colors text-sm font-medium">
@@ -80,8 +80,8 @@ export const Footer = () => {
 
           {/* Contact */}
           <div>
-            <h3 className="text-lg font-bold mb-6">Контакти</h3>
-            <ul className="space-y-4">
+            <h3 className="text-lg font-bold mb-4">Контакти</h3>
+            <ul className="space-y-2.5">
               <li className="flex gap-3 text-gray-400">
                 <MapPin className="w-5 h-5 text-[#FF4D00] shrink-0" />
                 <span className="text-sm">

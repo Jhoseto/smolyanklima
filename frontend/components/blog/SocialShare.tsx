@@ -66,7 +66,7 @@ export const SocialShare: React.FC<SocialShareProps> = ({
         url: fullUrl
       }).catch(() => {
         // Fallback to opening the share URL
-        window.open(shareUrl, '_blank', 'width=600,height=400');
+        window.open(shareUrl, '_blank', 'noopener,noreferrer,width=600,height=400');
       });
     } else {
       // Desktop - open in popup

@@ -4,6 +4,7 @@ import { corsPreflight, withCors } from "@/lib/http/cors";
 import { stripImportSourceFromDescription } from "@/lib/import/stripImportSourceFromDescription";
 import { withCloudinaryWebOptimization } from "@/lib/services/cloudinaryService";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
+import { sanitizeIlikeTerm } from "@/lib/security/sanitizeSearchTerm";
 import { parseBtuCsvParam, resolveProductIdsForBtuList } from "@/lib/catalog/productBtu";
 import { applyPublicCatalogFilter } from "@/lib/catalog/publicProductVisibility";
 import { CATEGORY_TYPE_FALLBACK } from "@/lib/catalog/publicCatalogDedup";
@@ -111,26 +112,28 @@ export async function GET(req: NextRequest) {
 
   // Search (FTS + ILIKE via RPC; fallback if migration not applied yet)
   if (q && q.trim()) {
-    const term = q.trim();
-    const { data: searchRows, error: rpcErr } = await supabase.rpc("search_product_ids", {
-      search_query: term,
-      result_limit: 5000,
-    });
-    let ids: string[] = [];
-    if (rpcErr) {
-      const { data: fb, error: fbErr } = await applyPublicCatalogFilter(
-        supabase.from("products").select("id"),
-      ).or(`name.ilike.%${term}%,description.ilike.%${term}%`);
-      if (fbErr) return withCors(req, NextResponse.json({ error: fbErr.message }, { status: 500 }));
-      ids = (fb ?? []).map((r: { id: string }) => r.id);
-    } else {
-      ids = (searchRows ?? []).map((r: { id: string }) => r.id).filter(Boolean);
-    }
-    try {
-      mergeProductIds(await filterPublicProductIds(supabase, ids));
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : String(e);
-      return withCors(req, NextResponse.json({ error: message }, { status: 500 }));
+    const term = sanitizeIlikeTerm(q);
+    if (term) {
+      const { data: searchRows, error: rpcErr } = await supabase.rpc("search_product_ids", {
+        search_query: term,
+        result_limit: 5000,
+      });
+      let ids: string[] = [];
+      if (rpcErr) {
+        const { data: fb, error: fbErr } = await applyPublicCatalogFilter(
+          supabase.from("products").select("id"),
+        ).or(`name.ilike.%${term}%,description.ilike.%${term}%`);
+        if (fbErr) return withCors(req, NextResponse.json({ error: fbErr.message }, { status: 500 }));
+        ids = (fb ?? []).map((r: { id: string }) => r.id);
+      } else {
+        ids = (searchRows ?? []).map((r: { id: string }) => r.id).filter(Boolean);
+      }
+      try {
+        mergeProductIds(await filterPublicProductIds(supabase, ids));
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        return withCors(req, NextResponse.json({ error: message }, { status: 500 }));
+      }
     }
   }
 

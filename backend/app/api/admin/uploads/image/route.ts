@@ -3,6 +3,7 @@ import { z } from "zod";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { logAdminActivity } from "@/lib/admin/audit";
 import { adminSession, requireRole } from "@/lib/admin/db";
+import { detectImageMime } from "@/lib/security/imageMagicBytes";
 import {
   buildUploadFolderPath,
   formatCloudinaryUploadError,
@@ -97,10 +98,11 @@ export async function POST(req: NextRequest) {
       NextResponse.json({ error: `Файлът е прекалено голям (макс. ${mb} MB)` }, { status: 400 }),
     );
   }
-  const mime = file.type || "application/octet-stream";
-  if (!mime.startsWith("image/")) {
-    return withCors(req, NextResponse.json({ error: "Файлът трябва да е изображение" }, { status: 400 }));
+  const detectedMime = detectImageMime(buf);
+  if (!detectedMime) {
+    return withCors(req, NextResponse.json({ error: "Файлът не е валидно изображение" }, { status: 400 }));
   }
+  const mime = detectedMime;
 
   try {
     const { url, publicId } = await uploadImageBuffer({

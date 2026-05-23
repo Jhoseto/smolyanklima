@@ -11,6 +11,8 @@ import { productSchema } from './pages';
 import { HOME_FAQS } from './faqs';
 import { blogCategorySeo as backendBlogCategorySeo } from './blogCategories';
 
+import { escapeHtml } from '@/lib/security/htmlEscape';
+
 function stripHtml(value: string): string {
   return value.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 }
@@ -98,7 +100,7 @@ export async function resolveSeoForPath(pathname: string): Promise<{ page: SeoPa
         page: {
           ...catSeo,
           ogImage: '/images/blog/og-blog-home.jpg',
-          bodyHtml: `<h1>${catSeo.title.split('|')[0].trim()}</h1><p>${catSeo.description}</p>`,
+          bodyHtml: `<h1>${escapeHtml(catSeo.title.split('|')[0].trim())}</h1><p>${escapeHtml(catSeo.description)}</p>`,
         },
         schemas,
       };
@@ -126,7 +128,7 @@ export async function resolveSeoForPath(pathname: string): Promise<{ page: SeoPa
         canonicalPath: `/blog/${data.slug}`,
         ogImage: data.featured_image ? String(data.featured_image) : '/images/hero-new.jpg',
         ogType: 'article',
-        bodyHtml: `<article><h1>${data.title}</h1><p>${excerpt}</p>${contentPreview ? `<p>${contentPreview}…</p>` : ''}</article>`,
+        bodyHtml: `<article><h1>${escapeHtml(String(data.title))}</h1><p>${escapeHtml(excerpt)}</p>${contentPreview ? `<p>${escapeHtml(contentPreview)}…</p>` : ''}</article>`,
       };
       schemas.push({
         '@context': 'https://schema.org',
@@ -176,7 +178,7 @@ export async function resolveSeoForPath(pathname: string): Promise<{ page: SeoPa
         description: stripHtml(String(row.description ?? '')).slice(0, 160)
           || `${row.name} (${brand}) — аксесоар за климатици. Цена €${row.price}. Смолян Klima.`,
         canonicalPath: `/aksesoar/${slug}`,
-        bodyHtml: `<h1>${row.name}</h1><p>${brand} · €${row.price}</p>`,
+        bodyHtml: `<h1>${escapeHtml(row.name)}</h1><p>${escapeHtml(brand)} · €${escapeHtml(String(row.price))}</p>`,
       };
       schemas.push(productSchema({
         name: row.name,

@@ -34,7 +34,7 @@ export async function GET() {
 
 const CreateSchema = z.object({
   phone: z.string().min(6, "Въведи валиден телефонен номер"),
-  password: z.string().min(4, "Паролата трябва да е поне 4 символа"),
+  password: z.string().min(12, "Паролата трябва да е поне 12 символа"),
   name: z.string().min(2).max(80),
   role: z.enum(["office_staff", "service_staff"]),
 });

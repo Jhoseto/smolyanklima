@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { optimizeArticlePayloadForWeb } from "@/lib/services/cloudinaryService";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { sanitizeIlikeTerm } from "@/lib/security/sanitizeSearchTerm";
 
 const QuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
@@ -36,8 +37,8 @@ export async function GET(req: NextRequest) {
 
   if (category) query = query.eq("category_slug", category);
   if (q && q.trim()) {
-    const term = q.trim();
-    query = query.or(`title.ilike.%${term}%,excerpt.ilike.%${term}%,content.ilike.%${term}%`);
+    const term = sanitizeIlikeTerm(q);
+    if (term) query = query.or(`title.ilike.%${term}%,excerpt.ilike.%${term}%,content.ilike.%${term}%`);
   }
 
   const from = (page - 1) * perPage;

@@ -302,7 +302,7 @@ export function ProfilePageClient() {
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
             <KeyRound className="w-4 h-4" /> Нова парола <span className="font-normal normal-case text-slate-400">(по избор)</span>
           </div>
-          <Input type="password" value={pw1} onChange={(e) => setPw1(e.target.value)} autoComplete="new-password" placeholder="Поне 4 знака" />
+          <Input type="password" value={pw1} onChange={(e) => setPw1(e.target.value)} autoComplete="new-password" placeholder="Поне 12 знака" />
           <Input type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} autoComplete="new-password" placeholder="Повтори паролата" />
         </div>
 

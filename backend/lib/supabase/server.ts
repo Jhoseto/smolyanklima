@@ -3,9 +3,10 @@ import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { getEnv } from "@/lib/env";
 
-// On Windows dev, Node.js cannot verify Supabase's TLS cert via the bundled CA store.
-// We disable verification only in development — production is completely unaffected.
-if (process.env.NODE_ENV === "development") {
+// On Windows dev, Node.js often cannot verify Supabase TLS via the bundled CA store.
+// Enabled by default in development only; set ALLOW_INSECURE_TLS=false to disable.
+// Production is never affected (NODE_ENV=production).
+if (process.env.NODE_ENV === "development" && process.env.ALLOW_INSECURE_TLS !== "false") {
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 }
 

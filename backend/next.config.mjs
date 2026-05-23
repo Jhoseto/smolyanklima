@@ -4,9 +4,9 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// On Windows dev, Node.js cannot verify Supabase's TLS cert via the bundled CA store.
-// Set the env var here (at Next.js config eval time) so it's active before any route modules load.
-if (process.env.NODE_ENV === "development") {
+// On Windows dev, Node.js often cannot verify Supabase TLS via the bundled CA store.
+// Default ON in development; set ALLOW_INSECURE_TLS=false to enforce verification locally.
+if (process.env.NODE_ENV === "development" && process.env.ALLOW_INSECURE_TLS !== "false") {
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
   // Suppress the resulting Node.js warning so the terminal stays clean.
   const _origWarn = process.emitWarning.bind(process);
@@ -42,22 +42,39 @@ const nextConfig = {
     ];
   },
   async headers() {
+    const baseSecurity = [
+      { key: "X-Content-Type-Options", value: "nosniff" },
+      { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+      { key: "Permissions-Policy", value: "geolocation=(), microphone=(), camera=()" },
+      { key: "X-Frame-Options", value: "SAMEORIGIN" },
+    ];
+    const prodSecurity =
+      process.env.NODE_ENV === "production"
+        ? [{ key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" }]
+        : [];
+
     return [
       {
         source: "/admin",
-        headers: [{ key: "Cache-Control", value: "private, no-cache, no-store, must-revalidate" }],
+        headers: [
+          { key: "Cache-Control", value: "private, no-cache, no-store, must-revalidate" },
+          { key: "X-Frame-Options", value: "DENY" },
+          ...baseSecurity,
+          ...prodSecurity,
+        ],
       },
       {
         source: "/admin/:path*",
-        headers: [{ key: "Cache-Control", value: "private, no-cache, no-store, must-revalidate" }],
+        headers: [
+          { key: "Cache-Control", value: "private, no-cache, no-store, must-revalidate" },
+          { key: "X-Frame-Options", value: "DENY" },
+          ...baseSecurity,
+          ...prodSecurity,
+        ],
       },
       {
         source: "/:path*",
-        headers: [
-          { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          { key: "Permissions-Policy", value: "geolocation=(), microphone=(), camera=()" },
-        ],
+        headers: [...baseSecurity, ...prodSecurity],
       },
     ];
   },

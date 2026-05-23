@@ -2,6 +2,7 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminDb } from "@/lib/admin/db";
+import { authErrorResponse, requireOfficeStaffSession } from "@/lib/admin/authGuard";
 import { isPostgrestMissingColumn } from "@/lib/admin/pgMissingColumn";
 import { logAdminActivity } from "@/lib/admin/audit";
 
@@ -56,12 +57,19 @@ export async function GET(req: NextRequest) {
 
 /** POST — задава продукт на позиция 1..6 (+ опционален badge). */
 export async function POST(req: NextRequest) {
+  let session;
+  try {
+    session = await requireOfficeStaffSession();
+  } catch (e) {
+    const err = authErrorResponse(e);
+    return withCors(req, NextResponse.json({ error: err.message }, { status: err.status }));
+  }
   const json = await req.json().catch(() => null);
   const parsed = SetBodySchema.safeParse(json);
   if (!parsed.success) return withCors(req, NextResponse.json({ error: "Невалидни данни" }, { status: 400 }));
 
   const { productId, position, badge } = parsed.data;
-  const supabase = await adminDb();
+  const supabase = session.db;
 
   // 1) Освободи слота, ако там вече стои друг продукт.
   const { error: clearOldOccupantErr } = await supabase
@@ -139,12 +147,19 @@ export async function POST(req: NextRequest) {
 
 /** DELETE — премахва продукт от Топ продукти. */
 export async function DELETE(req: NextRequest) {
+  let session;
+  try {
+    session = await requireOfficeStaffSession();
+  } catch (e) {
+    const err = authErrorResponse(e);
+    return withCors(req, NextResponse.json({ error: err.message }, { status: err.status }));
+  }
   const json = await req.json().catch(() => null);
   const parsed = RemoveBodySchema.safeParse(json);
   if (!parsed.success) return withCors(req, NextResponse.json({ error: "Невалидни данни" }, { status: 400 }));
 
   const { productId } = parsed.data;
-  const supabase = await adminDb();
+  const supabase = session.db;
 
   const { error } = await supabase
     .from("products")

@@ -4,6 +4,7 @@ import { corsPreflight, withCors } from "@/lib/http/cors";
 import { stripImportSourceFromDescription } from "@/lib/import/stripImportSourceFromDescription";
 import { optimizeImageRowUrls } from "@/lib/services/cloudinaryService";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
+import { sanitizeIlikeTerm } from "@/lib/security/sanitizeSearchTerm";
 
 const QuerySchema = z.object({
   q: z.string().optional(),
@@ -41,8 +42,8 @@ export async function GET(req: NextRequest) {
 
   if (brands.length > 0) query = query.in("brands.name", brands);
   if (q && q.trim()) {
-    const term = q.trim();
-    query = query.or(`name.ilike.%${term}%,description.ilike.%${term}%`);
+    const term = sanitizeIlikeTerm(q);
+    if (term) query = query.or(`name.ilike.%${term}%,description.ilike.%${term}%`);
   }
 
   query = query.order("created_at", { ascending: false });

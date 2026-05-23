@@ -1,18 +1,18 @@
 /**
  * Client payload shaping for POST /api/ai/chat.
- * Backend Zod limits: 20 messages, 2000 chars/message, 24000 chars systemPrompt.
+ * Backend builds trusted system prompt; client sends advisorContext only.
  */
 
 export type AIChatMessage = { role: 'user' | 'assistant'; content: string };
 
 const MAX_MESSAGES = 20;
 const MAX_MESSAGE_CHARS = 2000;
-const MAX_SYSTEM_PROMPT_CHARS = 24000;
+const MAX_ADVISOR_CONTEXT_CHARS = 8000;
 
 export function prepareAIChatPayload(
   messages: AIChatMessage[],
-  systemPrompt?: string,
-): { messages: AIChatMessage[]; systemPrompt?: string } {
+  advisorContext?: string,
+): { messages: AIChatMessage[]; advisorContext?: string } {
   const normalized = messages
     .filter((m) => m.role === 'user' || m.role === 'assistant')
     .map((m) => ({
@@ -22,19 +22,19 @@ export function prepareAIChatPayload(
     .filter((m) => m.content.length > 0)
     .slice(-MAX_MESSAGES);
 
-  const trimmedPrompt =
-    systemPrompt && systemPrompt.length > 0
-      ? systemPrompt.slice(0, MAX_SYSTEM_PROMPT_CHARS)
+  const trimmedContext =
+    advisorContext && advisorContext.length > 0
+      ? advisorContext.slice(0, MAX_ADVISOR_CONTEXT_CHARS)
       : undefined;
 
-  return { messages: normalized, systemPrompt: trimmedPrompt };
+  return { messages: normalized, advisorContext: trimmedContext };
 }
 
 export async function callBackendAIChat(
   messages: AIChatMessage[],
-  systemPrompt?: string,
+  advisorContext?: string,
 ): Promise<{ content: string }> {
-  const payload = prepareAIChatPayload(messages, systemPrompt);
+  const payload = prepareAIChatPayload(messages, advisorContext);
   if (payload.messages.length === 0) {
     throw new Error('No messages to send');
   }

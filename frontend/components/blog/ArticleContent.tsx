@@ -6,6 +6,18 @@ interface ArticleContentProps {
   content: string;
 }
 
+function isSafeHref(href: string): boolean {
+  try {
+    const trimmed = href.trim();
+    if (!trimmed || trimmed.startsWith('//')) return false;
+    if (trimmed.startsWith('/') || trimmed.startsWith('#')) return true;
+    const u = new URL(trimmed);
+    return u.protocol === 'http:' || u.protocol === 'https:' || u.protocol === 'mailto:';
+  } catch {
+    return false;
+  }
+}
+
 export const ArticleContent: React.FC<ArticleContentProps> = ({ content }) => {
   return (
     <div className="prose prose-lg max-w-none overflow-x-auto
@@ -26,7 +38,23 @@ export const ArticleContent: React.FC<ArticleContentProps> = ({ content }) => {
       prose-blockquote:border-l-4 prose-blockquote:border-[#FF4D00] prose-blockquote:pl-4 prose-blockquote:italic prose-blockquote:text-gray-600
       prose-img:rounded-xl prose-img:shadow-lg
       prose-hr:border-gray-200">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          a: ({ href, children }) => {
+            if (!href || !isSafeHref(href)) return <span>{children}</span>;
+            const external = /^https?:/i.test(href);
+            return (
+              <a
+                href={href}
+                {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+              >
+                {children}
+              </a>
+            );
+          },
+        }}
+      >
         {content}
       </ReactMarkdown>
     </div>

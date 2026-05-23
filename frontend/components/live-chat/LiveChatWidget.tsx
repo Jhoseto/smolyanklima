@@ -242,6 +242,7 @@ export function LiveChatWidget({ aiContext, onClose, initialName, onNavigate, on
     setFormError(null);
     setStarting(true);
     try {
+      const prior = loadSession();
       const res = await fetch(`${BASE_URL}/api/chat/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -251,6 +252,8 @@ export function LiveChatWidget({ aiContext, onClose, initialName, onNavigate, on
           visitor_phone: formPhone.trim() || undefined,
           ai_context: aiContext?.slice(-12),
           visitor_page_url: window.location.href,
+          resume_chat_id: prior?.chatId,
+          resume_session_token: prior?.sessionToken,
         }),
       });
       if (!res.ok) throw new Error("start_failed");

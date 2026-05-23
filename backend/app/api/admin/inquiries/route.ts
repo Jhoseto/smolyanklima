@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminDb } from "@/lib/admin/db";
 import { isPostgrestMissingColumn } from "@/lib/admin/pgMissingColumn";
+import { sanitizeIlikeTerm } from "@/lib/security/sanitizeSearchTerm";
 import {
   INQUIRY_ADMIN_SELECT,
   INQUIRY_ADMIN_SELECT_BASE,
@@ -38,7 +39,7 @@ export async function GET(req: NextRequest) {
     if (parsed.data.status) query = query.eq("status", parsed.data.status);
     if (parsed.data.source) query = query.eq("source", parsed.data.source);
     if (parsed.data.q) {
-      const q = parsed.data.q.trim();
+      const q = sanitizeIlikeTerm(parsed.data.q);
       if (q) {
         query = query.or(
           [

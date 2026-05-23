@@ -9,6 +9,7 @@ import {
   formatDuplicatePrimaryPhoneMessage,
   isPostgresContactsPhoneUniqueViolation,
 } from "@/lib/admin/contactPhoneDuplicate";
+import { sanitizeIlikeTerm } from "@/lib/security/sanitizeSearchTerm";
 
 const QuerySchema = z.object({
   q: z.string().optional(),
@@ -47,9 +48,12 @@ export async function GET(req: NextRequest) {
     .select("id,full_name,phone,email,address,notes,contact_kind,customer_status,next_follow_up_at,last_contacted_at,updated_at,created_at", { count: "exact" });
   if (kind) query = query.eq("contact_kind", kind);
   if (q?.trim()) {
-    query = query.or(
-      `full_name.ilike.%${q.trim()}%,phone.ilike.%${q.trim()}%,email.ilike.%${q.trim()}%,address.ilike.%${q.trim()}%`,
-    );
+    const term = sanitizeIlikeTerm(q);
+    if (term) {
+      query = query.or(
+        `full_name.ilike.%${term}%,phone.ilike.%${term}%,email.ilike.%${term}%,address.ilike.%${term}%`,
+      );
+    }
   }
   const from = (page - 1) * perPage;
   const to = from + perPage - 1;
@@ -64,9 +68,12 @@ export async function GET(req: NextRequest) {
       .select("id,full_name,phone,email,address,notes,contact_kind,updated_at,created_at", { count: "exact" });
     if (kind) fallback = fallback.eq("contact_kind", kind);
     if (q?.trim()) {
-      fallback = fallback.or(
-        `full_name.ilike.%${q.trim()}%,phone.ilike.%${q.trim()}%,email.ilike.%${q.trim()}%,address.ilike.%${q.trim()}%`,
-      );
+      const term = sanitizeIlikeTerm(q);
+      if (term) {
+        fallback = fallback.or(
+          `full_name.ilike.%${term}%,phone.ilike.%${term}%,email.ilike.%${term}%,address.ilike.%${term}%`,
+        );
+      }
     }
     const fallbackRes = await fallback
       .order("full_name", { ascending: true })

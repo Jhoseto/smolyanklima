@@ -1,13 +1,7 @@
 import { absoluteUrl } from './site';
 import type { SeoPage } from './pages';
 
-function esc(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
+import { escapeHtml as esc } from '@/lib/security/htmlEscape';
 
 export function renderSeoHtml(page: SeoPage, schemas: Record<string, unknown>[] = []): string {
   const canonical = absoluteUrl(page.canonicalPath);

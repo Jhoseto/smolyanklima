@@ -2,6 +2,7 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 
 import { corsPreflight, withCors } from "@/lib/http/cors";
+import { buildPublicAdvisorSystemPrompt } from "@/lib/ai/publicAdvisorPrompt";
 import { getEnv } from "@/lib/env";
 
 const GeminiMessageSchema = z.object({
@@ -10,10 +11,11 @@ const GeminiMessageSchema = z.object({
 });
 
 const ChatRequestSchema = z.object({
-  messages: z.array(GeminiMessageSchema).min(1).max(20), // max 20 turns
-  // Layered prompt + каталогни откъси лесно надхвърлят 4k символа; горна граница срещу злоупотреба.
+  messages: z.array(GeminiMessageSchema).min(1).max(20),
+  /** Untrusted catalog/emotion context — server builds trusted system prompt. */
+  advisorContext: z.string().max(8000).optional(),
+  /** @deprecated Ignored — kept for backward compatibility during rollout. */
   systemPrompt: z.string().max(24000).optional(),
-  // Client overrides are ignored for security/stability.
   model: z.string().optional(),
   temperature: z.number().min(0).max(1).optional(),
   maxOutputTokens: z.number().int().min(1).max(8192).optional(),
@@ -39,8 +41,11 @@ function normalizeChatBody(raw: unknown): unknown {
       .slice(-20);
   }
 
-  if (typeof body.systemPrompt === "string") {
-    out.systemPrompt = body.systemPrompt.slice(0, 24000);
+  if (typeof body.advisorContext === "string") {
+    out.advisorContext = body.advisorContext.slice(0, 8000);
+  } else if (typeof body.systemPrompt === "string") {
+    // Legacy clients — treat as context only, not as authoritative system prompt.
+    out.advisorContext = body.systemPrompt.slice(0, 8000);
   }
 
   return out;
@@ -79,7 +84,8 @@ async function postImpl(req: NextRequest) {
     return withCors(req, NextResponse.json({ error: "INVALID_REQUEST", details: parsed.error.flatten() }, { status: 400 }));
   }
 
-  const { messages, systemPrompt } = parsed.data;
+  const { messages, advisorContext } = parsed.data;
+  const systemPrompt = buildPublicAdvisorSystemPrompt(advisorContext);
 
   // ── Rate limiting ─────────────────────────────────────────────────────────
   // 1. Per-IP: max 8 requests per minute (burst protection)
