@@ -1,17 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseMiddlewareClient } from "@/lib/supabase/middleware";
+import { isSeoBot } from "@/lib/seo/botDetect";
+
+const STATIC_SEO = new Set(["/robots.txt", "/sitemap.xml", "/rss.xml", "/llms.txt"]);
+
+function isAdminArea(pathname: string): boolean {
+  return (
+    pathname === "/login"
+    || pathname === "/login/"
+    || pathname.startsWith("/admin")
+    || pathname.startsWith("/api/admin")
+  );
+}
 
 export async function proxy(req: NextRequest) {
-  const res = NextResponse.next();
   const { pathname } = req.nextUrl;
+
+  if (
+    !isAdminArea(pathname)
+    && !pathname.startsWith("/api/")
+    && !STATIC_SEO.has(pathname)
+    && isSeoBot(req.headers.get("user-agent"))
+  ) {
+    const url = req.nextUrl.clone();
+    url.pathname = "/api/seo-render";
+    url.searchParams.set("path", pathname);
+    return NextResponse.rewrite(url);
+  }
+
+  if (!isAdminArea(pathname)) {
+    return NextResponse.next();
+  }
+
+  const res = NextResponse.next();
   const supabase = createSupabaseMiddlewareClient(req, res);
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // If an already-authenticated user lands on /login (e.g. via mobile swipe-back),
-  // redirect them straight to /admin so the login form is never shown.
   if (pathname === "/login" || pathname === "/login/") {
     if (user) {
       const url = req.nextUrl.clone();
@@ -22,7 +49,6 @@ export async function proxy(req: NextRequest) {
     return res;
   }
 
-  // Protect admin routes — unauthenticated users go to /login.
   if (!user) {
     const nextUrl = req.nextUrl.clone();
     nextUrl.pathname = "/login";
@@ -48,6 +74,7 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/login", "/login/", "/admin/:path*", "/api/admin/:path*"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|images/|icon|assets/|.*\\.(?:png|jpg|jpeg|gif|webp|svg|ico|woff2?)$).*)",
+  ],
 };
-

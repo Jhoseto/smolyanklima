@@ -43,7 +43,7 @@ export const SchemaMarkup: React.FC<SchemaMarkupProps> = ({
             url: SITE_ORIGIN,
             logo: {
               '@type': 'ImageObject',
-              url: absoluteUrl('/logo.png')
+              url: absoluteUrl('/icon-192.png')
             }
           },
           mainEntityOfPage: {
@@ -145,6 +145,7 @@ interface SEOMetaTagsProps {
   ogImage?: string;
   ogType?: 'website' | 'article';
   canonicalUrl?: string;
+  robots?: string;
 }
 
 export const SEOMetaTags: React.FC<SEOMetaTagsProps> = ({
@@ -153,7 +154,8 @@ export const SEOMetaTags: React.FC<SEOMetaTagsProps> = ({
   keywords = [],
   ogImage = '/images/og-default.jpg',
   ogType = 'website',
-  canonicalUrl
+  canonicalUrl,
+  robots = 'index, follow',
 }) => {
   return (
     <>
@@ -181,7 +183,7 @@ export const SEOMetaTags: React.FC<SEOMetaTagsProps> = ({
       <meta name="twitter:image" content={absoluteUrl(ogImage)} />
       
       {/* Robots */}
-      <meta name="robots" content="index, follow" />
+      <meta name="robots" content={robots} />
       
       {/* RSS Feed */}
       <link rel="alternate" type="application/rss+xml" title="Smolyan Klima Blog" href={absoluteUrl('/rss.xml')} />

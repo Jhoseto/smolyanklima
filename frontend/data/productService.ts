@@ -129,6 +129,8 @@ type ApiProduct = {
   product_condition?: "new" | "used" | null;
   rating?: number | null;
   reviews_count?: number | null;
+  meta_title?: string | null;
+  meta_description?: string | null;
   brands?: { name: string } | null;
   product_types?: { name: string } | null;
   product_specs?: Array<{
@@ -170,6 +172,15 @@ export function pickCatalogImageUrl(urls: string[]): string {
   return reliable ?? urls[0] ?? CATALOG_IMAGE_PLACEHOLDER;
 }
 
+function resolveProductCategory(type: string): string {
+  const t = type.toLowerCase();
+  if (t.includes('касет') || t.includes('таван') || t.includes('подов') || t.includes('канал')) {
+    return 'Търговски';
+  }
+  if (t.includes('мулти')) return 'Къща';
+  return 'Апартамент';
+}
+
 function mapApiToCatalogProduct(raw: ApiProduct): CatalogProduct {
   const brand = raw.brands?.name ?? '—';
   const type = raw.product_types?.name ?? '';
@@ -192,17 +203,24 @@ function mapApiToCatalogProduct(raw: ApiProduct): CatalogProduct {
   const rating = raw.rating != null ? Number(raw.rating) : fallback.rating;
   const reviews = raw.reviews_count != null ? Number(raw.reviews_count) : fallback.reviews;
 
-  const coolingPower = specs0?.cooling_power_kw ? `${specs0.cooling_power_kw} kW` : undefined;
-  const heatingPower = specs0?.heating_power_kw ? `${specs0.heating_power_kw} kW` : undefined;
-  const noise = specs0?.noise_db ? `${specs0.noise_db} dB` : undefined;
-  const area = specs0?.coverage_m2 ? `до ${Math.round(specs0.coverage_m2)} м²` : undefined;
-  const warranty = specs0?.warranty_months ? `${Math.round(specs0.warranty_months / 12)} г. гаранция` : undefined;
-
   const numOrUndef = (v: unknown): number | undefined => {
     if (v == null) return undefined;
     const n = typeof v === "number" ? v : Number(v);
     return Number.isFinite(n) ? n : undefined;
   };
+
+  const coolingKw = numOrUndef(specs0?.cooling_power_kw);
+  const heatingKw = numOrUndef(specs0?.heating_power_kw);
+  const noiseDb = numOrUndef(specs0?.noise_db);
+  const coverageM2 = numOrUndef(specs0?.coverage_m2);
+  const btu = numOrUndef(specs0?.btu);
+
+  const coolingPower = coolingKw != null ? `${coolingKw} kW` : undefined;
+  const heatingPower = heatingKw != null ? `${heatingKw} kW` : undefined;
+  const noise = noiseDb != null ? `${noiseDb} dB` : undefined;
+  const area = coverageM2 != null ? `до ${Math.round(coverageM2)} м²` : undefined;
+  const warranty = specs0?.warranty_months ? `${Math.round(specs0.warranty_months / 12)} г. гаранция` : undefined;
+
   const weightIndoorKg = numOrUndef(specs0?.weight_indoor_kg);
   const weightOutdoorKg = numOrUndef(specs0?.weight_outdoor_kg);
   const indoorDims = {
@@ -230,7 +248,7 @@ function mapApiToCatalogProduct(raw: ApiProduct): CatalogProduct {
     brand,
     model: raw.name,
     type,
-    category: '—',
+    category: resolveProductCategory(type),
     condition: raw.product_condition === "used" ? "used" : "new",
 
     image,
@@ -251,6 +269,14 @@ function mapApiToCatalogProduct(raw: ApiProduct): CatalogProduct {
     heatingPower,
     seer: numOrUndef(specs0?.seer),
     scop: numOrUndef(specs0?.scop),
+    btu,
+    coverageM2,
+    coolingKw,
+    heatingKw,
+    noiseDb,
+
+    metaTitle: raw.meta_title?.trim() || undefined,
+    metaDescription: raw.meta_description?.trim() || undefined,
 
     price: Number(raw.price),
     priceWithMount:

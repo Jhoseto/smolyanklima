@@ -25,9 +25,9 @@ export const HeroSection = ({ onFreeConsultationClick }: HeroSectionProps) => {
   return (
     <section
       id="home"
-      className="relative flex min-h-[100dvh] flex-col pt-[calc(var(--navbar-height)+1.25rem)] overflow-hidden"
+      className="relative flex min-h-[100dvh] flex-col pt-[calc(var(--navbar-height)+0.25rem)] overflow-hidden"
     >
-      <div className="flex flex-1 items-center w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+      <div className="flex flex-1 items-center w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10 -translate-y-5 sm:-translate-y-6 lg:-translate-y-10">
         <div className="grid lg:grid-cols-2 gap-8 lg:gap-10 items-center w-full">
 
           {/* Left Content */}
@@ -203,7 +203,7 @@ export const HeroSection = ({ onFreeConsultationClick }: HeroSectionProps) => {
       </div>
 
       {/* Brands Carousel — долу в hero, до края на екрана */}
-      <div className="relative z-20 w-full shrink-0 pb-3 sm:pb-4 bg-transparent">
+      <div className="relative z-20 w-full shrink-0 pb-3 sm:pb-4 bg-transparent -mt-6 sm:-mt-8 lg:-mt-10">
         <BrandsSection />
       </div>
 

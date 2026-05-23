@@ -20,7 +20,7 @@ substitutions:
   # ЗАДЪЛЖИТЕЛНО: същият регион като Cloud Run услугата (от конзолата или тригера).
   _REGION: europe-west3
   _SERVICE: smolyanklima
-  _PUBLIC_URL: "https://REPLACE-WITH-YOUR-SERVICE-URL.europe-west3.run.app"
+  _PUBLIC_URL: "https://smolyanklima.com"
 
 options:
   logging: CLOUD_LOGGING_ONLY
@@ -65,7 +65,7 @@ steps:
       - --allow-unauthenticated
       - --port=8080
       - --quiet
-      - --set-env-vars=NODE_ENV=production,FRONTEND_ORIGIN=$_PUBLIC_URL,APP_URL=$_PUBLIC_URL
+      - --set-env-vars=NODE_ENV=production,FRONTEND_ORIGIN=$_PUBLIC_URL,APP_URL=$_PUBLIC_URL,NEXT_PUBLIC_SITE_ORIGIN=$_PUBLIC_URL
       - --set-secrets=SUPABASE_URL=SUPABASE_URL:latest,SUPABASE_ANON_KEY=SUPABASE_ANON_KEY:latest,SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest,GEMINI_API_KEY=GEMINI_API_KEY:latest,CLOUDINARY_URL=CLOUDINARY_URL:latest
 
 images:

@@ -27,6 +27,9 @@ import { getAllAccessories } from '../data/accessoryService';
 import { postPublicInquiry } from '../data/postInquiry';
 import type { CatalogProduct, SortOption } from '../data/types/product';
 import { parseSortOption } from '../data/types/product';
+import { SiteSeo } from '../components/seo/SiteSeo';
+import { PAGE_SEO } from '../lib/seo/config';
+import { breadcrumbSchema, localBusinessSchema } from '../lib/seo/jsonLd';
 
 // ─────────────────────────────────────────
 // TRUST BAR
@@ -615,6 +618,16 @@ const CatalogPage = () => {
   // ── Render ───────────────────────────────
   return (
     <div ref={pageRef} className="relative min-h-screen bg-gray-50 font-sans selection:bg-[#FF4D00]/20 selection:text-[#FF4D00]">
+      <SiteSeo
+        config={PAGE_SEO.catalog}
+        schemas={[
+          localBusinessSchema(),
+          breadcrumbSchema([
+            { name: 'Начало', path: '/' },
+            { name: 'Каталог', path: '/catalog' },
+          ]),
+        ]}
+      />
       {/* Scroll Progress Bar */}
       <motion.div
         className="fixed top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#00B4D8] to-[#FF4D00] transform-origin-0 z-[1000]"

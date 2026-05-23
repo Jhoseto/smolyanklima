@@ -78,6 +78,16 @@ export interface CatalogProduct {
   /** Реален SEER от спецификации (ако има в БД). */
   seer?: number;
   scop?: number;
+  /** Нормализирани числови полета за алгорitъми (от product_specs). */
+  btu?: number;
+  coverageM2?: number;
+  coolingKw?: number;
+  heatingKw?: number;
+  noiseDb?: number;
+
+  /** SEO полета от админ панела */
+  metaTitle?: string;
+  metaDescription?: string;
 
   // Pricing
   price: number;           // EUR, base price (converted from BGN at 1.95 rate)

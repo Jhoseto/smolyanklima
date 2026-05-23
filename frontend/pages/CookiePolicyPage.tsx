@@ -10,12 +10,15 @@ import {
 import { COOKIE_INVENTORY } from '../data/legal/cookieInventory';
 import { LEGAL_COMPANY } from '../data/legal/company';
 import { GA_MEASUREMENT_ID } from '../lib/analytics/gtag';
+import { SiteSeo } from '../components/seo/SiteSeo';
+import { PAGE_SEO } from '../lib/seo/config';
 
 export default function CookiePolicyPage() {
   const c = LEGAL_COMPANY;
 
   return (
     <LegalPageLayout title="Политика за бисквитки" subtitle="Бисквитки">
+      <SiteSeo config={PAGE_SEO.cookies} />
       <p className="text-gray-600">
         <strong>Последна актуализация:</strong> {c.effectiveDate} · <strong>Версия:</strong> {c.version}
       </p>

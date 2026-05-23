@@ -3,12 +3,15 @@ import { Link } from 'react-router-dom';
 import { LegalPageLayout } from '../components/layout/LegalPageLayout';
 import { CompanyBlock, CookieSettingsLink, LegalCrossLinks } from '../components/legal/LegalHelpers';
 import { LEGAL_AUTHORITY, LEGAL_COMPANY } from '../data/legal/company';
+import { SiteSeo } from '../components/seo/SiteSeo';
+import { PAGE_SEO } from '../lib/seo/config';
 
 export default function PrivacyPolicyPage() {
   const c = LEGAL_COMPANY;
 
   return (
     <LegalPageLayout title="Политика за поверителност" subtitle="Поверителност">
+      <SiteSeo config={PAGE_SEO.privacy} />
       <p className="text-gray-600">
         <strong>Последна актуализация:</strong> {c.effectiveDate} · <strong>Версия:</strong> {c.version}
       </p>

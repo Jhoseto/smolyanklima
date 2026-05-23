@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Clock, Calendar, ChevronLeft, ImageIcon } from 'lucide-react';
 import { Breadcrumb, SchemaMarkup, SEOMetaTags, ArticleContent, RelatedArticles, SocialShare } from '../components/blog';
+import { SiteSeo } from '../components/seo/SiteSeo';
 import { getAuthorBySlug, getCategoryBySlug, formatDate } from '../data/blog';
 import { fetchArticleBySlug, fetchArticles } from '../data/blogService';
 import type { Article } from '../data/blog/types';
@@ -63,14 +64,24 @@ export default function BlogArticlePage() {
 
   if (!article) {
     return (
-      <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Статията не е намерена</h1>
-          <Link to="/blog" className="text-[#FF4D00] hover:underline">
-            ← Обратно към блога
-          </Link>
+      <>
+        <SiteSeo
+          config={{
+            title: 'Статията не е намерена | Смолян Клима',
+            description: 'Търсената статия не съществува в блога.',
+            canonicalPath: slug ? `/blog/${slug}` : '/blog',
+            noindex: true,
+          }}
+        />
+        <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-gray-900 mb-4">Статията не е намерена</h1>
+            <Link to="/blog" className="text-[#FF4D00] hover:underline">
+              ← Обратно към блога
+            </Link>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 

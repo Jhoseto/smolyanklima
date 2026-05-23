@@ -134,7 +134,14 @@ export const RecommendationCard: React.FC<RecommendationCardProps> = ({
           </div>
         )}
 
-        {/* Match reasons — advisor-specific */}
+        {/* Match score + reasons */}
+        {scored.score > 0 && (
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[10px] font-black text-[#0077B6] bg-[#EBF5FF] border border-[#00B4D8]/15 rounded-full px-2.5 py-0.5 tabular-nums">
+              {scored.score}% съвпадение
+            </span>
+          </div>
+        )}
         {matchReasons.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-3">
             {matchReasons.map((reason, i) => (

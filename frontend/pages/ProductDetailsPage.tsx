@@ -8,6 +8,9 @@ import { trackViewItem } from '../lib/analytics/events';
 import { ProductCard } from '../components/catalog/ProductCard';
 import { PremiumImageGallery } from '../components/media/PremiumImageGallery';
 import { ProductInquiryModal } from '../components/catalog/ProductInquiryModal';
+import { SiteSeo } from '../components/seo/SiteSeo';
+import { productSeo } from '../lib/seo/config';
+import { breadcrumbSchema, localBusinessSchema, productSchema } from '../lib/seo/jsonLd';
 
 export default function ProductDetailsPage() {
   const { id } = useParams<{ id: string }>();
@@ -91,6 +94,14 @@ export default function ProductDetailsPage() {
   if (!product) {
     return (
       <div className="min-h-screen bg-[#FAFAFA] flex flex-col pt-20">
+        <SiteSeo
+          config={{
+            title: 'Продуктът не е намерен | Смолян Клима',
+            description: 'Търсеният климатик не е наличен в каталога.',
+            canonicalPath: id ? `/product/${id}` : '/catalog',
+            noindex: true,
+          }}
+        />
         <div className="flex-1 flex flex-col items-center justify-center">
           <h1 className="text-3xl font-black text-gray-900 mb-4">Продуктът не е намерен</h1>
           <button onClick={() => navigate('/catalog')} className="text-[#00B4D8] hover:underline font-bold">
@@ -103,9 +114,31 @@ export default function ProductDetailsPage() {
 
   const starsToRender = hoverStars ?? votedStars ?? Math.round(product.rating);
   const descriptionText = publicProductDescription(product.description);
+  const seo = productSeo({
+    name: product.name,
+    brand: product.brand,
+    type: product.type,
+    price: product.price,
+    metaTitle: product.metaTitle,
+    metaDescription: product.metaDescription,
+    id: product.id,
+    image: product.image,
+  });
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#FAFAFA] pt-20 font-sans">
+      <SiteSeo
+        config={seo}
+        schemas={[
+          localBusinessSchema(),
+          productSchema(product, seo),
+          breadcrumbSchema([
+            { name: 'Начало', path: '/' },
+            { name: 'Каталог', path: '/catalog' },
+            { name: product.name, path: seo.canonicalPath },
+          ]),
+        ]}
+      />
       <div
         aria-hidden
         className="pointer-events-none absolute -top-32 right-0 h-[420px] w-[420px] rounded-full bg-[#00B4D8]/8 blur-[100px]"

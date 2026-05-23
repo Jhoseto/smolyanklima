@@ -7,6 +7,9 @@ import { getAccessoryById, getAllAccessories } from '../data/accessoryService';
 import type { CatalogProduct } from '../data/types/product';
 import { ProductCard } from '../components/catalog/ProductCard';
 import { CatalogProductImage } from '../components/catalog/CatalogProductImage';
+import { SiteSeo } from '../components/seo/SiteSeo';
+import { productSeo } from '../lib/seo/config';
+import { breadcrumbSchema, localBusinessSchema, productSchema } from '../lib/seo/jsonLd';
 
 export default function AccessoryDetailsPage() {
   const { id } = useParams<{ id: string }>();
@@ -44,6 +47,14 @@ export default function AccessoryDetailsPage() {
   if (!item) {
     return (
       <div className="min-h-screen bg-[#FAFAFA] flex flex-col pt-20">
+        <SiteSeo
+          config={{
+            title: 'Аксесоарът не е намерен | Смолян Клима',
+            description: 'Търсеният аксесоар не е наличен в каталога.',
+            canonicalPath: id ? `/aksesoar/${id}` : '/catalog',
+            noindex: true,
+          }}
+        />
         <div className="flex-1 flex flex-col items-center justify-center">
           <h1 className="text-3xl font-black text-gray-900 mb-4">Аксесоарът не е намерен</h1>
           <button onClick={() => navigate('/catalog?tab=accessories')} className="text-[#00B4D8] hover:underline font-bold">
@@ -54,8 +65,32 @@ export default function AccessoryDetailsPage() {
     );
   }
 
+  const seo = productSeo({
+    name: item.name,
+    brand: item.brand,
+    type: item.type,
+    price: item.price,
+    id: item.id,
+    image: item.image,
+  });
+
   return (
     <div className="min-h-screen bg-white font-sans pt-20">
+      <SiteSeo
+        config={{
+          ...seo,
+          title: `${item.name} | Аксесоар — Смолян Клима`,
+        }}
+        schemas={[
+          localBusinessSchema(),
+          productSchema(item, seo),
+          breadcrumbSchema([
+            { name: 'Начало', path: '/' },
+            { name: 'Аксесоари', path: '/catalog?tab=accessories' },
+            { name: item.name, path: `/aksesoar/${item.id}` },
+          ]),
+        ]}
+      />
       <main className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
         <button
           onClick={() => navigate('/catalog?tab=accessories')}

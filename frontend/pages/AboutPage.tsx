@@ -14,6 +14,9 @@ import {
 } from 'lucide-react';
 import { HeroBackground } from '../components/sections/HeroBackground';
 import { StatsSection } from '../components/sections/StatsSection';
+import { SiteSeo } from '../components/seo/SiteSeo';
+import { PAGE_SEO } from '../lib/seo/config';
+import { breadcrumbSchema, localBusinessSchema } from '../lib/seo/jsonLd';
 
 const FOUNDER_IMAGE = '/images/about-kostadin.png';
 
@@ -70,6 +73,16 @@ export default function AboutPage() {
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] font-sans selection:bg-[#FF4D00]/20 selection:text-[#FF4D00]">
+      <SiteSeo
+        config={PAGE_SEO.about}
+        schemas={[
+          localBusinessSchema(),
+          breadcrumbSchema([
+            { name: 'Начало', path: '/' },
+            { name: 'За нас', path: '/za-nas' },
+          ]),
+        ]}
+      />
       {/* Hero */}
       <section className="relative overflow-hidden">
         <HeroBackground className="bg-left" style={{ backgroundPosition: 'left center' }} />

@@ -20,6 +20,10 @@ import { ContactInfoSection } from './components/sections/ContactInfoSection';
 import { FAQSection } from './components/sections/FAQSection';
 import { BrandsSection } from './components/sections/BrandsSection';
 import { Footer } from './components/layout/Footer';
+import { SiteSeo } from './components/seo/SiteSeo';
+import { PAGE_SEO } from './lib/seo/config';
+import { faqPageSchema, localBusinessSchema, webSiteSchema } from './lib/seo/jsonLd';
+import { HOME_FAQS } from './data/seo/faqs';
 import { BokehOrbs } from './components/effects';
 import { HeroBackground } from './components/sections/HeroBackground';
 import { AIChatWidget } from './components/ai-assistant';
@@ -38,10 +42,16 @@ const AccessoryDetailsPage = lazy(() => import('./pages/AccessoryDetailsPage'));
 const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'));
 const CookiePolicyPage = lazy(() => import('./pages/CookiePolicyPage'));
 const TermsPage = lazy(() => import('./pages/TermsPage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+const RegionalLandingPage = lazy(() => import('./pages/RegionalLandingPage'));
 
 // ── Главна страница ──────────────────────────────────
 const HomePage = ({ onOpenAssistantChat }: { onOpenAssistantChat?: () => void }) => (
   <div className="min-h-screen bg-[#FAFAFA] font-sans selection:bg-[#FF4D00]/20 selection:text-[#FF4D00]">
+    <SiteSeo
+      config={PAGE_SEO.home}
+      schemas={[localBusinessSchema(), webSiteSchema(), faqPageSchema(HOME_FAQS)]}
+    />
     <main>
       {/* Hero с Gradient Mesh — ефектът само на десктоп */}
       <section className="relative min-h-[100dvh] overflow-hidden">
@@ -181,7 +191,13 @@ function App() {
           <Route path="/politika-za-poveritelnost" element={<PageTransition><PrivacyPolicyPage /></PageTransition>} />
           <Route path="/biskvitki" element={<PageTransition><CookiePolicyPage /></PageTransition>} />
           <Route path="/obshti-usloviya" element={<PageTransition><TermsPage /></PageTransition>} />
-          <Route path="*" element={<PageTransition><HomePage onOpenAssistantChat={openAssistantFromHero} /></PageTransition>} />
+          <Route path="/klimatik-smolyan" element={<PageTransition><RegionalLandingPage slug="smolyan" /></PageTransition>} />
+          <Route path="/klimatik-rudozem" element={<PageTransition><RegionalLandingPage slug="rudozem" /></PageTransition>} />
+          <Route path="/klimatik-madan" element={<PageTransition><RegionalLandingPage slug="madan" /></PageTransition>} />
+          <Route path="/klimatik-devin" element={<PageTransition><RegionalLandingPage slug="devin" /></PageTransition>} />
+          <Route path="/klimatik-chepelare" element={<PageTransition><RegionalLandingPage slug="chepelare" /></PageTransition>} />
+          <Route path="/montaj-klimatik-smolyan" element={<PageTransition><RegionalLandingPage slug="montaj-smolyan" /></PageTransition>} />
+          <Route path="*" element={<PageTransition><NotFoundPage /></PageTransition>} />
         </Routes>
       </AnimatePresence>
       <Footer />
