@@ -157,12 +157,17 @@ export const SEOMetaTags: React.FC<SEOMetaTagsProps> = ({
   canonicalUrl,
   robots = 'index, follow',
 }) => {
+  const googleVerification = import.meta.env.VITE_GOOGLE_SITE_VERIFICATION?.trim();
+
   return (
     <>
       {/* Basic Meta */}
       <title>{title}</title>
       <meta name="description" content={description} />
       {keywords.length > 0 && <meta name="keywords" content={keywords.join(', ')} />}
+      {googleVerification ? (
+        <meta name="google-site-verification" content={googleVerification} />
+      ) : null}
       
       {/* Canonical */}
       {canonicalUrl && <link rel="canonical" href={absoluteUrl(canonicalUrl)} />}

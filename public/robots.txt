@@ -4,14 +4,46 @@ Disallow: /admin/
 Disallow: /api/
 Disallow: /login
 
+User-agent: Googlebot
+Allow: /
+
 User-agent: GPTBot
 Allow: /
+Allow: /blog/
+Allow: /catalog
+Allow: /product/
 Allow: /llms.txt
 Disallow: /admin/
 Disallow: /api/
 
 User-agent: ChatGPT-User
 Allow: /
+Allow: /blog/
+Allow: /catalog
+Allow: /product/
+Allow: /llms.txt
+Disallow: /admin/
+Disallow: /api/
+
+User-agent: Google-Extended
+Allow: /
+Disallow: /admin/
+Disallow: /api/
+
+User-agent: ClaudeBot
+Allow: /
+Allow: /blog/
+Allow: /catalog
+Allow: /product/
+Allow: /llms.txt
+Disallow: /admin/
+Disallow: /api/
+
+User-agent: PerplexityBot
+Allow: /
+Allow: /blog/
+Allow: /catalog
+Allow: /product/
 Allow: /llms.txt
 Disallow: /admin/
 Disallow: /api/

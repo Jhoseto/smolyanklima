@@ -8,6 +8,8 @@
 FROM node:22-alpine AS frontend_builder
 WORKDIR /repo
 ENV NODE_ENV=production
+ARG VITE_GOOGLE_SITE_VERIFICATION=
+ENV VITE_GOOGLE_SITE_VERIFICATION=$VITE_GOOGLE_SITE_VERIFICATION
 COPY package.json package-lock.json* ./
 RUN npm ci
 COPY . .
@@ -43,6 +45,8 @@ RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 COPY --from=backend_builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=backend_builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=frontend_builder --chown=nextjs:nodejs /repo/dist ./public
+# Гарантирай SEO файлове (Vite ги копира, но явно възстановяваме при нужда)
+COPY --chown=nextjs:nodejs public/robots.txt public/llms.txt ./public/
 # Vite dist презаписва целия public — върни admin PWA manifest + икона (layout.tsx + manifest)
 COPY --chown=nextjs:nodejs backend/public/manifest.webmanifest ./public/manifest.webmanifest
 COPY --chown=nextjs:nodejs backend/public/icon.svg ./public/icon.svg

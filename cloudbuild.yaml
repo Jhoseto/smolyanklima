@@ -9,6 +9,7 @@
 #
 # Trigger (Cloud Build → Triggers → Substitution variables):
 #   _PUBLIC_URL = публичният домейн на сайта, напр. https://smolyanklima.com (без / накрая)
+#   _GOOGLE_SITE_VERIFICATION = HTML tag code от Google Search Console (по избор)
 #   НЕ ползвайте само *.run.app ако посетителите влизат през custom domain — FRONTEND_ORIGIN трябва да съвпада.
 #   при нужда: _REGION, _SERVICE
 #
@@ -21,6 +22,7 @@ substitutions:
   _REGION: europe-west3
   _SERVICE: smolyanklima
   _PUBLIC_URL: "https://smolyanklima.com"
+  _GOOGLE_SITE_VERIFICATION: ""
 
 options:
   logging: CLOUD_LOGGING_ONLY
@@ -35,6 +37,8 @@ steps:
     id: build-image
     args:
       - build
+      - --build-arg
+      - VITE_GOOGLE_SITE_VERIFICATION=$_GOOGLE_SITE_VERIFICATION
       - -t
       - gcr.io/$PROJECT_ID/$_SERVICE:$COMMIT_SHA
       - -t
@@ -65,7 +69,7 @@ steps:
       - --allow-unauthenticated
       - --port=8080
       - --quiet
-      - --set-env-vars=NODE_ENV=production,FRONTEND_ORIGIN=$_PUBLIC_URL,APP_URL=$_PUBLIC_URL,NEXT_PUBLIC_SITE_ORIGIN=$_PUBLIC_URL
+      - --set-env-vars=NODE_ENV=production,FRONTEND_ORIGIN=$_PUBLIC_URL,APP_URL=$_PUBLIC_URL,NEXT_PUBLIC_SITE_ORIGIN=$_PUBLIC_URL,GOOGLE_SITE_VERIFICATION=$_GOOGLE_SITE_VERIFICATION
       - --set-secrets=SUPABASE_URL=SUPABASE_URL:latest,SUPABASE_ANON_KEY=SUPABASE_ANON_KEY:latest,SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest,GEMINI_API_KEY=GEMINI_API_KEY:latest,CLOUDINARY_URL=CLOUDINARY_URL:latest
 
 images:

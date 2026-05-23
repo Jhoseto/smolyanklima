@@ -10,6 +10,10 @@ import {
 import { productSchema } from './pages';
 import { HOME_FAQS } from './faqs';
 
+function stripHtml(value: string): string {
+  return value.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 function faqSchema() {
   return {
     '@context': 'https://schema.org',
@@ -115,11 +119,68 @@ export async function resolveSeoForPath(pathname: string): Promise<{ page: SeoPa
     }
   }
 
+  const accessoryMatch = path.match(/^\/aksesoar\/([^/]+)$/);
+  if (accessoryMatch) {
+    const id = decodeURIComponent(accessoryMatch[1]);
+    const supabase = createSupabaseServiceRoleClient();
+    let { data } = await supabase
+      .from('accessories')
+      .select('id,slug,name,price,description,brands:brand_id(name)')
+      .eq('is_active', true)
+      .eq('id', id)
+      .maybeSingle();
+    if (!data) {
+      ({ data } = await supabase
+        .from('accessories')
+        .select('id,slug,name,price,description,brands:brand_id(name)')
+        .eq('is_active', true)
+        .eq('slug', id)
+        .maybeSingle());
+    }
+    if (data) {
+      const row = data as {
+        id: string;
+        slug?: string | null;
+        name: string;
+        price: number;
+        description?: string | null;
+        brands?: { name?: string } | null;
+      };
+      const brand = row.brands?.name ?? '—';
+      const slug = row.slug ?? row.id;
+      const page: SeoPage = {
+        title: `${row.name} | Аксесоар — Смолян Клима`,
+        description: stripHtml(String(row.description ?? '')).slice(0, 160)
+          || `${row.name} (${brand}) — аксесоар за климатици. Цена €${row.price}. Смолян Klima.`,
+        canonicalPath: `/aksesoar/${slug}`,
+        bodyHtml: `<h1>${row.name}</h1><p>${brand} · €${row.price}</p>`,
+      };
+      schemas.push(productSchema({
+        name: row.name,
+        brand,
+        price: Number(row.price),
+        description: page.description,
+        slug,
+      }));
+      return { page, schemas };
+    }
+    return {
+      page: {
+        title: 'Аксесоарът не е намерен | Смолян Клима',
+        description: 'Търсеният аксесоар не е наличен в каталога.',
+        canonicalPath: path,
+        noindex: true,
+      },
+      schemas,
+    };
+  }
+
   return {
     page: {
-      title: 'Смолян Клима — Климатици, монтаж и сервиз',
-      description: 'Климатици в Смолян и региона — продажба, монтаж, сервиз.',
-      canonicalPath: '/',
+      title: 'Страницата не е намерена | Смолян Клима',
+      description: 'Търсената страница не съществува на smolyanklima.com.',
+      canonicalPath: path,
+      noindex: true,
     },
     schemas,
   };

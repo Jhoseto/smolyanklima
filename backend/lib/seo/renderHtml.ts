@@ -14,6 +14,10 @@ export function renderSeoHtml(page: SeoPage, schemas: Record<string, unknown>[] 
   const ogImage = absoluteUrl(page.ogImage ?? '/images/hero-new.jpg');
   const robots = page.noindex ? 'noindex, follow' : 'index, follow';
   const keywords = page.keywords?.length ? `<meta name="keywords" content="${esc(page.keywords.join(', '))}" />` : '';
+  const googleVerification = process.env.GOOGLE_SITE_VERIFICATION?.trim();
+  const googleMeta = googleVerification
+    ? `<meta name="google-site-verification" content="${esc(googleVerification)}" />`
+    : '';
   const schemaScripts = schemas
     .map((s) => `<script type="application/ld+json">${JSON.stringify(s)}</script>`)
     .join('\n  ');
@@ -28,6 +32,7 @@ export function renderSeoHtml(page: SeoPage, schemas: Record<string, unknown>[] 
   <meta name="description" content="${esc(page.description)}" />
   ${keywords}
   <meta name="robots" content="${robots}" />
+  ${googleMeta}
   <link rel="canonical" href="${esc(canonical)}" />
   <link rel="alternate" hreflang="bg" href="${esc(canonical)}" />
   <meta property="og:title" content="${esc(page.title)}" />

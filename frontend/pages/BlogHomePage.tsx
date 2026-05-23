@@ -30,6 +30,7 @@ export default function BlogHomePage() {
   const isCategoryPage = window.location.pathname.includes('/kategoria/');
   const isTagPage = window.location.pathname.includes('/tag/');
   const isSearchPage = window.location.pathname.includes('/tursi');
+  const shouldNoindex = isTagPage || isSearchPage;
   const categorySlug = isCategoryPage ? slug : undefined;
   const category = categorySlug ? getCategoryBySlug(categorySlug) : null;
   
@@ -82,7 +83,16 @@ export default function BlogHomePage() {
         description="Научете всичко за избора, монтажа и поддръжката на климатици. Експертни съвети, сравнения и новини от Smolyan Klima."
         keywords={['блог климатик', 'съвети климатик', 'монтаж климатик', 'избор климатик', 'смолян климатик']}
         ogImage="/images/blog/og-blog-home.jpg"
-        canonicalUrl={categorySlug ? `/blog/kategoria/${categorySlug}` : "/blog"}
+        canonicalUrl={
+          categorySlug
+            ? `/blog/kategoria/${categorySlug}`
+            : isTagPage && tagSlug
+              ? `/blog/tag/${tagSlug}`
+              : isSearchPage
+                ? `/blog/tursi${q ? `?q=${encodeURIComponent(q)}` : ''}`
+                : '/blog'
+        }
+        robots={shouldNoindex ? 'noindex, follow' : 'index, follow'}
       />
       
       {/* Organization Schema for Local SEO */}
