@@ -101,6 +101,12 @@ const ALL_CALENDAR_FILTER_IDS = CALENDAR_EVENT_FILTERS.map((f) => f.id);
 
 /** Запомня избора между табове/екрани; липса на ключ = първо посещение → всички включени. */
 const CALENDAR_EVENT_FILTERS_STORAGE_KEY = "sk-admin-calendar-event-filters";
+const CALENDAR_EVENT_FILTERS_STORAGE_VERSION = 2;
+
+type StoredCalendarFiltersPayload = {
+  v: number;
+  enabled: EventCode[];
+};
 
 function createAllCalendarFiltersEnabled(): Set<EventCode> {
   return new Set(ALL_CALENDAR_FILTER_IDS);
@@ -114,22 +120,35 @@ function isCalendarFilterId(value: unknown): value is EventCode {
   return typeof value === "string" && ALL_CALENDAR_FILTER_IDS.includes(value as EventCode);
 }
 
+/** Стари записи без supplier_order — добавяме го само ако потребителят е имал всички останали включени. */
+function migrateLegacyCalendarFilters(set: Set<EventCode>): Set<EventCode> {
+  const withoutSupplier = ALL_CALENDAR_FILTER_IDS.filter((id) => id !== "supplier_order");
+  const hadAllOldTypes =
+    withoutSupplier.every((id) => set.has(id)) && !set.has("supplier_order");
+  if (hadAllOldTypes) set.add("supplier_order");
+  return set;
+}
+
 function loadCalendarEventFiltersFromStorage(): Set<EventCode> {
   if (typeof window === "undefined") return createAllCalendarFiltersEnabled();
   try {
     const raw = localStorage.getItem(CALENDAR_EVENT_FILTERS_STORAGE_KEY);
     if (raw === null) return createAllCalendarFiltersEnabled();
     const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return createAllCalendarFiltersEnabled();
-    const ids = parsed.filter(isCalendarFilterId);
-    const set = new Set(ids);
-    // Нови типове събития (напр. поръчка от доставчик) — включени по подразбиране при стар запис
-    if (ids.length > 0) {
-      for (const id of ALL_CALENDAR_FILTER_IDS) {
-        if (!parsed.includes(id)) set.add(id);
+
+    if (Array.isArray(parsed)) {
+      const set = new Set(parsed.filter(isCalendarFilterId));
+      return migrateLegacyCalendarFilters(set);
+    }
+
+    if (parsed && typeof parsed === "object" && "enabled" in parsed) {
+      const payload = parsed as StoredCalendarFiltersPayload;
+      if (Array.isArray(payload.enabled)) {
+        return new Set(payload.enabled.filter(isCalendarFilterId));
       }
     }
-    return set;
+
+    return createAllCalendarFiltersEnabled();
   } catch {
     return createAllCalendarFiltersEnabled();
   }
@@ -138,7 +157,11 @@ function loadCalendarEventFiltersFromStorage(): Set<EventCode> {
 function saveCalendarEventFiltersToStorage(enabled: Set<EventCode>) {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(CALENDAR_EVENT_FILTERS_STORAGE_KEY, JSON.stringify([...enabled]));
+    const payload: StoredCalendarFiltersPayload = {
+      v: CALENDAR_EVENT_FILTERS_STORAGE_VERSION,
+      enabled: [...enabled],
+    };
+    localStorage.setItem(CALENDAR_EVENT_FILTERS_STORAGE_KEY, JSON.stringify(payload));
   } catch {
     /* localStorage пълен или блокиран */
   }
@@ -222,12 +245,8 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<WorkForm>(createDefaultForm());
   const [savingBusy, setSavingBusy] = useState(false);
-  const [enabledEventFilters, setEnabledEventFilters] = useState<Set<EventCode>>(createAllCalendarFiltersEnabled);
+  const [enabledEventFilters, setEnabledEventFilters] = useState<Set<EventCode>>(readInitialCalendarEventFilters);
   const calendarFiltersHydrated = useRef(false);
-
-  useEffect(() => {
-    setEnabledEventFilters(loadCalendarEventFiltersFromStorage());
-  }, []);
 
   useEffect(() => {
     if (!calendarFiltersHydrated.current) {

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
 import { adminLocalDateKey } from "@/lib/admin/localDateKey";
+import { logAdminActivity } from "@/lib/admin/audit";
 import {
   attachDeliveredProductsToOrders,
   normalizeSupplierOrderRow,
@@ -203,6 +204,17 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (wiErr) return withCors(req, NextResponse.json({ error: wiErr.message }, { status: 500 }));
+
+  await logAdminActivity({
+    action: "supplier_order.create",
+    entityType: "supplier_order",
+    entityId: (workItem as { id: string }).id,
+    details: {
+      productId,
+      customer_name: customerNameTrim || null,
+      unit_price: unitPrice,
+    },
+  });
 
   if (customerEmail && typeof customerEmail === "string" && customerEmail.trim() && contactId && typeof contactId === "string") {
     // Optionally store email on contact — best-effort, no fatal error

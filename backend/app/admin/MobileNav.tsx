@@ -7,7 +7,7 @@ import { logoutAction } from "@/app/login/actions";
 import {
   LayoutDashboard, Package, Users, MoreHorizontal, X,
   FileText, Star, Activity, Settings, LogOut, Headphones,
-  ShieldCheck, FolderOpen, MessageSquare, Receipt, Truck, UserCircle,
+  ShieldCheck, FolderOpen, MessageSquare, Receipt, Truck,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/admin/db";
 import type { LucideIcon } from "lucide-react";
@@ -18,7 +18,16 @@ type DrawerSection = {
   links: { href: string; label: string; icon: LucideIcon }[];
 };
 
-export function MobileNav({ role }: { role: AdminRole }) {
+export function MobileNav({
+  role,
+  userName,
+  avatarUrl,
+}: {
+  role: AdminRole;
+  userName: string;
+  avatarUrl: string | null;
+}) {
+  const initial = (userName || "?").trim().charAt(0).toUpperCase() || "?";
   const primaryLinks = role === "service_staff"
     ? [
         { href: "/admin", label: "Табло", icon: LayoutDashboard, exact: true },
@@ -33,18 +42,9 @@ export function MobileNav({ role }: { role: AdminRole }) {
       ];
 
   const drawerSections: DrawerSection[] = role === "service_staff"
-    ? [
-        {
-          title: "Акаунт",
-          links: [{ href: "/admin/profile", label: "Профил", icon: UserCircle }],
-        },
-      ]
+    ? []
     : (() => {
         const sections: DrawerSection[] = [
-          {
-            title: "Акаунт",
-            links: [{ href: "/admin/profile", label: "Профил", icon: UserCircle }],
-          },
           {
             title: "Офис",
             links: [
@@ -94,8 +94,11 @@ export function MobileNav({ role }: { role: AdminRole }) {
   }
 
   const allDrawerLinks = drawerSections.flatMap((s) => s.links);
-  const anyMoreActive = allDrawerLinks.some((l) => isActive(l.href));
-  const hasDrawer = allDrawerLinks.length > 0;
+  const anyMoreActive =
+    pathname === "/admin/profile" ||
+    pathname.startsWith("/admin/profile/") ||
+    allDrawerLinks.some((l) => isActive(l.href));
+  const hasDrawer = true;
 
   return (
     <>
@@ -127,6 +130,29 @@ export function MobileNav({ role }: { role: AdminRole }) {
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        <Link
+          href="/admin/profile"
+          onClick={() => setDrawerOpen(false)}
+          className={`mx-4 mb-3 flex items-center gap-3 rounded-2xl border px-3 py-2.5 no-underline transition-colors active:scale-[0.99] ${
+            isActive("/admin/profile")
+              ? "border-brand-orange-200 bg-brand-orange-50"
+              : "border-slate-200 bg-slate-50 hover:bg-white"
+          }`}
+        >
+          <div className="w-11 h-11 rounded-full bg-brand-blue-100 text-brand-blue-700 flex items-center justify-center font-extrabold text-base shrink-0 overflow-hidden ring-1 ring-slate-200/80">
+            {avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+            ) : (
+              initial
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-bold text-slate-900 truncate">{userName || "—"}</div>
+            <div className="text-[11px] font-semibold text-brand-orange-600">Моят профил</div>
+          </div>
+        </Link>
 
         <div className="px-4 pb-2 space-y-3 max-h-[55vh] overflow-y-auto">
           {drawerSections.map((section) => (

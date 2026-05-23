@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { adminSession } from "@/lib/admin/db";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { logAdminActivity } from "@/lib/admin/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -85,6 +86,21 @@ export async function PUT(req: NextRequest) {
       const supabase = await createSupabaseServerClient();
       const { error: pwErr } = await supabase.auth.updateUser({ password });
       if (pwErr) return NextResponse.json({ error: pwErr.message }, { status: 400 });
+    }
+
+    const changedFields = [
+      ...(name !== undefined ? ["name"] : []),
+      ...(phoneNorm !== undefined ? ["phone"] : []),
+      ...(avatar_url !== undefined ? ["avatar_url"] : []),
+      ...(password ? ["password"] : []),
+    ];
+    if (changedFields.length > 0) {
+      await logAdminActivity({
+        action: "profile.update",
+        entityType: "admin_user",
+        entityId: session.userId,
+        details: { changedFields, ...(password ? { passwordChanged: true } : {}) },
+      });
     }
 
     return NextResponse.json({ ok: true });

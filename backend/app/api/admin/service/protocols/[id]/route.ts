@@ -2,6 +2,7 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
+import { logAdminActivity } from "@/lib/admin/audit";
 import {
   combineUnitSerials,
   optionalProtocolEmail,
@@ -164,6 +165,18 @@ export async function PUT(
     .single();
 
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
+
+  await logAdminActivity({
+    action: "service_protocol.update",
+    entityType: "service_protocol",
+    entityId: id,
+    details: {
+      changedFields: Object.keys(update),
+      status: (data as { status?: string }).status ?? null,
+      protocol_number: (data as { protocol_number?: string }).protocol_number ?? null,
+    },
+  });
+
   return withCors(req, NextResponse.json({ data }));
 }
 
@@ -179,11 +192,28 @@ export async function DELETE(
   catch { return withCors(req, NextResponse.json({ error: "Забранен достъп" }, { status: 403 })); }
 
   const { id } = await params;
+  const { data: existing } = await session.db
+    .from("service_protocols")
+    .select("protocol_number, client_name")
+    .eq("id", id)
+    .maybeSingle();
+
   const { error } = await session.db
     .from("service_protocols")
     .delete()
     .eq("id", id);
 
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
+
+  await logAdminActivity({
+    action: "service_protocol.delete",
+    entityType: "service_protocol",
+    entityId: id,
+    details: {
+      protocol_number: (existing as { protocol_number?: string } | null)?.protocol_number ?? null,
+      client_name: (existing as { client_name?: string } | null)?.client_name ?? null,
+    },
+  });
+
   return withCors(req, new NextResponse(null, { status: 204 }));
 }

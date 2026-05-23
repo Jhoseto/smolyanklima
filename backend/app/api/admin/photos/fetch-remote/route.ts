@@ -33,6 +33,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { adminDb } from "@/lib/admin/db";
+import { logAdminActivity } from "@/lib/admin/audit";
 
 const MAX_BYTES = 8 * 1024 * 1024; // 8 MB
 const TIMEOUT_MS = 15_000;
@@ -301,6 +302,16 @@ export async function POST(req: NextRequest) {
   if (finalMime === "image/jpg") finalMime = "image/jpeg";
 
   const base64 = Buffer.from(buffer).toString("base64");
+
+  await logAdminActivity({
+    action: "media.fetch_remote",
+    entityType: "media",
+    details: {
+      url: parsedUrl.origin + parsedUrl.pathname,
+      mimeType: finalMime,
+      sizeBytes: totalBytes,
+    },
+  });
 
   return NextResponse.json({
     data: {

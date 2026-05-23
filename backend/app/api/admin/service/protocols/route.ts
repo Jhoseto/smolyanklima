@@ -2,6 +2,7 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
+import { logAdminActivity } from "@/lib/admin/audit";
 import {
   combineUnitSerials,
   optionalProtocolEmail,
@@ -170,5 +171,17 @@ export async function POST(req: NextRequest) {
     console.error("[POST /api/admin/service/protocols] insert error:", error);
     return withCors(req, NextResponse.json({ error: error.message, code: error.code }, { status: 500 }));
   }
+
+  await logAdminActivity({
+    action: "service_protocol.create",
+    entityType: "service_protocol",
+    entityId: (data as { id: string }).id,
+    details: {
+      protocol_number: protocolNumber,
+      client_name: d.client_name ?? null,
+      status: computedStatus,
+    },
+  });
+
   return withCors(req, NextResponse.json({ data }, { status: 201 }));
 }

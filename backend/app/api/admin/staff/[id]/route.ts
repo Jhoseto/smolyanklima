@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { adminSession, requireRole } from "@/lib/admin/db";
 import { createSupabaseServiceRoleClient, createSupabaseAdminClient } from "@/lib/supabase/server";
+import { logAdminActivity } from "@/lib/admin/audit";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -60,6 +61,18 @@ export async function PUT(req: NextRequest, { params }: Params) {
       if (pwErr) return NextResponse.json({ error: pwErr.message }, { status: 500 });
     }
 
+    await logAdminActivity({
+      action: "staff.update",
+      entityType: "admin_user",
+      entityId: id,
+      details: {
+        changedFields: Object.keys(update),
+        ...(parsed.data.password ? { passwordChanged: true } : {}),
+        role: parsed.data.role ?? undefined,
+        is_active: parsed.data.is_active,
+      },
+    });
+
     return NextResponse.json({ ok: true });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "ERROR";
@@ -84,6 +97,12 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
     await serviceClient.from("admin_users").delete().eq("id", id);
     const adminClient = createSupabaseAdminClient();
     await adminClient.auth.admin.deleteUser(id);
+
+    await logAdminActivity({
+      action: "staff.delete",
+      entityType: "admin_user",
+      entityId: id,
+    });
 
     return NextResponse.json({ ok: true });
   } catch (e: unknown) {

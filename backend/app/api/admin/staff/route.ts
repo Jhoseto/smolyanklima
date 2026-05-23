@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { adminSession, requireRole } from "@/lib/admin/db";
 import { createSupabaseServiceRoleClient, createSupabaseAdminClient } from "@/lib/supabase/server";
+import { logAdminActivity } from "@/lib/admin/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -83,6 +84,13 @@ export async function POST(req: NextRequest) {
       await adminClient.auth.admin.deleteUser(userId);
       return NextResponse.json({ error: dbError.message }, { status: 500 });
     }
+
+    await logAdminActivity({
+      action: "staff.create",
+      entityType: "admin_user",
+      entityId: userId,
+      details: { name, role, phone },
+    });
 
     return NextResponse.json({ staff: staffRow }, { status: 201 });
   } catch (e: unknown) {

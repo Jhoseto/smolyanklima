@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { Button, Card, Input, Select, SectionTitle, Table, Td, Th } from "../ui";
 import { useDebounce } from "@/lib/hooks/useDebounce";
+import { describeActivityLog, ENTITY_TYPE_LABELS } from "@/lib/admin/activityLogLabels";
 
 type ActivityRow = {
   id: string;
@@ -62,6 +63,16 @@ export default function AdminActivityPage() {
 
   const pages = Math.max(1, Math.ceil(meta.total / meta.perPage));
 
+  const entityFilterOptions = useMemo(
+    () =>
+      Object.entries(ENTITY_TYPE_LABELS)
+        .filter(([key]) =>
+          ["product", "contact", "inquiry", "work_item", "settings", "email_outbox", "ai", "article", "accessory", "admin_user", "service_protocol", "service_repair_protocol", "supplier_order"].includes(key),
+        )
+        .map(([value, label]) => ({ value, label })),
+    [],
+  );
+
   return (
     <div className="w-full space-y-3">
       <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -76,16 +87,28 @@ export default function AdminActivityPage() {
 
       <Card className="p-3">
         <div className="grid grid-cols-2 md:grid-cols-[1fr_180px_150px_150px] gap-2 md:gap-3 items-end">
-          <Input value={q} onChange={(e) => { setPage(1); setQ(e.target.value); }} placeholder="Търси действие..." className="col-span-2 md:col-span-1" />
-          <Select value={entityType} onChange={(e) => { setPage(1); setEntityType(e.target.value); }}>
+          <Input
+            value={q}
+            onChange={(e) => {
+              setPage(1);
+              setQ(e.target.value);
+            }}
+            placeholder="Търси по код на действие (напр. product.update)..."
+            className="col-span-2 md:col-span-1"
+          />
+          <Select
+            value={entityType}
+            onChange={(e) => {
+              setPage(1);
+              setEntityType(e.target.value);
+            }}
+          >
             <option value="">Всички типове</option>
-            <option value="product">Product</option>
-            <option value="contact">Contact</option>
-            <option value="inquiry">Inquiry</option>
-            <option value="work_item">Work item</option>
-            <option value="settings">Settings</option>
-            <option value="email_outbox">Email</option>
-            <option value="ai">AI</option>
+            {entityFilterOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
           </Select>
           <Input type="date" value={from} onChange={(e) => { setPage(1); setFrom(e.target.value); }} />
           <Input type="date" value={to} onChange={(e) => { setPage(1); setTo(e.target.value); }} />
@@ -107,24 +130,49 @@ export default function AdminActivityPage() {
             </tr>
           </thead>
           <tbody>
-            {!loading && items.map((row) => (
-              <tr key={row.id} className="hover:bg-slate-50 transition-colors">
-                <Td className="font-mono text-xs font-bold text-slate-900">{row.action}</Td>
-                <Td>{row.entity_type ?? "—"}</Td>
-                <Td>
-                  <div className="font-medium text-slate-900">{row.admin_users?.name ?? "—"}</div>
-                  <div className="text-xs text-slate-500">{row.admin_users?.email ?? ""}</div>
+            {!loading &&
+              items.map((row) => {
+                const described = describeActivityLog(row);
+                return (
+                  <tr key={row.id} className="hover:bg-slate-50 transition-colors">
+                    <Td>
+                      <div className="font-semibold text-sm text-slate-900">{described.actionLabel}</div>
+                      <div className="font-mono text-[10px] text-slate-400 mt-0.5" title={described.technicalAction}>
+                        {described.technicalAction}
+                      </div>
+                    </Td>
+                    <Td className="text-sm text-slate-700">{described.entityLabel}</Td>
+                    <Td>
+                      <div className="font-medium text-slate-900">{row.admin_users?.name ?? "—"}</div>
+                      <div className="text-xs text-slate-500">{row.admin_users?.email ?? ""}</div>
+                    </Td>
+                    <Td>
+                      {described.detailsText ? (
+                        <div className="max-w-[520px] text-xs text-slate-600 leading-relaxed whitespace-pre-line">
+                          {described.detailsText}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </Td>
+                    <Td className="text-xs text-slate-500">{new Date(row.created_at).toLocaleString("bg-BG")}</Td>
+                  </tr>
+                );
+              })}
+            {!loading && items.length === 0 && (
+              <tr>
+                <Td colSpan={5} className="text-center py-8 text-slate-500">
+                  Няма намерени записи.
                 </Td>
-                <Td>
-                  <div className="max-w-[520px] truncate font-mono text-xs text-slate-600" title={JSON.stringify(row.details ?? {})}>
-                    {JSON.stringify(row.details ?? {})}
-                  </div>
-                </Td>
-                <Td className="text-xs text-slate-500">{new Date(row.created_at).toLocaleString("bg-BG")}</Td>
               </tr>
-            ))}
-            {!loading && items.length === 0 && <tr><Td colSpan={5} className="text-center py-8 text-slate-500">Няма намерени записи.</Td></tr>}
-            {loading && <tr><Td colSpan={5} className="text-center py-8 text-slate-500">Зареждане...</Td></tr>}
+            )}
+            {loading && (
+              <tr>
+                <Td colSpan={5} className="text-center py-8 text-slate-500">
+                  Зареждане...
+                </Td>
+              </tr>
+            )}
           </tbody>
         </Table>
       </div>
@@ -132,30 +180,53 @@ export default function AdminActivityPage() {
       {/* Mobile card list */}
       <div className="md:hidden space-y-2">
         {loading && <div className="text-center py-10 text-slate-500 text-sm">Зареждане...</div>}
-        {!loading && items.length === 0 && <div className="bg-white rounded-xl border border-slate-200 p-6 text-center text-slate-500 text-sm">Няма намерени записи.</div>}
-        {!loading && items.map((row) => (
-          <div key={row.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-3">
-            <div className="flex items-start justify-between gap-2 mb-1.5">
-              <span className="font-mono text-xs font-bold text-slate-900 leading-snug">{row.action}</span>
-              <span className="text-[10px] text-slate-400 font-medium shrink-0">{new Date(row.created_at).toLocaleDateString("bg-BG")}</span>
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              {row.entity_type && <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-brand-blue-50 text-brand-blue-700">{row.entity_type}</span>}
-              {row.admin_users?.name && <span className="text-xs text-slate-600 font-medium">{row.admin_users.name}</span>}
-            </div>
-            {row.details && Object.keys(row.details).length > 0 && (
-              <div className="font-mono text-[10px] text-slate-500 mt-1.5 truncate">{JSON.stringify(row.details)}</div>
-            )}
+        {!loading && items.length === 0 && (
+          <div className="bg-white rounded-xl border border-slate-200 p-6 text-center text-slate-500 text-sm">
+            Няма намерени записи.
           </div>
-        ))}
+        )}
+        {!loading &&
+          items.map((row) => {
+            const described = describeActivityLog(row);
+            return (
+              <div key={row.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-3">
+                <div className="flex items-start justify-between gap-2 mb-1.5">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900 leading-snug">{described.actionLabel}</div>
+                    <div className="font-mono text-[10px] text-slate-400 mt-0.5">{described.technicalAction}</div>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-medium shrink-0">
+                    {new Date(row.created_at).toLocaleDateString("bg-BG")}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {row.entity_type && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-brand-blue-50 text-brand-blue-700">
+                      {described.entityLabel}
+                    </span>
+                  )}
+                  {row.admin_users?.name && <span className="text-xs text-slate-600 font-medium">{row.admin_users.name}</span>}
+                </div>
+                {described.detailsText && (
+                  <div className="text-xs text-slate-600 mt-2 leading-relaxed whitespace-pre-line">{described.detailsText}</div>
+                )}
+              </div>
+            );
+          })}
       </div>
 
       <div className="flex justify-between items-center">
         <span className="text-sm text-slate-500 font-medium">Общо: {meta.total}</span>
         <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹</Button>
-          <span className="text-sm font-medium text-slate-600">{page} / {pages}</span>
-          <Button variant="secondary" size="sm" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>›</Button>
+          <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+            ‹
+          </Button>
+          <span className="text-sm font-medium text-slate-600">
+            {page} / {pages}
+          </span>
+          <Button variant="secondary" size="sm" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>
+            ›
+          </Button>
         </div>
       </div>
     </div>

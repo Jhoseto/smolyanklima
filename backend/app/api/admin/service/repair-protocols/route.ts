@@ -13,6 +13,7 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
+import { logAdminActivity } from "@/lib/admin/audit";
 
 const QuerySchema = z.object({
   page:    z.coerce.number().int().min(1).optional().default(1),
@@ -280,5 +281,17 @@ export async function POST(req: NextRequest) {
     console.error("[POST /api/admin/service/repair-protocols] insert:", error);
     return withCors(req, NextResponse.json({ error: error.message, code: error.code }, { status: 500 }));
   }
+
+  await logAdminActivity({
+    action: "service_repair_protocol.create",
+    entityType: "service_repair_protocol",
+    entityId: (data as { id: string }).id,
+    details: {
+      protocol_number: protocolNumber,
+      client_name: d.client_name ?? null,
+      status: computedStatus,
+    },
+  });
+
   return withCors(req, NextResponse.json({ data }, { status: 201 }));
 }

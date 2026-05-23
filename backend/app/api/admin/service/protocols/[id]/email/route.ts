@@ -4,6 +4,7 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import React from "react";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
+import { logAdminActivity } from "@/lib/admin/audit";
 import { ProtocolPDF } from "@/lib/protocol-pdf";
 import { sendResendEmail } from "@/lib/email/resend";
 import { EMAIL_BRAND_LOGO_SVG } from "@/lib/brand-email";
@@ -115,5 +116,18 @@ export async function POST(
   // многократно (повторно до клиента, до счетоводител и т.н.).
 
   const skipped = result.ok ? false : Boolean(result.skipped);
+
+  await logAdminActivity({
+    action: "service_protocol.email",
+    entityType: "service_protocol",
+    entityId: id,
+    details: {
+      email: parsed.data.email,
+      protocol_number: data.protocol_number,
+      client_name: data.client_name ?? null,
+      skipped,
+    },
+  });
+
   return withCors(req, NextResponse.json({ ok: true, skipped }));
 }

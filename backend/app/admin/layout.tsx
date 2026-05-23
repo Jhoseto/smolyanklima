@@ -14,7 +14,6 @@ import {
   LayoutDashboard, Package, Users, FileText, Star,
   Activity, Settings, LogOut,
   ShieldCheck, FolderOpen, Receipt, Truck,
-  UserCircle,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -66,8 +65,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             </div>
           </div>
 
-          {/* Профил на оператора */}
-          <div className="px-3 py-3 border-b border-slate-100 flex items-center gap-2.5">
+          {/* Профил на оператора — клик → Моят профил */}
+          <Link
+            href="/admin/profile"
+            className="px-3 py-3 border-b border-slate-100 flex items-center gap-2.5 no-underline hover:bg-slate-50 transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-slate-200"
+          >
             <div className="w-10 h-10 rounded-full bg-brand-blue-100 text-brand-blue-700 flex items-center justify-center font-extrabold text-base shrink-0 overflow-hidden ring-1 ring-slate-200/80">
               {avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -87,13 +89,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                 {roleLabel}
               </div>
             </div>
-          </div>
+          </Link>
 
           {/* Навигация */}
           <nav className="flex flex-col gap-0.5 flex-1 p-2.5">
             {/* Главно: Табло */}
             <NavLink href="/admin" label="Табло" icon={<LayoutDashboard className="w-4 h-4" />} />
-            <NavLink href="/admin/profile" label="Моят профил" icon={<UserCircle className="w-4 h-4" />} />
 
             {showOffice && (
               <>
@@ -167,7 +168,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         </main>
 
         {/* Mobile nav */}
-        <MobileNav role={role} />
+        <MobileNav role={role} userName={userName} avatarUrl={avatarUrl} />
       </div>
     </>
   );

@@ -9,6 +9,7 @@ import {
   trimDeliveryFields,
   validateDeliveryFieldsComplete,
 } from "@/lib/admin/productDeliveryValidation";
+import { logAdminActivity } from "@/lib/admin/audit";
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflight(req);
@@ -204,6 +205,17 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     await supabase.from("products").delete().eq("id", newProductId);
     return withCors(req, NextResponse.json({ error: updateErr.message }, { status: 500 }));
   }
+
+  await logAdminActivity({
+    action: "supplier_order.fulfill",
+    entityType: "supplier_order",
+    entityId: id,
+    details: {
+      productInstanceId: newProductId,
+      productId: orderRow.product_id,
+      client_name: orderRow.customer_name,
+    },
+  });
 
   return withCors(
     req,
