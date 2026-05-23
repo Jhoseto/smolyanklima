@@ -1,21 +1,40 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Check, ArrowRightLeft, DollarSign, Zap, Volume2, Square, Wifi, Tag, Shield, Star, Loader2 } from 'lucide-react';
+import { X, Check, ArrowRightLeft, DollarSign, Zap, Volume2, Square, Wifi, Tag, Shield, Star, Loader2, Share2 } from 'lucide-react';
 import type { CatalogProduct } from '../../data/types/product';
 import { CatalogProductImage } from './CatalogProductImage';
 import { getComparisonAIService } from '../ai-assistant/core/ComparisonAIService';
 import { CompareEnergySavings } from './Calculators';
+import { buildCompareShareUrl } from '../../lib/catalog/compareUrl';
 
 interface CompareBarProps {
   compareList: CatalogProduct[];
   onRemove: (id: string) => void;
   onClear: () => void;
+  initialOpenTable?: boolean;
+  onShare?: (message: string) => void;
 }
 
-export const CompareBar = ({ compareList, onRemove, onClear }: CompareBarProps) => {
-  const [showTable, setShowTable] = useState(false);
+export const CompareBar = ({ compareList, onRemove, onClear, initialOpenTable = false, onShare }: CompareBarProps) => {
+  const [showTable, setShowTable] = useState(initialOpenTable);
   const [aiRecommendation, setAiRecommendation] = useState<string | null>(null);
   const [isLoadingAi, setIsLoadingAi] = useState(false);
+
+  useEffect(() => {
+    if (initialOpenTable && compareList.length >= 2) {
+      setShowTable(true);
+    }
+  }, [initialOpenTable, compareList.length]);
+
+  const handleShare = async () => {
+    const url = buildCompareShareUrl(compareList.map((p) => p.id));
+    try {
+      await navigator.clipboard.writeText(url);
+      onShare?.('Линкът за сравнение е копиран!');
+    } catch {
+      onShare?.('Не успяхме да копираме линка.');
+    }
+  };
 
   // Generate AI recommendation when table opens
   useEffect(() => {
@@ -130,6 +149,17 @@ export const CompareBar = ({ compareList, onRemove, onClear }: CompareBarProps) 
             <button onClick={onClear} className="text-sm font-semibold text-gray-500 hover:text-red-500 transition-colors">
               Изчисти
             </button>
+            {compareList.length >= 2 ? (
+              <button
+                type="button"
+                onClick={() => void handleShare()}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-semibold text-gray-600 hover:text-[#00B4D8] hover:bg-[#00B4D8]/5 transition-colors"
+                title="Сподели сравнението"
+              >
+                <Share2 className="w-4 h-4" />
+                <span className="hidden sm:inline">Сподели</span>
+              </button>
+            ) : null}
             <button
               onClick={() => setShowTable(true)}
               disabled={compareList.length < 2}
@@ -168,6 +198,14 @@ export const CompareBar = ({ compareList, onRemove, onClear }: CompareBarProps) 
                   <ArrowRightLeft className="w-5 h-5 text-[#00B4D8]" />
                   Сравнение на модели
                 </h2>
+                <button
+                  type="button"
+                  onClick={() => void handleShare()}
+                  className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-gray-600 hover:text-[#00B4D8] border border-gray-200 hover:border-[#00B4D8]/30 transition-colors"
+                >
+                  <Share2 className="w-4 h-4" />
+                  Сподели
+                </button>
                 <button
                   onClick={() => setShowTable(false)}
                   className="w-8 h-8 flex items-center justify-center rounded-full bg-white text-gray-400 hover:text-gray-900 shadow-sm border border-gray-100 transition-colors"

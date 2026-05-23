@@ -22,6 +22,7 @@ import { useScroll, useSpring } from 'motion/react';
 import {
   fetchProductsCatalogPage,
   fetchCatalogMeta,
+  getProductById,
 } from '../data/productService';
 import { getAllAccessories } from '../data/accessoryService';
 import { postPublicInquiry } from '../data/postInquiry';
@@ -30,6 +31,7 @@ import { parseSortOption } from '../data/types/product';
 import { SiteSeo } from '../components/seo/SiteSeo';
 import { PAGE_SEO } from '../lib/seo/config';
 import { breadcrumbSchema, localBusinessSchema } from '../lib/seo/jsonLd';
+import { buildCompareParam, parseCompareParam } from '../lib/catalog/compareUrl';
 
 // ─────────────────────────────────────────
 // TRUST BAR
@@ -176,6 +178,31 @@ const CatalogPage = () => {
   const [inquiryProduct, setInquiryProduct] = useState<CatalogProduct | null>(null);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [compareList, setCompareList] = useState<CatalogProduct[]>([]);
+  const [openCompareFromUrl] = useState(() => searchParams.get('openCompare') === '1');
+  const compareHydratedRef = useRef(false);
+  const compareSyncSkipRef = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const ids = parseCompareParam(searchParams.get('compare'));
+      if (!ids.length) {
+        compareHydratedRef.current = true;
+        return;
+      }
+      compareSyncSkipRef.current = true;
+      const loaded = await Promise.all(ids.map((id) => getProductById(id)));
+      if (cancelled) return;
+      const valid = loaded.filter((p): p is CatalogProduct => Boolean(p));
+      setCompareList(valid);
+      compareHydratedRef.current = true;
+      compareSyncSkipRef.current = false;
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate compare once on mount
+  }, []);
 
   const { toasts, addToast, dismissToast } = useToasts();
   const { isFavorite, toggle: toggleFavorite } = useFavorites();
@@ -442,8 +469,15 @@ const CatalogPage = () => {
     }
     if (sortBy !== 'recommended') params.set('s', sortBy);
     if (page > 1) params.set('page', String(page));
+    if (compareList.length) {
+      params.set('compare', buildCompareParam(compareList.map((p) => p.id)));
+    }
+    if (compareSyncSkipRef.current) {
+      const existing = searchParams.get('compare');
+      if (existing) params.set('compare', existing);
+    }
     setSearchParams(params, { replace: true });
-  }, [activeTab, effectiveCondition, search, category, brands, btus, energyClasses, features, priceRange, sortBy, effectivePriceMin, effectivePriceMax, page, setSearchParams]);
+  }, [activeTab, effectiveCondition, search, category, brands, btus, energyClasses, features, priceRange, sortBy, effectivePriceMin, effectivePriceMax, page, compareList, setSearchParams]);
 
   const scrollToCatalogTools = useCallback(() => {
     const el = catalogToolsRef.current;
@@ -949,6 +983,8 @@ const CatalogPage = () => {
           compareList={compareList}
           onRemove={(id) => setCompareList(prev => prev.filter(p => p.id !== id))}
           onClear={() => setCompareList([])}
+          initialOpenTable={openCompareFromUrl}
+          onShare={(msg) => addToast(msg, '🔗')}
         />
       )}
 
