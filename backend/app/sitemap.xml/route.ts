@@ -64,11 +64,12 @@ function renderSitemap(entries: SitemapEntry[]): string {
 }
 
 export async function GET() {
-  const now = new Date().toISOString();
-  const entries: SitemapEntry[] = STATIC_PAGES.map((entry) => ({ ...entry, lastmod: now }));
-
   try {
-    const supabase = createSupabaseServiceRoleClient();
+    const now = new Date().toISOString();
+    const entries: SitemapEntry[] = STATIC_PAGES.map((entry) => ({ ...entry, lastmod: now }));
+
+    try {
+      const supabase = createSupabaseServiceRoleClient();
 
     const { data: products, error: productsError } = await applyPublicCatalogFilter(
       supabase.from('products').select('slug, updated_at').order('updated_at', { ascending: false }),
@@ -132,10 +133,22 @@ export async function GET() {
     // Static pages only if Supabase is unavailable.
   }
 
-  return new NextResponse(renderSitemap(entries), {
-    headers: {
-      'Content-Type': 'application/xml; charset=utf-8',
-      'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
-    },
-  });
+    return new NextResponse(renderSitemap(entries), {
+      headers: {
+        'Content-Type': 'application/xml; charset=utf-8',
+        'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
+      },
+    });
+  } catch {
+    const fallback = renderSitemap(
+      STATIC_PAGES.map((entry) => ({ ...entry, lastmod: new Date().toISOString() })),
+    );
+    return new NextResponse(fallback, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/xml; charset=utf-8',
+        'Cache-Control': 'public, max-age=300',
+      },
+    });
+  }
 }

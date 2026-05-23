@@ -46,7 +46,7 @@ COPY --from=backend_builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=backend_builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=frontend_builder --chown=nextjs:nodejs /repo/dist ./public
 # Гарантирай SEO файлове (Vite ги копира, но явно възстановяваме при нужда)
-COPY --chown=nextjs:nodejs public/robots.txt public/llms.txt ./public/
+COPY --chown=nextjs:nodejs public/robots.txt public/llms.txt public/sitemap.xml ./public/
 # Vite dist презаписва целия public — върни admin PWA manifest + икона (layout.tsx + manifest)
 COPY --chown=nextjs:nodejs backend/public/manifest.webmanifest ./public/manifest.webmanifest
 COPY --chown=nextjs:nodejs backend/public/icon.svg ./public/icon.svg

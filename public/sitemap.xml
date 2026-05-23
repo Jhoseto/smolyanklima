@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://smolyanklima.com/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
+  <url><loc>https://smolyanklima.com/catalog</loc><changefreq>daily</changefreq><priority>0.95</priority></url>
+  <url><loc>https://smolyanklima.com/services</loc><changefreq>monthly</changefreq><priority>0.85</priority></url>
+  <url><loc>https://smolyanklima.com/contact</loc><changefreq>monthly</changefreq><priority>0.85</priority></url>
+  <url><loc>https://smolyanklima.com/za-nas</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://smolyanklima.com/blog</loc><changefreq>daily</changefreq><priority>0.9</priority></url>
+  <url><loc>https://smolyanklima.com/klimatik-smolyan</loc><changefreq>monthly</changefreq><priority>0.92</priority></url>
+  <url><loc>https://smolyanklima.com/klimatik-rudozem</loc><changefreq>monthly</changefreq><priority>0.88</priority></url>
+  <url><loc>https://smolyanklima.com/klimatik-madan</loc><changefreq>monthly</changefreq><priority>0.88</priority></url>
+  <url><loc>https://smolyanklima.com/klimatik-devin</loc><changefreq>monthly</changefreq><priority>0.88</priority></url>
+  <url><loc>https://smolyanklima.com/klimatik-chepelare</loc><changefreq>monthly</changefreq><priority>0.88</priority></url>
+  <url><loc>https://smolyanklima.com/montaj-klimatik-smolyan</loc><changefreq>monthly</changefreq><priority>0.93</priority></url>
+  <url><loc>https://smolyanklima.com/politika-za-poveritelnost</loc><changefreq>yearly</changefreq><priority>0.2</priority></url>
+  <url><loc>https://smolyanklima.com/biskvitki</loc><changefreq>yearly</changefreq><priority>0.2</priority></url>
+  <url><loc>https://smolyanklima.com/obshti-usloviya</loc><changefreq>yearly</changefreq><priority>0.2</priority></url>
+</urlset>
