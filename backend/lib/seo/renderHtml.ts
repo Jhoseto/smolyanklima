@@ -21,7 +21,7 @@ export function renderSeoHtml(page: SeoPage, schemas: Record<string, unknown>[] 
   const schemaScripts = schemas
     .map((s) => `<script type="application/ld+json">${JSON.stringify(s)}</script>`)
     .join('\n  ');
-  const body = page.bodyHtml ?? `<h1>${esc(page.title.split('|')[0].trim())}</h1><p>${esc(page.description)}</p>`;
+  const ogType = page.ogType ?? 'website';
 
   return `<!DOCTYPE html>
 <html lang="bg">
@@ -37,7 +37,7 @@ export function renderSeoHtml(page: SeoPage, schemas: Record<string, unknown>[] 
   <link rel="alternate" hreflang="bg" href="${esc(canonical)}" />
   <meta property="og:title" content="${esc(page.title)}" />
   <meta property="og:description" content="${esc(page.description)}" />
-  <meta property="og:type" content="website" />
+  <meta property="og:type" content="${ogType}" />
   <meta property="og:url" content="${esc(canonical)}" />
   <meta property="og:image" content="${esc(ogImage)}" />
   <meta property="og:locale" content="bg_BG" />
@@ -46,11 +46,12 @@ export function renderSeoHtml(page: SeoPage, schemas: Record<string, unknown>[] 
   <meta name="twitter:title" content="${esc(page.title)}" />
   <meta name="twitter:description" content="${esc(page.description)}" />
   <meta name="twitter:image" content="${esc(ogImage)}" />
+  <link rel="alternate" type="application/rss+xml" title="Smolyan Klima Blog" href="${esc(absoluteUrl('/rss.xml'))}" />
   <link rel="alternate" type="text/plain" href="${esc(absoluteUrl('/llms.txt'))}" title="LLM site summary" />
   ${schemaScripts}
 </head>
 <body>
-  <main>${body}</main>
+  <main>${page.bodyHtml ?? `<h1>${esc(page.title.split('|')[0].trim())}</h1><p>${esc(page.description)}</p>`}</main>
   <p><a href="${esc(canonical)}">Виж пълната страница на smolyanklima.com</a></p>
 </body>
 </html>`;

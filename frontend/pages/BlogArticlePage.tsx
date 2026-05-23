@@ -56,9 +56,16 @@ export default function BlogArticlePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center">
-        <div className="w-12 h-12 rounded-full border-4 border-[#00B4D8]/20 border-t-[#00B4D8] animate-spin" />
-      </div>
+      <>
+        <SEOMetaTags
+          title="Блог за климатици | Smolyan Klima"
+          description="Експертни съвети за климатици в Смолян и региона — Smolyan Klima."
+          canonicalUrl={slug ? `/blog/${slug}` : '/blog'}
+        />
+        <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center">
+          <div className="w-12 h-12 rounded-full border-4 border-[#00B4D8]/20 border-t-[#00B4D8] animate-spin" />
+        </div>
+      </>
     );
   }
 
@@ -95,10 +102,14 @@ export default function BlogArticlePage() {
         ogImage={article.seo.ogImage}
         ogType="article"
         canonicalUrl={`/blog/${article.slug}`}
+        articlePublishedTime={article.schema.datePublished || article.publishedAt}
+        articleModifiedTime={article.schema.dateModified || article.modifiedAt}
+        articleAuthor={article.schema.author.name}
+        articleSection={category?.name}
       />
       
       {/* Schema Markup */}
-      <SchemaMarkup article={article} type="article" />
+      <SchemaMarkup article={article} type="article" articleSection={category?.name} />
       <SchemaMarkup 
         article={article} 
         type="breadcrumb" 

@@ -168,3 +168,17 @@ export function serviceSchema(): JsonLd {
     },
   };
 }
+
+export function blogPageSchema(canonicalPath: string): JsonLd {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    '@id': absoluteUrl(canonicalPath),
+    url: absoluteUrl(canonicalPath),
+    name: 'Блог за климатици — Смолян Клима',
+    description: 'Експертни статии за климатици в Смолян и региона.',
+    inLanguage: 'bg-BG',
+    isPartOf: { '@id': `${SITE_ORIGIN}/#website` },
+    publisher: { '@id': `${SITE_ORIGIN}/#localbusiness` },
+  };
+}

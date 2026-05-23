@@ -7,6 +7,7 @@ export type SeoPage = {
   keywords?: string[];
   canonicalPath: string;
   ogImage?: string;
+  ogType?: 'website' | 'article';
   noindex?: boolean;
   bodyHtml?: string;
   schemas?: Record<string, unknown>[];
@@ -60,11 +61,13 @@ export const STATIC_PAGES: Record<string, SeoPage> = {
     ogImage: OG,
   },
   '/blog': {
-    title: 'Блог за климатици | Smolyan Klima — експертни съвети',
-    description: 'Съвети за избор, монтаж и поддръжка на климатици. Регионални статии за Смолян.',
-    keywords: ['блог климатик', 'монтаж климатик', 'смолян климатик'],
+    title: 'Блог за климатици Смолян | Експертни съвети — Смолян Klima',
+    description:
+      'Експертни статии за избор, монтаж и поддръжка на климатици в Смолян и региона. Сравнения, цени, профилактика и регионални съвети за Родопите.',
+    keywords: ['блог климатик', 'монтаж климатик смолян', 'климатик смолян', 'съвети климатик'],
     canonicalPath: '/blog',
     ogImage: OG,
+    bodyHtml: '<h1>Блог за климатици Смолян и региона</h1><p>Експертни съвети за климатици от Smolyan Klima.</p>',
   },
   '/montaj-klimatik-smolyan': {
     title: 'Монтаж на климатик Смолян | Цени от €150 — Смолян Клима',

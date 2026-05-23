@@ -12,6 +12,13 @@ import {
 import { categories, getCategoryBySlug } from '../data/blog';
 import { fetchArticles } from '../data/blogService';
 import type { Article } from '../data/blog/types';
+import {
+  BLOG_HOME_H1,
+  BLOG_HOME_LEAD,
+  BLOG_HOME_SEO,
+  blogCategorySeo,
+} from '../lib/seo/blogSeo';
+import { blogPageSchema } from '../lib/seo/jsonLd';
 
 export default function BlogHomePage() {
   const navigate = useNavigate();
@@ -76,13 +83,23 @@ export default function BlogHomePage() {
     }
   };
 
+  const seo = categorySlug && blogCategorySeo(categorySlug)
+    ? blogCategorySeo(categorySlug)!
+    : BLOG_HOME_SEO;
+
+  const heroH1 = category
+    ? `${category.name} — блог за климатици`
+    : BLOG_HOME_H1;
+
+  const heroLead = category?.description ?? BLOG_HOME_LEAD;
+
   return (
     <>
       <SEOMetaTags
-        title="Блог за Климатици | Smolyan Klima - Експертни Съвети 2026"
-        description="Научете всичко за избора, монтажа и поддръжката на климатици. Експертни съвети, сравнения и новини от Smolyan Klima."
-        keywords={['блог климатик', 'съвети климатик', 'монтаж климатик', 'избор климатик', 'смолян климатик']}
-        ogImage="/images/blog/og-blog-home.jpg"
+        title={seo.title}
+        description={seo.description}
+        keywords={seo.keywords}
+        ogImage={seo.ogImage}
         canonicalUrl={
           categorySlug
             ? `/blog/kategoria/${categorySlug}`
@@ -94,15 +111,22 @@ export default function BlogHomePage() {
         }
         robots={shouldNoindex ? 'noindex, follow' : 'index, follow'}
       />
-      
-      {/* Organization Schema for Local SEO */}
+
       <SchemaMarkup type="organization" />
+      {!shouldNoindex && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(blogPageSchema(seo.canonicalPath)) }}
+        />
+      )}
     <div className="min-h-screen bg-[#FAFAFA] font-sans">
-      {/* Hero Section */}
-      <BlogHeroSection 
+      <BlogHeroSection
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         onSearchSubmit={handleSearchSubmit}
+        h1={heroH1}
+        lead={heroLead}
+        articleCount={loading ? undefined : articles.length}
       />
 
       {/* Category Filter */}
@@ -117,9 +141,9 @@ export default function BlogHomePage() {
             {/* Category Title */}
             {category && (
               <section className="mb-8">
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                <h2 className="text-3xl font-bold text-gray-900 mb-2">
                   {category.name}
-                </h1>
+                </h2>
                 <p className="text-gray-600">{category.description}</p>
               </section>
             )}

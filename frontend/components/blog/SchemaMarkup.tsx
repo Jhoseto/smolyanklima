@@ -13,17 +13,20 @@ interface SchemaMarkupProps {
   type: 'article' | 'breadcrumb' | 'faqpage' | 'organization';
   breadcrumbs?: { name: string; url: string }[];
   faqs?: FAQItem[];
+  articleSection?: string;
 }
 
 export const SchemaMarkup: React.FC<SchemaMarkupProps> = ({ 
   article, 
   type,
   breadcrumbs = [],
-  faqs = []
+  faqs = [],
+  articleSection,
 }) => {
   const generateSchema = () => {
     switch (type) {
       case 'article':
+        if (!article) return null;
         return {
           '@context': 'https://schema.org',
           '@type': 'Article',
@@ -32,6 +35,8 @@ export const SchemaMarkup: React.FC<SchemaMarkupProps> = ({
           image: [article.featuredImage],
           datePublished: article.publishedAt,
           dateModified: article.modifiedAt,
+          inLanguage: 'bg-BG',
+          ...(articleSection ? { articleSection } : {}),
           author: {
             '@type': 'Person',
             name: article.schema.author.name,
@@ -98,7 +103,7 @@ export const SchemaMarkup: React.FC<SchemaMarkupProps> = ({
           '@type': 'Organization',
           name: 'Smolyan Klima',
           url: SITE_ORIGIN,
-          logo: absoluteUrl('/logo.png'),
+          logo: absoluteUrl('/icon-192.png'),
           description: 'Специализиран магазин за климатици в Смолян - продажба, монтаж и сервиз на климатични системи.',
           address: {
             '@type': 'PostalAddress',
@@ -116,8 +121,8 @@ export const SchemaMarkup: React.FC<SchemaMarkupProps> = ({
             availableLanguage: 'Bulgarian'
           },
           sameAs: [
-            'https://facebook.com/smolyanklima',
-            'https://instagram.com/smolyanklima'
+            'https://www.facebook.com/smolyanklima',
+            'https://www.instagram.com/smolyanklima'
           ]
         };
 
@@ -146,6 +151,10 @@ interface SEOMetaTagsProps {
   ogType?: 'website' | 'article';
   canonicalUrl?: string;
   robots?: string;
+  articlePublishedTime?: string;
+  articleModifiedTime?: string;
+  articleAuthor?: string;
+  articleSection?: string;
 }
 
 export const SEOMetaTags: React.FC<SEOMetaTagsProps> = ({
@@ -156,6 +165,10 @@ export const SEOMetaTags: React.FC<SEOMetaTagsProps> = ({
   ogType = 'website',
   canonicalUrl,
   robots = 'index, follow',
+  articlePublishedTime,
+  articleModifiedTime,
+  articleAuthor,
+  articleSection,
 }) => {
   const googleVerification = import.meta.env.VITE_GOOGLE_SITE_VERIFICATION?.trim();
 
@@ -171,6 +184,7 @@ export const SEOMetaTags: React.FC<SEOMetaTagsProps> = ({
       
       {/* Canonical */}
       {canonicalUrl && <link rel="canonical" href={absoluteUrl(canonicalUrl)} />}
+      <link rel="alternate" hrefLang="bg" href={canonicalUrl ? absoluteUrl(canonicalUrl) : SITE_ORIGIN} />
       
       {/* Open Graph */}
       <meta property="og:title" content={title} />
@@ -180,6 +194,18 @@ export const SEOMetaTags: React.FC<SEOMetaTagsProps> = ({
       <meta property="og:image" content={absoluteUrl(ogImage)} />
       <meta property="og:site_name" content="Smolyan Klima" />
       <meta property="og:locale" content="bg_BG" />
+      {ogType === 'article' && articlePublishedTime ? (
+        <meta property="article:published_time" content={articlePublishedTime} />
+      ) : null}
+      {ogType === 'article' && articleModifiedTime ? (
+        <meta property="article:modified_time" content={articleModifiedTime} />
+      ) : null}
+      {ogType === 'article' && articleAuthor ? (
+        <meta property="article:author" content={articleAuthor} />
+      ) : null}
+      {ogType === 'article' && articleSection ? (
+        <meta property="article:section" content={articleSection} />
+      ) : null}
       
       {/* Twitter Card */}
       <meta name="twitter:card" content="summary_large_image" />

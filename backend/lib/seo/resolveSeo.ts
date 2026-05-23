@@ -9,6 +9,7 @@ import {
 } from './pages';
 import { productSchema } from './pages';
 import { HOME_FAQS } from './faqs';
+import { blogCategorySeo as backendBlogCategorySeo } from './blogCategories';
 
 function stripHtml(value: string): string {
   return value.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -88,31 +89,53 @@ export async function resolveSeoForPath(pathname: string): Promise<{ page: SeoPa
     };
   }
 
+  const blogCategoryMatch = path.match(/^\/blog\/kategoria\/([^/]+)$/);
+  if (blogCategoryMatch) {
+    const catSlug = decodeURIComponent(blogCategoryMatch[1]);
+    const catSeo = backendBlogCategorySeo(catSlug);
+    if (catSeo) {
+      return {
+        page: {
+          ...catSeo,
+          ogImage: '/images/blog/og-blog-home.jpg',
+          bodyHtml: `<h1>${catSeo.title.split('|')[0].trim()}</h1><p>${catSeo.description}</p>`,
+        },
+        schemas,
+      };
+    }
+  }
+
   const blogMatch = path.match(/^\/blog\/([^/]+)$/);
   if (blogMatch && !['kategoria', 'tag', 'tursi'].includes(blogMatch[1])) {
     const slug = decodeURIComponent(blogMatch[1]);
     const supabase = createSupabaseServiceRoleClient();
     const { data } = await supabase
       .from('articles')
-      .select('slug,title,excerpt,seo,featured_image')
+      .select('slug,title,excerpt,content,seo,featured_image,published_at,modified_at')
       .eq('slug', slug)
       .eq('is_published', true)
       .maybeSingle();
     if (data) {
       const seo = (data.seo ?? {}) as { title?: string; description?: string; keywords?: string[] };
+      const excerpt = String(data.excerpt ?? '');
+      const contentPreview = stripHtml(String(data.content ?? '')).slice(0, 500);
       const page: SeoPage = {
         title: seo.title || `${data.title} | Smolyan Klima`,
-        description: seo.description || String(data.excerpt ?? ''),
+        description: seo.description || excerpt,
         keywords: seo.keywords,
         canonicalPath: `/blog/${data.slug}`,
         ogImage: data.featured_image ? String(data.featured_image) : '/images/hero-new.jpg',
-        bodyHtml: `<article><h1>${data.title}</h1><p>${data.excerpt ?? ''}</p></article>`,
+        ogType: 'article',
+        bodyHtml: `<article><h1>${data.title}</h1><p>${excerpt}</p>${contentPreview ? `<p>${contentPreview}…</p>` : ''}</article>`,
       };
       schemas.push({
         '@context': 'https://schema.org',
         '@type': 'Article',
         headline: data.title,
         description: page.description,
+        datePublished: data.published_at,
+        dateModified: data.modified_at ?? data.published_at,
+        inLanguage: 'bg-BG',
         url: `https://smolyanklima.com/blog/${data.slug}`,
       });
       return { page, schemas };
