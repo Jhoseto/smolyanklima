@@ -342,7 +342,7 @@ export async function syncAcceptanceProtocolFromInstallation(
     .eq("id", existing.id);
 
   if (error && isMissingColumnError(error)) {
-    const { indoor_unit_serial, outdoor_unit_serial, ...rest } = {
+    const rest = {
       date: pageOne.date,
       client_name: pageOne.client_name,
       client_phone: pageOne.client_phone,
