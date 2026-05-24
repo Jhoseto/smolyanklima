@@ -167,10 +167,6 @@ function saveCalendarEventFiltersToStorage(enabled: Set<EventCode>) {
   }
 }
 
-function readInitialCalendarEventFilters(): Set<EventCode> {
-  return loadCalendarEventFiltersFromStorage();
-}
-
 function createDefaultForm(date = ""): WorkForm {
   return {
     type: "service",
@@ -236,7 +232,14 @@ function ContactDerivedSummary({ form }: { form: WorkForm }) {
   );
 }
 
-export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
+export function WorkItemsPlanner({
+  readOnly = false,
+  canDeleteEvents = false,
+}: {
+  readOnly?: boolean;
+  /** Изтриване на събития — само master_admin (сървърът също валидира). */
+  canDeleteEvents?: boolean;
+}) {
   const [items, setItems] = useState<WorkItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [monthOffset, setMonthOffset] = useState(0);
@@ -245,19 +248,20 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<WorkForm>(createDefaultForm());
   const [savingBusy, setSavingBusy] = useState(false);
-  const [enabledEventFilters, setEnabledEventFilters] = useState<Set<EventCode>>(readInitialCalendarEventFilters);
+  const [enabledEventFilters, setEnabledEventFilters] = useState<Set<EventCode>>(createAllCalendarFiltersEnabled);
   const calendarFiltersHydrated = useRef(false);
 
   useEffect(() => {
     if (!calendarFiltersHydrated.current) {
       calendarFiltersHydrated.current = true;
+      setEnabledEventFilters(loadCalendarEventFiltersFromStorage());
       return;
     }
     saveCalendarEventFiltersToStorage(enabledEventFilters);
   }, [enabledEventFilters]);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmCompleteItem, setConfirmCompleteItem] = useState<WorkItem | null>(null);
-  const [displayMode, setDisplayMode] = useState<"calendar" | "agenda">("calendar");
+  const [displayMode, setDisplayMode] = useState<"calendar" | "agenda">("agenda");
   const [mountDetailId, setMountDetailId] = useState<string | null>(null);
   const [supplierOrderDetailId, setSupplierOrderDetailId] = useState<string | null>(null);
 
@@ -569,6 +573,7 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
   }
 
   async function removeItem(itemId: string) {
+    if (!canDeleteEvents) return;
     if (confirmDeleteId !== itemId) {
       setConfirmDeleteId(itemId);
       return;
@@ -608,14 +613,14 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
             <button
               type="button"
               onClick={() => setDisplayMode("agenda")}
-              className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold transition-colors ${displayMode === "agenda" ? "bg-brand-blue-500 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+              className={`flex items-center gap-1 px-3 py-2 min-h-[44px] text-xs font-semibold transition-colors ${displayMode === "agenda" ? "bg-brand-blue-500 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
             >
               <List className="w-3.5 h-3.5" /> Списък
             </button>
             <button
               type="button"
               onClick={() => setDisplayMode("calendar")}
-              className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold transition-colors ${displayMode === "calendar" ? "bg-brand-blue-500 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+              className={`flex items-center gap-1 px-3 py-2 min-h-[44px] text-xs font-semibold transition-colors ${displayMode === "calendar" ? "bg-brand-blue-500 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
             >
               <CalendarDays className="w-3.5 h-3.5" /> Кал.
             </button>
@@ -627,11 +632,11 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
       </div>
 
       {/* Multi on/off филтри по тип събитие */}
-      <div className="flex gap-1 mb-2 flex-wrap">
+      <div className="flex gap-1.5 mb-2 flex-wrap">
         <button
           type="button"
           onClick={toggleAllEventFilters}
-          className={`rounded-full px-2 py-0.5 text-[10px] font-bold border transition-colors ${
+          className={`rounded-full px-3 py-2 min-h-[36px] text-xs font-bold border transition-colors ${
             allEventFiltersOn
               ? "border-brand-blue-500 bg-brand-blue-50 text-brand-blue-700"
               : "border-slate-300 bg-white text-slate-500 hover:bg-slate-50"
@@ -646,7 +651,7 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
               key={m.id}
               type="button"
               onClick={() => toggleEventFilter(m.id)}
-              className={`rounded-full px-2 py-0.5 text-[10px] font-bold border transition-colors ${
+              className={`rounded-full px-3 py-2 min-h-[36px] text-xs font-bold border transition-colors ${
                 on
                   ? "border-brand-blue-500 bg-brand-blue-50 text-brand-blue-700"
                   : "border-slate-300 bg-white text-slate-500 hover:bg-slate-50 opacity-60"
@@ -708,15 +713,15 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
           })}
         </div>
 
-        <div className="flex flex-wrap gap-2 mt-2 text-[10px] font-medium text-slate-500">
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" /> Добавяне на продукт</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500 shrink-0" /> Премахване на продукт</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-sky-600 shrink-0" /> Монтаж</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-teal-500 shrink-0" /> Профилактика</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" /> Сервиз на терен</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-500 shrink-0" /> Сервиз в склад</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-pink-500 shrink-0" /> Консултация</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-600 shrink-0" /> Поръчка от доставчик</span>
+        <div className="flex gap-2 mt-2 overflow-x-auto md:overflow-x-visible md:flex-wrap flex-nowrap pb-0.5 -mx-0.5 px-0.5 text-xs font-medium text-slate-500 scrollbar-hide">
+          <span className="flex items-center gap-1 shrink-0 whitespace-nowrap"><span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" /> Добавяне на продукт</span>
+          <span className="flex items-center gap-1 shrink-0 whitespace-nowrap"><span className="w-2 h-2 rounded-full bg-orange-500 shrink-0" /> Премахване на продукт</span>
+          <span className="flex items-center gap-1 shrink-0 whitespace-nowrap"><span className="w-2 h-2 rounded-full bg-sky-600 shrink-0" /> Монтаж</span>
+          <span className="flex items-center gap-1 shrink-0 whitespace-nowrap"><span className="w-2 h-2 rounded-full bg-teal-500 shrink-0" /> Профилактика</span>
+          <span className="flex items-center gap-1 shrink-0 whitespace-nowrap"><span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" /> Сервиз на терен</span>
+          <span className="flex items-center gap-1 shrink-0 whitespace-nowrap"><span className="w-2 h-2 rounded-full bg-violet-500 shrink-0" /> Сервиз в склад</span>
+          <span className="flex items-center gap-1 shrink-0 whitespace-nowrap"><span className="w-2 h-2 rounded-full bg-pink-500 shrink-0" /> Консултация</span>
+          <span className="flex items-center gap-1 shrink-0 whitespace-nowrap"><span className="w-2 h-2 rounded-full bg-violet-600 shrink-0" /> Поръчка от доставчик</span>
         </div>
       </div>
 
@@ -780,7 +785,7 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
                               e.stopPropagation();
                               setMountDetailId(item.id);
                             }}
-                            className="shrink-0 self-center px-2 py-2 text-[10px] font-bold uppercase text-brand-blue-700 bg-brand-blue-50 rounded-lg border border-brand-blue-100"
+                            className="shrink-0 self-center px-3 py-2.5 min-h-[44px] text-xs font-bold uppercase text-brand-blue-700 bg-brand-blue-50 rounded-lg border border-brand-blue-100"
                           >
                             Инфо
                           </button>
@@ -792,7 +797,7 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
                               e.stopPropagation();
                               setSupplierOrderDetailId(item.id);
                             }}
-                            className="shrink-0 self-center px-2 py-2 text-[10px] font-bold uppercase text-violet-800 bg-violet-50 rounded-lg border border-violet-200"
+                            className="shrink-0 self-center px-3 py-2.5 min-h-[44px] text-xs font-bold uppercase text-violet-800 bg-violet-50 rounded-lg border border-violet-200"
                           >
                             Детайли
                           </button>
@@ -900,9 +905,11 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
                               <Button variant="secondary" size="sm" onClick={() => startEdit(item)}>
                                 Редакция
                               </Button>
-                              <Button variant="danger" size="sm" onClick={() => void removeItem(item.id)}>
-                                Изтрий
-                              </Button>
+                              {canDeleteEvents && (
+                                <Button variant="danger" size="sm" onClick={() => void removeItem(item.id)}>
+                                  Изтрий
+                                </Button>
+                              )}
                             </>
                           )}
                         </div>
@@ -1039,7 +1046,7 @@ export function WorkItemsPlanner({ readOnly = false }: { readOnly?: boolean }) {
         />
       )}
 
-      {confirmDeleteId && (
+      {canDeleteEvents && confirmDeleteId && (
         <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center md:p-4 bg-slate-950/55 backdrop-blur-md" onClick={() => setConfirmDeleteId(null)}>
           <div className="w-full md:max-w-lg rounded-t-3xl md:rounded-3xl border border-white/70 bg-white p-6 shadow-[0_-8px_40px_rgba(15,23,42,0.25)]" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-center mb-3 md:hidden"><div className="w-10 h-1 rounded-full bg-slate-200" /></div>

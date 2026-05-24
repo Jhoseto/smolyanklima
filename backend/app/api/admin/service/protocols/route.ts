@@ -11,10 +11,14 @@ import {
 } from "@/lib/protocol-contact-fields";
 
 const QuerySchema = z.object({
-  page:    z.coerce.number().int().min(1).optional().default(1),
+  page: z.coerce.number().int().min(1).optional().default(1),
   perPage: z.coerce.number().int().min(1).max(100).optional().default(20),
-  status:  z.enum(["prepared", "in_progress", "signed"]).optional(),
-  q:       z.string().optional(),
+  status: z.enum(["prepared", "in_progress", "signed"]).optional(),
+  q: z.string().optional(),
+  sort: z
+    .enum(["created-desc", "created-asc", "date-desc", "date-asc", "client-asc", "client-desc"])
+    .optional()
+    .default("created-desc"),
 });
 
 const MaterialSchema = z.object({
@@ -62,24 +66,49 @@ export async function GET(req: NextRequest) {
   const parsed = QuerySchema.safeParse(params);
   if (!parsed.success) return withCors(req, NextResponse.json({ error: "Невалидни параметри" }, { status: 400 }));
 
-  const { page, perPage, status, q } = parsed.data;
+  const { page, perPage, status, q, sort } = parsed.data;
   const offset = (page - 1) * perPage;
 
   let query = session.db
     .from("service_protocols")
-    .select("id,protocol_number,date,client_name,ac_model,address,status,created_at,created_by", { count: "exact" })
-    .order("date", { ascending: false })
-    .order("created_at", { ascending: false })
-    .range(offset, offset + perPage - 1);
+    .select(
+      "id,protocol_number,date,client_name,client_phone,ac_model,address,paid_amount,status,created_at,created_by",
+      { count: "exact" },
+    );
 
-  // service_staff вижда само своите; офис и master — всички
+  switch (sort) {
+    case "created-asc":
+      query = query.order("created_at", { ascending: true }).order("date", { ascending: true });
+      break;
+    case "date-desc":
+      query = query.order("date", { ascending: false }).order("created_at", { ascending: false });
+      break;
+    case "date-asc":
+      query = query.order("date", { ascending: true }).order("created_at", { ascending: true });
+      break;
+    case "client-asc":
+      query = query.order("client_name", { ascending: true, nullsFirst: false }).order("created_at", { ascending: false });
+      break;
+    case "client-desc":
+      query = query.order("client_name", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false });
+      break;
+    case "created-desc":
+    default:
+      query = query.order("created_at", { ascending: false }).order("date", { ascending: false });
+      break;
+  }
+
+  query = query.range(offset, offset + perPage - 1);
+
+  // service_staff вижда своите + автоматично създадени от продажби (с work_item_id)
   if (session.role === "service_staff") {
-    query = query.eq("created_by", session.userId);
+    query = query.or(`created_by.eq.${session.userId},work_item_id.not.is.null`);
   }
   if (status) query = query.eq("status", status);
   if (q?.trim()) {
+    const term = q.trim();
     query = query.or(
-      `client_name.ilike.%${q.trim()}%,protocol_number.ilike.%${q.trim()}%,ac_model.ilike.%${q.trim()}%`
+      `client_name.ilike.%${term}%,protocol_number.ilike.%${term}%,ac_model.ilike.%${term}%,address.ilike.%${term}%,client_phone.ilike.%${term}%`,
     );
   }
 

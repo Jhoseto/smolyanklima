@@ -185,6 +185,7 @@ export const SEOMetaTags: React.FC<SEOMetaTagsProps> = ({
       {/* Canonical */}
       {canonicalUrl && <link rel="canonical" href={absoluteUrl(canonicalUrl)} />}
       <link rel="alternate" hrefLang="bg" href={canonicalUrl ? absoluteUrl(canonicalUrl) : SITE_ORIGIN} />
+      <link rel="alternate" hrefLang="x-default" href={canonicalUrl ? absoluteUrl(canonicalUrl) : SITE_ORIGIN} />
       
       {/* Open Graph */}
       <meta property="og:title" content={title} />

@@ -53,17 +53,24 @@ function stockStatusAfterSale(
   return nextQty <= 0 ? "out_of_stock" : "in_stock";
 }
 
-async function adminPostWorkItem(body: Record<string, unknown>): Promise<{ id: string }> {
+async function adminPostWorkItem(body: Record<string, unknown>): Promise<{
+  id: string;
+  protocol_warning?: string;
+}> {
   const res = await fetch("/api/admin/work-items", {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  const json = (await res.json().catch(() => ({}))) as { error?: string; data?: { id: string } };
+  const json = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    data?: { id: string };
+    protocol_warning?: string;
+  };
   if (!res.ok) throw new Error(json.error || "Грешка при създаване на задача");
   if (!json.data?.id) throw new Error("Липсва ID на задача");
-  return { id: json.data.id };
+  return { id: json.data.id, protocol_warning: json.protocol_warning };
 }
 
 async function adminPatchWorkItem(itemId: string, body: Record<string, unknown>): Promise<void> {

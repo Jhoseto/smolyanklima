@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     return withCors(req, NextResponse.json({ error: "Неоторизиран достъп" }, { status: 401 }));
   }
   try {
-    requireRole(session, "master_admin");
+    requireRole(session, "master_admin", "office_staff");
   } catch {
     return withCors(req, NextResponse.json({ error: "Нямате достъп до одит лога." }, { status: 403 }));
   }

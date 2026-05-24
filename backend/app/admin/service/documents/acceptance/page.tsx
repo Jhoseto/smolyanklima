@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { adminSession } from "@/lib/admin/db";
 import { DocumentsClient } from "./DocumentsClient";
 
@@ -21,5 +22,9 @@ export default async function AcceptanceProtocolsPage() {
     redirect("/login");
   }
 
-  return <DocumentsClient role={session.role} />;
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Зареждане…</div>}>
+      <DocumentsClient role={session.role} />
+    </Suspense>
+  );
 }

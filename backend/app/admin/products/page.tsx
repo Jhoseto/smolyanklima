@@ -265,17 +265,30 @@ function toIsoFromDateAndTimeLocal(dateStr: string, timeStr: string | undefined 
   return d.toISOString();
 }
 
-async function adminPostWorkItem(body: Record<string, unknown>): Promise<{ id: string }> {
+async function adminPostWorkItem(body: Record<string, unknown>): Promise<{
+  id: string;
+  linked_protocol?: { id: string; protocol_number: string };
+  protocol_warning?: string;
+}> {
   const res = await fetch("/api/admin/work-items", {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  const json = (await res.json().catch(() => ({}))) as { error?: string; data?: { id: string } };
+  const json = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    data?: { id: string };
+    linked_protocol?: { id: string; protocol_number: string };
+    protocol_warning?: string;
+  };
   if (!res.ok) throw new Error(json.error || "Грешка при създаване на задача");
   if (!json.data?.id) throw new Error("Липсва ID на задача");
-  return { id: json.data.id };
+  return {
+    id: json.data.id,
+    linked_protocol: json.linked_protocol,
+    protocol_warning: json.protocol_warning,
+  };
 }
 
 async function adminPatchWorkItem(itemId: string, body: Record<string, unknown>): Promise<void> {
@@ -994,6 +1007,7 @@ export default function AdminProductsPage() {
     prod: ProductRow,
     customer: { id?: string; name: string; phone: string; address: string; email?: string; notes: string },
     mount: { date: string; timeFrom: string; timeTo: string },
+    salePrice?: number,
   ) {
     if (!canRecordSale(prod)) return false;
 
@@ -1002,6 +1016,11 @@ export default function AdminProductsPage() {
       setError("Посочете дата за монтаж.");
       return false;
     }
+
+    const unitPrice =
+      salePrice != null && Number.isFinite(salePrice) && salePrice >= 0
+        ? salePrice
+        : Number(prod.price);
 
     const schedStart = toIsoFromDateAndTimeLocal(mountDate, mount.timeFrom);
     let schedEnd = toIsoFromDateAndTimeLocal(mountDate, mount.timeTo);
@@ -1041,10 +1060,10 @@ export default function AdminProductsPage() {
         customerPhone: customer.phone || null,
         customerAddress: customer.address || null,
         notes: customer.notes || null,
-        quantity: 1,
-        unitPrice: Number(prod.price),
-        totalAmount: Number(prod.price),
-      });
+      quantity: 1,
+      unitPrice,
+      totalAmount: unitPrice,
+    });
       saleId = saleRow.id;
 
       const noteLines = [customer.notes.trim() || null, `Връзка продажба: ${saleId}`].filter(Boolean) as string[];
@@ -1073,6 +1092,9 @@ export default function AdminProductsPage() {
       installId = inst.id;
 
       await adminPatchWorkItem(saleId, { installationWorkItemId: installId });
+      if (inst.protocol_warning) {
+        console.warn("[markAsSold] acceptance protocol:", inst.protocol_warning);
+      }
 
       const res = await fetch(`/api/admin/products/${prod.id}`, {
         method: "PUT",
@@ -2294,7 +2316,7 @@ export default function AdminProductsPage() {
                 </button>
                 <Link
                   href={catalogEditHref(p)}
-                  className="flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-bold text-brand-blue-700 hover:bg-white active:bg-brand-blue-50/60 min-w-0"
+                  className="flex flex-col items-center justify-center gap-0.5 py-2.5 min-h-[44px] text-xs font-bold text-brand-blue-700 hover:bg-white active:bg-brand-blue-50/60 min-w-0"
                   title="Редакция"
                 >
                   <Edit className="w-3.5 h-3.5 shrink-0" />
@@ -2303,7 +2325,7 @@ export default function AdminProductsPage() {
                 <button
                   type="button"
                   onClick={() => setShareProduct(p)}
-                  className="flex flex-col items-center justify-center gap-0.5 py-2 text-brand-orange-600 hover:bg-white active:bg-brand-orange-50/50 min-w-0"
+                  className="flex flex-col items-center justify-center gap-0.5 py-2.5 min-h-[44px] text-xs font-bold text-brand-orange-600 hover:bg-white active:bg-brand-orange-50/50 min-w-0"
                   title="Сподели в чат"
                 >
                   <MessageCircle className="w-3.5 h-3.5 shrink-0" />
@@ -2312,7 +2334,7 @@ export default function AdminProductsPage() {
                 <button
                   type="button"
                   onClick={() => setFeaturedFor(p)}
-                  className={`flex flex-col items-center justify-center gap-0.5 py-2 min-w-0 ${
+                  className={`flex flex-col items-center justify-center gap-0.5 py-2.5 min-h-[44px] text-xs min-w-0 ${
                     p.featured_position
                       ? "text-amber-800 bg-amber-50/80 hover:bg-amber-100"
                       : "text-slate-500 hover:bg-white hover:text-amber-700"
@@ -2385,24 +2407,27 @@ export default function AdminProductsPage() {
         const isBackOrder = saleFor.stock_status === "on_order";
         return (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-md"
+          className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/55 p-0 md:p-4 backdrop-blur-md"
           onClick={() => !saleBusy && setSaleFor(null)}
         >
           <div
-            className="w-full max-w-3xl max-h-[calc(100vh-2rem)] overflow-hidden rounded-3xl border border-white/70 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)]"
+            className="w-full max-w-3xl max-h-[92dvh] md:max-h-[calc(100vh-2rem)] overflow-hidden rounded-t-3xl md:rounded-3xl border border-white/70 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className={`border-b border-slate-100 px-6 py-5 ${isBackOrder ? "bg-[radial-gradient(circle_at_top_left,#ede9fe_0,#ffffff_42%,#f8fafc_100%)]" : "bg-[radial-gradient(circle_at_top_left,#e6f9fd_0,#ffffff_42%,#fff3ed_100%)]"}`}>
+            <div className="flex justify-center pt-3 pb-1 md:hidden shrink-0">
+              <div className="w-10 h-1 rounded-full bg-slate-200" />
+            </div>
+            <div className={`border-b border-slate-100 px-4 py-4 md:px-6 md:py-5 shrink-0 ${isBackOrder ? "bg-[radial-gradient(circle_at_top_left,#ede9fe_0,#ffffff_42%,#f8fafc_100%)]" : "bg-[radial-gradient(circle_at_top_left,#e6f9fd_0,#ffffff_42%,#fff3ed_100%)]"}`}>
               <div className={`text-xs font-bold uppercase tracking-[0.24em] ${isBackOrder ? "text-violet-700" : "text-brand-blue-700"}`}>{isBackOrder ? "Поръчка от доставчик" : "Запис на продажба"}</div>
-              <div className="mt-1 text-2xl font-black leading-tight text-slate-950">{saleFor.name}</div>
-              <div className="mt-1 text-sm font-medium text-slate-500">
+              <div className="mt-1 text-lg md:text-2xl font-black leading-tight text-slate-950">{saleFor.name}</div>
+              <div className="mt-1 text-sm font-medium text-slate-500 hidden sm:block">
                 {isBackOrder
                   ? "Поръчка към доставчик — клиентът не е задължителен. Попълни договорена цена; данните за клиент са по желание."
                   : "Контакт за сделката (съществуващ или нов), дата и час за монтаж. Създава се продажба в панела „Продажби“ (чака монтаж) и отделно събитие „Монтаж“ в оперативния календар."}
               </div>
             </div>
 
-            <div className="grid max-h-[calc(100vh-12rem)] grid-cols-1 gap-3 overflow-y-auto p-6 md:grid-cols-2">
+            <div className="grid flex-1 min-h-0 grid-cols-1 gap-3 overflow-y-auto p-4 md:p-6 md:grid-cols-2">
               <div className="col-span-full relative">
                 <Input
                   value={contactQuery}
@@ -2609,6 +2634,9 @@ export default function AdminProductsPage() {
                     onClick={async () => {
                       setSaleBusy(true);
                       try {
+                        const resolvedPrice = saleForm.agreedPrice.trim()
+                          ? Number(saleForm.agreedPrice.replace(",", "."))
+                          : Number(saleFor.price);
                         const ok = await markAsSold(
                           saleFor,
                           {
@@ -2624,9 +2652,14 @@ export default function AdminProductsPage() {
                             timeFrom: saleForm.mountTimeFrom,
                             timeTo: saleForm.mountTimeTo,
                           },
+                          Number.isFinite(resolvedPrice) ? resolvedPrice : Number(saleFor.price),
                         );
                         if (ok) {
-                          setSaleSuccess({ productName: saleFor.name, customerName: saleForm.customerName.trim(), amount: Number(saleFor.price) });
+                          setSaleSuccess({
+                            productName: saleFor.name,
+                            customerName: saleForm.customerName.trim(),
+                            amount: Number.isFinite(resolvedPrice) ? resolvedPrice : Number(saleFor.price),
+                          });
                           setSaleFor(null);
                         }
                       } finally {
@@ -2645,23 +2678,26 @@ export default function AdminProductsPage() {
       })()}
 
       {saleSuccess && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-md" onClick={() => setSaleSuccess(null)}>
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/55 p-0 md:p-4 backdrop-blur-md" onClick={() => setSaleSuccess(null)}>
           <div
-            className="w-full max-w-xl overflow-hidden rounded-3xl border border-white/70 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)]"
+            className="w-full max-w-xl max-h-[92dvh] overflow-hidden rounded-t-3xl md:rounded-3xl border border-white/70 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)] flex flex-col pb-safe md:pb-0"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className={`px-6 py-6 text-center ${saleSuccess.isBackOrder ? "bg-[radial-gradient(circle_at_top_left,#ede9fe_0,#ffffff_44%,#f8fafc_100%)]" : "bg-[radial-gradient(circle_at_top_left,#dcfce7_0,#ffffff_44%,#f8fafc_100%)]"}`}>
+            <div className="flex justify-center pt-3 pb-1 md:hidden shrink-0">
+              <div className="w-10 h-1 rounded-full bg-slate-200" />
+            </div>
+            <div className={`px-4 py-5 md:px-6 md:py-6 text-center shrink-0 ${saleSuccess.isBackOrder ? "bg-[radial-gradient(circle_at_top_left,#ede9fe_0,#ffffff_44%,#f8fafc_100%)]" : "bg-[radial-gradient(circle_at_top_left,#dcfce7_0,#ffffff_44%,#f8fafc_100%)]"}`}>
               <div className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl text-white shadow-lg ${saleSuccess.isBackOrder ? "bg-violet-600 shadow-violet-600/25" : "bg-emerald-600 shadow-emerald-600/25"}`}>
                 <CheckCircle className="h-7 w-7" />
               </div>
-              <div className="text-2xl font-black text-slate-950">
+              <div className="text-xl md:text-2xl font-black text-slate-950">
                 {saleSuccess.isBackOrder ? "Поръчката е записана" : "Продажбата е записана"}
               </div>
               <div className="mt-2 text-sm font-medium text-slate-500">
                 {saleSuccess.productName} · {saleSuccess.customerName}
               </div>
             </div>
-            <div className="grid gap-3 p-6">
+            <div className="grid gap-3 p-4 md:p-6 overflow-y-auto flex-1 min-h-0">
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Договорена цена</div>
                 <div className="mt-1 text-2xl font-black text-slate-900">€{saleSuccess.amount.toLocaleString()}</div>
@@ -2672,7 +2708,7 @@ export default function AdminProductsPage() {
                 </div>
               ) : (
                 <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-semibold leading-6 text-emerald-900">
-                  Артикулът е маркиран като продаден. В панела „Продажби“ сделката е със статус <strong>чака монтаж</strong>, а в таблото е планиран <strong>монтаж</strong> на избраната дата.
+                  В панела „Продажби“ сделката е със статус <strong>чака монтаж</strong>, а в таблото е планиран <strong>монтаж</strong> на избраната дата.
                 </div>
               )}
             </div>
@@ -2685,13 +2721,16 @@ export default function AdminProductsPage() {
 
       {confirmBulkDelete && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-md"
+          className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/55 p-0 md:p-4 backdrop-blur-md"
           onClick={() => setConfirmBulkDelete(false)}
         >
           <div
-            className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-rose-100"
+            className="w-full max-w-lg max-h-[92dvh] overflow-y-auto rounded-t-3xl md:rounded-3xl bg-white p-5 md:p-6 shadow-2xl ring-1 ring-rose-100 pb-safe md:pb-6"
             onClick={(e) => e.stopPropagation()}
           >
+            <div className="flex justify-center pb-2 md:hidden">
+              <div className="w-10 h-1 rounded-full bg-slate-200" />
+            </div>
             <div className="flex items-start gap-3">
               <div className="shrink-0 w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center">
                 <Trash2 className="w-5 h-5" />

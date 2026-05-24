@@ -234,7 +234,7 @@ export function ServiceDocumentsClient({ role }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="flex flex-col flex-1 min-h-0 bg-slate-50">
       {/* ── Хедър ── */}
       <div className="bg-white border-b border-slate-200 px-4 py-4 sticky top-0 z-10">
         <div className="flex items-center justify-between mb-3 gap-2">
@@ -327,14 +327,6 @@ export function ServiceDocumentsClient({ role }: Props) {
           </div>
         )}
       </div>
-
-      <button
-        onClick={handleNew}
-        className="fixed bottom-6 right-5 w-14 h-14 bg-brand-orange-500 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-brand-orange-600 active:bg-brand-orange-700 z-20 md:hidden"
-        aria-label="Нов протокол"
-      >
-        <Plus className="w-6 h-6" />
-      </button>
     </div>
   );
 }

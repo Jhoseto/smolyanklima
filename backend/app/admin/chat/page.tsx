@@ -360,7 +360,7 @@ function AdminChatClient() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col h-full gap-4 min-h-0">
+    <div className="flex flex-col flex-1 min-h-0 gap-4">
       {/* Title row */}
       <div className="flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
@@ -392,7 +392,7 @@ function AdminChatClient() {
               const labels: Record<string, string> = { "": "Всички", waiting: "Изчакват", active: "Активни", closed: "Затворени" };
               return (
                 <button key={s} onClick={() => setFilter(s)}
-                  className={`flex-1 py-1 rounded-lg text-[11px] font-bold transition-colors ${filter === s ? "bg-brand-blue-500 text-white" : "text-slate-500 hover:bg-slate-100"}`}>
+                  className={`flex-1 py-2 min-h-[36px] rounded-lg text-xs font-bold transition-colors ${filter === s ? "bg-brand-blue-500 text-white" : "text-slate-500 hover:bg-slate-100"}`}>
                   {labels[s]}
                   {s === "waiting" && waitingCount > 0 && (
                     <span className="ml-1 inline-flex items-center justify-center w-4 h-4 rounded-full bg-orange-500 text-white text-[9px] font-black">{waitingCount}</span>
@@ -429,7 +429,7 @@ function AdminChatClient() {
               {/* Chat header */}
               <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-white">
                 <div className="flex items-center gap-2 min-w-0">
-                  <button className="md:hidden w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors shrink-0"
+                  <button className="md:hidden min-h-11 min-w-11 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors shrink-0"
                     onClick={() => setMobilePane("list")}>
                     <ChevronRight className="w-4 h-4 rotate-180" />
                   </button>
@@ -561,11 +561,11 @@ function AdminChatClient() {
 
               {/* Input */}
               {detail.chat.status !== "closed" && (
-                <div className="shrink-0 px-3 pt-2 pb-3 border-t border-slate-100 bg-white">
+                <div className="shrink-0 px-3 pt-2 pb-3 pb-safe border-t border-slate-100 bg-white">
                   <div className="flex gap-2 items-center bg-slate-50 rounded-2xl px-3 py-1 border border-slate-200 focus-within:border-brand-blue-400 focus-within:ring-2 focus-within:ring-brand-blue-200 transition">
                     {cannedResponses.length > 0 && (
                       <button onClick={() => setShowCanned(v => !v)} title="Готови отговори"
-                        className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors shrink-0 ${showCanned ? "text-brand-blue-500 bg-brand-blue-100" : "text-slate-400 hover:text-brand-blue-500 hover:bg-brand-blue-50"}`}>
+                        className={`min-h-11 min-w-11 rounded-lg flex items-center justify-center transition-colors shrink-0 ${showCanned ? "text-brand-blue-500 bg-brand-blue-100" : "text-slate-400 hover:text-brand-blue-500 hover:bg-brand-blue-50"}`}>
                         <Zap className="w-4 h-4" />
                       </button>
                     )}
@@ -573,10 +573,10 @@ function AdminChatClient() {
                       onChange={(e) => { setInputValue(e.target.value); sendAdminTyping(); }}
                       onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
                       placeholder="Напишете отговор..."
-                      className="flex-1 bg-transparent text-sm py-2.5 text-slate-900 placeholder:text-slate-400 focus:outline-none min-w-0"
+                      className="flex-1 bg-transparent text-sm py-2.5 text-slate-900 placeholder:text-slate-400 focus:outline-none min-w-0 min-h-[44px]"
                       disabled={sending} />
                     <button onClick={() => handleSend()} disabled={!inputValue.trim() || sending}
-                      className="w-9 h-9 rounded-xl flex items-center justify-center bg-brand-blue-500 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-brand-blue-700 transition-colors shrink-0">
+                      className="min-h-11 min-w-11 rounded-xl flex items-center justify-center bg-brand-blue-500 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-brand-blue-700 transition-colors shrink-0">
                       {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" strokeWidth={2} />}
                     </button>
                   </div>

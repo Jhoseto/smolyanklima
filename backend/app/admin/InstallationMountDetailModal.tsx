@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Button, Card } from "./ui";
-import { X, Loader2, Package, CheckCircle2, ExternalLink } from "lucide-react";
+import { Button, Card, ADMIN_MODAL_BACKDROP, ADMIN_MODAL_PANEL, AdminModalDragHandle } from "./ui";
+import { X, Loader2, Package, CheckCircle2, ExternalLink, FileText } from "lucide-react";
 import Link from "next/link";
 
 type ProductEmbed = {
@@ -29,6 +29,13 @@ type LinkedSale = {
   total_amount?: number | null;
   unit_price?: number | null;
   event_code?: string | null;
+};
+
+type LinkedProtocol = {
+  id: string;
+  protocol_number: string;
+  status: string;
+  date?: string | null;
 };
 
 type WorkRow = {
@@ -84,12 +91,14 @@ export function InstallationMountDetailModal({ workItemId, readOnly = false, onC
   const [error, setError] = useState<string | null>(null);
   const [row, setRow] = useState<WorkRow | null>(null);
   const [linkedSale, setLinkedSale] = useState<LinkedSale | null>(null);
+  const [linkedProtocol, setLinkedProtocol] = useState<LinkedProtocol | null>(null);
   const [completeBusy, setCompleteBusy] = useState(false);
 
   const load = useCallback(async () => {
     if (!workItemId) {
       setRow(null);
       setLinkedSale(null);
+      setLinkedProtocol(null);
       return;
     }
     setLoading(true);
@@ -98,17 +107,19 @@ export function InstallationMountDetailModal({ workItemId, readOnly = false, onC
       const res = await fetch(`/api/admin/work-items/${workItemId}`, { credentials: "include" });
       const json = (await res.json().catch(() => ({}))) as {
         error?: string;
-        data?: { work_item: WorkRow; linked_sale: LinkedSale | null };
+        data?: { work_item: WorkRow; linked_sale: LinkedSale | null; linked_protocol: LinkedProtocol | null };
       };
       if (!res.ok) throw new Error(json.error || "Грешка при зареждане");
       const w = json.data?.work_item;
       if (!w) throw new Error("Няма данни");
       setRow(w);
       setLinkedSale(json.data?.linked_sale ?? null);
+      setLinkedProtocol(json.data?.linked_protocol ?? null);
     } catch (e: unknown) {
       setError(String(e instanceof Error ? e.message : e));
       setRow(null);
       setLinkedSale(null);
+      setLinkedProtocol(null);
     } finally {
       setLoading(false);
     }
@@ -147,13 +158,14 @@ export function InstallationMountDetailModal({ workItemId, readOnly = false, onC
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-md"
+      className={ADMIN_MODAL_BACKDROP}
       onClick={() => !completeBusy && onClose()}
     >
       <div
-        className="w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-2xl border border-white/20 bg-white shadow-2xl flex flex-col"
+        className={`${ADMIN_MODAL_PANEL} max-w-2xl`}
         onClick={(e) => e.stopPropagation()}
       >
+        <AdminModalDragHandle />
         <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4 shrink-0">
           <div className="min-w-0">
             <div className="text-[10px] font-black uppercase tracking-widest text-brand-blue-700">Монтаж</div>
@@ -220,6 +232,26 @@ export function InstallationMountDetailModal({ workItemId, readOnly = false, onC
                   </div>
                 )}
               </Card>
+
+              {linkedProtocol && (
+                <Card className="p-4 border-violet-100 bg-violet-50/40">
+                  <div className="text-xs font-black uppercase tracking-wide text-violet-800 mb-2">Приемно-предавателен протокол</div>
+                  <div className="text-sm font-semibold text-slate-900">{linkedProtocol.protocol_number}</div>
+                  <div className="text-xs text-slate-600 mt-1">
+                    Дата: {linkedProtocol.date ? new Date(linkedProtocol.date).toLocaleDateString("bg-BG") : "—"} · Статус:{" "}
+                    <strong>{linkedProtocol.status === "signed" ? "подписан" : linkedProtocol.status === "in_progress" ? "в процес" : "подготвен"}</strong>
+                  </div>
+                  <div className="pt-3 mt-2 border-t border-violet-100">
+                    <Link
+                      href={`/admin/service/documents/acceptance?edit=${linkedProtocol.id}`}
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-violet-800 hover:underline"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      Отвори протокола за допълване
+                    </Link>
+                  </div>
+                </Card>
+              )}
 
               {linkedSale && (
                 <Card className="p-4 border-emerald-100 bg-emerald-50/50">

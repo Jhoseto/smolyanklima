@@ -32,6 +32,7 @@ export const SiteSeo: React.FC<SiteSeoProps> = ({ config, schemas = [] }) => {
         robots={config.noindex ? 'noindex, follow' : 'index, follow'}
       />
       <link rel="alternate" hrefLang="bg" href={absoluteUrl(config.canonicalPath)} />
+      <link rel="alternate" hrefLang="x-default" href={absoluteUrl(config.canonicalPath)} />
       {schemas.map((schema, i) => (
         <JsonLdScript key={i} data={schema} />
       ))}

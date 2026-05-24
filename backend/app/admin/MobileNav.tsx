@@ -65,7 +65,7 @@ export function MobileNav({
             ],
           },
         ];
-        if (role === "master_admin") {
+        if (role === "master_admin" || role === "office_staff") {
           sections.push({
             title: "Отчети",
             links: [
@@ -77,7 +77,9 @@ export function MobileNav({
             title: "Администрация",
             links: [
               { href: "/admin/staff", label: "Персонал", icon: ShieldCheck },
-              { href: "/admin/settings", label: "Настройки", icon: Settings },
+              ...(role === "master_admin"
+                ? [{ href: "/admin/settings", label: "Настройки", icon: Settings }]
+                : []),
             ],
           });
         }
@@ -98,7 +100,7 @@ export function MobileNav({
     pathname === "/admin/profile" ||
     pathname.startsWith("/admin/profile/") ||
     allDrawerLinks.some((l) => isActive(l.href));
-  const hasDrawer = true;
+  const hasDrawer = drawerSections.length > 0;
 
   return (
     <>
@@ -125,7 +127,7 @@ export function MobileNav({
           <span className="text-sm font-black text-slate-900 tracking-wide uppercase">Меню</span>
           <button
             onClick={() => setDrawerOpen(false)}
-            className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 active:bg-slate-200 transition-colors"
+            className="w-11 h-11 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 active:bg-slate-200 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -204,7 +206,7 @@ export function MobileNav({
 
       {/* Fixed bottom navigation bar — solid bg for performance on older phones */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-slate-200 shadow-[0_-2px_16px_rgba(15,23,42,0.06)]">
-        <div className="flex items-stretch justify-around px-1 pt-1 pb-1">
+        <div className="flex items-stretch justify-around px-1 pt-1.5 pb-1">
           {primaryLinks.map((link) => {
             const Icon = link.icon;
             const active = isActive(link.href, link.exact);
@@ -214,7 +216,7 @@ export function MobileNav({
               <Link
                 key={link.href}
                 href={link.href}
-                className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl transition-all duration-150 min-w-0 flex-1 ${
+                className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl transition-all duration-150 min-w-0 flex-1 min-h-[44px] justify-center ${
                   active ? "text-brand-orange-600" : "text-slate-500"
                 }`}
               >
@@ -247,7 +249,7 @@ export function MobileNav({
           {hasDrawer && (
             <button
               onClick={() => setDrawerOpen(true)}
-              className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl transition-all duration-150 flex-1 ${
+              className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl transition-all duration-150 flex-1 min-h-[44px] justify-center ${
                 anyMoreActive ? "text-brand-orange-600" : "text-slate-500"
               }`}
             >

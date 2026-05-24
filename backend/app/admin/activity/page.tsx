@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { Button, Card, Input, Select, SectionTitle, Table, Td, Th } from "../ui";
 import { useDebounce } from "@/lib/hooks/useDebounce";
-import { describeActivityLog, ENTITY_TYPE_LABELS } from "@/lib/admin/activityLogLabels";
+import { describeActivityLog, formatActivityUser } from "@/lib/admin/activityLogLabels";
 
 type ActivityRow = {
   id: string;
@@ -65,11 +65,21 @@ export default function AdminActivityPage() {
 
   const entityFilterOptions = useMemo(
     () =>
-      Object.entries(ENTITY_TYPE_LABELS)
-        .filter(([key]) =>
-          ["product", "contact", "inquiry", "work_item", "settings", "email_outbox", "ai", "article", "accessory", "admin_user", "service_protocol", "service_repair_protocol", "supplier_order"].includes(key),
-        )
-        .map(([value, label]) => ({ value, label })),
+      [
+        { value: "product", label: "Климатици" },
+        { value: "accessory", label: "Аксесоари" },
+        { value: "work_item", label: "Продажби и календар" },
+        { value: "contact", label: "Клиенти" },
+        { value: "inquiry", label: "Запитвания" },
+        { value: "service_protocol", label: "Приемо-предавателни протоколи" },
+        { value: "service_repair_protocol", label: "Сервизни протоколи" },
+        { value: "supplier_order", label: "Поръчки" },
+        { value: "admin_user", label: "Екип" },
+        { value: "article", label: "Блог" },
+        { value: "settings", label: "Настройки" },
+        { value: "email_outbox", label: "Имейли" },
+        { value: "ai", label: "AI" },
+      ],
     [],
   );
 
@@ -77,7 +87,7 @@ export default function AdminActivityPage() {
     <div className="w-full space-y-3">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h1 className="text-lg md:text-xl font-bold text-slate-900 leading-tight">
-          <SectionTitle title="Активност" hint="Одит лог: промени по продукти, контакти, заявки, настройки и системни действия." />
+          <SectionTitle title="Активност" hint="Хронология на промени: продажби, монтажи, каталог, клиенти, протоколи и системни действия." />
         </h1>
         <Button variant="secondary" onClick={() => void load()} className="gap-2">
           <RefreshCw className="w-4 h-4" />
@@ -93,7 +103,7 @@ export default function AdminActivityPage() {
               setPage(1);
               setQ(e.target.value);
             }}
-            placeholder="Търси по код на действие (напр. product.update)..."
+            placeholder="Търси по действие, клиент, продукт..."
             className="col-span-2 md:col-span-1"
           />
           <Select
@@ -103,7 +113,7 @@ export default function AdminActivityPage() {
               setEntityType(e.target.value);
             }}
           >
-            <option value="">Всички типове</option>
+            <option value="">Всички обекти</option>
             {entityFilterOptions.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
@@ -123,7 +133,7 @@ export default function AdminActivityPage() {
           <thead>
             <tr>
               <Th>Действие</Th>
-              <Th>Тип</Th>
+              <Th>Обект</Th>
               <Th>Потребител</Th>
               <Th>Детайли</Th>
               <Th>Дата</Th>
@@ -133,18 +143,16 @@ export default function AdminActivityPage() {
             {!loading &&
               items.map((row) => {
                 const described = describeActivityLog(row);
+                const user = formatActivityUser(row.admin_users);
                 return (
                   <tr key={row.id} className="hover:bg-slate-50 transition-colors">
                     <Td>
                       <div className="font-semibold text-sm text-slate-900">{described.actionLabel}</div>
-                      <div className="font-mono text-[10px] text-slate-400 mt-0.5" title={described.technicalAction}>
-                        {described.technicalAction}
-                      </div>
                     </Td>
                     <Td className="text-sm text-slate-700">{described.entityLabel}</Td>
                     <Td>
-                      <div className="font-medium text-slate-900">{row.admin_users?.name ?? "—"}</div>
-                      <div className="text-xs text-slate-500">{row.admin_users?.email ?? ""}</div>
+                      <div className="font-medium text-slate-900">{user.name}</div>
+                      {user.subtitle && <div className="text-xs text-slate-500">{user.subtitle}</div>}
                     </Td>
                     <Td>
                       {described.detailsText ? (
@@ -188,24 +196,26 @@ export default function AdminActivityPage() {
         {!loading &&
           items.map((row) => {
             const described = describeActivityLog(row);
+            const user = formatActivityUser(row.admin_users);
             return (
               <div key={row.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-3">
                 <div className="flex items-start justify-between gap-2 mb-1.5">
                   <div>
                     <div className="text-sm font-semibold text-slate-900 leading-snug">{described.actionLabel}</div>
-                    <div className="font-mono text-[10px] text-slate-400 mt-0.5">{described.technicalAction}</div>
                   </div>
                   <span className="text-[10px] text-slate-400 font-medium shrink-0">
                     {new Date(row.created_at).toLocaleDateString("bg-BG")}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  {row.entity_type && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-brand-blue-50 text-brand-blue-700">
-                      {described.entityLabel}
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-brand-blue-50 text-brand-blue-700">
+                    {described.entityLabel}
+                  </span>
+                  {user.name !== "—" && (
+                    <span className="text-xs text-slate-600 font-medium">
+                      {user.name}{user.subtitle ? ` · ${user.subtitle}` : ""}
                     </span>
                   )}
-                  {row.admin_users?.name && <span className="text-xs text-slate-600 font-medium">{row.admin_users.name}</span>}
                 </div>
                 {described.detailsText && (
                   <div className="text-xs text-slate-600 mt-2 leading-relaxed whitespace-pre-line">{described.detailsText}</div>

@@ -44,8 +44,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // Кои секции вижда текущата роля
   const showOffice = role === "master_admin" || role === "office_staff";
   const showService = true; // всички роли виждат секция Сервиз → Документи
-  const showReports = role === "master_admin";
-  const showAdminSection = role === "master_admin";
+  const showReports = role === "master_admin" || role === "office_staff";
+  const showStaff = role === "master_admin" || role === "office_staff";
+  const showSettings = role === "master_admin";
   // „Продажби" — master_admin + офис (списък продажби / work_items).
   const showSales = role === "master_admin" || role === "office_staff";
 
@@ -135,11 +136,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               </>
             )}
 
-            {showAdminSection && (
+            {(showStaff || showSettings) && (
               <>
                 <SectionLabel label="Администрация" />
-                <NavLink href="/admin/staff" label="Персонал" icon={<ShieldCheck className="w-4 h-4" />} />
-                <NavLink href="/admin/settings" label="Настройки" icon={<Settings className="w-4 h-4" />} />
+                {showStaff && (
+                  <NavLink href="/admin/staff" label="Персонал" icon={<ShieldCheck className="w-4 h-4" />} />
+                )}
+                {showSettings && (
+                  <NavLink href="/admin/settings" label="Настройки" icon={<Settings className="w-4 h-4" />} />
+                )}
               </>
             )}
           </nav>
@@ -159,11 +164,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         </aside>
 
         {/* Main content */}
-        <main className="flex-1 min-h-0 w-full min-w-0 overflow-x-hidden overflow-y-auto p-2 pb-24 md:p-4 md:pb-4">
+        <main className="flex flex-col flex-1 min-h-0 w-full min-w-0 overflow-x-hidden overflow-y-auto p-2 pb-24 md:p-4 md:pb-4">
           <OfflineBootstrap>
-            <OfflineExplainerCard />
-            <AdminPushBanner role={role} />
-            {children}
+            <div className="flex flex-col flex-1 min-h-0 min-w-0">
+              <OfflineExplainerCard />
+              <AdminPushBanner role={role} />
+              <div className="flex flex-col flex-1 min-h-0 min-w-0">
+                {children}
+              </div>
+            </div>
           </OfflineBootstrap>
         </main>
 

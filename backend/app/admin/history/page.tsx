@@ -2,8 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { SectionTitle, Card, Input, Select, Button, Table, Th, Td } from "../ui";
-import { RefreshCw, CheckCircle2, Ban } from "lucide-react";
+import { RefreshCw, CheckCircle2, Ban, Eye } from "lucide-react";
 import { ProductQuickViewButton } from "../ProductQuickView";
+import { SaleDetailModal } from "./SaleDetailModal";
+import {
+  SALE_CANCEL_REASONS,
+  SALE_CANCEL_REASON_LABELS,
+  saleCancelReasonLabel,
+  type SaleCancelReason,
+} from "@/lib/admin/saleCancelReason";
 
 type EventCode =
   | "item_added"
@@ -31,7 +38,8 @@ type WorkRow = {
   created_at: string;
   notes?: string | null;
   sale_install_state?: "pending_mount" | "completed" | null;
-  products?: { id?: string; name?: string; slug?: string } | null;
+  cancel_reason?: string | null;
+  products?: { id?: string; name?: string; slug?: string; model_code?: string | null } | null;
 };
 
 function statusPillClass(status: WorkRow["status"]): string {
@@ -78,6 +86,8 @@ export default function AdminHistoryPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionRowId, setActionRowId] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<{ kind: ConfirmKind; row: WorkRow } | null>(null);
+  const [cancelReason, setCancelReason] = useState<SaleCancelReason | "">("");
+  const [detailSaleId, setDetailSaleId] = useState<string | null>(null);
 
   const qs = useMemo(() => {
     const sp = new URLSearchParams();
@@ -130,7 +140,7 @@ export default function AdminHistoryPage() {
     }
   }
 
-  async function performCancel(row: WorkRow) {
+  async function performCancel(row: WorkRow, reason: SaleCancelReason) {
     setActionRowId(row.id);
     setError(null);
     try {
@@ -138,7 +148,7 @@ export default function AdminHistoryPage() {
         method: "PUT",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "cancelled" }),
+        body: JSON.stringify({ status: "cancelled", cancelReason: reason }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((json as { error?: string }).error || "Грешка");
@@ -148,6 +158,7 @@ export default function AdminHistoryPage() {
     } finally {
       setActionRowId(null);
       setConfirm(null);
+      setCancelReason("");
     }
   }
 
@@ -155,6 +166,17 @@ export default function AdminHistoryPage() {
 
   const canPendingActions = (row: WorkRow) =>
     row.sale_install_state === "pending_mount" && row.status !== "cancelled";
+
+  function openCancelConfirm(row: WorkRow) {
+    setCancelReason("");
+    setConfirm({ kind: "cancel", row });
+  }
+
+  function closeConfirm() {
+    if (actionRowId) return;
+    setConfirm(null);
+    setCancelReason("");
+  }
 
   return (
     <div className="w-full space-y-3">
@@ -209,6 +231,7 @@ export default function AdminHistoryPage() {
             {items.map((row) => {
               const productName = row.products?.name ?? "—";
               const showActions = canPendingActions(row);
+              const cancelLabel = saleCancelReasonLabel(row.cancel_reason);
               return (
                 <tr key={row.id} className="hover:bg-slate-50 transition-colors">
                   <Td className="max-w-[200px] min-w-0">
@@ -217,6 +240,11 @@ export default function AdminHistoryPage() {
                       productName={productName}
                       className="block truncate text-sm font-semibold text-slate-800"
                     />
+                    {cancelLabel && (
+                      <div className="text-[10px] text-red-700 font-medium mt-0.5 truncate" title={cancelLabel}>
+                        {cancelLabel}
+                      </div>
+                    )}
                   </Td>
                   <Td>
                     <span className={mountPhasePillClass(row)}>{mountPhaseLabel(row)}</span>
@@ -240,32 +268,41 @@ export default function AdminHistoryPage() {
                     {row.due_date ? new Date(row.due_date).toLocaleDateString("bg-BG") : "—"}
                   </Td>
                   <Td className="text-right">
-                    {showActions ? (
-                      <div className="flex flex-wrap justify-end gap-1.5">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          className="!text-xs font-bold"
-                          disabled={actionRowId === row.id}
-                          onClick={() => setConfirm({ kind: "complete", row })}
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5 inline mr-1" />
-                          Завърши
-                        </Button>
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          className="!text-xs font-bold"
-                          disabled={actionRowId === row.id}
-                          onClick={() => setConfirm({ kind: "cancel", row })}
-                        >
-                          <Ban className="w-3.5 h-3.5 inline mr-1" />
-                          Отказ
-                        </Button>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-slate-400">—</span>
-                    )}
+                    <div className="flex flex-wrap justify-end gap-1.5">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="!text-xs font-bold"
+                        onClick={() => setDetailSaleId(row.id)}
+                      >
+                        <Eye className="w-3.5 h-3.5 inline mr-1" />
+                        Детайли
+                      </Button>
+                      {showActions && (
+                        <>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            className="!text-xs font-bold"
+                            disabled={actionRowId === row.id}
+                            onClick={() => setConfirm({ kind: "complete", row })}
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5 inline mr-1" />
+                            Завърши
+                          </Button>
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            className="!text-xs font-bold"
+                            disabled={actionRowId === row.id}
+                            onClick={() => openCancelConfirm(row)}
+                          >
+                            <Ban className="w-3.5 h-3.5 inline mr-1" />
+                            Отказ
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </Td>
                 </tr>
               );
@@ -290,6 +327,7 @@ export default function AdminHistoryPage() {
           const amount = row.total_amount != null ? row.total_amount : row.unit_price;
           const productName = row.products?.name ?? "—";
           const showActions = canPendingActions(row);
+          const cancelLabel = saleCancelReasonLabel(row.cancel_reason);
           return (
             <div key={row.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
               <div className="flex items-start justify-between gap-3 mb-2">
@@ -306,6 +344,7 @@ export default function AdminHistoryPage() {
                     </a>
                   )}
                   {row.customer_address && <div className="text-xs text-slate-500 mt-0.5">{row.customer_address}</div>}
+                  {cancelLabel && <div className="text-[11px] text-red-700 font-semibold mt-1">{cancelLabel}</div>}
                 </div>
                 <div className="text-right shrink-0">
                   {amount != null ? (
@@ -327,28 +366,33 @@ export default function AdminHistoryPage() {
                   Монтаж: {row.due_date ? new Date(row.due_date).toLocaleDateString("bg-BG") : "—"}
                 </span>
               </div>
-              {showActions && (
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="font-bold !text-xs"
-                    disabled={actionRowId === row.id}
-                    onClick={() => setConfirm({ kind: "complete", row })}
-                  >
-                    Завърши
-                  </Button>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    className="font-bold !text-xs"
-                    disabled={actionRowId === row.id}
-                    onClick={() => setConfirm({ kind: "cancel", row })}
-                  >
-                    Отказ
-                  </Button>
-                </div>
-              )}
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <Button variant="secondary" size="sm" className="font-bold !text-xs col-span-2" onClick={() => setDetailSaleId(row.id)}>
+                  Детайли
+                </Button>
+                {showActions && (
+                  <>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="font-bold !text-xs"
+                      disabled={actionRowId === row.id}
+                      onClick={() => setConfirm({ kind: "complete", row })}
+                    >
+                      Завърши
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      className="font-bold !text-xs"
+                      disabled={actionRowId === row.id}
+                      onClick={() => openCancelConfirm(row)}
+                    >
+                      Отказ
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           );
         })}
@@ -369,15 +413,20 @@ export default function AdminHistoryPage() {
         </div>
       </div>
 
+      <SaleDetailModal saleId={detailSaleId} onClose={() => setDetailSaleId(null)} />
+
       {confirm && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm"
-          onClick={() => !actionRowId && setConfirm(null)}
+          className="fixed inset-0 z-[60] flex items-end md:items-center justify-center bg-slate-950/50 p-0 md:p-4 backdrop-blur-sm"
+          onClick={closeConfirm}
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-2xl p-5"
+            className="w-full max-w-md max-h-[92dvh] overflow-y-auto rounded-t-3xl md:rounded-2xl border border-slate-200 bg-white shadow-2xl p-5 pb-safe md:pb-5"
             onClick={(e) => e.stopPropagation()}
           >
+            <div className="flex justify-center pb-2 md:hidden">
+              <div className="w-10 h-1 rounded-full bg-slate-200" />
+            </div>
             <div className="text-lg font-black text-slate-900">
               {confirm.kind === "complete" ? "Потвърждение: завършване" : "Потвърждение: отказ"}
             </div>
@@ -390,25 +439,51 @@ export default function AdminHistoryPage() {
               ) : (
                 <>
                   Сигурни ли сте, че искате да <strong>откажете</strong> тази продажа (чака монтаж)? Продажбата и свързаният монтаж в календара
-                  ще бъдат маркирани като <strong>отказани</strong>. Това не възстановява автоматично склада — при нужда коригирайте продукта
-                  ръчно.
+                  ще бъдат маркирани като <strong>отказани</strong>, а климатикът ще се върне като <strong>наличен</strong> в списъка с продукти.
                 </>
               )}
             </p>
             <div className="mt-1 text-xs font-semibold text-slate-500 truncate" title={confirm.row.products?.name ?? confirm.row.title}>
               {confirm.row.products?.name ?? confirm.row.title}
             </div>
+
+            {confirm.kind === "cancel" && (
+              <div className="mt-4 space-y-2">
+                <div className="text-xs font-bold uppercase tracking-wide text-slate-600">Причина за отказ *</div>
+                {SALE_CANCEL_REASONS.map((reason) => (
+                  <label
+                    key={reason}
+                    className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 cursor-pointer transition-colors ${
+                      cancelReason === reason
+                        ? "border-red-300 bg-red-50"
+                        : "border-slate-200 bg-white hover:border-slate-300"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="cancelReason"
+                      value={reason}
+                      checked={cancelReason === reason}
+                      onChange={() => setCancelReason(reason)}
+                      className="accent-red-600"
+                    />
+                    <span className="text-sm font-medium text-slate-800">{SALE_CANCEL_REASON_LABELS[reason]}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+
             <div className="mt-5 flex flex-wrap justify-end gap-2">
-              <Button variant="secondary" type="button" disabled={actionRowId !== null} onClick={() => setConfirm(null)}>
+              <Button variant="secondary" type="button" disabled={actionRowId !== null} onClick={closeConfirm}>
                 Назад
               </Button>
               <Button
                 variant={confirm.kind === "cancel" ? "danger" : "primary"}
                 type="button"
-                disabled={actionRowId !== null}
+                disabled={actionRowId !== null || (confirm.kind === "cancel" && !cancelReason)}
                 onClick={() => {
                   if (confirm.kind === "complete") void performComplete(confirm.row);
-                  else void performCancel(confirm.row);
+                  else if (cancelReason) void performCancel(confirm.row, cancelReason);
                 }}
               >
                 {actionRowId ? (

@@ -291,3 +291,34 @@ a {
   );
   mask-image: radial-gradient(ellipse 78% 78% at 50% 50%, #000 38%, transparent 100%);
 }
+
+/* iOS / PWA safe area — използва се от MobileNav и fixed FAB-ове */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.h-safe-area-inset-bottom {
+  height: env(safe-area-inset-bottom, 0px);
+}
+
+/* Височина на мобилната bottom nav + safe area (за fixed бутони над нея) */
+.bottom-nav-offset {
+  bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}

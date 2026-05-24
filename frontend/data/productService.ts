@@ -16,6 +16,7 @@ import type {
   BrandMeta,
   SortOption,
 } from './types/product';
+import { DEFAULT_CATALOG_SORT } from './types/product';
 
 // ──────────────────────────────────────
 // IMAGE POOL (6 налични снимки за всички продукти)
@@ -411,7 +412,7 @@ export async function fetchProductsCatalogPage(
   if (params.features?.length) sp.set("f", params.features.join(","));
   if (typeof params.min === "number") sp.set("min", String(params.min));
   if (typeof params.max === "number") sp.set("max", String(params.max));
-  if (params.sort && params.sort !== "recommended") sp.set("s", params.sort);
+  if (params.sort && params.sort !== DEFAULT_CATALOG_SORT) sp.set("s", params.sort);
   sp.set("page", String(params.page ?? 1));
   sp.set("perPage", String(params.perPage ?? 24));
 

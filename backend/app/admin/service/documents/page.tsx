@@ -104,7 +104,7 @@ export default async function ServiceDocumentsHubPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="flex flex-col flex-1 min-h-0 bg-slate-50">
       {/* ── Хедър ── */}
       <div className="bg-white border-b border-slate-200 px-4 py-4 sticky top-0 z-10">
         <h1 className="text-base font-bold text-slate-900">Документи</h1>

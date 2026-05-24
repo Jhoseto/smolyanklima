@@ -28,7 +28,7 @@ export async function GET(
     .eq("id", id);
 
   if (session.role === "service_staff") {
-    query = query.eq("created_by", session.userId);
+    query = query.or(`created_by.eq.${session.userId},work_item_id.not.is.null`);
   }
 
   const { data, error } = await query.maybeSingle();

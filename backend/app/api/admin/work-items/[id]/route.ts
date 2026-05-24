@@ -3,7 +3,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
+import {
+  findAcceptanceProtocolByWorkItem,
+  ensureAcceptanceProtocolForInstallation,
+  deleteAcceptanceProtocolForInstallation,
+  syncAcceptanceProtocolFromInstallation,
+} from "@/lib/admin/acceptanceProtocolFromInstall";
+import {
+  canRestoreStockForPendingSale,
+  restoreProductStockAfterPendingSaleCancel,
+} from "@/lib/admin/restoreProductStockAfterSaleCancel";
 import { syncConsultationContactFollowUp } from "@/lib/work-items/consultation-contact";
+import { isSaleCancelReason } from "@/lib/admin/saleCancelReason";
 
 const WORK_ITEM_EVENT_CODES = [
   "item_added",
@@ -39,6 +50,7 @@ const UpdateSchema = z.object({
   totalAmount: z.number().nonnegative().nullable().optional(),
   saleInstallState: z.enum(["pending_mount", "completed"]).optional().nullable(),
   installationWorkItemId: z.string().uuid().optional().nullable(),
+  cancelReason: z.enum(["client_declined", "staff_error"]).optional().nullable(),
 });
 
 export async function OPTIONS(req: NextRequest) {
@@ -68,12 +80,16 @@ const WORK_ITEM_DETAIL_SELECT = [
   "unit_price",
   "total_amount",
   "created_at",
+  "completed_at",
+  "cancel_reason",
   `products:product_id (
     id, name, slug, model_code, price, price_with_mount, product_condition,
     indoor_unit_serial, outdoor_unit_serial, stock_status, stock_quantity,
     brands:brand_id (name),
-    product_types:type_id (name)
+    product_types:type_id (name),
+    product_images (url, is_main, sort_order)
   )`,
+  `contacts:contact_id (id, full_name, phone, email, address)`,
 ].join(",");
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -96,17 +112,62 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   if (!workItem) return withCors(req, NextResponse.json({ error: "Не е намерено" }, { status: 404 }));
 
   const saleId = (workItem as { sale_work_item_id?: string | null }).sale_work_item_id;
+  const installIdFromSale = (workItem as { installation_work_item_id?: string | null }).installation_work_item_id;
+  const eventCode = (workItem as { event_code?: string | null }).event_code;
+
   let linkedSale: Record<string, unknown> | null = null;
   if (saleId) {
     const { data: s } = await supabase
       .from("work_items")
-      .select("id,title,status,sale_install_state,total_amount,unit_price,event_code")
+      .select("id,title,status,sale_install_state,total_amount,unit_price,event_code,cancel_reason")
       .eq("id", saleId)
       .maybeSingle();
     linkedSale = s ?? null;
   }
 
-  return withCors(req, NextResponse.json({ data: { work_item: workItem, linked_sale: linkedSale } }));
+  let linkedInstallation: Record<string, unknown> | null = null;
+  if (eventCode === "sale" && installIdFromSale) {
+    const { data: inst } = await supabase
+      .from("work_items")
+      .select("id,title,status,due_date,scheduled_start,scheduled_end,notes,completed_at")
+      .eq("id", installIdFromSale)
+      .maybeSingle();
+    linkedInstallation = inst ?? null;
+  }
+
+  let linkedProtocol = null;
+  const protocolWorkItemId =
+    eventCode === "service_installation" ? id : eventCode === "sale" ? installIdFromSale : null;
+  if (protocolWorkItemId) {
+    try {
+      linkedProtocol = await findAcceptanceProtocolByWorkItem(supabase, protocolWorkItemId);
+      if (!linkedProtocol) {
+        linkedProtocol = await ensureAcceptanceProtocolForInstallation(
+          supabase,
+          protocolWorkItemId,
+          session.userId,
+        );
+      }
+    } catch (e: unknown) {
+      console.error(
+        "[work-items GET] acceptance protocol lookup/create failed:",
+        e instanceof Error ? e.message : e,
+      );
+      linkedProtocol = null;
+    }
+  }
+
+  return withCors(
+    req,
+    NextResponse.json({
+      data: {
+        work_item: workItem,
+        linked_sale: linkedSale,
+        linked_installation: linkedInstallation,
+        linked_protocol: linkedProtocol,
+      },
+    }),
+  );
 }
 
 export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -131,7 +192,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
 
   const { data: beforeRow, error: beforeErr } = await supabase
     .from("work_items")
-    .select("id,type,installation_work_item_id,event_code,sale_install_state,status")
+    .select("id,type,installation_work_item_id,sale_work_item_id,event_code,sale_install_state,status,due_date,customer_name,customer_phone,customer_address,product_id,contact_id,quantity")
     .eq("id", id)
     .maybeSingle();
   if (beforeErr) return withCors(req, NextResponse.json({ error: beforeErr.message }, { status: 500 }));
@@ -141,11 +202,30 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     id: string;
     type?: string | null;
     installation_work_item_id?: string | null;
+    sale_work_item_id?: string | null;
     event_code?: string | null;
     sale_install_state?: string | null;
     status?: string;
+    due_date?: string | null;
+    customer_name?: string | null;
+    customer_phone?: string | null;
+    customer_address?: string | null;
+    product_id?: string | null;
+    contact_id?: string | null;
+    quantity?: number | null;
   };
   const installId = br.installation_work_item_id ?? null;
+  const isInstallationRow = br.event_code === "service_installation";
+
+  const markSaleCancelled =
+    parsed.data.status === "cancelled" &&
+    br.event_code === "sale" &&
+    br.status !== "cancelled";
+
+  const markInstallCancelled =
+    parsed.data.status === "cancelled" &&
+    br.event_code === "service_installation" &&
+    br.status !== "cancelled";
 
   const saleDeniedMsg =
     "Продажбите се създават от панела „Продажби“ (каталог → „Продажба“), не чрез смяна на тип в календара.";
@@ -195,9 +275,6 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     );
   }
 
-  const markSaleCancelled =
-    parsed.data.status === "cancelled" && br.event_code === "sale";
-
   if (markSaleCancelled && br.sale_install_state === "completed") {
     return withCors(req, NextResponse.json({ error: "Завършена продажба не може да се отмени от тук." }, { status: 400 }));
   }
@@ -206,6 +283,29 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       req,
       NextResponse.json({ error: "Отказ е възможен само когато монтажът е в статус „чака монтаж“." }, { status: 400 }),
     );
+  }
+  if (markSaleCancelled) {
+    const reason = parsed.data.cancelReason;
+    if (!reason || !isSaleCancelReason(reason)) {
+      return withCors(
+        req,
+        NextResponse.json({ error: "Посочете причина за отказ: клиентът се отказва или лична грешка." }, { status: 400 }),
+      );
+    }
+  }
+
+  if (markInstallCancelled && br.sale_work_item_id) {
+    const { data: linkedSaleBefore } = await supabase
+      .from("work_items")
+      .select("id,sale_install_state,status")
+      .eq("id", br.sale_work_item_id)
+      .maybeSingle();
+    if (linkedSaleBefore?.sale_install_state === "completed") {
+      return withCors(
+        req,
+        NextResponse.json({ error: "Завършен монтаж/продажба не може да се отмени от календара." }, { status: 400 }),
+      );
+    }
   }
 
   const patch: Record<string, unknown> = {};
@@ -240,6 +340,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     patch.status = "cancelled";
     patch.completed_at = null;
     patch.sale_install_state = null;
+    patch.cancel_reason = parsed.data.cancelReason ?? null;
   }
 
   const markMountComplete =
@@ -268,6 +369,26 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     }
   }
 
+  let stockRestoreTarget: { productId: string; quantity: number } | null = null;
+  if (markSaleCancelled && br.product_id && canRestoreStockForPendingSale(br)) {
+    stockRestoreTarget = { productId: br.product_id, quantity: br.quantity ?? 1 };
+  } else if (markInstallCancelled && br.sale_work_item_id) {
+    const { data: linkedSaleForStock } = await supabase
+      .from("work_items")
+      .select("id,product_id,quantity,sale_install_state,status")
+      .eq("id", br.sale_work_item_id)
+      .maybeSingle();
+    if (linkedSaleForStock && canRestoreStockForPendingSale(linkedSaleForStock)) {
+      const pid = (linkedSaleForStock as { product_id?: string | null }).product_id ?? br.product_id;
+      if (pid) {
+        stockRestoreTarget = {
+          productId: pid,
+          quantity: (linkedSaleForStock as { quantity?: number | null }).quantity ?? br.quantity ?? 1,
+        };
+      }
+    }
+  }
+
   if (markSaleCancelled && installId) {
     const { error: instCancelErr } = await supabase
       .from("work_items")
@@ -279,7 +400,64 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         NextResponse.json({ error: `Продажбата е отказана, но монтажът: ${instCancelErr.message}` }, { status: 500 }),
       );
     }
+    try {
+      await deleteAcceptanceProtocolForInstallation(supabase, installId, "sale_cancelled");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.error("[work-items PUT] acceptance protocol delete on sale cancel failed:", message);
+    }
   }
+
+  if (markInstallCancelled && br.sale_work_item_id) {
+    const { data: linkedSale } = await supabase
+      .from("work_items")
+      .select("id,sale_install_state,status")
+      .eq("id", br.sale_work_item_id)
+      .maybeSingle();
+    if (linkedSale?.sale_install_state === "completed") {
+      return withCors(
+        req,
+        NextResponse.json({ error: "Завършен монтаж/продажба не може да се отмени от календара." }, { status: 400 }),
+      );
+    }
+    if (linkedSale && canRestoreStockForPendingSale(linkedSale)) {
+      const { error: saleCancelErr } = await supabase
+        .from("work_items")
+        .update({ status: "cancelled", sale_install_state: null, completed_at: null })
+        .eq("id", br.sale_work_item_id);
+      if (saleCancelErr) {
+        return withCors(
+          req,
+          NextResponse.json({ error: `Монтажът е отказан, но продажбата: ${saleCancelErr.message}` }, { status: 500 }),
+        );
+      }
+    }
+    try {
+      await deleteAcceptanceProtocolForInstallation(supabase, id, "install_cancelled");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.error("[work-items PUT] acceptance protocol delete on install cancel failed:", message);
+    }
+  }
+
+  let restoredProductId: string | null = null;
+  try {
+    if (stockRestoreTarget) {
+      const result = await restoreProductStockAfterPendingSaleCancel(
+        supabase,
+        stockRestoreTarget.productId,
+        stockRestoreTarget.quantity,
+      );
+      if (result.restored) restoredProductId = result.productId;
+    }
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e);
+    return withCors(
+      req,
+      NextResponse.json({ error: `Задачата е отказана, но възстановяването на склада: ${message}` }, { status: 500 }),
+    );
+  }
+
   await syncConsultationContactFollowUp(supabase, {
     contactId: (parsed.data.contactId ?? data.contact_id) as string | null,
     dueDate: (parsed.data.dueDate ?? data.due_date) as string | null,
@@ -287,17 +465,64 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     eventCode: (parsed.data.eventCode ?? data.event_code) as string | null,
   });
 
+  const auditOperation = markSaleCancelled
+    ? "sale_cancelled"
+    : markInstallCancelled
+      ? "install_cancelled"
+      : markMountComplete
+        ? "sale_completed"
+        : "update";
+
   await logAdminActivity({
     action: "work_item.update",
     entityType: "work_item",
     entityId: id,
     details: {
+      operation: auditOperation,
+      event_code: data.event_code ?? br.event_code ?? null,
+      title: data.title ?? br.title ?? null,
+      customer_name: data.customer_name ?? br.customer_name ?? null,
       changedFields: Object.keys(patch),
       status: data.status,
       priority: data.priority,
       due_date: data.due_date,
+      sale_install_state: data.sale_install_state ?? null,
+      ...(restoredProductId ? { restored_product_id: restoredProductId } : {}),
+      ...(markSaleCancelled && parsed.data.cancelReason ? { cancel_reason: parsed.data.cancelReason } : {}),
     },
   });
+
+  const protocolSyncFields = ["dueDate", "customerName", "customerPhone", "customerAddress", "productId", "contactId"] as const;
+  const shouldSyncProtocol =
+    isInstallationRow &&
+    protocolSyncFields.some((f) => parsed.data[f] !== undefined) &&
+    String(data.status ?? br.status) !== "cancelled";
+
+  if (shouldSyncProtocol) {
+    try {
+      await syncAcceptanceProtocolFromInstallation(supabase, id);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.error("[work-items PUT] acceptance protocol sync failed:", message);
+    }
+  }
+
+  const linkedInstallId =
+    parsed.data.installationWorkItemId !== undefined
+      ? parsed.data.installationWorkItemId
+      : br.event_code === "sale"
+        ? (data as { installation_work_item_id?: string | null }).installation_work_item_id ?? installId
+        : null;
+
+  if (linkedInstallId && br.event_code === "sale") {
+    try {
+      await ensureAcceptanceProtocolForInstallation(supabase, linkedInstallId, session.userId);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.error("[work-items PUT] acceptance protocol ensure after sale link failed:", message);
+    }
+  }
+
   return withCors(req, NextResponse.json({ data }));
 }
 
@@ -309,19 +534,35 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
     return withCors(req, NextResponse.json({ error: "Неоторизиран достъп" }, { status: 401 }));
   }
   try {
-    requireRole(session, "master_admin", "office_staff");
+    requireRole(session, "master_admin");
   } catch {
-    return withCors(req, NextResponse.json({ error: "Сервизните акаунти могат само да преглеждат календара." }, { status: 403 }));
+    return withCors(
+      req,
+      NextResponse.json({ error: "Само главният администратор може да изтрива събития от календара." }, { status: 403 }),
+    );
   }
 
   const { id } = await ctx.params;
   const supabase = session.db;
+  const { data: existing } = await supabase
+    .from("work_items")
+    .select("event_code,title,customer_name,type")
+    .eq("id", id)
+    .maybeSingle();
   const { error } = await supabase.from("work_items").delete().eq("id", id);
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   await logAdminActivity({
     action: "work_item.delete",
     entityType: "work_item",
     entityId: id,
+    details: existing
+      ? {
+          event_code: existing.event_code ?? null,
+          title: existing.title ?? null,
+          customer_name: existing.customer_name ?? null,
+          type: existing.type ?? null,
+        }
+      : undefined,
   });
   return withCors(req, NextResponse.json({ ok: true }));
 }

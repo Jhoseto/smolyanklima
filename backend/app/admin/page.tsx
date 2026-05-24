@@ -110,7 +110,7 @@ export default async function AdminDashboardPage() {
   return (
     <div className="w-full space-y-3">
       {/* Operations planner — top of dashboard */}
-      <WorkItemsPlanner readOnly={readOnlyDashboard} />
+      <WorkItemsPlanner readOnly={readOnlyDashboard} canDeleteEvents={session.role === "master_admin"} />
 
       <div>
         <h1 className="text-lg md:text-xl font-bold text-slate-900 mb-0.5 leading-tight">

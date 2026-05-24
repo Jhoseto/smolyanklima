@@ -97,17 +97,15 @@ export const HeroSection = ({ onFreeConsultationClick }: HeroSectionProps) => {
                   Смолян и региона
                 </span>
               </span> <br />
-              <div className="mt-2">
-                <span className="font-light text-transparent bg-clip-text bg-gradient-to-br from-gray-900 via-gray-800 to-gray-600 drop-shadow-sm mr-3">
-                  с монтаж
+              <span className="font-light text-transparent bg-clip-text bg-gradient-to-br from-gray-900 via-gray-800 to-gray-600 drop-shadow-sm mr-3">
+                с монтаж
+              </span>
+              <span className="relative inline-block mt-2">
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00B4D8] to-[#0077B6] drop-shadow-md">
+                  и гаранция
                 </span>
-                <span className="relative inline-block">
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00B4D8] to-[#0077B6] drop-shadow-md">
-                    и гаранция
-                  </span>
-                  <div className="absolute -bottom-2 left-0 right-0 h-1 bg-gradient-to-r from-[#00B4D8]/0 via-[#00B4D8] to-[#00B4D8]/0 opacity-50 rounded-full" />
-                </span>
-              </div>
+                <span className="absolute -bottom-2 left-0 right-0 h-1 bg-gradient-to-r from-[#00B4D8]/0 via-[#00B4D8] to-[#00B4D8]/0 opacity-50 rounded-full" aria-hidden="true" />
+              </span>
             </h1>
 
             {/* Description */}

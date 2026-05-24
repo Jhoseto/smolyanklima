@@ -12,11 +12,11 @@ function phoneToEmail(phone: string): string {
   return `staff_${digits}@smolyanklima.internal`;
 }
 
-/** GET /api/admin/staff — list all staff (master_admin only) */
+/** GET /api/admin/staff — list all staff (master_admin + office_staff) */
 export async function GET() {
   try {
     const session = await adminSession();
-    requireRole(session, "master_admin");
+    requireRole(session, "master_admin", "office_staff");
 
     const { data, error } = await session.db
       .from("admin_users")

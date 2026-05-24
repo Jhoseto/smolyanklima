@@ -3,22 +3,75 @@ import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
+import { applyPublicCatalogFilter } from "@/lib/catalog/publicProductVisibility";
 
 const QuerySchema = z.object({
   q: z.string().optional(),
-  // view=summary → grouped per product (default)
-  // view=detail  → individual rows for one product
   view: z.enum(["summary", "detail"]).optional().default("summary"),
   product_id: z.string().uuid().optional(),
   stars: z.coerce.number().int().min(1).max(5).optional(),
   page: z.coerce.number().int().min(1).optional().default(1),
   perPage: z.coerce.number().int().min(1).max(200).optional().default(50),
+  sort: z
+    .enum([
+      "reviews-desc",
+      "reviews-asc",
+      "rating-desc",
+      "rating-asc",
+      "name-asc",
+      "name-desc",
+      "slug-asc",
+      "slug-desc",
+    ])
+    .optional()
+    .default("reviews-desc"),
+  reviews: z.enum(["all", "with", "without"]).optional().default("all"),
+  minRating: z.coerce.number().min(0).max(5).optional(),
+  maxRating: z.coerce.number().min(0).max(5).optional(),
+  minReviews: z.coerce.number().int().min(0).optional(),
+  maxReviews: z.coerce.number().int().min(0).optional(),
+  brandId: z.string().uuid().optional(),
+  condition: z.enum(["all", "new", "used"]).optional().default("all"),
+  featured: z.enum(["all", "yes", "no"]).optional().default("all"),
+  stockStatus: z.enum(["all", "in_stock", "on_order"]).optional().default("all"),
+  hasStar: z.coerce.number().int().min(1).max(5).optional(),
 });
 
 const PatchSchema = z.object({
-  // Adjust star counts by delta (positive = add, negative = remove)
   adjustments: z.record(z.enum(["1", "2", "3", "4", "5"]), z.number().int()).optional(),
 });
+
+function intersectIds(current: string[] | null, next: string[]): string[] | null {
+  if (next.length === 0) return [];
+  if (current === null) return next;
+  const set = new Set(next);
+  return current.filter((id) => set.has(id));
+}
+
+function applySummarySort<T extends { order: (col: string, opts: { ascending: boolean; nullsFirst?: boolean }) => T }>(
+  query: T,
+  sort: z.infer<typeof QuerySchema>["sort"],
+): T {
+  switch (sort) {
+    case "reviews-asc":
+      return query.order("reviews_count", { ascending: true, nullsFirst: true }).order("name", { ascending: true });
+    case "rating-desc":
+      return query.order("rating", { ascending: false, nullsFirst: true }).order("name", { ascending: true });
+    case "rating-asc":
+      return query.order("rating", { ascending: true, nullsFirst: true }).order("name", { ascending: true });
+    case "name-asc":
+      return query.order("name", { ascending: true });
+    case "name-desc":
+      return query.order("name", { ascending: false });
+    case "slug-asc":
+      return query.order("slug", { ascending: true });
+    case "slug-desc":
+      return query.order("slug", { ascending: false });
+    case "reviews-desc":
+    default:
+      return query.order("reviews_count", { ascending: false, nullsFirst: true }).order("name", { ascending: true });
+  }
+}
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflight(req);
@@ -32,7 +85,7 @@ export async function GET(req: NextRequest) {
     return withCors(req, NextResponse.json({ error: "Неоторизиран достъп" }, { status: 401 }));
   }
   try {
-    requireRole(session, "master_admin");
+    requireRole(session, "master_admin", "office_staff");
   } catch {
     return withCors(req, NextResponse.json({ error: "Нямате достъп." }, { status: 403 }));
   }
@@ -41,7 +94,25 @@ export async function GET(req: NextRequest) {
   const parsed = QuerySchema.safeParse(params);
   if (!parsed.success) return withCors(req, NextResponse.json({ error: "Невалидни параметри" }, { status: 400 }));
 
-  const { q, view, product_id, stars, page, perPage } = parsed.data;
+  const {
+    q,
+    view,
+    product_id,
+    stars,
+    page,
+    perPage,
+    sort,
+    reviews,
+    minRating,
+    maxRating,
+    minReviews,
+    maxReviews,
+    brandId,
+    condition,
+    featured,
+    stockStatus,
+    hasStar,
+  } = parsed.data;
   const supabase = session.db;
 
   // ── DETAIL: individual rows for one product ─────────────────────────────
@@ -59,31 +130,58 @@ export async function GET(req: NextRequest) {
     return withCors(req, NextResponse.json({ data: data ?? [], meta: { page, perPage, total: count ?? 0 } }));
   }
 
-  // ── SUMMARY: one row per product with distribution ─────────────────────
-  // First resolve product IDs if search query given
+  // ── SUMMARY: one row per public-catalog product with distribution ───────
   let productIds: string[] | null = null;
+
   if (q?.trim()) {
-    const { data: pRows, error: pErr } = await supabase
-      .from("products")
-      .select("id")
-      .ilike("name", `%${q.trim()}%`)
-      .limit(500);
+    const term = q.trim().replace(/,/g, " ");
+    const { data: pRows, error: pErr } = await applyPublicCatalogFilter(
+      supabase
+        .from("products")
+        .select("id")
+        .or(`name.ilike.%${term}%,model_code.ilike.%${term}%,slug.ilike.%${term}%`),
+    ).limit(1000);
     if (pErr) return withCors(req, NextResponse.json({ error: pErr.message }, { status: 500 }));
-    productIds = (pRows ?? []).map((p: { id: string }) => p.id);
-    if (productIds.length === 0) {
+    productIds = intersectIds(productIds, (pRows ?? []).map((p: { id: string }) => p.id));
+    if (productIds !== null && productIds.length === 0) {
       return withCors(req, NextResponse.json({ data: [], meta: { page, perPage, total: 0 } }));
     }
   }
 
-  // Get products that have at least one rating
-  let prodQuery = supabase
-    .from("products")
-    .select("id,slug,name,rating,reviews_count", { count: "exact" })
-    .gt("reviews_count", 0);
+  if (hasStar) {
+    const { data: starRows, error: starErr } = await supabase
+      .from("product_ratings")
+      .select("product_id")
+      .eq("stars", hasStar);
+    if (starErr) return withCors(req, NextResponse.json({ error: starErr.message }, { status: 500 }));
+    const starIds = [...new Set((starRows ?? []).map((r: { product_id: string }) => r.product_id))];
+    productIds = intersectIds(productIds, starIds);
+    if (productIds !== null && productIds.length === 0) {
+      return withCors(req, NextResponse.json({ data: [], meta: { page, perPage, total: 0 } }));
+    }
+  }
+
+  let prodQuery = applyPublicCatalogFilter(
+    supabase.from("products").select("id,slug,name,rating,reviews_count", { count: "exact" }),
+  );
+
   if (productIds) prodQuery = prodQuery.in("id", productIds);
+  if (brandId) prodQuery = prodQuery.eq("brand_id", brandId);
+  if (condition === "new") prodQuery = prodQuery.eq("product_condition", "new");
+  if (condition === "used") prodQuery = prodQuery.eq("product_condition", "used");
+  if (featured === "yes") prodQuery = prodQuery.eq("is_featured", true);
+  if (featured === "no") prodQuery = prodQuery.eq("is_featured", false);
+  if (stockStatus === "in_stock") prodQuery = prodQuery.eq("stock_status", "in_stock");
+  if (stockStatus === "on_order") prodQuery = prodQuery.eq("stock_status", "on_order");
+  if (reviews === "with") prodQuery = prodQuery.gt("reviews_count", 0);
+  if (reviews === "without") prodQuery = prodQuery.or("reviews_count.eq.0,reviews_count.is.null");
+  if (typeof minRating === "number") prodQuery = prodQuery.gte("rating", minRating);
+  if (typeof maxRating === "number") prodQuery = prodQuery.lte("rating", maxRating);
+  if (typeof minReviews === "number") prodQuery = prodQuery.gte("reviews_count", minReviews);
+  if (typeof maxReviews === "number") prodQuery = prodQuery.lte("reviews_count", maxReviews);
+
   const from = (page - 1) * perPage;
-  const { data: products, error: prodErr, count: prodCount } = await prodQuery
-    .order("reviews_count", { ascending: false })
+  const { data: products, error: prodErr, count: prodCount } = await applySummarySort(prodQuery, sort)
     .range(from, from + perPage - 1);
 
   if (prodErr) return withCors(req, NextResponse.json({ error: prodErr.message }, { status: 500 }));
@@ -112,8 +210,8 @@ export async function GET(req: NextRequest) {
     id: p.id,
     slug: p.slug,
     name: p.name,
-    rating: p.rating,
-    reviews_count: p.reviews_count,
+    rating: Number(p.rating ?? 0),
+    reviews_count: Number(p.reviews_count ?? 0),
     distribution: distMap.get(p.id) ?? { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
   }));
 

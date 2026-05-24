@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { CheckCircle2, ChevronRight, X } from "lucide-react";
-import { Card, Button, HoverTip } from "./ui";
+import { Card, Button, HoverTip, ADMIN_MODAL_BACKDROP, ADMIN_MODAL_PANEL, AdminModalDragHandle } from "./ui";
 import { ProductQuickViewButton } from "./ProductQuickView";
 
 type DashboardDetail = {
@@ -254,14 +254,15 @@ export function DashboardPanel({
 
       {selected && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-md"
+          className={ADMIN_MODAL_BACKDROP}
           onClick={() => setSelected(null)}
         >
           <div
-            className="w-full max-w-xl overflow-hidden rounded-3xl border border-white/70 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)]"
+            className={`${ADMIN_MODAL_PANEL} max-w-xl`}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="relative border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#ffffff_42%,#f8fafc_100%)] px-6 py-5">
+            <AdminModalDragHandle />
+            <div className="relative border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#ffffff_42%,#f8fafc_100%)] px-4 py-4 md:px-6 md:py-5 shrink-0">
               <HoverTip tip={PANEL_TIPS.close}>
               <button
                 type="button"
@@ -276,14 +277,14 @@ export function DashboardPanel({
                 <div className="text-xs font-bold uppercase tracking-[0.24em] text-brand-blue-700">
                   Оперативни детайли
                 </div>
-                <div className="mt-1 text-2xl font-black leading-tight text-slate-950">{selected.title}</div>
+                <div className="mt-1 text-lg md:text-2xl font-black leading-tight text-slate-950">{selected.title}</div>
                 {selected.subtitle && (
                   <div className="mt-1 text-sm font-medium text-slate-500">{selected.subtitle}</div>
                 )}
               </div>
             </div>
 
-            <div className="grid gap-3 p-6">
+            <div className="grid gap-3 p-4 md:p-6 overflow-y-auto flex-1 min-h-0">
               {selected.fields
                 .filter((field) => field.value !== undefined && field.value !== null && String(field.value).trim() !== "")
                 .map((field) => (

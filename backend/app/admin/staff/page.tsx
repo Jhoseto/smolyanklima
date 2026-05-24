@@ -13,9 +13,9 @@ export default async function StaffPage() {
     redirect("/login");
   }
 
-  if (session.role !== "master_admin") {
+  if (session.role !== "master_admin" && session.role !== "office_staff") {
     redirect("/admin");
   }
 
-  return <StaffPageClient currentUserId={session.userId} />;
+  return <StaffPageClient currentUserId={session.userId} canManage={session.role === "master_admin"} />;
 }

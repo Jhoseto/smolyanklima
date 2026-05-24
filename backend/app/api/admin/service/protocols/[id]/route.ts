@@ -60,7 +60,7 @@ export async function GET(
     .eq("id", id);
 
   if (session.role === "service_staff") {
-    query = query.eq("created_by", session.userId);
+    query = query.or(`created_by.eq.${session.userId},work_item_id.not.is.null`);
   }
 
   const { data, error } = await query.maybeSingle();
@@ -87,10 +87,13 @@ export async function PUT(
   if (session.role === "service_staff") {
     const { data: existing } = await session.db
       .from("service_protocols")
-      .select("created_by")
+      .select("created_by,work_item_id")
       .eq("id", id)
       .maybeSingle();
-    if (!existing || existing.created_by !== session.userId) {
+    const allowed =
+      existing &&
+      (existing.created_by === session.userId || Boolean(existing.work_item_id));
+    if (!allowed) {
       return withCors(req, NextResponse.json({ error: "Забранен достъп" }, { status: 403 }));
     }
   }

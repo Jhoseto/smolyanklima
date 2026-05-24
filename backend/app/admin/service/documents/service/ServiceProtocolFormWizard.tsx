@@ -661,7 +661,7 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
       </div>
 
       {/* ── Навигация (фиксиран footer) ── */}
-      <div className="bg-white border-t border-slate-200 shrink-0 px-4 py-3">
+      <div className="bg-white border-t border-slate-200 shrink-0 px-4 py-3 pb-safe">
         <div className="flex gap-2 max-w-2xl mx-auto">
           <button
             onClick={() => setStep(s => Math.max(0, s - 1))}

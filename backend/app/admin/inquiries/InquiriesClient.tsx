@@ -641,9 +641,12 @@ export function InquiriesClient() {
       )}
 
       {aiReplyDraft && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-md" onClick={() => setAiReplyDraft(null)}>
-          <div className="w-full max-w-2xl overflow-hidden rounded-3xl border border-white/70 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)]" onClick={e => e.stopPropagation()}>
-            <div className="relative border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#ffffff_42%,#f8fafc_100%)] px-6 py-5">
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/55 p-0 md:p-4 backdrop-blur-md" onClick={() => setAiReplyDraft(null)}>
+          <div className="w-full max-w-2xl max-h-[92dvh] overflow-hidden rounded-t-3xl md:rounded-3xl border border-white/70 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)] flex flex-col pb-safe md:pb-0" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-center pt-3 pb-1 md:hidden shrink-0">
+              <div className="w-10 h-1 rounded-full bg-slate-200" />
+            </div>
+            <div className="relative border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#ffffff_42%,#f8fafc_100%)] px-4 py-4 md:px-6 md:py-5 shrink-0">
               <HoverTip tip={INQUIRY_TIPS.close}>
                 <button type="button" aria-label={INQUIRY_TIPS.close} onClick={() => setAiReplyDraft(null)} className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white/80 text-slate-500 shadow-sm hover:bg-white hover:text-slate-900"><X className="h-4 w-4" /></button>
               </HoverTip>
@@ -651,12 +654,12 @@ export function InquiriesClient() {
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-blue-500 text-white shadow-lg shadow-brand-blue-500/25"><Sparkles className="h-5 w-5" /></div>
                 <div>
                   <div className="text-xs font-bold uppercase tracking-[0.24em] text-brand-blue-700">Gemini отговор</div>
-                  <div className="mt-1 text-2xl font-black leading-tight text-slate-950">AI чернова</div>
+                  <div className="mt-1 text-lg md:text-2xl font-black leading-tight text-slate-950">AI чернова</div>
                   <div className="mt-1 text-sm font-medium text-slate-500">{aiReplyDraft.customerName}</div>
                 </div>
               </div>
             </div>
-            <div className="space-y-4 p-6">
+            <div className="space-y-4 p-4 md:p-6 overflow-y-auto flex-1 min-h-0">
               {aiReplyDraft.reply && (
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                   <div className="mb-2 flex items-center justify-between gap-3">
@@ -804,8 +807,11 @@ function InquiryNotesModal({ inquiryId, initialNotes, onClose, onSave }: {
   const [text, setText] = useState(initialNotes);
   const [saving, setSaving] = useState(false);
   return (
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-2" onClick={onClose}>
-      <div className="w-full max-w-lg max-h-[calc(100vh-1rem)] overflow-y-auto bg-white rounded-xl shadow-xl border border-slate-200 p-3" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-end md:items-center justify-center z-50 p-0 md:p-2" onClick={onClose}>
+      <div className="w-full max-w-lg max-h-[92dvh] overflow-y-auto bg-white rounded-t-3xl md:rounded-xl shadow-xl border border-slate-200 p-4 pb-safe md:pb-4" onClick={e => e.stopPropagation()}>
+        <div className="flex justify-center pb-2 md:hidden">
+          <div className="w-10 h-1 rounded-full bg-slate-200" />
+        </div>
         <div className="font-bold text-sm text-slate-900 mb-0.5 inline-flex items-center gap-1.5">
           Вътрешни бележки (CRM)
           <InfoDot text="Тези бележки са само за вътрешна работа и не се изпращат към клиента." />

@@ -31,7 +31,7 @@ export default async function ServiceTasksPage() {
         <h1 className="text-lg font-bold text-slate-900 leading-tight">Сервизни задачи</h1>
         <p className="text-xs text-slate-500 mt-0.5">Всички задачи за обслужване по дни</p>
       </div>
-      <WorkItemsPlanner />
+      <WorkItemsPlanner canDeleteEvents={session.role === "master_admin"} />
     </div>
   );
 }

@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
     return withCors(req, NextResponse.json({ error: "Неоторизиран достъп" }, { status: 401 }));
   }
   try {
-    requireRole(session, "master_admin");
+    requireRole(session, "master_admin", "office_staff");
   } catch {
     return withCors(req, NextResponse.json({ error: "Нямате достъп до одит лога." }, { status: 403 }));
   }
@@ -39,7 +39,20 @@ export async function GET(req: NextRequest) {
   let query = supabase
     .from("activity_logs")
     .select("id,user_id,action,entity_type,entity_id,details,created_at,admin_users:user_id(email,name)", { count: "exact" });
-  if (q?.trim()) query = query.ilike("action", `%${q.trim()}%`);
+  if (q?.trim()) {
+    const term = q.trim().replace(/[%_]/g, "");
+    query = query.or(
+      [
+        `action.ilike.%${term}%`,
+        `details->>customer_name.ilike.%${term}%`,
+        `details->>client_name.ilike.%${term}%`,
+        `details->>full_name.ilike.%${term}%`,
+        `details->>name.ilike.%${term}%`,
+        `details->>title.ilike.%${term}%`,
+        `details->>protocol_number.ilike.%${term}%`,
+      ].join(","),
+    );
+  }
   if (entityType?.trim()) query = query.eq("entity_type", entityType.trim());
   if (userId) query = query.eq("user_id", userId);
   if (from) query = query.gte("created_at", `${from}T00:00:00.000Z`);

@@ -2,8 +2,8 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminDb, adminSession, requireRole } from "@/lib/admin/db";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { logAdminActivity } from "@/lib/admin/audit";
+import { ensureAcceptanceProtocolForInstallation } from "@/lib/admin/acceptanceProtocolFromInstall";
 import { syncConsultationContactFollowUp } from "@/lib/work-items/consultation-contact";
 
 const WORK_ITEM_EVENT_CODES = [
@@ -70,13 +70,22 @@ export async function GET(req: NextRequest) {
   let query = supabase
     .from("work_items")
     .select(
-      "id,type,event_code,status,priority,title,notes,due_date,scheduled_start,scheduled_end,product_id,contact_id,inquiry_id,customer_name,customer_phone,customer_address,quantity,unit_price,total_amount,assigned_to,completed_at,created_at,sale_install_state,installation_work_item_id,sale_work_item_id,products:product_id(id,slug,name),contacts:contact_id(id,full_name,phone,email,address)",
+      "id,type,event_code,status,priority,title,notes,due_date,scheduled_start,scheduled_end,product_id,contact_id,inquiry_id,customer_name,customer_phone,customer_address,quantity,unit_price,total_amount,assigned_to,completed_at,created_at,cancel_reason,sale_install_state,installation_work_item_id,sale_work_item_id,products:product_id(id,slug,name,model_code,price,product_condition,brands:brand_id(name)),contacts:contact_id(id,full_name,phone,email,address)",
       {
       count: "exact",
     },
-    )
-    .order("due_date", { ascending: true, nullsFirst: false })
-    .order("created_at", { ascending: false });
+    );
+
+  // Панел „История на продажбите“ — най-новите (по дата на запис / монтаж) отгоре.
+  if (eventCode === "sale") {
+    query = query
+      .order("created_at", { ascending: false, nullsFirst: false })
+      .order("due_date", { ascending: false, nullsFirst: true });
+  } else {
+    query = query
+      .order("due_date", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: false });
+  }
 
   if (q?.trim()) {
     query = query.or(
@@ -146,10 +155,6 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = session.db;
-  const anon = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await anon.auth.getUser();
 
   const payload: Record<string, unknown> = {
     type: parsed.data.type,
@@ -171,7 +176,7 @@ export async function POST(req: NextRequest) {
     quantity: parsed.data.quantity,
     unit_price: parsed.data.unitPrice ?? null,
     total_amount: parsed.data.totalAmount ?? null,
-    created_by: user?.id ?? null,
+    created_by: session.userId,
   };
   if (parsed.data.saleInstallState !== undefined) {
     payload.sale_install_state = parsed.data.saleInstallState;
@@ -199,10 +204,43 @@ export async function POST(req: NextRequest) {
     entityId: data.id as string,
     details: {
       type: data.type,
+      event_code: data.event_code ?? null,
+      title: data.title ?? null,
+      customer_name: data.customer_name ?? null,
       status: data.status,
       priority: data.priority,
       due_date: data.due_date,
+      sale_install_state: data.sale_install_state ?? null,
     },
   });
-  return withCors(req, NextResponse.json({ data }, { status: 201 }));
+
+  const created = data as {
+    id: string;
+    event_code?: string | null;
+    sale_work_item_id?: string | null;
+  };
+
+  let linkedProtocol = null;
+  let protocolWarning: string | null = null;
+  if (created.event_code === "service_installation" && created.sale_work_item_id) {
+    try {
+      linkedProtocol = await ensureAcceptanceProtocolForInstallation(supabase, created.id, session.userId);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      protocolWarning = message;
+      console.error("[work-items POST] acceptance protocol create failed:", message);
+    }
+  }
+
+  return withCors(
+    req,
+    NextResponse.json(
+      {
+        data,
+        ...(linkedProtocol ? { linked_protocol: linkedProtocol } : {}),
+        ...(protocolWarning ? { protocol_warning: protocolWarning } : {}),
+      },
+      { status: 201 },
+    ),
+  );
 }

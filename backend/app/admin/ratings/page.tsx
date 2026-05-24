@@ -1,8 +1,88 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { HelpRow, SectionTitle, HelpCard, Card, Input, Button, Table, Th, Td } from "../ui";
-import { RefreshCw, Star, ChevronRight, X, Trash2, Plus, Minus } from "lucide-react";
+import { SectionTitle, Card, Input, Button, Select, Table, Th, Td } from "../ui";
+import { RefreshCw, Star, ChevronRight, X, Trash2, Plus, Minus, SlidersHorizontal } from "lucide-react";
+
+type SortOption =
+  | "reviews-desc"
+  | "reviews-asc"
+  | "rating-desc"
+  | "rating-asc"
+  | "name-asc"
+  | "name-desc"
+  | "slug-asc"
+  | "slug-desc";
+
+type ReviewsFilter = "all" | "with" | "without";
+type ConditionFilter = "all" | "new" | "used";
+type FeaturedFilter = "all" | "yes" | "no";
+type StockFilter = "all" | "in_stock" | "on_order";
+
+type BrandOption = { id: string; name: string };
+
+type SummaryFilters = {
+  q: string;
+  sort: SortOption;
+  reviews: ReviewsFilter;
+  minRating: string;
+  maxRating: string;
+  minReviews: string;
+  maxReviews: string;
+  brandId: string;
+  condition: ConditionFilter;
+  featured: FeaturedFilter;
+  stockStatus: StockFilter;
+  hasStar: string;
+  perPage: string;
+};
+
+const DEFAULT_FILTERS: SummaryFilters = {
+  q: "",
+  sort: "reviews-desc",
+  reviews: "all",
+  minRating: "",
+  maxRating: "",
+  minReviews: "",
+  maxReviews: "",
+  brandId: "",
+  condition: "all",
+  featured: "all",
+  stockStatus: "all",
+  hasStar: "",
+  perPage: "50",
+};
+
+const SORT_OPTIONS: Array<{ value: SortOption; label: string }> = [
+  { value: "reviews-desc", label: "Оценки ↓" },
+  { value: "reviews-asc", label: "Оценки ↑" },
+  { value: "rating-desc", label: "Средна ↓" },
+  { value: "rating-asc", label: "Средна ↑" },
+  { value: "name-asc", label: "Име А→Я" },
+  { value: "name-desc", label: "Име Я→А" },
+  { value: "slug-asc", label: "Slug А→Я" },
+  { value: "slug-desc", label: "Slug Я→А" },
+];
+
+const COMPACT_INPUT = "!py-1 !px-2 !text-xs !rounded-md min-w-0";
+const COMPACT_SELECT = `${COMPACT_INPUT} !pr-6`;
+
+function CompactField({
+  label,
+  children,
+  className = "",
+}: {
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <label className={`inline-flex items-center gap-1 min-w-0 ${className}`}>
+      <span className="text-[10px] font-semibold text-slate-500 whitespace-nowrap shrink-0">{label}</span>
+      {children}
+    </label>
+  );
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -288,18 +368,73 @@ function DetailModal({
 
 export default function AdminRatingsPage() {
   const [items, setItems] = useState<ProductSummary[]>([]);
-  const [q, setQ] = useState("");
+  const [filters, setFilters] = useState<SummaryFilters>(DEFAULT_FILTERS);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [brands, setBrands] = useState<BrandOption[]>([]);
   const [page, setPage] = useState(1);
   const [meta, setMeta] = useState({ page: 1, perPage: 50, total: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<ProductSummary | null>(null);
 
+  useEffect(() => {
+    void fetch("/api/admin/meta/brands?usedInProducts=1", { credentials: "include" })
+      .then((r) => r.json())
+      .then((json) => {
+        const rows = (json.data ?? json.brands ?? []) as Array<{ id: string; name: string }>;
+        setBrands(rows.map((b) => ({ id: b.id, name: b.name })));
+      })
+      .catch(() => {});
+  }, []);
+
   const qs = useMemo(() => {
-    const sp = new URLSearchParams({ view: "summary", page: String(page), perPage: "50" });
-    if (q.trim()) sp.set("q", q.trim());
+    const sp = new URLSearchParams({
+      view: "summary",
+      page: String(page),
+      perPage: filters.perPage,
+      sort: filters.sort,
+      reviews: filters.reviews,
+      condition: filters.condition,
+      featured: filters.featured,
+      stockStatus: filters.stockStatus,
+    });
+    if (filters.q.trim()) sp.set("q", filters.q.trim());
+    if (filters.minRating.trim()) sp.set("minRating", filters.minRating.trim());
+    if (filters.maxRating.trim()) sp.set("maxRating", filters.maxRating.trim());
+    if (filters.minReviews.trim()) sp.set("minReviews", filters.minReviews.trim());
+    if (filters.maxReviews.trim()) sp.set("maxReviews", filters.maxReviews.trim());
+    if (filters.brandId) sp.set("brandId", filters.brandId);
+    if (filters.hasStar) sp.set("hasStar", filters.hasStar);
     return sp.toString();
-  }, [q, page]);
+  }, [filters, page]);
+
+  const hasActiveFilters = useMemo(
+    () =>
+      filters.q.trim() !== "" ||
+      filters.sort !== DEFAULT_FILTERS.sort ||
+      filters.reviews !== "all" ||
+      filters.minRating !== "" ||
+      filters.maxRating !== "" ||
+      filters.minReviews !== "" ||
+      filters.maxReviews !== "" ||
+      filters.brandId !== "" ||
+      filters.condition !== "all" ||
+      filters.featured !== "all" ||
+      filters.stockStatus !== "all" ||
+      filters.hasStar !== "" ||
+      filters.perPage !== DEFAULT_FILTERS.perPage,
+    [filters],
+  );
+
+  function patchFilters(patch: Partial<SummaryFilters>) {
+    setPage(1);
+    setFilters((prev) => ({ ...prev, ...patch }));
+  }
+
+  function resetFilters() {
+    setPage(1);
+    setFilters(DEFAULT_FILTERS);
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -325,7 +460,7 @@ export default function AdminRatingsPage() {
     <div className="w-full space-y-3">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h1 className="text-lg md:text-xl font-bold text-slate-900 leading-tight">
-          <SectionTitle title="Оценки" hint="Преглед и модерация на клиентски оценки по продукти." />
+          <SectionTitle title="Оценки" hint="Всички продукти от публичния каталог — с и без клиентски оценки." />
         </h1>
         <Button variant="secondary" onClick={load} className="gap-2 shadow-sm">
           <RefreshCw className="w-4 h-4" />
@@ -333,17 +468,117 @@ export default function AdminRatingsPage() {
         </Button>
       </div>
 
-      <HelpCard className="hidden md:block">
-        <HelpRow items={["Кликни на продукт за детайлен изглед", "Ръчна корекция на брой оценки по звезди", "Изтриване на конкретни оценки"]} />
-      </HelpCard>
+      <Card className="p-2 space-y-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Input
+            value={filters.q}
+            onChange={(e) => patchFilters({ q: e.target.value })}
+            placeholder="Търси име, модел, slug..."
+            className={`flex-1 min-w-[140px] ${COMPACT_INPUT}`}
+          />
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="gap-1 shrink-0 !text-xs !py-1"
+            onClick={() => setFiltersOpen((v) => !v)}
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5" />
+            {filtersOpen ? "Скрий" : "Филтри"}
+          </Button>
+          {hasActiveFilters && (
+            <Button type="button" variant="secondary" size="sm" className="!text-xs !py-1" onClick={resetFilters}>
+              Изчисти
+            </Button>
+          )}
+        </div>
 
-      <Card className="p-3">
-        <Input
-          value={q}
-          onChange={(e) => { setPage(1); setQ(e.target.value); }}
-          placeholder="Търси по название на продукт..."
-          className="w-full"
-        />
+        {filtersOpen && (
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 pt-1.5 border-t border-slate-100">
+            <CompactField label="Сорт">
+              <Select className={`w-[7.5rem] ${COMPACT_SELECT}`} value={filters.sort} onChange={(e) => patchFilters({ sort: e.target.value as SortOption })}>
+                {SORT_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </Select>
+            </CompactField>
+
+            <CompactField label="Оценки">
+              <Select className={`w-[5.5rem] ${COMPACT_SELECT}`} value={filters.reviews} onChange={(e) => patchFilters({ reviews: e.target.value as ReviewsFilter })}>
+                <option value="all">Всички</option>
+                <option value="with">С</option>
+                <option value="without">Без</option>
+              </Select>
+            </CompactField>
+
+            <CompactField label="Марка" className="min-w-[8rem] flex-1 max-w-[11rem]">
+              <Select className={`w-full ${COMPACT_SELECT}`} value={filters.brandId} onChange={(e) => patchFilters({ brandId: e.target.value })}>
+                <option value="">Всички</option>
+                {brands.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </Select>
+            </CompactField>
+
+            <CompactField label="Съст.">
+              <Select className={`w-[5.5rem] ${COMPACT_SELECT}`} value={filters.condition} onChange={(e) => patchFilters({ condition: e.target.value as ConditionFilter })}>
+                <option value="all">Всички</option>
+                <option value="new">Нов</option>
+                <option value="used">Употр.</option>
+              </Select>
+            </CompactField>
+
+            <CompactField label="Акцент">
+              <Select className={`w-[5.5rem] ${COMPACT_SELECT}`} value={filters.featured} onChange={(e) => patchFilters({ featured: e.target.value as FeaturedFilter })}>
+                <option value="all">Всички</option>
+                <option value="yes">Да</option>
+                <option value="no">Не</option>
+              </Select>
+            </CompactField>
+
+            <CompactField label="Налич.">
+              <Select className={`w-[6.5rem] ${COMPACT_SELECT}`} value={filters.stockStatus} onChange={(e) => patchFilters({ stockStatus: e.target.value as StockFilter })}>
+                <option value="all">Всички</option>
+                <option value="in_stock">Наличен</option>
+                <option value="on_order">Поръчка</option>
+              </Select>
+            </CompactField>
+
+            <CompactField label="★">
+              <Select className={`w-[4.5rem] ${COMPACT_SELECT}`} value={filters.hasStar} onChange={(e) => patchFilters({ hasStar: e.target.value })}>
+                <option value="">—</option>
+                {[5, 4, 3, 2, 1].map((s) => (
+                  <option key={s} value={String(s)}>{s}</option>
+                ))}
+              </Select>
+            </CompactField>
+
+            <CompactField label="/стр">
+              <Select className={`w-[3.5rem] ${COMPACT_SELECT}`} value={filters.perPage} onChange={(e) => patchFilters({ perPage: e.target.value })}>
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="200">200</option>
+              </Select>
+            </CompactField>
+
+            <CompactField label="Средна">
+              <div className="inline-flex items-center gap-0.5">
+                <Input type="number" min={0} max={5} step={0.1} value={filters.minRating} onChange={(e) => patchFilters({ minRating: e.target.value })} placeholder="0" className={`w-11 ${COMPACT_INPUT}`} />
+                <span className="text-[10px] text-slate-400">–</span>
+                <Input type="number" min={0} max={5} step={0.1} value={filters.maxRating} onChange={(e) => patchFilters({ maxRating: e.target.value })} placeholder="5" className={`w-11 ${COMPACT_INPUT}`} />
+              </div>
+            </CompactField>
+
+            <CompactField label="Брой">
+              <div className="inline-flex items-center gap-0.5">
+                <Input type="number" min={0} step={1} value={filters.minReviews} onChange={(e) => patchFilters({ minReviews: e.target.value })} placeholder="0" className={`w-11 ${COMPACT_INPUT}`} />
+                <span className="text-[10px] text-slate-400">–</span>
+                <Input type="number" min={0} step={1} value={filters.maxReviews} onChange={(e) => patchFilters({ maxReviews: e.target.value })} placeholder="∞" className={`w-11 ${COMPACT_INPUT}`} />
+              </div>
+            </CompactField>
+          </div>
+        )}
       </Card>
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm font-medium">{error}</div>}
@@ -365,7 +600,7 @@ export default function AdminRatingsPage() {
               <tr><Td colSpan={5} className="text-center py-8 text-slate-400">Зарежда...</Td></tr>
             )}
             {!loading && items.length === 0 && (
-              <tr><Td colSpan={5} className="text-center py-8 text-slate-500">Няма намерени продукти с оценки.</Td></tr>
+              <tr><Td colSpan={5} className="text-center py-8 text-slate-500">Няма намерени продукти в публичния каталог.</Td></tr>
             )}
             {!loading && items.map((item) => (
               <tr
@@ -398,7 +633,7 @@ export default function AdminRatingsPage() {
         {loading && <div className="text-center py-8 text-slate-400 text-sm">Зарежда...</div>}
         {!loading && items.length === 0 && (
           <div className="bg-white rounded-xl border border-slate-200 p-6 text-center text-slate-500 text-sm">
-            Няма намерени продукти с оценки.
+            Няма намерени продукти в публичния каталог.
           </div>
         )}
         {!loading && items.map((item) => (

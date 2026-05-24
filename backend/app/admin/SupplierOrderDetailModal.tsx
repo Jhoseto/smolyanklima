@@ -414,14 +414,16 @@ export function SupplierOrderDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-md"
+      className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/60 p-0 md:p-3 backdrop-blur-md"
       onClick={onClose}
     >
       <div
-        className="flex w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-white/70 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)]"
-        style={{ maxHeight: "calc(100vh - 2rem)" }}
+        className="flex w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl md:rounded-3xl border border-white/70 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)] max-h-[92dvh] md:max-h-[calc(100vh-2rem)] pb-safe md:pb-0"
         onClick={(e) => e.stopPropagation()}
       >
+        <div className="flex justify-center pt-3 pb-1 md:hidden shrink-0">
+          <div className="w-10 h-1 rounded-full bg-slate-200" />
+        </div>
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-slate-100 bg-violet-50/60 px-5 py-4">
           <div className="min-w-0 flex-1">
@@ -438,7 +440,7 @@ export function SupplierOrderDetailModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-white hover:text-slate-700"
+            className="rounded-full p-2 min-h-11 min-w-11 flex items-center justify-center text-slate-400 transition-colors hover:bg-white hover:text-slate-700"
             aria-label="Затвори"
           >
             <X className="h-5 w-5" />
@@ -722,7 +724,7 @@ export function SupplierOrderDetailModal({
                     className="inline-flex items-center gap-1.5 text-xs font-bold text-green-800 hover:underline"
                   >
                     <ExternalLink className="h-3.5 w-3.5" />
-                    Отвори складовата бройка
+                    Редактирай продукта
                   </Link>
                 </div>
               )}

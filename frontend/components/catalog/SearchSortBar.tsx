@@ -1,21 +1,32 @@
 import React from 'react';
 import { Search, SlidersHorizontal, LayoutGrid, LayoutList, X, ChevronDown } from 'lucide-react';
 import type { SortOption } from '../../data/types/product';
+import { ACCESSORY_SORT_OPTIONS, CATALOG_SORT_OPTIONS } from '../../data/types/product';
 
-const SORT_OPTIONS: { value: SortOption; label: string }[] = [
-  { value: 'recommended', label: 'Препоръчани (отзиви и избрани)' },
-  { value: 'rating-desc', label: 'По рейтинг (звезди)' },
-  { value: 'price-asc', label: 'Цена: ниска → висока' },
-  { value: 'price-desc', label: 'Цена: висока → ниска' },
-  { value: 'kw-asc', label: 'Мощност (kW): ниска → висока' },
-  { value: 'btu-asc', label: 'BTU: 7K → 24K' },
-  { value: 'coverage-asc', label: 'Площ (m²): малка → голяма' },
-  { value: 'seer-desc', label: 'По SEER (икономичност)' },
-  { value: 'scop-desc', label: 'По SCOP (икономичност)' },
-  { value: 'name-asc', label: 'По име (А–Я)' },
-  { value: 'energy-class', label: 'Енергиен клас' },
-  { value: 'noise-asc', label: 'Ниво на шум' },
-];
+const SORT_LABELS: Record<SortOption, string> = {
+  'seer-desc': 'По SEER (икономичност)',
+  'recommended': 'Препоръчани (отзиви и избрани)',
+  'rating-desc': 'По рейтинг (звезди)',
+  'price-asc': 'Цена: ниска → висока',
+  'price-desc': 'Цена: висока → ниска',
+  'kw-asc': 'Мощност (kW): ниска → висока',
+  'kw-desc': 'Мощност (kW): висока → ниска',
+  'btu-asc': 'BTU: 7K → 24K',
+  'btu-desc': 'BTU: 24K → 7K',
+  'coverage-asc': 'Площ (m²): малка → голяма',
+  'coverage-desc': 'Площ (m²): голяма → малка',
+  'scop-desc': 'По SCOP (икономичност)',
+  'name-asc': 'По име (А–Я)',
+  'energy-class': 'Енергиен клас',
+  'noise-asc': 'Ниво на шум',
+};
+
+function sortOptionsFor(values: SortOption[]) {
+  return values.map((value) => ({ value, label: SORT_LABELS[value] }));
+}
+
+const CLIMATE_SORT_OPTIONS = sortOptionsFor(CATALOG_SORT_OPTIONS);
+export const ACCESSORY_SORT_UI_OPTIONS = sortOptionsFor(ACCESSORY_SORT_OPTIONS);
 
 interface SearchSortBarProps {
   search: string;
@@ -30,6 +41,8 @@ interface SearchSortBarProps {
   categoryChipsSlot?: React.ReactNode;
   /** Активни филтри — под категориите */
   activeFiltersSlot?: React.ReactNode;
+  /** Ограничава опциите за сортиране (напр. аксесоари) */
+  sortOptions?: { value: SortOption; label: string }[];
 }
 
 export const SearchSortBar = ({
@@ -43,6 +56,7 @@ export const SearchSortBar = ({
   sidebarOpen,
   categoryChipsSlot,
   activeFiltersSlot,
+  sortOptions = CLIMATE_SORT_OPTIONS,
 }: SearchSortBarProps) => {
   return (
     <div className="bg-white border border-gray-100 rounded-2xl shadow-sm transition-all">
@@ -104,19 +118,19 @@ export const SearchSortBar = ({
         {/* Row 2: Категории (flex-1) + сортиране вдясно */}
         <div className="flex items-start gap-3 mt-2.5 pt-2.5 border-t border-gray-100/70">
           <div className="flex-1 min-w-0">{categoryChipsSlot}</div>
-          <div className="relative shrink-0 w-[9.5rem] sm:w-auto sm:min-w-[9.5rem] lg:min-w-[10.5rem]">
+          <div className="relative shrink-0 flex-1 sm:flex-none sm:w-auto sm:min-w-[9.5rem] lg:min-w-[10.5rem] max-w-[11rem] sm:max-w-none">
             <select
               value={sortBy}
               onChange={(e) => onSortChange(e.target.value as SortOption)}
-              className="w-full appearance-none pl-2 pr-6 py-1 bg-gray-50 border border-gray-200 rounded-lg text-[10px] leading-tight text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#00B4D8]/30 focus:border-[#00B4D8] cursor-pointer transition-all"
+              className="w-full appearance-none pl-2.5 pr-7 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs leading-tight text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#00B4D8]/30 focus:border-[#00B4D8] cursor-pointer transition-all"
             >
-              {SORT_OPTIONS.map(opt => (
-                <option key={opt.value} value={opt.value} className="text-[10px]">
+              {sortOptions.map(opt => (
+                <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>
               ))}
             </select>
-            <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
+            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
           </div>
         </div>
 

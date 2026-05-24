@@ -2,10 +2,13 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   Plus, FileText, ChevronRight, Download,
   ClipboardCheck, Wrench, CheckCircle, Loader2, Search, ArrowLeft, Trash2, CloudOff,
+  SlidersHorizontal,
 } from "lucide-react";
+import { Select } from "../../../ui";
 import { ProtocolFormWizard } from "./ProtocolFormWizard";
 import { ProtocolPreview } from "./ProtocolPreview";
 import type { AdminRole } from "@/lib/admin/db";
@@ -15,19 +18,34 @@ import { useOnlineStatus } from "@/lib/hooks/useOnlineStatus";
 import { useOfflineQueue } from "@/lib/hooks/useOfflineQueue";
 
 type ProtocolStatus = "prepared" | "in_progress" | "signed";
+type StatusFilter = "" | ProtocolStatus;
+type SortOption = "created-desc" | "created-asc" | "date-desc" | "date-asc" | "client-asc" | "client-desc";
 
 interface Protocol {
   id: string;
   protocol_number: string;
   date: string;
   client_name: string | null;
+  client_phone: string | null;
   ac_model: string | null;
   address: string | null;
+  paid_amount: number | null;
   status: ProtocolStatus;
   created_at: string;
   /** true → записът е в IndexedDB и още не е стигнал до сървъра. */
   pendingSync?: boolean;
 }
+
+const COMPACT_SELECT = "!py-1 !px-2 !text-xs !rounded-md min-w-0 !pr-6";
+
+const SORT_OPTIONS: Array<{ value: SortOption; label: string }> = [
+  { value: "created-desc", label: "Най-нови" },
+  { value: "created-asc", label: "Най-стари" },
+  { value: "date-desc", label: "Дата ↓" },
+  { value: "date-asc", label: "Дата ↑" },
+  { value: "client-asc", label: "Клиент А→Я" },
+  { value: "client-desc", label: "Клиент Я→А" },
+];
 
 /**
  * Превръща cache документ в Protocol row, подходящ за списъка.
@@ -41,18 +59,23 @@ function cachedToProtocol(doc: CachedDocument<Record<string, unknown>>): Protoco
     protocol_number: (d.protocol_number as string) || (isOffline ? "Чернова (офлайн)" : "—"),
     date:            (d.date as string) || new Date(doc.updatedAt).toISOString().slice(0, 10),
     client_name:     (d.client_name as string) ?? null,
+    client_phone:    (d.client_phone as string) ?? null,
     ac_model:        (d.ac_model as string) ?? null,
     address:         (d.address as string) ?? null,
+    paid_amount:     typeof d.paid_amount === "number" ? d.paid_amount : null,
     status:          ((d.status as ProtocolStatus) ?? "prepared"),
     created_at:      new Date(doc.updatedAt).toISOString(),
     pendingSync:     isOffline,
   };
 }
 
-// Жизнен цикъл на протокола:
-//   prepared    — офисът е въвел клиентските данни и чака сервизен екип.
-//   in_progress — сервизният екип на място попълва, но не е финализирал.
-//   signed      — завършен и подписан от двете страни.
+// Жизнен цикъл: prepared → in_progress → signed
+const STATUS_LIST_LABEL: Record<ProtocolStatus, string> = {
+  prepared: "Подготвен",
+  in_progress: "В процес",
+  signed: "Подписан",
+};
+
 const STATUS_CONFIG: Record<ProtocolStatus, { label: string; icon: React.ComponentType<{ className?: string }>; cls: string }> = {
   prepared:    { label: "Подготвен",            icon: ClipboardCheck, cls: "bg-amber-100  text-amber-700"  },
   in_progress: { label: "В процес на изпълнение", icon: Wrench,         cls: "bg-blue-100   text-blue-700"   },
@@ -64,12 +87,16 @@ interface Props {
 }
 
 export function DocumentsClient({ role }: Props) {
+  const searchParams = useSearchParams();
   const [protocols, setProtocols]     = useState<Protocol[]>([]);
   const [offlineRows, setOfflineRows] = useState<Protocol[]>([]);
   const [total, setTotal]             = useState(0);
   const [page, setPage]               = useState(1);
   const [loading, setLoading]         = useState(true);
   const [search, setSearch]           = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
+  const [sort, setSort]                 = useState<SortOption>("created-desc");
+  const [filtersOpen, setFiltersOpen]   = useState(false);
   const [openForm, setOpenForm]       = useState(false);
   const [editId, setEditId]           = useState<string | null>(null);
   const [preview, setPreview]         = useState<Protocol | null>(null);
@@ -103,14 +130,19 @@ export function DocumentsClient({ role }: Props) {
     }
   }, []);
 
-  const load = useCallback(async (p = 1, q = "") => {
+  const load = useCallback(async (p = 1, q = "", status: StatusFilter = "", sortBy: SortOption = "created-desc") => {
     setLoading(true);
     try {
       // Винаги опитваме API; ако сме офлайн, тръгваме на cache fallback.
       const isOnline = typeof navigator === "undefined" ? true : navigator.onLine;
       if (isOnline) {
-        const params = new URLSearchParams({ page: String(p), perPage: String(perPage) });
+        const params = new URLSearchParams({
+          page: String(p),
+          perPage: String(perPage),
+          sort: sortBy,
+        });
         if (q) params.set("q", q);
+        if (status) params.set("status", status);
         const res = await fetch(`/api/admin/service/protocols?${params}`, { credentials: "include" });
         if (res.ok) {
           const json = await res.json();
@@ -129,7 +161,7 @@ export function DocumentsClient({ role }: Props) {
     }
   }, [loadOfflineRows]);
 
-  useEffect(() => { load(1, search); }, [load, search]);
+  useEffect(() => { load(1, search, statusFilter, sort); }, [load, search, statusFilter, sort]);
 
   // Презареждаме offline rows при промяна на броя pending mutations
   // (т.е. след auto-sync — изчистваме маркираните като качени).
@@ -141,21 +173,35 @@ export function DocumentsClient({ role }: Props) {
   useEffect(() => {
     if (online && !initialOnlineRef.current) {
       // Бил offline → стана online → ре-fetch.
-      void load(1, search);
+      void load(1, search, statusFilter, sort);
     }
     initialOnlineRef.current = online;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [online]);
 
   const handleSearch = (v: string) => { setSearch(v); setPage(1); };
+  const patchFilters = (patch: { status?: StatusFilter; sort?: SortOption }) => {
+    setPage(1);
+    if (patch.status !== undefined) setStatusFilter(patch.status);
+    if (patch.sort !== undefined) setSort(patch.sort);
+  };
+
+  const hasActiveFilters = statusFilter !== "" || sort !== "created-desc";
 
   const handleNew = () => { setPreview(null); setEditId(null); setOpenForm(true); };
   const openPreview = (p: Protocol) => { setPreview(p); };
   const openEdit = (id: string) => { setPreview(null); setEditId(id); setOpenForm(true); };
 
+  useEffect(() => {
+    const editFromUrl = searchParams.get("edit")?.trim();
+    if (!editFromUrl) return;
+    openEdit(editFromUrl);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   const handleSaved = (id: string) => {
     setEditId(id);
-    load(1, search);
+    load(1, search, statusFilter, sort);
   };
 
   const downloadPdf = (e: React.MouseEvent, id: string) => {
@@ -197,50 +243,69 @@ export function DocumentsClient({ role }: Props) {
   const formatDate = (d: string) =>
     new Date(d).toLocaleDateString("bg-BG", { day: "2-digit", month: "2-digit", year: "numeric" });
 
+  const formatPaid = (n: number | null | undefined) => {
+    if (n == null || !Number.isFinite(Number(n))) return null;
+    return `€${Number(n).toLocaleString("bg-BG", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  };
+
   // Рендер на един ред в списъка. `isOffline` маркира визуално неизпратените записи.
   const renderProtocolRow = (p: Protocol, isOffline: boolean) => {
     const st = STATUS_CONFIG[p.status];
     const Icon = st.icon;
+    const paidLabel = formatPaid(p.paid_amount);
+    const detailParts = [
+      p.client_name?.trim(),
+      p.client_phone?.trim(),
+      p.ac_model?.trim(),
+      p.address?.trim(),
+    ].filter(Boolean);
+
     return (
       <div
         key={p.id}
         onClick={() => isOffline ? openEdit(p.id) : openPreview(p)}
-        className={`rounded-2xl p-4 flex items-center gap-3 cursor-pointer shadow-sm transition-colors ${
+        className={`rounded-xl px-3 py-2.5 flex items-center gap-2.5 cursor-pointer shadow-sm transition-colors ${
           isOffline
             ? "bg-amber-50 border-2 border-dashed border-amber-300 active:bg-amber-100"
             : "bg-white border border-slate-100 active:bg-slate-50"
         }`}
       >
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
           isOffline ? "bg-amber-100" : "bg-blue-50"
         }`}>
-          {isOffline ? <CloudOff className="w-5 h-5 text-amber-700" /> : <FileText className="w-5 h-5 text-blue-600" />}
+          {isOffline ? <CloudOff className="w-4 h-4 text-amber-700" /> : <FileText className="w-4 h-4 text-blue-600" />}
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-            <p className="text-sm font-bold text-slate-900 truncate">{p.protocol_number}</p>
-            <span className={`flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${st.cls}`}>
-              <Icon className="w-3 h-3" />
-              {st.label}
+          <div className="flex items-center gap-1.5 min-w-0">
+            <p className="text-sm font-bold text-slate-900 truncate min-w-0">{p.protocol_number}</p>
+            <span className={`inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${st.cls}`}>
+              <Icon className="w-2.5 h-2.5" />
+              {STATUS_LIST_LABEL[p.status]}
             </span>
             {isOffline && (
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-700 bg-amber-200 px-1.5 py-0.5 rounded">
-                Чака мрежа
+              <span className="text-[9px] font-extrabold uppercase tracking-wide text-amber-700 bg-amber-200 px-1 py-0.5 rounded shrink-0">
+                Офлайн
               </span>
             )}
+            <span className="ml-auto pl-2 text-[11px] text-slate-400 whitespace-nowrap shrink-0 tabular-nums">
+              {formatDate(p.date)}
+              {paidLabel ? ` · ${paidLabel}` : ""}
+            </span>
           </div>
-          <p className="text-xs text-slate-600 truncate">
-            {p.client_name ?? "—"}{p.ac_model ? ` · ${p.ac_model}` : ""}
-          </p>
-          <p className="text-xs text-slate-400 mt-0.5">{formatDate(p.date)}</p>
+
+          {detailParts.length > 0 && (
+            <p className="text-xs text-slate-600 truncate mt-0.5">
+              {detailParts.join(" · ")}
+            </p>
+          )}
         </div>
 
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center shrink-0 -mr-0.5">
           {!isOffline && (
             <button
               onClick={e => downloadPdf(e, p.id)}
-              className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 active:bg-slate-200 rounded-lg transition-colors"
+              className="p-2 min-h-11 min-w-11 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 active:bg-slate-200 rounded-lg transition-colors"
               title="Свали PDF"
             >
               <Download className="w-4 h-4" />
@@ -250,7 +315,7 @@ export function DocumentsClient({ role }: Props) {
             <button
               onClick={(e) => handleDelete(e, p)}
               disabled={deletingId === p.id}
-              className="p-2 text-rose-400 hover:text-rose-700 hover:bg-rose-50 active:bg-rose-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait"
+              className="p-2 min-h-11 min-w-11 flex items-center justify-center text-rose-400 hover:text-rose-700 hover:bg-rose-50 active:bg-rose-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait"
               title="Изтрий протокола"
             >
               {deletingId === p.id
@@ -258,7 +323,7 @@ export function DocumentsClient({ role }: Props) {
                 : <Trash2 className="w-4 h-4" />}
             </button>
           )}
-          <ChevronRight className="w-4 h-4 text-slate-300" />
+          <ChevronRight className="w-4 h-4 text-slate-300 ml-0.5" />
         </div>
       </div>
     );
@@ -268,7 +333,7 @@ export function DocumentsClient({ role }: Props) {
     return (
       <ProtocolFormWizard
         protocolId={editId ?? undefined}
-        onClose={() => { setOpenForm(false); load(1, search); }}
+        onClose={() => { setOpenForm(false); load(1, search, statusFilter, sort); }}
         onSaved={handleSaved}
       />
     );
@@ -289,7 +354,7 @@ export function DocumentsClient({ role }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="flex flex-col flex-1 min-h-0 bg-slate-50">
 
       {/* ── Хедър ── */}
       <div className="bg-white border-b border-slate-200 px-4 py-4 sticky top-0 z-10">
@@ -318,16 +383,91 @@ export function DocumentsClient({ role }: Props) {
           </button>
         </div>
 
-        {/* Търсене */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            type="search"
-            value={search}
-            onChange={e => handleSearch(e.target.value)}
-            placeholder="Търси по клиент, модел, номер..."
-            className="w-full pl-9 pr-4 py-2.5 bg-slate-100 rounded-xl text-sm outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all"
-          />
+        {/* Търсене + филтри */}
+        <div className="space-y-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="search"
+              value={search}
+              onChange={e => handleSearch(e.target.value)}
+              placeholder="Клиент, телефон, адрес, модел, №..."
+              className="w-full pl-9 pr-4 py-2 bg-slate-100 rounded-xl text-sm outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setFiltersOpen(v => !v)}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              {filtersOpen ? "Скрий" : "Филтри"}
+            </button>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={() => patchFilters({ status: "", sort: "created-desc" })}
+                className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600"
+              >
+                Изчисти
+              </button>
+            )}
+            {!filtersOpen && (
+              <div className="flex flex-wrap items-center gap-1.5 min-w-0 flex-1">
+                <Select
+                  className={`w-full max-w-[7rem] sm:w-[6.5rem] ${COMPACT_SELECT}`}
+                  value={sort}
+                  onChange={(e) => patchFilters({ sort: e.target.value as SortOption })}
+                >
+                  {SORT_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </Select>
+                <Select
+                  className={`w-full max-w-[6.5rem] sm:w-[6rem] ${COMPACT_SELECT}`}
+                  value={statusFilter}
+                  onChange={(e) => patchFilters({ status: e.target.value as StatusFilter })}
+                >
+                  <option value="">Всички</option>
+                  <option value="prepared">Подготвен</option>
+                  <option value="in_progress">В процес</option>
+                  <option value="signed">Подписан</option>
+                </Select>
+              </div>
+            )}
+          </div>
+
+          {filtersOpen && (
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-xl border border-slate-100 bg-slate-50/80 px-2 py-2">
+              <label className="inline-flex items-center gap-1">
+                <span className="text-[10px] font-semibold text-slate-500 whitespace-nowrap">Сортиране</span>
+                <Select
+                  className={`w-[6.5rem] ${COMPACT_SELECT}`}
+                  value={sort}
+                  onChange={(e) => patchFilters({ sort: e.target.value as SortOption })}
+                >
+                  {SORT_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </Select>
+              </label>
+              <label className="inline-flex items-center gap-1">
+                <span className="text-[10px] font-semibold text-slate-500 whitespace-nowrap">Статус</span>
+                <Select
+                  className={`w-[6rem] ${COMPACT_SELECT}`}
+                  value={statusFilter}
+                  onChange={(e) => patchFilters({ status: e.target.value as StatusFilter })}
+                >
+                  <option value="">Всички</option>
+                  <option value="prepared">Подготвен</option>
+                  <option value="in_progress">В процес</option>
+                  <option value="signed">Подписан</option>
+                </Select>
+              </label>
+            </div>
+          )}
         </div>
       </div>
 
@@ -393,7 +533,7 @@ export function DocumentsClient({ role }: Props) {
             {/* Зареди още */}
             {protocols.length < total && (
               <button
-                onClick={() => { const p = page + 1; setPage(p); load(p, search); }}
+                onClick={() => { const p = page + 1; setPage(p); load(p, search, statusFilter, sort); }}
                 disabled={loading}
                 className="w-full py-3 text-sm text-blue-600 font-semibold flex items-center justify-center gap-2"
               >
@@ -404,15 +544,6 @@ export function DocumentsClient({ role }: Props) {
           </div>
         ) : null}
       </div>
-
-      {/* ── Плаващ бутон (mobile) ── */}
-      <button
-        onClick={handleNew}
-        className="fixed bottom-6 right-5 w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center active:bg-blue-700 z-20 md:hidden"
-        aria-label="Нов протокол"
-      >
-        <Plus className="w-6 h-6" />
-      </button>
     </div>
   );
 }

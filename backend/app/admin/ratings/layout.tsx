@@ -6,7 +6,7 @@ export const metadata = { title: "Оценки | Смолян Клима Адм�
 export default async function RatingsLayout({ children }: { children: React.ReactNode }) {
   try {
     const session = await adminSession();
-    if (session.role !== "master_admin") {
+    if (session.role !== "master_admin" && session.role !== "office_staff") {
       redirect("/admin");
     }
   } catch {

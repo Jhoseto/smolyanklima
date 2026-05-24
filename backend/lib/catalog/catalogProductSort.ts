@@ -21,6 +21,8 @@ export const CATALOG_SORT_VALUES = [
 
 export type CatalogSortValue = (typeof CATALOG_SORT_VALUES)[number];
 
+export const DEFAULT_CATALOG_SORT: CatalogSortValue = "seer-desc";
+
 export type CatalogRepresentativeRow = {
   id: string;
   name?: string | null;
@@ -137,7 +139,7 @@ export function sortRepresentatives(
   specById: Map<string, CatalogSpecSortRow>,
   sort: CatalogSortValue | string | undefined,
 ): CatalogRepresentativeRow[] {
-  const s = sort ?? "recommended";
+  const s = sort ?? DEFAULT_CATALOG_SORT;
   const sorted = [...rows];
 
   sorted.sort((a, b) => {

@@ -6,6 +6,14 @@ import { ServiceRequestModalProvider } from './context/ServiceRequestModalContex
 import { ConsentProvider } from './lib/consent/ConsentProvider';
 import './index.css';
 
+if (import.meta.env.PROD && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      /* SW blocked or unsupported — PWA still installable */
+    });
+  });
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>

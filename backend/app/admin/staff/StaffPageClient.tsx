@@ -6,7 +6,7 @@ import {
   CheckCircle2, XCircle, Pencil, Trash2, KeyRound,
   Loader2, X, Eye, EyeOff, Phone, ImagePlus,
 } from "lucide-react";
-import { Button, Input, Select } from "../ui";
+import { Button, Input, Select, ADMIN_MODAL_BACKDROP, ADMIN_MODAL_PANEL, AdminModalDragHandle } from "../ui";
 import { StaffAvatarCropModal } from "./StaffAvatarCropModal";
 
 type AdminRole = "master_admin" | "office_staff" | "service_staff";
@@ -49,7 +49,14 @@ function RoleBadge({ role }: { role: AdminRole }) {
   );
 }
 
-export function StaffPageClient({ currentUserId }: { currentUserId: string }) {
+export function StaffPageClient({
+  currentUserId,
+  canManage = false,
+}: {
+  currentUserId: string;
+  /** Добавяне/редакция/изтриване — само master_admin. */
+  canManage?: boolean;
+}) {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -255,12 +262,18 @@ export function StaffPageClient({ currentUserId }: { currentUserId: string }) {
           <h1 className="text-lg font-bold text-slate-900 flex items-center gap-2">
             <Users className="w-5 h-5 text-slate-400" /> Управление на персонала
           </h1>
-          <p className="text-xs text-slate-500 mt-0.5">Само Master Admin може да добавя и управлява служители.</p>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {canManage
+              ? "Само Master Admin може да добавя и управлява служители."
+              : "Преглед на екипа — промените се правят от главния администратор."}
+          </p>
         </div>
-        <Button onClick={() => setShowAddForm(v => !v)} className="flex items-center gap-1.5">
-          <Plus className="w-3.5 h-3.5" />
-          Нов служител
-        </Button>
+        {canManage && (
+          <Button onClick={() => setShowAddForm(v => !v)} className="flex items-center gap-1.5">
+            <Plus className="w-3.5 h-3.5" />
+            Нов служител
+          </Button>
+        )}
       </div>
 
       {/* Stats */}
@@ -279,7 +292,7 @@ export function StaffPageClient({ currentUserId }: { currentUserId: string }) {
       </div>
 
       {/* Add form */}
-      {showAddForm && (
+      {canManage && showAddForm && (
         <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
           <div className="flex items-center justify-between mb-1">
             <p className="text-sm font-bold text-slate-800">Добави нов служител</p>
@@ -357,14 +370,75 @@ export function StaffPageClient({ currentUserId }: { currentUserId: string }) {
               <p className="text-sm">Все още няма добавени служители.</p>
             </div>
           ) : (
-            <table className="w-full text-xs">
+            <>
+            <div className="md:hidden divide-y divide-slate-100">
+              {staff.map((m) => (
+                <div key={m.id} className="px-4 py-3 flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-bold text-sm shrink-0 overflow-hidden ring-1 ring-slate-200/80">
+                    {m.avatar_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={m.avatar_url} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      m.name.charAt(0).toUpperCase()
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-semibold text-slate-800 text-sm">{m.name}
+                        {m.id === currentUserId && <span className="ml-1 text-[10px] text-slate-400">(ти)</span>}
+                      </p>
+                      <RoleBadge role={m.role} />
+                    </div>
+                    {m.phone ? (
+                      <a href={`tel:${m.phone}`} className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                        <Phone className="w-3 h-3" />{m.phone}
+                      </a>
+                    ) : (
+                      <p className="text-xs text-slate-300 italic mt-0.5">без телефон</p>
+                    )}
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      {m.last_login_at
+                        ? `Вход: ${new Date(m.last_login_at).toLocaleDateString("bg-BG", { day: "2-digit", month: "short" })}`
+                        : "Няма вход"}
+                      · {m.is_active ? "Активен" : "Неактивен"}
+                    </p>
+                  </div>
+                  {canManage && (
+                    <div className="flex flex-col gap-1 shrink-0">
+                      <button onClick={() => openEdit(m)}
+                        className="p-2 min-h-11 min-w-11 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors flex items-center justify-center"
+                        title="Редактирай">
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      {m.id !== currentUserId && (
+                        <>
+                          <button onClick={() => handleToggleActive(m)}
+                            className="p-2 min-h-11 min-w-11 rounded-lg hover:bg-slate-100 transition-colors flex items-center justify-center"
+                            title={m.is_active ? "Деактивирай" : "Активирай"}>
+                            {m.is_active ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <XCircle className="w-4 h-4 text-slate-300" />}
+                          </button>
+                          <button onClick={() => setConfirmDelete(m)}
+                            className="p-2 min-h-11 min-w-11 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors flex items-center justify-center"
+                            title="Изтрий">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            <table className="w-full text-xs hidden md:table">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50">
                   <th className="text-left px-4 py-2.5 font-semibold text-slate-500">Служител</th>
                   <th className="text-left px-4 py-2.5 font-semibold text-slate-500 hidden sm:table-cell">Роля</th>
                   <th className="text-left px-4 py-2.5 font-semibold text-slate-500 hidden md:table-cell">Последен вход</th>
                   <th className="text-center px-4 py-2.5 font-semibold text-slate-500">Статус</th>
-                  <th className="text-right px-4 py-2.5 font-semibold text-slate-500">Действия</th>
+                  {canManage && (
+                    <th className="text-right px-4 py-2.5 font-semibold text-slate-500">Действия</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -402,43 +476,54 @@ export function StaffPageClient({ currentUserId }: { currentUserId: string }) {
                         : "—"}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <button onClick={() => handleToggleActive(m)}
-                        disabled={m.id === currentUserId}
-                        title={m.is_active ? "Деактивирай" : "Активирай"}
-                        className="disabled:opacity-40 disabled:cursor-not-allowed">
-                        {m.is_active
-                          ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" />
-                          : <XCircle className="w-4 h-4 text-slate-300 mx-auto" />}
-                      </button>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1 justify-end">
-                        <button onClick={() => openEdit(m)}
-                          className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
-                          title="Редактирай">
-                          <Pencil className="w-3.5 h-3.5" />
+                      {canManage ? (
+                        <button onClick={() => handleToggleActive(m)}
+                          disabled={m.id === currentUserId}
+                          title={m.is_active ? "Деактивирай" : "Активирай"}
+                          className="disabled:opacity-40 disabled:cursor-not-allowed">
+                          {m.is_active
+                            ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" />
+                            : <XCircle className="w-4 h-4 text-slate-300 mx-auto" />}
                         </button>
-                        {m.id !== currentUserId && (
-                          <button onClick={() => setConfirmDelete(m)}
-                            className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors"
-                            title="Изтрий">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
+                      ) : (
+                        m.is_active
+                          ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" />
+                          : <XCircle className="w-4 h-4 text-slate-300 mx-auto" />
+                      )}
                     </td>
+                    {canManage && (
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1 justify-end">
+                          <button onClick={() => openEdit(m)}
+                            className="p-2 min-h-11 min-w-11 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors flex items-center justify-center"
+                            title="Редактирай">
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          {m.id !== currentUserId && (
+                            <button onClick={() => setConfirmDelete(m)}
+                              className="p-2 min-h-11 min-w-11 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors flex items-center justify-center"
+                              title="Изтрий">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
             </table>
+            </>
           )}
         </div>
       )}
 
       {/* Edit modal */}
       {editMember && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-5 space-y-4">
+        <div className={ADMIN_MODAL_BACKDROP} onClick={() => setEditMember(null)}>
+          <div className={`${ADMIN_MODAL_PANEL} max-w-md`} onClick={(e) => e.stopPropagation()}>
+            <AdminModalDragHandle />
+            <div className="overflow-y-auto flex-1 min-h-0 p-5 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-bold text-slate-800">Редактирай служител</h2>
               <button onClick={() => setEditMember(null)} className="text-slate-400 hover:text-slate-700">
@@ -576,14 +661,16 @@ export function StaffPageClient({ currentUserId }: { currentUserId: string }) {
               </Button>
               <Button variant="secondary" onClick={() => setEditMember(null)}>Отказ</Button>
             </div>
+            </div>
           </div>
         </div>
       )}
 
       {/* Delete confirm */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-5 space-y-4">
+        <div className={ADMIN_MODAL_BACKDROP} onClick={() => setConfirmDelete(null)}>
+          <div className={`${ADMIN_MODAL_PANEL} max-w-sm p-5 space-y-4`} onClick={(e) => e.stopPropagation()}>
+            <AdminModalDragHandle />
             <h2 className="text-sm font-bold text-slate-800">Изтрий служител</h2>
             <p className="text-xs text-slate-600">
               Сигурен ли си, че искаш да изтриеш <strong>{confirmDelete.name}</strong>? Акаунтът ще бъде изтрит окончателно.

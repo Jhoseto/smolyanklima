@@ -29,10 +29,26 @@ export function InfoDot({ text }: { text: string }) {
     <span
       title={text}
       aria-label={text}
-      className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-brand-blue-50 text-brand-blue-700 cursor-help"
+      className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-brand-blue-50 text-brand-blue-700 cursor-help shrink-0"
     >
       <Info className="w-3.5 h-3.5" />
     </span>
+  );
+}
+
+/** Backdrop за admin modals — bottom sheet на mobile, центриран на desktop. */
+export const ADMIN_MODAL_BACKDROP =
+  "fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/55 p-0 md:p-4 backdrop-blur-md";
+
+/** Панел за admin modals — с safe area отдолу на mobile. */
+export const ADMIN_MODAL_PANEL =
+  "w-full max-h-[92dvh] md:max-h-[calc(100vh-2rem)] overflow-hidden rounded-t-3xl md:rounded-2xl border border-white/70 bg-white shadow-2xl flex flex-col pb-safe md:pb-0";
+
+export function AdminModalDragHandle() {
+  return (
+    <div className="flex justify-center pt-3 pb-1 md:hidden shrink-0">
+      <div className="w-10 h-1 rounded-full bg-slate-200" />
+    </div>
   );
 }
 
@@ -111,9 +127,9 @@ export function Button({
   };
   
   const sizes = {
-    sm: "px-2 py-1.5 text-xs max-md:px-1.5 max-md:py-1 max-md:text-[11px]",
-    md: "px-3 py-2 text-sm max-md:px-2.5 max-md:py-1.5 max-md:text-[13px]",
-    lg: "px-3.5 py-2 text-sm max-md:px-3 max-md:py-2 max-md:text-[13px]",
+    sm: "px-2.5 py-2 text-xs min-h-[36px]",
+    md: "px-3 py-2.5 text-sm min-h-[40px]",
+    lg: "px-3.5 py-2.5 text-sm min-h-[44px]",
   };
 
   return (

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ArrowUp, SlidersHorizontal, PackageX } from 'lucide-react';
 
 import { CatalogHero }    from '../components/catalog/CatalogHero';
-import { SearchSortBar }  from '../components/catalog/SearchSortBar';
+import { SearchSortBar, ACCESSORY_SORT_UI_OPTIONS }  from '../components/catalog/SearchSortBar';
 import { CategoryChips }  from '../components/catalog/CategoryChips';
 import { CatalogPagination } from '../components/catalog/CatalogPagination';
 import { FilterSidebar }  from '../components/catalog/FilterSidebar';
@@ -27,7 +27,7 @@ import {
 import { getAllAccessories } from '../data/accessoryService';
 import { postPublicInquiry } from '../data/postInquiry';
 import type { CatalogProduct, SortOption } from '../data/types/product';
-import { parseSortOption } from '../data/types/product';
+import { DEFAULT_CATALOG_SORT, parseSortOption, ACCESSORY_SORT_OPTIONS, isClimateOnlySort } from '../data/types/product';
 import { SiteSeo } from '../components/seo/SiteSeo';
 import { PAGE_SEO } from '../lib/seo/config';
 import { breadcrumbSchema, localBusinessSchema } from '../lib/seo/jsonLd';
@@ -246,6 +246,7 @@ const CatalogPage = () => {
     if (activeTab === 'accessories') {
       if (!ACCESSORY_CATEGORIES.some((c) => c.id === category)) setCategory('all');
       if (selectedConditions.length > 0) setSelectedConditions([]);
+      setSortBy((prev) => (isClimateOnlySort(prev) ? 'recommended' : prev));
       return;
     }
   }, [activeTab, category, selectedConditions]);
@@ -467,7 +468,7 @@ const CatalogPage = () => {
       if (priceRange[0] > effectivePriceMin) params.set('min', priceRange[0].toString());
       if (priceRange[1] < effectivePriceMax) params.set('max', priceRange[1].toString());
     }
-    if (sortBy !== 'recommended') params.set('s', sortBy);
+    if (sortBy !== DEFAULT_CATALOG_SORT) params.set('s', sortBy);
     if (page > 1) params.set('page', String(page));
     if (compareList.length) {
       params.set('compare', buildCompareParam(compareList.map((p) => p.id)));
@@ -552,7 +553,7 @@ const CatalogPage = () => {
     setEnergyClasses([]);
     setFeatures([]);
     setPriceRange([effectivePriceMin, effectivePriceMax]);
-    setSortBy('recommended');
+    setSortBy(DEFAULT_CATALOG_SORT);
     setPage(1);
   }, [effectivePriceMin, effectivePriceMax]);
 
@@ -568,7 +569,7 @@ const CatalogPage = () => {
     setFeatures([]);
     setSearch('');
     setPriceRange([nextMin, nextMax]);
-    setSortBy('recommended');
+    setSortBy(DEFAULT_CATALOG_SORT);
     setCompareList([]);
     setQuickViewProduct(null);
     setPage(1);
@@ -709,6 +710,7 @@ const CatalogPage = () => {
             onSearchChange={setSearch}
             sortBy={sortBy}
             onSortChange={setSortBy}
+            sortOptions={activeTab === 'climate' ? undefined : ACCESSORY_SORT_UI_OPTIONS}
             viewMode={viewMode}
             onViewModeChange={setViewMode}
             onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}

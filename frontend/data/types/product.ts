@@ -157,6 +157,20 @@ export type SortOption =
   | 'energy-class'
   | 'noise-asc';
 
+export const DEFAULT_CATALOG_SORT: SortOption = 'seer-desc';
+
+export const ACCESSORY_SORT_OPTIONS: SortOption[] = [
+  'recommended',
+  'rating-desc',
+  'price-asc',
+  'price-desc',
+  'name-asc',
+];
+
+export function isClimateOnlySort(sort: SortOption): boolean {
+  return !(ACCESSORY_SORT_OPTIONS as readonly string[]).includes(sort);
+}
+
 export const CATALOG_SORT_OPTIONS: SortOption[] = [
   'recommended',
   'rating-desc',
@@ -176,7 +190,7 @@ export function parseSortOption(raw: string | null | undefined): SortOption {
   if (raw && (CATALOG_SORT_OPTIONS as readonly string[]).includes(raw)) {
     return raw as SortOption;
   }
-  return 'recommended';
+  return DEFAULT_CATALOG_SORT;
 }
 
 // ──────────────────────────────────────
