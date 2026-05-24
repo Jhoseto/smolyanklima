@@ -25,17 +25,12 @@ export const CategoryChips = ({ selected, onChange, counts, compact = false }: C
 
   return (
     <div className="relative min-w-0 flex-1">
-      {!compact && (
-        <>
-          <div className="absolute left-0 top-0 bottom-0 w-6 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none" />
-          <div className="absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none" />
-        </>
-      )}
+      <div className={`absolute right-0 top-0 bottom-0 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none ${compact ? 'w-4' : 'w-6'}`} />
 
       <div
         ref={scrollRef}
-        className={`flex w-full min-w-0 ${
-          compact ? 'flex-wrap gap-1.5 content-start' : 'gap-2 overflow-x-auto scrollbar-hide px-2 pb-1'
+        className={`flex w-full min-w-0 flex-nowrap gap-2 overflow-x-auto scrollbar-hide ${
+          compact ? 'gap-1.5 pb-0.5' : 'px-2 pb-1'
         }`}
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       >

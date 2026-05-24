@@ -116,7 +116,7 @@ export const SearchSortBar = ({
         </div>
 
         {/* Row 2: Категории (flex-1) + сортиране вдясно */}
-        <div className="flex items-start gap-3 mt-2.5 pt-2.5 border-t border-gray-100/70">
+        <div className="flex items-center gap-3 mt-2.5 pt-2.5 border-t border-gray-100/70">
           <div className="flex-1 min-w-0">{categoryChipsSlot}</div>
           <div className="relative shrink-0 flex-1 sm:flex-none sm:w-auto sm:min-w-[9.5rem] lg:min-w-[10.5rem] max-w-[11rem] sm:max-w-none">
             <select
