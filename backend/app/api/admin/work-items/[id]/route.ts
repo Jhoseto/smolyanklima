@@ -192,7 +192,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
 
   const { data: beforeRow, error: beforeErr } = await supabase
     .from("work_items")
-    .select("id,type,installation_work_item_id,sale_work_item_id,event_code,sale_install_state,status,due_date,customer_name,customer_phone,customer_address,product_id,contact_id,quantity")
+    .select("id,type,installation_work_item_id,sale_work_item_id,event_code,sale_install_state,status,title,due_date,customer_name,customer_phone,customer_address,product_id,contact_id,quantity")
     .eq("id", id)
     .maybeSingle();
   if (beforeErr) return withCors(req, NextResponse.json({ error: beforeErr.message }, { status: 500 }));
@@ -206,6 +206,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     event_code?: string | null;
     sale_install_state?: string | null;
     status?: string;
+    title?: string | null;
     due_date?: string | null;
     customer_name?: string | null;
     customer_phone?: string | null;
