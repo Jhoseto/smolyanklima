@@ -83,18 +83,58 @@
   mask-image: radial-gradient(ellipse 78% 78% at 50% 50%, #000 38%, transparent 100%);
 }
 
-/* About page — fade като home hero, слива се с hero-back фона */
-.about-founder-image-mask {
-  -webkit-mask-image:
-    linear-gradient(to bottom, transparent 0%, #000 18%),
-    linear-gradient(to right, transparent 0%, #000 22%),
-    linear-gradient(to left, transparent 0%, #000 22%);
-  mask-image:
-    linear-gradient(to bottom, transparent 0%, #000 18%),
-    linear-gradient(to right, transparent 0%, #000 22%),
-    linear-gradient(to left, transparent 0%, #000 22%);
-  -webkit-mask-composite: source-in;
-  mask-composite: intersect;
+/* About page — hero portrait, wide soft fade left into HeroBackground */
+.about-hero-image {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 100%;
+  width: min(82vw, 960px);
+  max-width: none;
+  object-fit: cover;
+  object-position: 72% center;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(0, 0, 0, 0.06) 10%,
+    rgba(0, 0, 0, 0.28) 26%,
+    rgba(0, 0, 0, 0.62) 40%,
+    rgba(0, 0, 0, 0.88) 48%,
+    #000 55%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(0, 0, 0, 0.06) 10%,
+    rgba(0, 0, 0, 0.28) 26%,
+    rgba(0, 0, 0, 0.62) 40%,
+    rgba(0, 0, 0, 0.88) 48%,
+    #000 55%
+  );
+}
+
+@media (max-width: 1023px) {
+  .about-hero-image {
+    width: 100%;
+    object-position: 82% center;
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0%,
+      rgba(0, 0, 0, 0.12) 14%,
+      rgba(0, 0, 0, 0.42) 32%,
+      rgba(0, 0, 0, 0.75) 48%,
+      #000 62%
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent 0%,
+      rgba(0, 0, 0, 0.12) 14%,
+      rgba(0, 0, 0, 0.42) 32%,
+      rgba(0, 0, 0, 0.75) 48%,
+      #000 62%
+    );
+  }
 }
 
 /* Hero image crossfade — GPU opacity/scale only, no JS animation library */

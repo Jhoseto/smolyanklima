@@ -59,6 +59,7 @@ export const PAGE_SEO: Record<string, PageSeoConfig> = {
       'Смолян Клима — семеен бизнес от 1990-те с над 3000 монтажа в Смолян, Рудозем, Мадан и Родопите. Оторизиран дилър, професионален монтаж и честна гаранция.',
     keywords: [...REGION_KEYWORDS, 'Смолян Клима', 'климатизация опит'],
     canonicalPath: '/za-nas',
+    ogImage: '/images/about-hero.png',
   },
   privacy: {
     title: 'Политика за поверителност | Смолян Клима',

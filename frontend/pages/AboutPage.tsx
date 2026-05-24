@@ -18,7 +18,7 @@ import { SiteSeo } from '../components/seo/SiteSeo';
 import { PAGE_SEO } from '../lib/seo/config';
 import { breadcrumbSchema, localBusinessSchema } from '../lib/seo/jsonLd';
 
-const FOUNDER_IMAGE = '/images/about-kostadin.png';
+const ABOUT_HERO_IMAGE = '/images/about-hero.png';
 
 const milestones = [
   {
@@ -83,17 +83,30 @@ export default function AboutPage() {
           ]),
         ]}
       />
-      {/* Hero */}
-      <section className="relative overflow-hidden">
+      {/* Hero — full-bleed image отдясно, fade наляво към HeroBackground */}
+      <section className="relative min-h-[420px] sm:min-h-[480px] lg:min-h-[580px] overflow-hidden">
         <HeroBackground className="bg-left" style={{ backgroundPosition: 'left center' }} />
+
+        <div className="absolute inset-0 pointer-events-none">
+          <img
+            src={ABOUT_HERO_IMAGE}
+            alt="Костадин Георгиев — основател на Смолян Клима"
+            width={1920}
+            height={1080}
+            decoding="async"
+            fetchPriority="high"
+            className="about-hero-image"
+          />
+        </div>
+
         <div className="relative z-10 pt-[calc(var(--navbar-height)+2rem)] pb-16 lg:pb-20">
           <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid lg:grid-cols-2 gap-10 lg:gap-14 items-center">
+            <div className="grid lg:grid-cols-12 gap-8 lg:gap-6 items-center min-h-[320px] lg:min-h-[420px]">
               <motion.div
                 initial={{ opacity: 0, y: 24 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-                className="relative w-full min-w-0 lg:max-w-[620px]"
+                className="relative w-full min-w-0 lg:col-span-5"
               >
                 <span className="inline-flex items-center gap-2 px-4 py-2 bg-white/50 backdrop-blur-sm border border-[#FFDCC2]/80 rounded-full mb-6 text-sm font-semibold text-[#FF5722]">
                   <Sparkles className="w-4 h-4" />
@@ -116,31 +129,11 @@ export default function AboutPage() {
                   собственик на Смолян Клима. От десетилетия изграждам бизнес, основан на думата, майсторството и
                   уважението към всеки клиент в Смолян и региона.
                 </p>
-              
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.7, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
-                className="relative w-full min-w-0 max-w-[720px] mx-auto lg:mx-0 lg:ml-auto xl:max-w-[780px]"
-              >
-                <div className="relative overflow-hidden rounded-[2rem] lg:rounded-[2.5rem]">
-                  <div className="relative about-founder-image-mask">
-                    <img
-                      src={FOUNDER_IMAGE}
-                      alt="Костадин Георгиев — основател на Смолян Клима"
-                      width={1024}
-                      height={1024}
-                      decoding="async"
-                      className="block w-full h-[240px] sm:h-[300px] lg:h-[380px] object-contain object-center"
-                    />
-                  </div>
-                </div>
               </motion.div>
             </div>
           </div>
         </div>
+
       </section>
 
       <StatsSection />
