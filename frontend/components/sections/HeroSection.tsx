@@ -181,7 +181,7 @@ export const HeroSection = ({ onFreeConsultationClick }: HeroSectionProps) => {
               </div>
             </div>
 
-            <div className="hidden lg:flex absolute top-8 -left-8 bg-white shadow-lg rounded-full px-5 py-3 border border-gray-100 items-center gap-2">
+            <div className="hidden lg:flex absolute top-21 -left-8 bg-white shadow-lg rounded-full px-5 py-3 border border-gray-100 items-center gap-2">
               <Zap className="w-5 h-5 text-[#FF5722] fill-[#FF5722]/20" />
               <span className="text-sm font-bold text-gray-800">Монтаж до 48ч</span>
             </div>
