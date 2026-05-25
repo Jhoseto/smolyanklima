@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useLayoutEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion } from 'motion/react';
 
 interface PageTransitionProps {
@@ -29,6 +30,13 @@ const pageVariants = {
 };
 
 export const PageTransition: React.FC<PageTransitionProps> = ({ children }) => {
+  const { pathname, hash } = useLocation();
+
+  useLayoutEffect(() => {
+    if (hash) return;
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [pathname, hash]);
+
   return (
     <motion.div
       initial="initial"

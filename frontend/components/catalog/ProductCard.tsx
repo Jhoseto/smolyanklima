@@ -18,8 +18,6 @@ interface ProductCardProps {
   onCompareToggle?: () => void;
   onInquiry?: (product: CatalogProduct) => void;
   viewMode?: 'grid' | 'list';
-  /** При пагинация — пропуска enter анимацията, за да не пречи на скрола */
-  noEnterAnim?: boolean;
   key?: React.Key;
 }
 
@@ -49,7 +47,6 @@ export const ProductCard = ({
   onCompareToggle,
   onInquiry,
   viewMode = 'grid',
-  noEnterAnim = false,
 }: ProductCardProps) => {
   const [imgError, setImgError] = useState(false);
 
@@ -72,12 +69,11 @@ export const ProductCard = ({
 
   return (
     <motion.div
-      layout={!noEnterAnim}
-      initial={noEnterAnim ? false : { opacity: 0, y: 24 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.92 }}
-      transition={noEnterAnim ? { duration: 0 } : { duration: 0.35, delay: Math.min(index * 0.04, 0.4) }}
-      whileHover={{ y: isList ? 0 : -6, x: isList ? 4 : 0, transition: { duration: 0.2 } }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2, ease: 'easeOut' }}
+      whileHover={{ y: isList ? 0 : -4, x: isList ? 4 : 0, transition: { duration: 0.2 } }}
       className={`bg-white rounded-[1.5rem] overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border ${product.cardBorder} flex ${isList ? 'flex-row items-center' : 'flex-col'} group relative`}
     >
       {/* ── IMAGE AREA ──────────────────────────── */}

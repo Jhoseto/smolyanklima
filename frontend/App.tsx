@@ -29,6 +29,7 @@ import { HeroBackground } from './components/sections/HeroBackground';
 import { AIChatWidget } from './components/ai-assistant';
 import { LiveChatWidget } from './components/live-chat/LiveChatWidget';
 import { AnalyticsPageTracker } from './lib/consent/ConsentProvider';
+import { ScrollToHomeHash } from './components/layout/ScrollToHomeHash';
 
 // Lazy load страници за по-бързо начално зареждане
 const CatalogPage = lazy(() => import('./pages/CatalogPage'));
@@ -172,6 +173,7 @@ function App() {
   return (
     <Suspense fallback={<PageLoader />}>
       <AnalyticsPageTracker pathname={pagePath} />
+      <ScrollToHomeHash />
       <Navbar />
       <AnimatePresence mode="wait">
         <Routes location={location}>

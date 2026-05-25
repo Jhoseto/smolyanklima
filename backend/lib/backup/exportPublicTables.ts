@@ -38,8 +38,22 @@ export async function exportAllPublicTables(supabase: SupabaseClient): Promise<B
   return { exportedAt, names, data, tableErrors };
 }
 
+/** Име на файл с локална дата/час (Europe/Sofia). */
 export function backupFilename(exportedAt: string, ext: "json" | "xlsx"): string {
-  const stamp = exportedAt.replace(/[:]/g, "-").replace(/\./g, "-");
+  const d = new Date(exportedAt);
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Sofia",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+  const pick = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value?.padStart(2, "0") ?? "00";
+  const stamp = `${pick("year")}-${pick("month")}-${pick("day")}_${pick("hour")}-${pick("minute")}-${pick("second")}`;
   if (ext === "xlsx") return `smolyanklima-prodazhbi-stoka-${stamp}.xml`;
   return `smolyanklima-backup-${stamp}.json`;
 }

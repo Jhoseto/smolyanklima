@@ -48,8 +48,13 @@ export default async function LoginPage({
           <div className="login-alert login-alert--warn" role="alert">
             <strong style={{ display: "block", marginBottom: 6 }}>Нямате администраторски права</strong>
             <span>
-              Акаунтът не е активиран в списъка на администраторите. Свържете се с отговорното лице или проверете записа в{" "}
-              <code style={{ opacity: 0.95 }}>admin_users</code>.
+              Паролата е приета, но акаунтът липсва или е неактивен в{" "}
+              <code style={{ opacity: 0.95 }}>admin_users</code>. След възстановяване от резервно копие Auth
+              потребителите не се импортират — в Supabase SQL Editor свържете UUID от{" "}
+              <code style={{ opacity: 0.95 }}>auth.users</code> с ред в{" "}
+              <code style={{ opacity: 0.95 }}>admin_users</code> (роля{" "}
+              <code style={{ opacity: 0.95 }}>master_admin</code>,{" "}
+              <code style={{ opacity: 0.95 }}>is_active = true</code>).
             </span>
           </div>
         )}

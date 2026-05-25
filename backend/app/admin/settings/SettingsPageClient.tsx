@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { SectionTitle, Card, Input, Button } from "../ui";
-import { RefreshCw, Save, Database, Download, FolderOpen, CloudDownload, Layers } from "lucide-react";
+import { RefreshCw, Save, Database, Download, FolderOpen, CloudDownload, Layers, Upload } from "lucide-react";
 import type { BulclimaSyncProgressEvent } from "@/lib/import/bulclima/bulclimaSyncProgress";
 import type { ClimacomSyncProgressEvent } from "@/lib/import/climacom/climacomSyncProgress";
 import type { CondexSyncProgressEvent } from "@/lib/import/condex/condexSyncProgress";
@@ -12,6 +12,7 @@ import {
   pickLocalFolder,
   writeBlobToDirectory,
 } from "@/lib/client/pickLocalFolder";
+import { previewBackupPayload, type BackupFilePreview } from "@/lib/backup/backupManifest";
 
 const MAX_SYNC_LOG_LINES = 300;
 
@@ -293,6 +294,15 @@ export default function SettingsPageClient() {
   const [backupReminderDays, setBackupReminderDays] = useState("7");
   const [backupSaving, setBackupSaving] = useState(false);
   const [backupDownloading, setBackupDownloading] = useState<"json" | "xlsx" | null>(null);
+  const [backupRestoreMode, setBackupRestoreMode] = useState<"merge" | "replace">("replace");
+  const [backupRestoreConfirm, setBackupRestoreConfirm] = useState("");
+  const [backupRestoring, setBackupRestoring] = useState(false);
+  const [backupRestoreInfo, setBackupRestoreInfo] = useState<string | null>(null);
+  const [backupFilePreview, setBackupFilePreview] = useState<BackupFilePreview | null>(null);
+  const [backupLastDownloadSummary, setBackupLastDownloadSummary] = useState<BackupFilePreview | null>(null);
+  const [backupSystemOk, setBackupSystemOk] = useState<boolean | null>(null);
+  const [backupSystemMessage, setBackupSystemMessage] = useState<string | null>(null);
+  const backupFileInputRef = useRef<HTMLInputElement>(null);
   const [lastBackupAt, setLastBackupAt] = useState<string | null>(null);
   const [bulclimaSyncing, setBulclimaSyncing] = useState(false);
   const [reclassifying, setReclassifying] = useState(false);
@@ -558,10 +568,22 @@ export default function SettingsPageClient() {
     setBackupLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/admin/settings", { credentials: "include" });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Грешка");
+      const [settingsRes, statusRes] = await Promise.all([
+        fetch("/api/admin/settings", { credentials: "include" }),
+        fetch("/api/admin/backup/status", { credentials: "include" }),
+      ]);
+      const json = await settingsRes.json();
+      if (!settingsRes.ok) throw new Error(json.error || "Грешка");
       setItems(json.data ?? []);
+
+      const statusJson = (await statusRes.json().catch(() => ({}))) as { ok?: boolean; message?: string };
+      if (statusRes.ok) {
+        setBackupSystemOk(Boolean(statusJson.ok));
+        setBackupSystemMessage(statusJson.message ?? null);
+      } else {
+        setBackupSystemOk(false);
+        setBackupSystemMessage("Неуспешна проверка на backup системата.");
+      }
     } catch (e: unknown) {
       setError(String(e instanceof Error ? e.message : e));
     } finally {
@@ -952,11 +974,26 @@ export default function SettingsPageClient() {
       const url =
         format === "xlsx" ? "/api/admin/backup/full?format=xlsx" : "/api/admin/backup/full";
       const res = await fetch(url, { credentials: "include" });
-      if (!res.ok) {
+      if (!res.ok && res.status !== 207) {
         const j = (await res.json().catch(() => null)) as { error?: string } | null;
         throw new Error(j?.error || "Грешка при генериране на архива");
       }
-      const blob = await res.blob();
+      let blob = await res.blob();
+      if (format === "json") {
+        const text = await blob.text();
+        try {
+          const summary = previewBackupPayload(JSON.parse(text));
+          setBackupLastDownloadSummary(summary);
+          if (summary.errors.length > 0) {
+            setError(
+              `Архивът е записан, но ${summary.errors.length} таблици не са експортирани напълно. Проверете manifest.tableErrors във файла.`,
+            );
+          }
+        } catch {
+          setBackupLastDownloadSummary(null);
+        }
+        blob = new Blob([text], { type: "application/json" });
+      }
       const cd = res.headers.get("Content-Disposition");
       let filename = format === "xlsx" ? "smolyanklima-prodazhbi-stoka.xml" : "smolyanklima-backup.json";
       const m = cd?.match(/filename="([^"]+)"/);
@@ -994,6 +1031,46 @@ export default function SettingsPageClient() {
       setError(String(e instanceof Error ? e.message : e));
     } finally {
       setBackupDownloading(null);
+    }
+  }
+
+  async function restoreFullBackup(file: File) {
+    if (backupRestoreConfirm.trim() !== "RESTORE") {
+      setError('Въведете RESTORE в полето за потвърждение.');
+      return;
+    }
+    setBackupRestoring(true);
+    setError(null);
+    setBackupRestoreInfo(null);
+    try {
+      const text = await file.text();
+      const backup = JSON.parse(text) as unknown;
+      const res = await fetch("/api/admin/backup/restore", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          backup,
+          mode: backupRestoreMode,
+          confirm: "RESTORE",
+        }),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        rowsInserted?: number;
+        tablesProcessed?: number;
+        mode?: string;
+      };
+      if (!res.ok) throw new Error(json.error || "Грешка при възстановяване");
+      setBackupRestoreInfo(
+        `Успешно възстановяване (${json.mode === "replace" ? "пълно" : "сливане"}): ${json.rowsInserted ?? 0} реда в ${json.tablesProcessed ?? 0} таблици. Sequences са синхронизирани.`,
+      );
+      setBackupRestoreConfirm("");
+      if (backupFileInputRef.current) backupFileInputRef.current.value = "";
+    } catch (e: unknown) {
+      setError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setBackupRestoring(false);
     }
   }
 
@@ -1041,11 +1118,30 @@ export default function SettingsPageClient() {
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-black text-slate-900 tracking-tight">Резервно копие на базата данни</div>
                   <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                    <strong>JSON</strong> — пълен технически архив на базата. <strong>Excel</strong> — отчет за офиса: лист{" "}
-                    <strong>„Продажби“</strong> (всички продажби до момента) и <strong>„Налична стока“</strong> (артикули със
-                    статус „В наличност“). Запишете файловете на сигурно място.
+                    Периодично сваляйте <strong>Архив JSON</strong> в папка на компютъра (името включва дата и час). Файлът съдържа{" "}
+                    <strong>всички данни</strong> от public таблиците + инструкции за restore вътре в{" "}
+                    <code className="text-[10px] bg-slate-100 px-1 rounded">manifest.restoreGuide</code>. Структурата на таблиците
+                    е в GitHub migrations — при нов Supabase първо migrations, после import. <strong>Excel</strong> е само отчет
+                    (продажби/стока), не за restore.
                   </p>
                 </div>
+              </div>
+
+              {backupSystemOk === false && backupSystemMessage && (
+                <div className="mb-3 text-xs font-semibold text-red-900 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  {backupSystemMessage}
+                </div>
+              )}
+              {backupSystemOk === true && backupSystemMessage && (
+                <div className="mb-3 text-xs font-semibold text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                  {backupSystemMessage}
+                </div>
+              )}
+
+              <div className="mb-3 text-[11px] text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 leading-relaxed">
+                <strong className="block mb-1">Работен процес (катастрофа / смяна на Supabase):</strong>
+                1) Свали JSON архив → 2) Нов Supabase проект → 3) Пусни migrations от repo → 4) Deploy backend → 5) Import с{" "}
+                <strong>„Пълно възстановяване“</strong> → 6) Създай admin login в Supabase Auth.
               </div>
 
               {backupReminderDue && (
@@ -1159,6 +1255,122 @@ export default function SettingsPageClient() {
                   Excel: продажби и стока
                 </Button>
               </div>
+
+              {backupLastDownloadSummary && (
+                <p className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 mt-3">
+                  Последен JSON архив: {new Date(backupLastDownloadSummary.exportedAt).toLocaleString("bg-BG")} ·{" "}
+                  {backupLastDownloadSummary.tables} таблици · {backupLastDownloadSummary.totalRows.toLocaleString("bg-BG")} реда
+                  {backupLastDownloadSummary.errors.length > 0
+                    ? ` · ⚠ ${backupLastDownloadSummary.errors.length} таблици с грешки`
+                    : ""}
+                </p>
+              )}
+
+              <div className="mt-6 pt-5 border-t border-slate-200">
+                <div className="text-xs font-black text-slate-800 uppercase tracking-wide mb-2">Възстановяване от JSON архив</div>
+                <p className="text-[11px] text-slate-600 leading-relaxed mb-3">
+                  Използвайте запазен файл{" "}
+                  <code className="text-[10px] bg-slate-100 px-1 rounded">smolyanklima-backup-YYYY-MM-DD_HH-MM-SS.json</code>.
+                  <strong> Пълно възстановяване</strong> — за нов/празен Supabase (изчиства таблиците от архива и зарежда всички
+                  данни). <strong> Сливане</strong> — само актуализира съществуващи редове по id. Login паролите (Supabase Auth)
+                  не са в архива — създайте ги отново в Dashboard след restore.
+                </p>
+                <div className="flex flex-wrap gap-3 mb-3 text-xs">
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="backupRestoreMode"
+                      checked={backupRestoreMode === "replace"}
+                      onChange={() => setBackupRestoreMode("replace")}
+                      className="accent-brand-blue-600"
+                    />
+                    Пълно възстановяване (нов Supabase / катастрофа)
+                  </label>
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="backupRestoreMode"
+                      checked={backupRestoreMode === "merge"}
+                      onChange={() => setBackupRestoreMode("merge")}
+                      className="accent-slate-600"
+                    />
+                    Сливане (актуализация на текуща база)
+                  </label>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                  <label className="grid gap-1.5">
+                    <span className="text-xs font-bold text-slate-600">JSON архив</span>
+                    <input
+                      ref={backupFileInputRef}
+                      type="file"
+                      accept=".json,application/json"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) {
+                          setBackupFilePreview(null);
+                          return;
+                        }
+                        void file.text().then(
+                          (text) => {
+                            try {
+                              setBackupFilePreview(previewBackupPayload(JSON.parse(text)));
+                            } catch {
+                              setBackupFilePreview(null);
+                              setError("Избраният файл не е валиден backup JSON.");
+                            }
+                          },
+                          () => setBackupFilePreview(null),
+                        );
+                      }}
+                      className="text-xs file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-brand-blue-50 file:text-brand-blue-800 file:font-semibold"
+                    />
+                  </label>
+                  <label className="grid gap-1.5">
+                    <span className="text-xs font-bold text-slate-600">Потвърждение (въведете RESTORE)</span>
+                    <Input
+                      value={backupRestoreConfirm}
+                      onChange={(e) => setBackupRestoreConfirm(e.target.value)}
+                      placeholder="RESTORE"
+                      autoComplete="off"
+                    />
+                  </label>
+                </div>
+                {backupFilePreview && (
+                  <p className="text-xs text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-2 mb-3">
+                    Архив от {new Date(backupFilePreview.exportedAt).toLocaleString("bg-BG")} · {backupFilePreview.tables} таблици ·{" "}
+                    {backupFilePreview.totalRows.toLocaleString("bg-BG")} реда
+                    {backupFilePreview.errors.length > 0 ? (
+                      <span className="text-amber-800"> · ⚠ {backupFilePreview.errors.length} таблици с грешки при export</span>
+                    ) : null}
+                  </p>
+                )}
+                <Button
+                  variant={backupRestoreMode === "replace" ? "primary" : "secondary"}
+                  disabled={backupRestoring || backupDownloading !== null}
+                  className="gap-2"
+                  onClick={() => {
+                    const file = backupFileInputRef.current?.files?.[0];
+                    if (!file) {
+                      setError("Изберете JSON файл за възстановяване.");
+                      return;
+                    }
+                    void restoreFullBackup(file);
+                  }}
+                >
+                  {backupRestoring ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Upload className="w-4 h-4" />
+                  )}
+                  Възстанови в Supabase
+                </Button>
+                {backupRestoreInfo && (
+                  <p className="text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 mt-3">
+                    {backupRestoreInfo}
+                  </p>
+                )}
+              </div>
+
               <p className="text-[10px] text-slate-500 mt-3 leading-relaxed">
                 За автоматични седмични копия на ниво PostgreSQL вижте Supabase Dashboard → Database → Backups.
               </p>

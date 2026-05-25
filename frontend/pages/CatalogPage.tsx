@@ -169,9 +169,6 @@ const CatalogPage = () => {
   const catalogToolsRef = useRef<HTMLDivElement>(null);
   const catalogTopAnchorRef = useRef<HTMLDivElement>(null);
   const pendingPageScrollRef = useRef(false);
-  // Когато е true — картите се показват без enter анимации (само при пагинация)
-  const [suppressCardAnims, setSuppressCardAnims] = useState(false);
-  
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [quickViewProduct, setQuickViewProduct] = useState<CatalogProduct | null>(null);
@@ -213,6 +210,12 @@ const CatalogPage = () => {
     const t = setTimeout(() => setDebouncedSearch(search), 150);
     return () => clearTimeout(t);
   }, [search]);
+
+  const [debouncedPriceRange, setDebouncedPriceRange] = useState(priceRange);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedPriceRange(priceRange), 250);
+    return () => clearTimeout(t);
+  }, [priceRange]);
 
   const accessoryCounts = {
     all: allAccessories.length,
@@ -331,13 +334,16 @@ const CatalogPage = () => {
       btus,
       energyClasses,
       features,
-      priceRange,
+      priceRange: debouncedPriceRange,
       sortBy,
     });
     const prevSig = prevListFiltersSigRef.current;
-    if (prevSig !== null && prevSig !== listFiltersSig && page !== 1) {
-      setPage(1);
-      return;
+    if (prevSig !== null && prevSig !== listFiltersSig) {
+      pendingPageScrollRef.current = true;
+      if (page !== 1) {
+        setPage(1);
+        return;
+      }
     }
     prevListFiltersSigRef.current = listFiltersSig;
 
@@ -347,9 +353,9 @@ const CatalogPage = () => {
       try {
         if (activeTab === 'climate') {
           const minQ =
-            priceMax > priceMin && priceRange[0] > priceMin ? priceRange[0] : undefined;
+            priceMax > priceMin && debouncedPriceRange[0] > priceMin ? debouncedPriceRange[0] : undefined;
           const maxQ =
-            priceMax > priceMin && priceRange[1] < priceMax ? priceRange[1] : undefined;
+            priceMax > priceMin && debouncedPriceRange[1] < priceMax ? debouncedPriceRange[1] : undefined;
           const { data, meta } = await fetchProductsCatalogPage({
             q: debouncedSearch,
             cat: category,
@@ -380,7 +386,7 @@ const CatalogPage = () => {
           if (category !== 'all' && accessoryCategoryOf(p) !== category) return false;
           if (brands.length > 0 && !brands.includes(p.brand)) return false;
           if (effectivePriceMax > effectivePriceMin) {
-            if (p.price < priceRange[0] || p.price > priceRange[1]) return false;
+            if (p.price < debouncedPriceRange[0] || p.price > debouncedPriceRange[1]) return false;
           }
           return true;
         });
@@ -411,7 +417,7 @@ const CatalogPage = () => {
       } finally {
         if (!cancelled) {
           setListLoading(false);
-          // Скрол при пагинация — след два browser paint-а (гарантирано рендирани карти)
+          // Скрол при пагинация или смяна на филтри — след два browser paint-а
           if (pendingPageScrollRef.current) {
             pendingPageScrollRef.current = false;
             requestAnimationFrame(() => {
@@ -425,7 +431,6 @@ const CatalogPage = () => {
                   ? anchor.getBoundingClientRect().top + window.scrollY - navH
                   : 0;
                 window.scrollTo({ top: Math.max(0, y), behavior: 'auto' });
-                setSuppressCardAnims(false);
               });
             });
           }
@@ -446,7 +451,7 @@ const CatalogPage = () => {
     btus,
     energyClasses,
     features,
-    priceRange,
+    debouncedPriceRange,
     sortBy,
     page,
     priceMin,
@@ -494,7 +499,6 @@ const CatalogPage = () => {
 
   const goToPage = useCallback((nextPage: number) => {
     pendingPageScrollRef.current = true;
-    setSuppressCardAnims(true);
     setPage(nextPage);
   }, []);
 
@@ -903,15 +907,14 @@ const CatalogPage = () => {
                 {[...Array(8)].map((_, i) => <SkeletonCard key={i} />)}
               </div>
             ) : (
-              <motion.div
-                layout={!suppressCardAnims}
+              <div
                 className={`grid gap-4 lg:gap-5 ${
                   viewMode === 'grid'
                     ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
                     : 'grid-cols-1'
                 }`}
               >
-                <AnimatePresence mode="popLayout">
+                <AnimatePresence mode="sync">
                   {!listLoading && products.length === 0 ? (
                     <div key="empty" className="col-span-full">
                       <EmptyState onReset={resetAllFilters} />
@@ -934,7 +937,6 @@ const CatalogPage = () => {
                           key={product.id}
                           product={product}
                           index={index}
-                          noEnterAnim={suppressCardAnims}
                           onQuickView={(p) => {
                             if (activeTab === 'accessories') {
                               navigate(`/aksesoar/${p.id}`);
@@ -958,7 +960,7 @@ const CatalogPage = () => {
                     })
                   )}
                 </AnimatePresence>
-              </motion.div>
+              </div>
             )}
 
             {!showSkeleton && products.length > 0 && total > 0 && (

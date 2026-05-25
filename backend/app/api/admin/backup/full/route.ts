@@ -5,6 +5,7 @@ import { logAdminActivity } from "@/lib/admin/audit";
 import { buildBusinessExcelBuffer } from "@/lib/backup/buildExcelBackup";
 import { exportBusinessExcelData } from "@/lib/backup/exportBusinessExcelData";
 import { backupFilename, exportAllPublicTables } from "@/lib/backup/exportPublicTables";
+import { BACKUP_RESTORE_GUIDE } from "@/lib/backup/backupManifest";
 
 export const maxDuration = 300;
 
@@ -91,19 +92,27 @@ export async function GET(req: NextRequest) {
       tables: names,
       rowCounts,
       tableErrors: hadErrors ? tableErrors : undefined,
+      restoreGuide: BACKUP_RESTORE_GUIDE,
     },
     data,
   };
 
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json; charset=utf-8",
+    "Content-Disposition": `attachment; filename="${filename}"`,
+    "Cache-Control": "no-store",
+    "X-Backup-Tables": String(names.length),
+    "X-Backup-Rows": String(Object.values(rowCounts).reduce((a, b) => a + b, 0)),
+  };
+  if (hadErrors) {
+    headers["X-Backup-Errors"] = String(Object.keys(tableErrors).length);
+  }
+
   return withCors(
     req,
     new NextResponse(JSON.stringify(body), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/json; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${filename}"`,
-        "Cache-Control": "no-store",
-      },
+      status: hadErrors ? 207 : 200,
+      headers,
     }),
   );
 }

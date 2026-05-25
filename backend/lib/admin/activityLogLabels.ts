@@ -41,6 +41,7 @@ const ACTION_LABELS: Record<string, string> = {
   "media.upload": "Качено изображение",
   "email_outbox.drain": "Изпратени натрупани имейли",
   "backup.full_export": "Създаден пълен JSON backup",
+  "backup.full_restore": "Възстановен JSON backup в базата",
   "backup.business_export_xlsx": "Експортирани бизнес данни в Excel",
   "catalog.bittel_sync": "Синхронизация с Bittel",
   "catalog.bulclima_sync": "Синхронизация с Bulclima",

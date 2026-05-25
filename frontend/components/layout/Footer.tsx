@@ -120,7 +120,14 @@ export const Footer = () => {
             >
               Управление на бисквитки
             </button>
-            <a href="#" className="hover:text-white transition-colors">Developed by K. Serezliev</a>
+            <a
+              href="https://www.facebook.com/kostadin.serezliev"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-white transition-colors"
+            >
+              Developed by K. Serezliev
+            </a>
           </div>
         </div>
       </div>
