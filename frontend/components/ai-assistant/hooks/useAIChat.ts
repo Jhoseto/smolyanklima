@@ -123,9 +123,6 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
         hallucinationGuard.current.updateProducts(mapped);
         return mapped;
       } catch (err) {
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('[useAIChat] Catalog load failed:', err);
-        }
         return aiProductsRef.current;
       } finally {
         catalogLoadingRef.current = null;
@@ -403,10 +400,6 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
       
       if (!validationResult.isValid && validationResult.correctedContent) {
         finalContent = validationResult.correctedContent;
-        // Only log in development
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('Response corrected by hallucination guard:', validationResult.violations);
-        }
       }
 
       // Apply emotional intelligence
@@ -464,13 +457,6 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
       emotionalIntelligence.updateWarmth(updatedConversation.id, aiMessage);
 
     } catch (err) {
-      // Only log errors in development
-      if (process.env.NODE_ENV === 'development') {
-        console.error('AI Chat Error:', err);
-        console.error('Error details:', JSON.stringify(err, null, 2));
-      }
-      
-      // Handle rate limit errors specifically
       if (err && typeof err === 'object' && 'code' in err && err.code === 'RATE_LIMIT_EXCEEDED') {
         setError('Надвишили сте дневния лимит за съобщения. Моля, опитайте отново утре или се свържете с нас на телефон: 0888 58 58 16');
       } else {

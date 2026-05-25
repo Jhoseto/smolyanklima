@@ -56,8 +56,7 @@ export class ProductSearchSkill {
         products: topProducts,
         confidence: results[0].score,
       };
-    } catch (error) {
-      console.error('ProductSearchSkill error:', error);
+    } catch {
       return {
         success: false,
         response: 'Съжалявам, имаше технически проблем при търсенето. Опитайте отново или се свържете с нас на 0876 123 456.',

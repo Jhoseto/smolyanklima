@@ -61,9 +61,8 @@ export function useUserContext(): UseUserContextReturn {
           setUserContext(defaultContext);
           saveContext(defaultContext);
         }
-      } catch (err) {
+      } catch {
         setError('Failed to load user context');
-        console.error('Error loading user context:', err);
       } finally {
         setIsLoading(false);
       }

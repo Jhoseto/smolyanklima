@@ -39,8 +39,7 @@ export class HandoffSkill {
         response,
         confidence: 1.0,
       };
-    } catch (error) {
-      console.error('HandoffSkill error:', error);
+    } catch {
       return {
         success: false,
         response: 'Съжалявам, имаше проблем при свързването. Моля, обадете се директно на 0876 123 456.',

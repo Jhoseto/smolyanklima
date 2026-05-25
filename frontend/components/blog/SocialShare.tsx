@@ -52,8 +52,7 @@ export const SocialShare: React.FC<SocialShareProps> = ({
       await navigator.clipboard.writeText(fullUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
+    } catch {
     }
   };
 

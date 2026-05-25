@@ -91,8 +91,7 @@ export const CompareBar = ({ compareList, onRemove, onClear, initialOpenTable = 
       }
       
       setAiRecommendation(recommendationText);
-    } catch (error) {
-      console.error('Error generating AI recommendation:', error);
+    } catch {
       setAiRecommendation('Не успяхме да генерираме AI препоръка. Моля, опитайте отново.');
     } finally {
       setIsLoadingAi(false);

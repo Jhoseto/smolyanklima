@@ -172,8 +172,8 @@ export function loadUserContext(): UserContext | null {
     if (stored) {
       try {
         return JSON.parse(stored);
-      } catch (e) {
-        console.error('Failed to parse user context', e);
+      } catch {
+        return null;
       }
     }
   }

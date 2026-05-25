@@ -50,14 +50,6 @@ class HallucinationGuard {
       correctedContent = this.correctResponse(response);
     }
 
-    // Log violations if enabled
-    if (!isValid && this.config.logViolations) {
-      // Only log in development, not in production
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('[HallucinationGuard] Violations detected:', this.violations);
-      }
-    }
-
     return {
       isValid,
       violations: this.violations,

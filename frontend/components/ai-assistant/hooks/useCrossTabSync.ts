@@ -65,7 +65,6 @@ export function useCrossTabSync(options: UseCrossTabSyncOptions): UseCrossTabSyn
 
     // Check if BroadcastChannel is supported
     if (typeof BroadcastChannel === 'undefined') {
-      console.warn('BroadcastChannel not supported in this browser');
       return;
     }
 
@@ -118,8 +117,7 @@ export function useCrossTabSync(options: UseCrossTabSyncOptions): UseCrossTabSyn
         channel.close();
         broadcastChannelRef.current = null;
       };
-    } catch (error) {
-      console.error('BroadcastChannel initialization error:', error);
+    } catch {
     }
   }, [conversationId, onExternalMessage]);
 
@@ -137,8 +135,7 @@ export function useCrossTabSync(options: UseCrossTabSyncOptions): UseCrossTabSyn
 
     try {
       broadcastChannelRef.current.postMessage(message);
-    } catch (error) {
-      console.error('Failed to sync state:', error);
+    } catch {
     }
   }, [conversationId]);
 
@@ -156,8 +153,7 @@ export function useCrossTabSync(options: UseCrossTabSyncOptions): UseCrossTabSyn
 
     try {
       broadcastChannelRef.current.postMessage(syncMsg);
-    } catch (error) {
-      console.error('Failed to sync message:', error);
+    } catch {
     }
   }, [conversationId]);
 
@@ -190,8 +186,7 @@ export function useStorageSync(conversationId: string | null): {
         tabId: generateTabId(),
       });
       localStorage.setItem(storageKey, serialized);
-    } catch (error) {
-      console.error('Failed to sync to storage:', error);
+    } catch {
     }
   }, [conversationId, storageKey]);
 
@@ -204,8 +199,7 @@ export function useStorageSync(conversationId: string | null): {
       
       const parsed = JSON.parse(stored);
       return parsed.data;
-    } catch (error) {
-      console.error('Failed to get from storage:', error);
+    } catch {
       return null;
     }
   }, [conversationId, storageKey]);

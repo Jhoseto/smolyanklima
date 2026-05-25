@@ -33,8 +33,7 @@ export class ObjectionHandlingSkill {
         response,
         confidence: 0.8,
       };
-    } catch (error) {
-      console.error('ObjectionHandlingSkill error:', error);
+    } catch {
       return {
         success: false,
         response: 'Разбирам Вашето притеснение. Нека Ви свържа с Митко на 0876 123 456, който ще Ви помогне с конкретната ситуация.',

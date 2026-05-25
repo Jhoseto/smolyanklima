@@ -50,9 +50,7 @@ export function useConversation(options: UseConversationOptions = {}): UseConver
           setConversation(newConversation);
           saveConversation(newConversation, []);
         }
-      } catch (err) {
-        console.error('Error loading conversation:', err);
-        // Create fresh conversation on error
+      } catch {
         const newConversation = createNewConversation(userContext);
         setConversation(newConversation);
       }

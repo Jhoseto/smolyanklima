@@ -146,8 +146,8 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({
           const msgs = purgeIfExpired<Message[]>(storedMessages);
           if (msgs) setMessages(msgs);
           else localStorage.removeItem(STORAGE_KEYS.messages);
-        } catch (e) {
-          console.error('Failed to parse stored messages', e);
+        } catch {
+          localStorage.removeItem(STORAGE_KEYS.messages);
         }
       }
       
@@ -156,8 +156,8 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({
           const conv = purgeIfExpired<Conversation>(storedConversation);
           if (conv) setConversation(conv);
           else localStorage.removeItem(STORAGE_KEYS.conversation);
-        } catch (e) {
-          console.error('Failed to parse stored conversation', e);
+        } catch {
+          localStorage.removeItem(STORAGE_KEYS.conversation);
         }
       }
       
@@ -166,8 +166,8 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({
           const ctx = purgeIfExpired<UserContext>(storedUserContext);
           if (ctx) setUserContextState(ctx);
           else localStorage.removeItem(STORAGE_KEYS.userContext);
-        } catch (e) {
-          console.error('Failed to parse stored user context', e);
+        } catch {
+          localStorage.removeItem(STORAGE_KEYS.userContext);
         }
       }
     }

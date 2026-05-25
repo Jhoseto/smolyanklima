@@ -112,7 +112,6 @@ class ComparisonAIService {
 
     // If parsing failed, use the raw response as summary
     if (!summary && !bestChoice && keyDifferences.length === 0) {
-      console.log('Parsing failed, using raw response');
       return {
         summary: response.trim(),
         bestChoice: '',

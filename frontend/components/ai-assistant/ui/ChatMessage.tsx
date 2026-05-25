@@ -153,10 +153,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
             {message.metadata.actions.map((action, idx) => (
               <button
                 key={idx}
-                onClick={() => {
-                  // Handle action click
-                  console.log('Action clicked:', action);
-                }}
+                onClick={() => {}}
                 style={{
                   backgroundColor: 'white',
                   border: `1px solid ${primaryColor}`,

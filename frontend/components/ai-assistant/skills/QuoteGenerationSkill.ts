@@ -42,8 +42,7 @@ export class QuoteGenerationSkill {
         products,
         confidence: 0.9,
       };
-    } catch (error) {
-      console.error('QuoteGenerationSkill error:', error);
+    } catch {
       return {
         success: false,
         response: 'Съжалявам, имаше проблем при генерирането на офертата. Моля, свържете се с нас на 0876 123 456 за персонална оферта.',

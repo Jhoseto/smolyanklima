@@ -39,11 +39,6 @@ class AIAnalytics {
     if (this.events.length > this.maxEvents) {
       this.events = this.events.slice(-this.maxEvents);
     }
-    
-    // Send to analytics endpoint or console in development
-    if (import.meta.env.DEV) {
-      console.log('[AI Analytics]', event);
-    }
 
     if (readConsent()?.analytics) {
       trackAiEvent(eventType, metadata);
@@ -161,19 +156,6 @@ class AIAnalytics {
    */
   private generateSessionId(): string {
     return `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  }
-
-  /**
-   * Send to analytics endpoint (implement based on your analytics provider)
-   */
-  private async sendToAnalyticsEndpoint(event: AnalyticsEvent): Promise<void> {
-    // Implement based on your analytics provider (Google Analytics, Mixpanel, etc.)
-    // Example:
-    // await fetch('/api/analytics', {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify(event),
-    // });
   }
 }
 

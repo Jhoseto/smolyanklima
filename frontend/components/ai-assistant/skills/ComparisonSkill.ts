@@ -42,8 +42,7 @@ export class ComparisonSkill {
         products,
         confidence: 0.9,
       };
-    } catch (error) {
-      console.error('ComparisonSkill error:', error);
+    } catch {
       return {
         success: false,
         response: 'Съжалявам, имаше проблем при сравнението. Опитайте отново или се свържете с нас.',
