@@ -4,20 +4,19 @@ import { Clock, ShoppingCart, User, CheckCircle2, TrendingUp, Star, Package, Map
 
 // Разширени съобщения за социално доказателство
 const ALL_MESSAGES = [
-  { text: "Иван от Смолян току-що купи Daikin Perfera", icon: ShoppingCart, type: 'purchase' },
-  { text: "Мария от Чепеларе поръча Mitsubishi Elegant", icon: ShoppingCart, type: 'purchase' },
-  { text: "3 човека разглеждат Daikin Perfera в момента", icon: User, type: 'viewing' },
-  { text: "5 човека разглеждат този продукт", icon: User, type: 'viewing' },
-  { text: "Последна поръчка: преди 12 минути", icon: Clock, type: 'recent' },
-  { text: "Нова поръчка: преди 8 минути", icon: Clock, type: 'recent' },
+  { text: "Потребител от региона направи запитване Daikin Perfera", icon: ShoppingCart, type: 'purchase' },
+  { text: "Потребител от региона направи запитване за Mitsubishi Elegant", icon: ShoppingCart, type: 'purchase' },
+  { text: "2 човека разглеждат Daikin Perfera в момента", icon: User, type: 'viewing' },
+  { text: "3 човека разглеждат този продукт", icon: User, type: 'viewing' },
+  { text: "Нова заявка: преди 18 минути", icon: Clock, type: 'recent' },
   { text: "Нова доставка: Mitsubishi MSZ-LN наличен", icon: Package, type: 'stock' },
   { text: "Популярно: Daikin Perfera се разпродава бързо", icon: TrendingUp, type: 'trending' },
   { text: "Топ оценка: 4.9★ от 127 клиента", icon: Star, type: 'rating' },
-  { text: "Петър от Девин поръча климатик с монтаж", icon: ShoppingCart, type: 'purchase' },
-  { text: "Гаранция 3 години на всички модели", icon: CheckCircle2, type: 'service' },
+  { text: "Нов клиент от Девин направи заявка за климатик с монтаж преди 30 минути", icon: ShoppingCart, type: 'purchase' },
+  { text: "Гаранция от 3 години на всички модели", icon: CheckCircle2, type: 'service' },
   { text: "3000+ успешни монтажа в региона", icon: TrendingUp, type: 'social' },
   { text: "25+ години опит в климатичната техника", icon: Star, type: 'social' },
-  { text: "Работим с всички марки: Daikin, Mitsubishi, Gree", icon: Package, type: 'brands' },
+  { text: "Работим с всички марки: Daikin, Mitsubishi, Toshiba, Fujitsu", icon: Package, type: 'brands' },
 ];
 
 export const SocialProofToasts = () => {
