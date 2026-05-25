@@ -212,7 +212,7 @@ export function ProductInquiryModal({ product, onClose, onSuccess, onError }: Pr
                       required
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
-                      placeholder="0888 123 456"
+                      placeholder="0888 58 58 16"
                       className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#00B4D8] focus:ring-2 focus:ring-[#00B4D8]/20"
                     />
                   </label>

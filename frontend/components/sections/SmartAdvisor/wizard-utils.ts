@@ -1,14 +1,18 @@
 import type { WizardAnswers, ResultTier } from './types';
+import { formatBudgetRange } from './advisor-logic';
 
 export const LABEL_MAP: Record<string, Record<string, string>> = {
   roomType:     { bedroom: 'Спалня', living: 'Дневна', kids: 'Детска', office: 'Офис', kitchen: 'Кухня', commercial: 'Търговски' },
   area:         { tiny: 'до 20 м²', small: '20–30 м²', medium: '30–45 м²', large: '45–60 м²', xlarge: 'над 60 м²' },
   orientation:  { north: 'Север', south: 'Юг/Запад', top: 'Горен ет.', unknown: 'Без данни' },
   usage:        { cooling: 'Само лято', both: 'Лято и зима', heating: 'Основно зима' },
-  budget:       { budget: 'до €450', mid: '€450–720', comfort: '€720–1 150', premium: 'над €1 150' },
   floor:        { ground: 'Партерен', low: '2–5 ет.', mid: '6–10 ет.', high: 'Над 10 ет.' },
   buildingType: { panel: 'Панелен', brick: 'Тухлена', house: 'Къща', office: 'Офис сгр.', new: 'Ново стр.' },
 };
+
+export function formatBudgetAnswer(answers: WizardAnswers): string {
+  return formatBudgetRange(answers.budgetMin, answers.budgetMax);
+}
 
 const PRIORITY_FULL: Record<string, string> = {
   quiet:        'Тиха работа',
@@ -32,7 +36,7 @@ export function formatWizardMessage(
     `☀️  Изложение     : ${LABEL_MAP.orientation[answers.orientation ?? ''] ?? '—'}`,
     `❄️  Употреба      : ${LABEL_MAP.usage[answers.usage ?? ''] ?? '—'}`,
     `⭐ Приоритети     : ${(answers.priorities ?? []).map(p => PRIORITY_FULL[p] ?? p).join(' · ') || '—'}`,
-    `💰 Бюджет         : ${LABEL_MAP.budget[answers.budget ?? ''] ?? '—'}`,
+    `💰 Бюджет         : ${formatBudgetAnswer(answers)}`,
     `🏗️  Монтаж – Етаж : ${LABEL_MAP.floor[answers.floor ?? ''] ?? '—'}`,
     `🏘️  Монтаж – Сграда: ${LABEL_MAP.buildingType[answers.buildingType ?? ''] ?? '—'}`,
   ];

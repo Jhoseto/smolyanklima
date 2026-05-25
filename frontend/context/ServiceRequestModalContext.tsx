@@ -1,8 +1,13 @@
 import React, { createContext, useCallback, useContext, useState } from 'react';
 import { ServiceRequestModal } from '../components/sections/ServiceRequestModal';
+import type { ServiceType } from '../components/sections/ServiceRequestContent';
+
+export type ServiceRequestOpenOptions = {
+  serviceType?: ServiceType;
+};
 
 type ServiceRequestModalContextValue = {
-  open: () => void;
+  open: (options?: ServiceRequestOpenOptions) => void;
   close: () => void;
 };
 
@@ -10,14 +15,22 @@ const ServiceRequestModalContext = createContext<ServiceRequestModalContextValue
 
 export function ServiceRequestModalProvider({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [initialServiceType, setInitialServiceType] = useState<ServiceType>('consultation');
 
-  const open = useCallback(() => setIsOpen(true), []);
-  const close = useCallback(() => setIsOpen(false), []);
+  const open = useCallback((options?: ServiceRequestOpenOptions) => {
+    setInitialServiceType(options?.serviceType ?? 'consultation');
+    setIsOpen(true);
+  }, []);
+
+  const close = useCallback(() => {
+    setIsOpen(false);
+    setInitialServiceType('consultation');
+  }, []);
 
   return (
     <ServiceRequestModalContext.Provider value={{ open, close }}>
       {children}
-      <ServiceRequestModal open={isOpen} onClose={close} />
+      <ServiceRequestModal open={isOpen} onClose={close} initialServiceType={initialServiceType} />
     </ServiceRequestModalContext.Provider>
   );
 }

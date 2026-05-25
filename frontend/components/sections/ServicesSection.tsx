@@ -1,6 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Zap, Wrench, Clock, Thermometer, ArrowRight, Check, Phone, ChevronDown, ShieldCheck, BadgeCheck } from 'lucide-react';
+import { useServiceRequestModal } from '../../context/ServiceRequestModalContext';
+import type { ServiceType } from './ServiceRequestContent';
+
+const SERVICE_TO_FORM: Record<string, ServiceType> = {
+  sales: 'consultation',
+  install: 'installation',
+  service: 'maintenance',
+  repair: 'repair',
+};
 
 const services = [
   {
@@ -48,6 +57,7 @@ const services = [
 export const ServicesSection = () => {
   const [isExpanded, setIsExpanded] = useState(false);
   const sectionRef = useRef<HTMLElement>(null);
+  const { open: openServiceRequest } = useServiceRequestModal();
 
   useEffect(() => {
     if (isExpanded) {
@@ -192,7 +202,14 @@ export const ServicesSection = () => {
                           </div>
                         ))}
                       </div>
-                      <button className="w-full py-4 bg-[#00B4D8] text-white rounded-2xl font-bold text-xs hover:bg-[#FF4D00] transition-all hover:shadow-lg hover:shadow-[#FF4D00]/20 active:scale-[0.98]">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openServiceRequest({ serviceType: SERVICE_TO_FORM[service.id] });
+                        }}
+                        className="w-full py-4 bg-[#00B4D8] text-white rounded-2xl font-bold text-xs hover:bg-[#FF4D00] transition-all hover:shadow-lg hover:shadow-[#FF4D00]/20 active:scale-[0.98]"
+                      >
                         Заяви консултация
                       </button>
                     </motion.div>

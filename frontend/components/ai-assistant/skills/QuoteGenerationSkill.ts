@@ -5,6 +5,7 @@
 
 import type { IntentType, Product, UserContext, SkillResult, SkillContext } from '../types';
 import { aiAnalytics } from '../analytics';
+import { LEGAL_COMPANY } from '../../../data/legal/company';
 
 export class QuoteGenerationSkill {
   public name = 'QuoteGenerationSkill';
@@ -45,7 +46,7 @@ export class QuoteGenerationSkill {
     } catch {
       return {
         success: false,
-        response: 'Съжалявам, имаше проблем при генерирането на офертата. Моля, свържете се с нас на 0876 123 456 за персонална оферта.',
+        response: `Съжалявам, имаше проблем при генерирането на офертата. Моля, свържете се с нас на ${LEGAL_COMPANY.phone} за персонална оферта.`,
         confidence: 0,
       };
     }

@@ -8,6 +8,7 @@ import { getVectorSearchService } from '../services/vectorSearch';
 import { aiAnalytics } from '../analytics';
 import { getAllProducts } from '../../../data/productService';
 import { catalogProductsToAI } from '../data/catalogToAIProducts';
+import { LEGAL_COMPANY } from '../../../data/legal/company';
 
 export class ProductSearchSkill {
   public name = 'ProductSearchSkill';
@@ -59,7 +60,7 @@ export class ProductSearchSkill {
     } catch {
       return {
         success: false,
-        response: 'Съжалявам, имаше технически проблем при търсенето. Опитайте отново или се свържете с нас на 0876 123 456.',
+        response: `Съжалявам, имаше технически проблем при търсенето. Опитайте отново или се свържете с нас на ${LEGAL_COMPANY.phone}.`,
         confidence: 0,
       };
     }

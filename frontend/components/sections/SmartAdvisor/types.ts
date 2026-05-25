@@ -8,7 +8,8 @@ export interface WizardAnswers {
   orientation?: string;
   usage?: string;
   priorities?: string[];
-  budget?: string;
+  budgetMin?: number;
+  budgetMax?: number;
   floor?: string;
   buildingType?: string;
   name?: string;
@@ -39,7 +40,14 @@ export interface ContactStepDef {
   subtitle: string;
 }
 
-export type StepDef = OptionStepDef | ContactStepDef;
+export interface BudgetStepDef {
+  type: 'budget';
+  question: string;
+  subtitle: string;
+  hint?: string;
+}
+
+export type StepDef = OptionStepDef | ContactStepDef | BudgetStepDef;
 
 export interface ScoredProduct {
   product: CatalogProduct;

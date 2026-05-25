@@ -768,7 +768,7 @@ function AdminContactsPageInner() {
                 <Input
                   value={newForm.phone}
                   onChange={(e) => setNewForm((f) => ({ ...f, phone: e.target.value }))}
-                  placeholder="напр. 0888 123 456"
+                  placeholder="напр. 0888 58 58 16"
                 />
               </label>
 
@@ -1052,7 +1052,7 @@ function AdminContactsPageInner() {
                       <Input
                         value={editForm.phone}
                         onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
-                        placeholder="напр. 0888 123 456"
+                        placeholder="напр. 0888 58 58 16"
                       />
                     </label>
 

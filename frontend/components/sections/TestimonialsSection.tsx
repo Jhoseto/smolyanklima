@@ -124,9 +124,6 @@ export const TestimonialsSection = () => {
                   <Star key={star} className="w-5 h-5 text-[#F9AB00] fill-[#F9AB00] transition-transform group-hover:scale-110" />
                 ))}
               </div>
-              <div className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] leading-none">
-                РЕАЛНИ ОЦЕНКИ В <span className="text-[#4285F4]">G</span><span className="text-[#EA4335]">O</span><span className="text-[#FBBC05]">O</span><span className="text-[#4285F4]">G</span><span className="text-[#34A853]">L</span><span className="text-[#EA4335]">E</span>
-              </div>
             </div>
           </motion.div>
         </div>

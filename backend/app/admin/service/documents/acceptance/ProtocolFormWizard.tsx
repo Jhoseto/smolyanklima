@@ -477,7 +477,7 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
                   inputMode="numeric"
                   autoComplete="tel"
                   value={form.client_phone}
-                  placeholder="0888123456"
+                  placeholder="0888585816"
                   onChange={e => {
                     update("client_phone", digitsOnlyPhoneInput(e.target.value));
                     if (fieldErrors.client_phone) {

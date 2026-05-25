@@ -1,20 +1,47 @@
 import type { CatalogProduct } from '../../../data/types/product';
 import type { WizardAnswers, ScoredProduct, ResultTier } from './types';
 
-// ── Budget → total cost ceiling (климатик + монтаж, EUR) ───────────────────────
-const BUDGET_TOTAL_MAX_EUR: Record<string, number> = {
-  budget:  450,
-  mid:     720,
-  comfort: 1150,
-  premium: 9999,
-};
+export function formatEur(amount: number): string {
+  return `€${amount.toLocaleString('bg-BG')}`;
+}
 
-const BUDGET_TOTAL_MIN_EUR: Record<string, number> = {
-  budget:  0,
-  mid:     450,
-  comfort: 720,
-  premium: 1150,
-};
+export function formatBudgetRange(min?: number, max?: number): string {
+  if (min == null || max == null || min <= 0 || max <= 0) return '—';
+  return `${formatEur(min)} – ${formatEur(max)}`;
+}
+
+const OPEN_BUDGET_MAX = 50000;
+
+export function resolveBudgetFromAnswers(answers: WizardAnswers): { budgetMin: number; budgetMax: number } {
+  const min = answers.budgetMin ?? 0;
+  const max = answers.budgetMax ?? 0;
+  if (min > 0 && max > 0 && min <= max) {
+    return { budgetMin: min, budgetMax: max };
+  }
+  return { budgetMin: 800, budgetMax: 2500 };
+}
+
+export function getCatalogTotalCostBounds(products: CatalogProduct[]): { min: number; max: number } | null {
+  const totals = products
+    .filter((p) => p.price > 0)
+    .map((p) => p.price + calcInstallCost(p));
+  if (!totals.length) return null;
+  return { min: Math.min(...totals), max: Math.max(...totals) };
+}
+
+export function suggestBudgetRange(products: CatalogProduct[]): { min: number; max: number } {
+  const totals = products
+    .filter((p) => p.price > 0)
+    .map((p) => p.price + calcInstallCost(p))
+    .sort((a, b) => a - b);
+  if (!totals.length) return { min: 800, max: 2500 };
+  const pick = (p: number) => totals[Math.max(0, Math.min(totals.length - 1, Math.floor((totals.length * p) / 100) - 1))] ?? totals[0];
+  const round50 = (n: number) => Math.round(n / 50) * 50;
+  return {
+    min: round50(pick(25)),
+    max: round50(pick(75)),
+  };
+}
 
 // ── Installation cost (EUR) ────────────────────────────────────────────────────
 const FLOOR_EXTRA: Record<string, number> = {
@@ -190,15 +217,15 @@ function buildUserProfile(answers: WizardAnswers): UserProfile {
   const requiredCoolingKw = Math.round(baseCoolingKw * 10) / 10;
   const requiredHeatingKw = requiredCoolingKw * (answers.usage === 'heating' ? 1.08 : 1.0);
 
-  const budgetKey = answers.budget ?? 'comfort';
+  const budget = resolveBudgetFromAnswers(answers);
 
   return {
     targetSqm: area.target,
     minSqm: area.min,
     requiredCoolingKw,
     requiredHeatingKw,
-    budgetMin: BUDGET_TOTAL_MIN_EUR[budgetKey] ?? 0,
-    budgetMax: BUDGET_TOTAL_MAX_EUR[budgetKey] ?? 9999,
+    budgetMin: budget.budgetMin,
+    budgetMax: budget.budgetMax,
     needsHeating: answers.usage === 'heating' || answers.usage === 'both',
     priorities: answers.priorities ?? [],
     roomType: answers.roomType,
@@ -260,9 +287,11 @@ function powerAdequacy(metrics: ProductMetrics, profile: UserProfile, mode: Filt
 }
 
 function budgetAdequacy(totalCost: number, profile: UserProfile, mode: FilterMode): boolean {
-  const stretch = mode === 'strict' ? 1.05 : mode === 'relaxed' ? 1.12 : 1.25;
-  if (profile.budgetMax >= 5000) return true;
-  return totalCost <= profile.budgetMax * stretch;
+  const stretchHigh = mode === 'strict' ? 1.05 : mode === 'relaxed' ? 1.12 : 1.25;
+  const stretchLow = mode === 'strict' ? 0.92 : mode === 'relaxed' ? 0.85 : 0.75;
+  const min = profile.budgetMin > 0 ? profile.budgetMin * stretchLow : 0;
+  const max = profile.budgetMax >= OPEN_BUDGET_MAX ? Number.POSITIVE_INFINITY : profile.budgetMax * stretchHigh;
+  return totalCost >= min && totalCost <= max;
 }
 
 function isEligible(
@@ -318,19 +347,27 @@ function scoreSizing(metrics: ProductMetrics, profile: UserProfile): { score: nu
 
 function scoreBudget(totalCost: number, profile: UserProfile): { score: number; reasons: string[] } {
   const reasons: string[] = [];
-  if (profile.budgetMax >= 5000) {
+  const { budgetMin, budgetMax } = profile;
+  if (budgetMax >= OPEN_BUDGET_MAX) {
     return { score: 0.85, reasons: [] };
   }
 
-  const ratio = totalCost / profile.budgetMax;
-  let s: number;
-  if (ratio <= 0.75) s = 1;
-  else if (ratio <= 0.9) s = 0.92;
-  else if (ratio <= 1) s = 0.78;
-  else if (ratio <= 1.05) s = 0.45;
-  else s = 0.1;
+  const span = Math.max(1, budgetMax - budgetMin);
+  const mid = budgetMin + span / 2;
+  const dist = Math.abs(totalCost - mid) / (span / 2);
 
-  if (s >= 0.78) reasons.push('Вписва се в бюджета ви (с монтаж)');
+  let s: number;
+  if (totalCost >= budgetMin && totalCost <= budgetMax) {
+    if (dist <= 0.35) s = 1;
+    else if (dist <= 0.7) s = 0.88;
+    else s = 0.72;
+    reasons.push('В диапазона на бюджета ви (с монтаж)');
+  } else if (totalCost <= budgetMax * 1.05) {
+    s = 0.45;
+  } else {
+    s = 0.1;
+  }
+
   return { score: s, reasons };
 }
 
@@ -625,7 +662,7 @@ export function getThreeTiers(products: CatalogProduct[], answers: WizardAnswers
   const viable = scored.filter(s => s.score >= minViableScore);
   const pool = viable.length >= 3 ? viable : scored;
 
-  const isOpenBudget = profile.budgetMax >= 5000;
+  const isOpenBudget = profile.budgetMax >= OPEN_BUDGET_MAX;
   let budgetPick: ScoredProduct;
   let recommendedPick: ScoredProduct;
   let premiumPick: ScoredProduct;
@@ -643,17 +680,22 @@ export function getThreeTiers(products: CatalogProduct[], answers: WizardAnswers
       ?? [...pool].sort((a, b) => b.score - a.score)[0]
       ?? pool[0];
   } else {
+    const min = profile.budgetMin;
     const max = profile.budgetMax;
-    const lowCut = max * 0.62;
-    const midCut = max * 0.88;
+    const span = Math.max(1, max - min);
+    const lowCut = min + span * 0.33;
+    const midCut = min + span * 0.66;
 
-    const budgetPool = pool.filter(s => totalCost(s) <= lowCut);
-    const midPool = pool.filter(s => totalCost(s) > lowCut && totalCost(s) <= midCut);
-    const premiumPool = pool.filter(s => totalCost(s) > midCut && totalCost(s) <= max * 1.05);
+    const inRange = pool.filter((s) => totalCost(s) >= min && totalCost(s) <= max * 1.05);
+    const rangePool = inRange.length >= 3 ? inRange : pool.filter((s) => totalCost(s) <= max * 1.05);
 
-    budgetPick = budgetPool[0] ?? pool.filter(s => totalCost(s) <= max)[0] ?? pool[0];
-    recommendedPick = midPool[0] ?? pool[0];
-    premiumPick = premiumPool[0] ?? pool[pool.length - 1] ?? pool[0];
+    const budgetPool = rangePool.filter((s) => totalCost(s) <= lowCut);
+    const midPool = rangePool.filter((s) => totalCost(s) > lowCut && totalCost(s) <= midCut);
+    const premiumPool = rangePool.filter((s) => totalCost(s) > midCut && totalCost(s) <= max * 1.05);
+
+    budgetPick = budgetPool[0] ?? rangePool[0] ?? pool[0];
+    recommendedPick = midPool.sort((a, b) => b.score - a.score)[0] ?? pool[0];
+    premiumPick = premiumPool.sort((a, b) => b.score - a.score)[0] ?? rangePool[rangePool.length - 1] ?? pool[0];
   }
 
   const usedIds = new Set<string>();

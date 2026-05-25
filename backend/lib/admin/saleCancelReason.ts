@@ -3,7 +3,7 @@ export const SALE_CANCEL_REASONS = ["client_declined", "staff_error"] as const;
 export type SaleCancelReason = (typeof SALE_CANCEL_REASONS)[number];
 
 export const SALE_CANCEL_REASON_LABELS: Record<SaleCancelReason, string> = {
-  client_declined: "Клиентът се отказва",
+  client_declined: "Отказ от клиент",
   staff_error: "Лична грешка",
 };
 

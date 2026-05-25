@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { RecommendationCard } from './RecommendationCard';
 import { postPublicInquiry } from '../../../data/postInquiry';
-import { formatWizardMessage, LABEL_MAP } from './wizard-utils';
+import { formatWizardMessage, LABEL_MAP, formatBudgetAnswer } from './wizard-utils';
 import type { ResultTier, WizardAnswers } from './types';
 
 interface ResultsScreenProps {
@@ -177,7 +177,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ tiers, answers, on
               <SummaryRow icon={<Sun className="w-3.5 h-3.5" />}        label="Изложение"   value={LABEL_MAP.orientation[answers.orientation ?? ''] ?? '—'} />
               <SummaryRow icon={<Snowflake className="w-3.5 h-3.5" />}  label="Употреба"    value={LABEL_MAP.usage[answers.usage ?? ''] ?? '—'} />
               <SummaryRow icon={<StarIcon className="w-3.5 h-3.5" />}   label="Приоритети"  value={(answers.priorities ?? []).map(p => PRIORITY_LABELS[p] ?? p).join(' · ') || '—'} />
-              <SummaryRow icon={<Coins className="w-3.5 h-3.5" />}      label="Бюджет"      value={LABEL_MAP.budget[answers.budget ?? ''] ?? '—'} />
+              <SummaryRow icon={<Coins className="w-3.5 h-3.5" />}      label="Бюджет"      value={formatBudgetAnswer(answers)} />
               <SummaryRow icon={<Building className="w-3.5 h-3.5" />}   label="Етаж"        value={LABEL_MAP.floor[answers.floor ?? ''] ?? '—'} />
               <SummaryRow icon={<Layers className="w-3.5 h-3.5" />}     label="Тип сграда"  value={LABEL_MAP.buildingType[answers.buildingType ?? ''] ?? '—'} />
             </div>

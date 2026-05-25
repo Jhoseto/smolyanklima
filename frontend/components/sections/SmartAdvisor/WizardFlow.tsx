@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   BedDouble, Sofa, Baby, Briefcase, UtensilsCrossed, Store,
@@ -6,18 +6,17 @@ import {
   Moon, Sun, MoveUp, HelpCircle,
   Snowflake, Flame, CloudSun,
   VolumeX, Zap, Wifi, Wind, Sparkles, Clock,
-  Coins, CreditCard, Star, Gem,
   Layers, Trees, Hammer,
   Landmark,
-  ChevronLeft, ChevronRight, User, Phone, Info,
+  ChevronLeft, ChevronRight, User, Phone, Info, Coins,
 } from 'lucide-react';
 import { ProgressBar } from './ProgressBar';
 import { AnswerBreadcrumb } from './AnswerBreadcrumb';
 import { OptionCard } from './OptionCard';
 import { ResultsScreen } from './ResultsScreen';
-import { getThreeTiers } from './advisor-logic';
+import { getThreeTiers, formatEur, getCatalogTotalCostBounds, suggestBudgetRange } from './advisor-logic';
 import { getAllProducts } from '../../../data/productService';
-import { LABEL_MAP, formatWizardMessage } from './wizard-utils';
+import { LABEL_MAP } from './wizard-utils';
 import type { WizardAnswers, OptionStepDef, StepDef, ResultTier } from './types';
 
 // ── Step definitions ──────────────────────────────────────────────────────────
@@ -90,16 +89,10 @@ const STEPS: StepDef[] = [
     ],
   },
   {
-    type: 'single',
-    key: 'budget',
+    type: 'budget',
     question: 'Какъв е вашият бюджет?',
-    subtitle: 'Включва климатика и монтажа',
-    options: [
-      { value: 'budget',  label: 'До €450',         sublabel: 'Покрива ~60% от каталога', Icon: Coins },
-      { value: 'mid',     label: '€450 – €720',     sublabel: 'Покрива ~80% от каталога', Icon: CreditCard },
-      { value: 'comfort', label: '€720 – €1 150',   sublabel: 'Покрива ~90% от каталога', Icon: Star },
-      { value: 'premium', label: 'Над €1 150',      sublabel: 'Целият каталог',            Icon: Gem },
-    ],
+    subtitle: 'Обща сума за климатик и монтаж (EUR)',
+    hint: 'Посочете минималната и максималната сума, която сте готови да инвестирате.',
   },
   // ── Installation steps ──
   {
@@ -146,7 +139,8 @@ const STEP_LABELS: Record<keyof WizardAnswers, (val: string | string[]) => strin
   orientation:  v => LABEL_MAP.orientation[v as string] ?? String(v),
   usage:        v => LABEL_MAP.usage[v as string] ?? String(v),
   priorities:   v => (v as string[]).map(p => ({ quiet: 'Тихо', efficiency: 'А+++', wifi: 'WiFi', purification: 'Чист въздух', design: 'Дизайн', fast: 'Бърз монтаж' })[p] ?? p).join(' · '),
-  budget:       v => LABEL_MAP.budget[v as string] ?? String(v),
+  budgetMin:    v => String(v),
+  budgetMax:    v => String(v),
   floor:        v => LABEL_MAP.floor[v as string] ?? String(v),
   buildingType: v => LABEL_MAP.buildingType[v as string] ?? String(v),
   name:         v => v as string,
@@ -155,7 +149,7 @@ const STEP_LABELS: Record<keyof WizardAnswers, (val: string | string[]) => strin
 
 const STEP_KEY_ORDER: (keyof WizardAnswers)[] = [
   'roomType', 'area', 'orientation', 'usage', 'priorities',
-  'budget', 'floor', 'buildingType',
+  'budgetMin', 'floor', 'buildingType',
 ];
 
 const INSTALLATION_STEPS = [6, 7]; // indices in STEPS array
@@ -163,11 +157,21 @@ const INSTALLATION_STEPS = [6, 7]; // indices in STEPS array
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function isStepAnswered(step: StepDef, answers: WizardAnswers): boolean {
-  if (step.type === 'contact') return true; // always skippable
+  if (step.type === 'contact') return true;
+  if (step.type === 'budget') {
+    const min = answers.budgetMin ?? 0;
+    const max = answers.budgetMax ?? 0;
+    return min > 0 && max > 0 && min <= max;
+  }
   const key = (step as OptionStepDef).key;
   const val = answers[key];
   if (Array.isArray(val)) return val.length > 0;
   return !!val;
+}
+
+function parseBudgetInput(raw: string): number {
+  const digits = raw.replace(/[^\d]/g, '');
+  return digits ? Number(digits) : 0;
 }
 
 // ── Slide animation variants ───────────────────────────────────────────────────
@@ -192,6 +196,22 @@ export const WizardFlow: React.FC<WizardFlowProps> = ({ onOpenChat, onResultsMod
   const [answers, setAnswers] = useState<WizardAnswers>({});
   const [showResults, setShowResults] = useState(false);
   const [tiers, setTiers] = useState<ResultTier[] | null>(null);
+  const [catalogCostBounds, setCatalogCostBounds] = useState<{ min: number; max: number } | null>(null);
+  const [budgetSuggestion, setBudgetSuggestion] = useState({ min: 1000, max: 2500 });
+
+  useEffect(() => {
+    let cancelled = false;
+    getAllProducts()
+      .then((products) => {
+        if (cancelled) return;
+        setCatalogCostBounds(getCatalogTotalCostBounds(products));
+        setBudgetSuggestion(suggestBudgetRange(products));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Pending auto-advance timer ref (to avoid double-advance)
   const autoAdvanceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -214,6 +234,10 @@ export const WizardFlow: React.FC<WizardFlowProps> = ({ onOpenChat, onResultsMod
       setTiers([]);
     }
   }, [onResultsMode]);
+
+  const handleBudgetChange = useCallback((budgetMin: number, budgetMax: number) => {
+    setAnswers((a) => ({ ...a, budgetMin, budgetMax }));
+  }, []);
 
   const handleNext = useCallback(() => {
     if (stepIdx < STEPS.length - 1) {
@@ -326,8 +350,11 @@ export const WizardFlow: React.FC<WizardFlowProps> = ({ onOpenChat, onResultsMod
             <StepContent
               step={currentStep}
               answers={answers}
+              catalogCostBounds={catalogCostBounds}
+              budgetSuggestion={budgetSuggestion}
               onSelectSingle={handleSelectSingle}
               onSelectMulti={handleSelectMulti}
+              onBudgetChange={handleBudgetChange}
               onContactChange={(name, phone) => setAnswers(a => ({ ...a, name, phone }))}
             />
           </motion.div>
@@ -400,17 +427,39 @@ export const WizardFlow: React.FC<WizardFlowProps> = ({ onOpenChat, onResultsMod
 interface StepContentProps {
   step: StepDef;
   answers: WizardAnswers;
+  catalogCostBounds: { min: number; max: number } | null;
+  budgetSuggestion: { min: number; max: number };
   onSelectSingle: (key: keyof WizardAnswers, value: string) => void;
   onSelectMulti: (key: keyof WizardAnswers, value: string, max: number) => void;
+  onBudgetChange: (budgetMin: number, budgetMax: number) => void;
   onContactChange: (name: string, phone: string) => void;
 }
 
 const StepContent: React.FC<StepContentProps> = ({
-  step, answers, onSelectSingle, onSelectMulti, onContactChange,
+  step, answers, catalogCostBounds, budgetSuggestion,
+  onSelectSingle, onSelectMulti, onBudgetChange, onContactChange,
 }) => {
   const [showHint, setShowHint] = useState(false);
   const [localName, setLocalName] = useState(answers.name ?? '');
   const [localPhone, setLocalPhone] = useState(answers.phone ?? '');
+  const [localBudgetMin, setLocalBudgetMin] = useState(
+    answers.budgetMin ? String(answers.budgetMin) : '',
+  );
+  const [localBudgetMax, setLocalBudgetMax] = useState(
+    answers.budgetMax ? String(answers.budgetMax) : '',
+  );
+
+  useEffect(() => {
+    if (step.type !== 'budget') return;
+    if (answers.budgetMin || answers.budgetMax) return;
+    setLocalBudgetMin(String(budgetSuggestion.min));
+    setLocalBudgetMax(String(budgetSuggestion.max));
+    onBudgetChange(budgetSuggestion.min, budgetSuggestion.max);
+  }, [step.type, budgetSuggestion.min, budgetSuggestion.max, answers.budgetMin, answers.budgetMax, onBudgetChange]);
+
+  const budgetMinVal = parseBudgetInput(localBudgetMin);
+  const budgetMaxVal = parseBudgetInput(localBudgetMax);
+  const budgetInvalid = budgetMinVal > 0 && budgetMaxVal > 0 && budgetMinVal > budgetMaxVal;
 
   // Contact step
   if (step.type === 'contact') {
@@ -447,6 +496,68 @@ const StepContent: React.FC<StepContentProps> = ({
         <p className="text-center text-[11px] text-gray-400 font-light">
           🔒 Не споделяме данни с трети страни
         </p>
+      </div>
+    );
+  }
+
+  if (step.type === 'budget') {
+    return (
+      <div className="flex flex-col gap-5 max-w-md mx-auto py-2">
+        <div className="text-center">
+          <h3 className="text-xl font-outfit font-semibold text-gray-900 mb-1">{step.question}</h3>
+          <p className="text-sm text-gray-400 font-light">{step.subtitle}</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">От</span>
+            <div className="relative">
+              <Coins className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" strokeWidth={1.5} />
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder={String(budgetSuggestion.min)}
+                value={localBudgetMin}
+                onChange={(e) => {
+                  setLocalBudgetMin(e.target.value);
+                  onBudgetChange(parseBudgetInput(e.target.value), budgetMaxVal);
+                }}
+                className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 text-sm font-semibold text-gray-800 focus:outline-none focus:border-[#00B4D8] focus:ring-2 focus:ring-[#00B4D8]/10 transition-all"
+              />
+            </div>
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">До</span>
+            <div className="relative">
+              <Coins className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" strokeWidth={1.5} />
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder={String(budgetSuggestion.max)}
+                value={localBudgetMax}
+                onChange={(e) => {
+                  setLocalBudgetMax(e.target.value);
+                  onBudgetChange(budgetMinVal, parseBudgetInput(e.target.value));
+                }}
+                className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 text-sm font-semibold text-gray-800 focus:outline-none focus:border-[#00B4D8] focus:ring-2 focus:ring-[#00B4D8]/10 transition-all"
+              />
+            </div>
+          </label>
+        </div>
+
+        {budgetInvalid && (
+          <p className="text-xs text-red-500 text-center">Минимумът не може да е по-голям от максимума.</p>
+        )}
+
+        {catalogCostBounds && (
+          <p className="text-center text-xs text-gray-400 font-light">
+            Каталогът (с монтаж): {formatEur(catalogCostBounds.min)} – {formatEur(catalogCostBounds.max)}
+          </p>
+        )}
+
+        {step.hint && (
+          <p className="text-center text-[11px] text-gray-400 font-light">{step.hint}</p>
+        )}
       </div>
     );
   }

@@ -290,7 +290,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     if (!reason || !isSaleCancelReason(reason)) {
       return withCors(
         req,
-        NextResponse.json({ error: "Посочете причина за отказ: клиентът се отказва или лична грешка." }, { status: 400 }),
+        NextResponse.json({ error: "Посочете причина за отказ: отказ от клиент или лична грешка." }, { status: 400 }),
       );
     }
   }

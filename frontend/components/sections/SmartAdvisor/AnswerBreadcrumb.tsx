@@ -25,6 +25,18 @@ export const AnswerBreadcrumb: React.FC<AnswerBreadcrumbProps> = ({
   const chips: AnswerLabel[] = [];
 
   for (const [idx, key] of stepKeyOrder.entries()) {
+    if (key === 'budgetMin') {
+      if (answers.budgetMin && answers.budgetMax) {
+        chips.push({
+          key: 'budgetMin',
+          stepIndex: idx,
+          label: `€${answers.budgetMin.toLocaleString('bg-BG')} – €${answers.budgetMax.toLocaleString('bg-BG')}`,
+        });
+      }
+      continue;
+    }
+    if (key === 'budgetMax') continue;
+
     const val = answers[key];
     if (!val) continue;
     if (Array.isArray(val) && val.length === 0) continue;

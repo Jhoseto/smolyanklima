@@ -1,14 +1,15 @@
 import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X } from 'lucide-react';
-import { ServiceRequestContent } from './ServiceRequestContent';
+import { ServiceRequestContent, type ServiceType } from './ServiceRequestContent';
 
 interface ServiceRequestModalProps {
   open: boolean;
   onClose: () => void;
+  initialServiceType?: ServiceType;
 }
 
-export function ServiceRequestModal({ open, onClose }: ServiceRequestModalProps) {
+export function ServiceRequestModal({ open, onClose, initialServiceType = 'consultation' }: ServiceRequestModalProps) {
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
@@ -64,9 +65,11 @@ export function ServiceRequestModal({ open, onClose }: ServiceRequestModalProps)
                 Заявете услуга
               </div>
               <ServiceRequestContent
+                key={initialServiceType}
                 showTitle
                 formIdPrefix="sr-modal"
                 animateOnMount
+                initialServiceType={initialServiceType}
               />
             </div>
           </motion.div>

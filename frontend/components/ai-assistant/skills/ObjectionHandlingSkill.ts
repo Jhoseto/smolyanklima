@@ -5,6 +5,7 @@
 
 import type { IntentType, UserContext, SkillResult, SkillContext } from '../types';
 import { aiAnalytics } from '../analytics';
+import { LEGAL_COMPANY } from '../../../data/legal/company';
 
 export class ObjectionHandlingSkill {
   public name = 'ObjectionHandlingSkill';
@@ -36,7 +37,7 @@ export class ObjectionHandlingSkill {
     } catch {
       return {
         success: false,
-        response: 'Разбирам Вашето притеснение. Нека Ви свържа с Митко на 0876 123 456, който ще Ви помогне с конкретната ситуация.',
+        response: `Разбирам Вашето притеснение. Свържете се с нас на ${LEGAL_COMPANY.phone} — ще Ви помогнем с конкретната ситуация.`,
         confidence: 0,
       };
     }
@@ -157,7 +158,7 @@ export class ObjectionHandlingSkill {
       `• Безплатен оглед на място?\n` +
       `• Разговор с техник?\n` +
       `• Оферта за сравнение?\n\n` +
-      `**Свържете се с нас:** 0876 123 456\n` +
+      `**Свържете се с нас:** ${LEGAL_COMPANY.phone}\n` +
       `Митко или Георги ще се радват да помогнат! 😊`;
   }
 

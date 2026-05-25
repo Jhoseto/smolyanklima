@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Send, Clock, ShieldCheck, CheckCircle, Check } from 'lucide-react';
 import { postPublicInquiry } from '../../data/postInquiry';
 import { PrivacyCheckbox } from '../consent/PrivacyCheckbox';
 import { trackGenerateLead } from '../../lib/analytics/events';
 
-const CONTACT_SERVICE_OPTIONS: { label: string; value: 'consultation' | 'installation' | 'maintenance' | 'repair' }[] = [
+export type ServiceType = 'consultation' | 'installation' | 'maintenance' | 'repair';
+
+const CONTACT_SERVICE_OPTIONS: { label: string; value: ServiceType }[] = [
   { label: 'Консултация', value: 'consultation' },
   { label: 'Монтаж', value: 'installation' },
   { label: 'Профилактика', value: 'maintenance' },
@@ -21,6 +23,8 @@ export interface ServiceRequestContentProps {
   formIdPrefix?: string;
   /** Без whileInView — за модал */
   animateOnMount?: boolean;
+  /** Предварително избрана услуга (напр. от карта в секция Услуги) */
+  initialServiceType?: ServiceType;
 }
 
 export const ServiceRequestContent = ({
@@ -30,16 +34,21 @@ export const ServiceRequestContent = ({
   titleBold = 'услуга',
   formIdPrefix = 'contact',
   animateOnMount = false,
+  initialServiceType = 'consultation',
 }: ServiceRequestContentProps) => {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [message, setMessage] = useState('');
-  const [serviceType, setServiceType] = useState<(typeof CONTACT_SERVICE_OPTIONS)[number]['value']>('consultation');
+  const [serviceType, setServiceType] = useState<ServiceType>(initialServiceType);
   const [honeypot, setHoneypot] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
+
+  useEffect(() => {
+    setServiceType(initialServiceType);
+  }, [initialServiceType]);
 
   const nameId = `${formIdPrefix}-name`;
   const phoneId = `${formIdPrefix}-phone`;
@@ -309,7 +318,10 @@ export const ServiceRequestContent = ({
                 </p>
                 <button
                   type="button"
-                  onClick={() => setIsSubmitted(false)}
+                  onClick={() => {
+                    setIsSubmitted(false);
+                    setServiceType(initialServiceType);
+                  }}
                   className="text-sm font-bold text-[#00B4D8] uppercase tracking-widest hover:text-[#0077B6] transition-colors"
                 >
                   Изпрати нова заявка
