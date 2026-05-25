@@ -1,5 +1,6 @@
 import { loginAction } from "./actions";
 import { LoginPWAInstall } from "./LoginPWAInstall";
+import { AdminLogo } from "../admin/AdminLogo";
 
 export const metadata = {
   title: "Вход — администрация | Смолян Клима",
@@ -21,10 +22,7 @@ export default async function LoginPage({
     <div className="login-shell">
       <div className="login-card">
         <div className="login-brand">
-          <div className="login-logo">
-            <span className="login-logo-smolyan">СМОЛЯН</span>
-            <span className="login-logo-klima">КЛИМА</span>
-          </div>
+          <AdminLogo size="lg" uniqueId="login" showIcon={false} className="justify-center" />
           <p className="login-tagline">Административен портал</p>
         </div>
 

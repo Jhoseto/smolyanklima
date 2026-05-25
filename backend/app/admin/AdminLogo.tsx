@@ -17,11 +17,14 @@ export function AdminLogo({
   size = "md",
   className = "",
   uniqueId = "admin",
+  showIcon = true,
 }: {
   size?: LogoSize;
   className?: string;
   /** Уникален суфикс за SVG <defs> id-та (при повече от едно лого на страницата). */
   uniqueId?: string;
+  /** Показва SVG знака (C) отляво на текста. */
+  showIcon?: boolean;
 }) {
   const current = SIZES[size];
   const orangeId = `brandOrange-${uniqueId}`;
@@ -31,6 +34,7 @@ export function AdminLogo({
   return (
     <div className={`flex items-center select-none ${className}`}>
       <div className={`flex items-center tracking-[-0.05em] font-sans font-black leading-none uppercase ${current.text}`}>
+        {showIcon && (
         <svg
           viewBox="0 5 73 90"
           className={`${current.icon} ${current.margin} w-auto shrink-0`}
@@ -83,6 +87,7 @@ export function AdminLogo({
             filter={`url(#${shadowId})`}
           />
         </svg>
+        )}
 
         <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#FF4D00] via-[#FF6A00] to-[#FF2A4D]">
           СМОЛЯН
