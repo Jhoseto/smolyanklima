@@ -15,6 +15,7 @@ import {
   FolderOpen,
   Receipt,
   Truck,
+  Bot,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/admin/db";
 import { ChatNavBadge } from "./chat/ChatNavBadge";
@@ -70,7 +71,9 @@ function sectionForPath(pathname: string, role: AdminRole): AdminNavSectionId | 
     pathname === "/admin/staff" ||
     pathname.startsWith("/admin/staff/") ||
     pathname === "/admin/settings" ||
-    pathname.startsWith("/admin/settings/")
+    pathname.startsWith("/admin/settings/") ||
+    pathname === "/admin/ai-agent" ||
+    pathname.startsWith("/admin/ai-agent/")
   ) {
     return "admin";
   }
@@ -136,6 +139,7 @@ export function AdminSidebarNav({ role }: { role: AdminRole }) {
         <AdminNavCollapsibleSection id="admin" label="Администрация" open={open.admin} onToggle={toggle}>
           {showStaff && <NavLink href="/admin/staff" label="Персонал" icon={<ShieldCheck className="w-4 h-4" />} />}
           {showSettings && <NavLink href="/admin/settings" label="Настройки" icon={<Settings className="w-4 h-4" />} />}
+          {showSettings && <NavLink href="/admin/ai-agent" label="AI Agent" icon={<Bot className="w-4 h-4" />} />}
         </AdminNavCollapsibleSection>
       )}
     </nav>

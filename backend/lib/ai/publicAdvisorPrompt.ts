@@ -23,6 +23,8 @@ function containsJailbreak(text: string): boolean {
   return JAILBREAK_PATTERNS.some((re) => re.test(text));
 }
 
+export { containsJailbreak };
+
 /** Build trusted system prompt; client context is untrusted catalog/emotion data only. */
 export function buildPublicAdvisorSystemPrompt(advisorContext?: string): string {
   const ctx = (advisorContext ?? '').trim().slice(0, 8000);

@@ -7,7 +7,7 @@ import { logoutAction } from "@/app/login/actions";
 import {
   LayoutDashboard, Package, Users, MoreHorizontal, X,
   FileText, Star, Activity, Settings, LogOut, Headphones,
-  ShieldCheck, FolderOpen, MessageSquare, Receipt, Truck,
+  ShieldCheck, FolderOpen, MessageSquare, Receipt, Truck, Bot,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/admin/db";
 import type { LucideIcon } from "lucide-react";
@@ -85,7 +85,10 @@ export function MobileNav({
             links: [
               { href: "/admin/staff", label: "Персонал", icon: ShieldCheck },
               ...(role === "master_admin"
-                ? [{ href: "/admin/settings", label: "Настройки", icon: Settings }]
+                ? [
+                    { href: "/admin/settings", label: "Настройки", icon: Settings },
+                    { href: "/admin/ai-agent", label: "AI Agent", icon: Bot },
+                  ]
                 : []),
             ],
           });
