@@ -13,13 +13,13 @@ function adminLoginHref(): string {
 export const Footer = () => {
   const c = LEGAL_COMPANY;
   return (
-    <footer className="bg-gray-900 text-white pt-20 pb-10 border-t border-gray-800">
+    <footer className="bg-gray-900 text-white pt-16 pb-8 border-t border-gray-800">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-10 mb-10">
 
           {/* Brand */}
-          <div className="space-y-6">
-            <div className="flex items-center mb-2">
+          <div className="space-y-4">
+            <div className="flex items-center">
               <Logo isDark={true} size="md" />
             </div>
             <p className="text-gray-400 text-sm leading-relaxed">
@@ -44,8 +44,8 @@ export const Footer = () => {
 
           {/* Links */}
           <div>
-            <h3 className="text-lg font-bold mb-6">Бързи връзки</h3>
-            <ul className="space-y-4">
+            <h3 className="text-lg font-bold mb-3">Бързи връзки</h3>
+            <ul className="space-y-1.5">
               {[
                 { name: 'Начало', href: '#home' },
                 { name: 'Каталог', href: '/catalog' },
@@ -66,8 +66,8 @@ export const Footer = () => {
 
           {/* Services */}
           <div>
-            <h3 className="text-lg font-bold mb-6">Услуги</h3>
-            <ul className="space-y-4">
+            <h3 className="text-lg font-bold mb-3">Услуги</h3>
+            <ul className="space-y-1.5">
               {['Продажба на климатици', 'Професионален монтаж', 'Профилактика и почистване', 'Сервиз и ремонт', 'Оглед и консултация'].map((item) => (
                 <li key={item}>
                   <a href="#services" className="text-gray-400 hover:text-[#FF4D00] transition-colors text-sm font-medium">
@@ -80,8 +80,8 @@ export const Footer = () => {
 
           {/* Contact */}
           <div>
-            <h3 className="text-lg font-bold mb-6">Контакти</h3>
-            <ul className="space-y-4">
+            <h3 className="text-lg font-bold mb-3">Контакти</h3>
+            <ul className="space-y-2">
               <li className="flex gap-3 text-gray-400">
                 <MapPin className="w-5 h-5 text-[#FF4D00] shrink-0" />
                 <span className="text-sm">
@@ -111,21 +111,21 @@ export const Footer = () => {
 
         </div>
 
-        <div className="pt-8 border-t border-gray-800 text-center md:flex justify-between items-center text-sm text-gray-500">
-          <p>© {new Date().getFullYear()} Смолян Клима. Всички права запазени.</p>
-          <div className="flex flex-wrap gap-x-4 gap-y-2 mt-4 md:mt-0 justify-center">
-            <a href="/politika-za-poveritelnost" className="hover:text-white transition-colors">Политика за поверителност</a>
-            <a href="/biskvitki" className="hover:text-white transition-colors">Бисквитки</a>
-            <a href="/obshti-usloviya" className="hover:text-white transition-colors">Общи условия</a>
+        <div className="pt-6 border-t border-gray-800 flex flex-col sm:flex-row flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm text-gray-500">
+          <p className="shrink-0">© {new Date().getFullYear()} Смолян Клима. Всички права запазени.</p>
+          <nav className="inline-flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5" aria-label="Правни връзки">
+            <a href="/politika-za-poveritelnost" className="hover:text-white transition-colors whitespace-nowrap">Политика за поверителност</a>
+            <a href="/biskvitki" className="hover:text-white transition-colors whitespace-nowrap">Бисквитки</a>
+            <a href="/obshti-usloviya" className="hover:text-white transition-colors whitespace-nowrap">Общи условия</a>
             <button
               type="button"
               onClick={() => window.dispatchEvent(new Event('sk-open-cookie-settings'))}
-              className="hover:text-white transition-colors"
+              className="hover:text-white transition-colors whitespace-nowrap"
             >
               Управление на бисквитки
             </button>
-            <a href="#" className="hover:text-white transition-colors">Developed by K. Serezliev</a>
-          </div>
+            <a href="#" className="hover:text-white transition-colors whitespace-nowrap">Developed by K. Serezliev</a>
+          </nav>
         </div>
       </div>
     </footer>

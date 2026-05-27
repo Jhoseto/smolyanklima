@@ -14,7 +14,7 @@ export function LegalPageLayout({ title, subtitle, children }: LegalPageLayoutPr
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] font-sans pt-[calc(var(--navbar-height)+2rem)] pb-16">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <nav className="text-sm text-gray-500 mb-6">
           <Link to="/" className="hover:text-[#FF4D00] transition-colors">
             Начало
