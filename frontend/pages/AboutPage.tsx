@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { HeroBackground } from '../components/sections/HeroBackground';
 import { StatsSection } from '../components/sections/StatsSection';
+import { AboutCertificatesSection } from '../components/sections/AboutCertificatesSection';
 import { SiteSeo } from '../components/seo/SiteSeo';
 import { PAGE_SEO } from '../lib/seo/config';
 import { breadcrumbSchema, localBusinessSchema } from '../lib/seo/jsonLd';
@@ -265,6 +266,8 @@ export default function AboutPage() {
           </div>
         </div>
       </section>
+
+      <AboutCertificatesSection />
 
       {/* Location + CTA */}
       <section className="py-20 relative overflow-hidden">

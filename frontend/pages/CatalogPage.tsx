@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowUp, SlidersHorizontal, PackageX } from 'lucide-react';
 
@@ -169,6 +169,8 @@ const CatalogPage = () => {
   const catalogToolsRef = useRef<HTMLDivElement>(null);
   const catalogTopAnchorRef = useRef<HTMLDivElement>(null);
   const pendingPageScrollRef = useRef(false);
+  /** След първото зареждане — иначе meta/debounce промените скролват към филтрите вместо hero. */
+  const catalogFilterScrollEnabledRef = useRef(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [quickViewProduct, setQuickViewProduct] = useState<CatalogProduct | null>(null);
@@ -178,6 +180,19 @@ const CatalogPage = () => {
   const [openCompareFromUrl] = useState(() => searchParams.get('openCompare') === '1');
   const compareHydratedRef = useRef(false);
   const compareSyncSkipRef = useRef(false);
+
+  useLayoutEffect(() => {
+    catalogFilterScrollEnabledRef.current = false;
+    const scrollTop = () => window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    scrollTop();
+    requestAnimationFrame(() => {
+      requestAnimationFrame(scrollTop);
+    });
+    const enableFilterScroll = window.setTimeout(() => {
+      catalogFilterScrollEnabledRef.current = true;
+    }, 450);
+    return () => window.clearTimeout(enableFilterScroll);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -338,7 +353,7 @@ const CatalogPage = () => {
       sortBy,
     });
     const prevSig = prevListFiltersSigRef.current;
-    if (prevSig !== null && prevSig !== listFiltersSig) {
+    if (catalogFilterScrollEnabledRef.current && prevSig !== null && prevSig !== listFiltersSig) {
       pendingPageScrollRef.current = true;
       if (page !== 1) {
         setPage(1);
