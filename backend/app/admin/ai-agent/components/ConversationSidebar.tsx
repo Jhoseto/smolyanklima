@@ -140,7 +140,9 @@ function ConversationRow({
     >
       <button type="button" onClick={onSelect} className="flex-1 text-left px-3 py-3 min-w-0">
         <p className="text-xs font-bold text-slate-900 truncate">{conversation.title}</p>
-        <p className="text-[10px] text-slate-400 mt-0.5">{timeAgo(conversation.updated_at)}</p>
+        <p className="text-[10px] text-slate-400 mt-0.5" suppressHydrationWarning>
+          {timeAgo(conversation.updated_at)}
+        </p>
       </button>
       <button
         type="button"

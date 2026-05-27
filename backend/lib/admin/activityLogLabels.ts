@@ -70,6 +70,11 @@ const ACTION_LABELS: Record<string, string> = {
   "ai.inquiry_reply": "AI чернова за отговор на запитване",
   "ai.contact_summary": "AI обобщение на клиент",
   "ai.product_image_search": "AI търсене на продуктови снимки",
+  "agent_query": "Запитване към AI асистента",
+  "agent_supplier_web": "AI търсене при доставчик",
+  "agent_bulk_delete": "Групово изтриване на AI разговори",
+  "agent_retention_cleanup": "Почистване на стари AI разговори",
+  "agent_scheduled_reports_run": "Автоматичен AI отчет",
 };
 
 const AI_TASK_LABELS: Record<string, string> = {
@@ -104,6 +109,8 @@ export const ENTITY_TYPE_LABELS: Record<string, string> = {
   service_protocol: "Протоколи · приемо-предаване",
   service_repair_protocol: "Протоколи · сервиз",
   supplier_order: "Поръчки",
+  ai_agent: "AI асистент",
+  supplier: "Доставчик",
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -708,6 +715,40 @@ export function formatActivityAction(action: string): string {
     return AI_TASK_LABELS[task] ?? `AI: ${task.replace(/_/g, " ")}`;
   }
   return action.replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Превежда технически кодове (action, status, entity) в текст за потребител на админ панела. */
+export function humanizeAdminDisplayText(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return text;
+
+  if (ACTION_LABELS[trimmed]) return ACTION_LABELS[trimmed];
+  if (trimmed.startsWith("ai.")) return formatActivityAction(trimmed);
+  if (ENTITY_TYPE_LABELS[trimmed]) return ENTITY_TYPE_LABELS[trimmed];
+  if (EVENT_CODE_LABELS[trimmed]) return EVENT_CODE_LABELS[trimmed];
+  if (WORK_ITEM_STATUS[trimmed]) return WORK_ITEM_STATUS[trimmed];
+  if (INQUIRY_STATUS[trimmed]) return INQUIRY_STATUS[trimmed];
+  if (STOCK_STATUS[trimmed]) return STOCK_STATUS[trimmed];
+  if (PRODUCT_CONDITION[trimmed]) return PRODUCT_CONDITION[trimmed];
+  if (SALE_INSTALL_STATE_LABELS[trimmed]) return SALE_INSTALL_STATE_LABELS[trimmed];
+  if (PRIORITY_LABELS[trimmed]) return PRIORITY_LABELS[trimmed];
+  if (PROTOCOL_STATUS[trimmed]) return PROTOCOL_STATUS[trimmed];
+  if (ROLE_LABELS[trimmed]) return ROLE_LABELS[trimmed];
+
+  if (trimmed.includes(".") && /^[a-z0-9_.]+$/i.test(trimmed)) {
+    return formatActivityAction(trimmed);
+  }
+
+  return text
+    .replace(/\bin_progress\b/g, "в процес")
+    .replace(/\bout_of_stock\b/g, "няма наличност")
+    .replace(/\bin_stock\b/g, "в наличност")
+    .replace(/\bon_order\b/g, "по поръчка")
+    .replace(/\bpending_mount\b/g, "чака монтаж")
+    .replace(/\bwork_items?\b/gi, "работни задачи")
+    .replace(/\bdone\b/g, "приключено")
+    .replace(/\bplanned\b/g, "планирано")
+    .replace(/\bcancelled\b/g, "отказано");
 }
 
 export function formatActivityEntityType(entityType: string | null | undefined): string {

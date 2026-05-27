@@ -1,17 +1,28 @@
 import type { AdminSession } from "@/lib/admin/db";
 import { getEnv } from "@/lib/env";
 import type { AgentProgressEvent } from "@/lib/ai/agent/agentProgress";
-import { AgentResponseSchema, type AgentBlock, type AgentTurnResult, type TokenUsage } from "@/lib/ai/agent/types";
+import type { AgentBlock, AgentTurnResult, TokenUsage } from "@/lib/ai/agent/types";
+import { blocksFromModelText, finalizeAgentBlocks, parseAgentBlocksFromText } from "@/lib/ai/agent/blockNormalize";
+import { enrichBlocksFromPrefetch } from "@/lib/ai/agent/agentBlockEnrich";
+import { buildFinalAnalysisPrompt, buildPlainJsonFallbackPrompt } from "@/lib/ai/agent/agentAnalysisPrompt";
+import {
+  formatExecutedToolResults,
+  formatPrefetchedToolContext,
+  planAutoTools,
+  requiresToolData,
+  toolDataRefusalNudge,
+} from "@/lib/ai/agent/agentAutoTools";
 import { buildAgentSystemPrompt } from "@/lib/ai/agent/systemPrompt";
 import { loadSupplierRegistry } from "@/lib/ai/agent/supplierRegistry";
 import { executeAgentTool, type ToolContext } from "@/lib/ai/agent/agentTools";
 import {
   callGeminiAgent,
   extractFunctionCalls,
-  extractJsonFromText,
+  extractModelOutputText,
   extractTextFromParts,
   extractUsage,
   getCandidateParts,
+  getFinishReason,
   type GeminiContent,
 } from "@/lib/ai/agent/geminiAgentClient";
 
@@ -65,101 +76,206 @@ export async function runAgentTurn(
 
   let totalUsage: TokenUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0, model: "" };
   let toolCallsCount = 0;
-  let usePro = false;
+  let usePro = requiresToolData(userMessage);
 
-  for (let round = 0; round < maxToolRounds; round++) {
-    if (options.signal?.aborted) throw new Error("AI заявката беше отменена.");
+  const autoPlans = planAutoTools(userMessage);
+  let skipToolLoop = false;
+  let prefetchedResults: Array<{ name: string; args: Record<string, unknown>; result: Record<string, unknown> }> = [];
 
-    const { body, model } = await callGeminiAgent(env, contents, {
-      usePro,
-      withTools: true,
+  if (autoPlans.length > 0) {
+    options.onProgress?.({
+      phase: "tools",
+      message: "Извличам данни от системата…",
+      tools: autoPlans.map((plan) => plan.name),
+    });
+    const prefetched = [];
+    for (const plan of autoPlans) {
+      toolCallsCount += 1;
+      const result = await executeAgentTool(plan.name, plan.args, toolCtx);
+      prefetched.push({ name: plan.name, args: plan.args, result });
+    }
+    prefetchedResults = prefetched;
+    const prefetchText = formatPrefetchedToolContext(prefetched);
+    if (prefetchText) {
+      contents.push({ role: "user", parts: [{ text: prefetchText }] });
+    }
+    // Data already loaded — skip Gemini tool loop to avoid thought_signature issues.
+    skipToolLoop = true;
+  }
+
+  if (!skipToolLoop) {
+    for (let round = 0; round < maxToolRounds; round++) {
+      if (options.signal?.aborted) throw new Error("AI заявката беше отменена.");
+
+      const { body, model } = await callGeminiAgent(env, contents, {
+        usePro,
+        withTools: true,
+        timeoutMs: turnTimeoutMs,
+        signal: options.signal,
+        systemInstruction: systemPrompt,
+      });
+      const usage = extractUsage(body, model);
+      totalUsage = {
+        promptTokens: totalUsage.promptTokens + usage.promptTokens,
+        completionTokens: totalUsage.completionTokens + usage.completionTokens,
+        totalTokens: totalUsage.totalTokens + usage.totalTokens,
+        model,
+      };
+
+      const parts = getCandidateParts(body);
+      const calls = extractFunctionCalls(parts);
+
+      if (calls.length === 0) {
+        const text = extractTextFromParts(parts);
+        const blocks = finalizeAgentBlocks(parseAgentBlocksFromText(text));
+        if (blocks.length > 0) {
+          if (requiresToolData(userMessage) && toolCallsCount === 0) {
+            contents.push({ role: "user", parts: [{ text: toolDataRefusalNudge() }] });
+            continue;
+          }
+          if (requiresToolData(userMessage) && toolCallsCount > 0) {
+            break;
+          }
+          options.onProgress?.({ phase: "done", message: "Готово." });
+          return { blocks, usage: totalUsage, toolCallsCount, model };
+        }
+        break;
+      }
+
+      const toolNames = calls.map((c) => c.functionCall.name);
+      options.onProgress?.({
+        phase: "tools",
+        message: "Извличам данни от системата…",
+        tools: toolNames,
+      });
+
+      const executed = [];
+      for (const call of calls) {
+        toolCallsCount += 1;
+        const fc = call.functionCall;
+        const result = await executeAgentTool(fc.name, fc.args ?? {}, toolCtx);
+        executed.push({ name: fc.name, args: fc.args ?? {}, result });
+      }
+
+      // Feed tool results as plain text — never echo functionCall parts (Gemini 3 thought_signature).
+      const toolText = formatExecutedToolResults(executed);
+      if (toolText) {
+        contents.push({ role: "user", parts: [{ text: toolText }] });
+      }
+
+      const modelText = extractTextFromParts(parts);
+      if (modelText) {
+        contents.push({ role: "model", parts: [{ text: modelText }] });
+      }
+
+      if (toolCallsCount >= escalationThreshold) {
+        usePro = true;
+      }
+    }
+  }
+
+  options.onProgress?.({ phase: "final", message: "Анализирам и формулирам изводи…" });
+
+  const finalPrompt = buildFinalAnalysisPrompt(userMessage);
+  contents.push({ role: "user", parts: [{ text: finalPrompt }] });
+
+  // Prefetched data is in context — flash model is enough for synthesis; avoids Pro empty JSON edge cases.
+  const finalUsePro = usePro && !skipToolLoop;
+  const fallbackModel = env.GEMINI_AGENT_FALLBACK_MODEL ?? "gemini-2.5-flash";
+
+  type FinalGenOpts = {
+    usePro: boolean;
+    structuredOnly: boolean;
+    modelOverride?: string;
+    contentsOverride?: GeminiContent[];
+  };
+
+  async function runFinalGeneration(opts: FinalGenOpts) {
+    return callGeminiAgent(env, opts.contentsOverride ?? contents, {
+      usePro: opts.usePro,
+      structuredOnly: opts.structuredOnly,
+      withTools: false,
       timeoutMs: turnTimeoutMs,
       signal: options.signal,
       systemInstruction: systemPrompt,
+      modelOverride: opts.modelOverride,
     });
-    const usage = extractUsage(body, model);
+  }
+
+  function mergeUsage(model: string, usage: ReturnType<typeof extractUsage>) {
     totalUsage = {
       promptTokens: totalUsage.promptTokens + usage.promptTokens,
       completionTokens: totalUsage.completionTokens + usage.completionTokens,
       totalTokens: totalUsage.totalTokens + usage.totalTokens,
       model,
     };
-
-    const parts = getCandidateParts(body);
-    const calls = extractFunctionCalls(parts);
-
-    if (calls.length === 0) {
-      const text = extractTextFromParts(parts);
-      const blocks = parseBlocksFromText(text);
-      if (blocks.length > 0) {
-        options.onProgress?.({ phase: "done", message: "Готово." });
-        return { blocks, usage: totalUsage, toolCallsCount, model };
-      }
-      break;
-    }
-
-    const toolNames = calls.map((c) => c.functionCall.name);
-    options.onProgress?.({
-      phase: "tools",
-      message: "Извличам данни от системата…",
-      tools: toolNames,
-    });
-
-    contents.push({ role: "model", parts });
-
-    const responseParts: Array<Record<string, unknown>> = [];
-    for (const call of calls) {
-      toolCallsCount += 1;
-      const fc = call.functionCall;
-      const result = await executeAgentTool(fc.name, fc.args ?? {}, toolCtx);
-      responseParts.push({
-        functionResponse: {
-          name: fc.name,
-          id: fc.id,
-          response: result,
-        },
-      });
-    }
-    contents.push({ role: "user", parts: responseParts });
-
-    if (toolCallsCount >= escalationThreshold) {
-      usePro = true;
-    }
   }
 
-  options.onProgress?.({ phase: "final", message: "Формулирам структуриран отговор…" });
+  let { body, model } = await runFinalGeneration({ usePro: finalUsePro, structuredOnly: true });
+  mergeUsage(model, extractUsage(body, model));
 
-  const finalPrompt =
-    'На база на всички tool results по-горе, генерирай финален отговор САМО като JSON: {"blocks":[...]}. Без markdown fences.';
-  contents.push({ role: "user", parts: [{ text: finalPrompt }] });
+  let rawText = extractModelOutputText(body);
+  let blocks = blocksFromModelText(rawText);
+  let finishReason = getFinishReason(body);
 
-  const { body, model } = await callGeminiAgent(env, contents, {
-    usePro,
-    structuredOnly: true,
-    withTools: false,
-    timeoutMs: turnTimeoutMs,
-    signal: options.signal,
-    onTextDelta: options.onTextDelta,
-  });
-  const usage = extractUsage(body, model);
-  totalUsage = {
-    promptTokens: totalUsage.promptTokens + usage.promptTokens,
-    completionTokens: totalUsage.completionTokens + usage.completionTokens,
-    totalTokens: totalUsage.totalTokens + usage.totalTokens,
-    model,
-  };
-
-  const parts = getCandidateParts(body);
-  const text = extractTextFromParts(parts);
-  const blocks = parseBlocksFromText(text);
+  if (blocks.length === 0 && finalUsePro) {
+    const retry = await runFinalGeneration({ usePro: false, structuredOnly: true });
+    mergeUsage(retry.model, extractUsage(retry.body, retry.model));
+    model = retry.model;
+    body = retry.body;
+    rawText = extractModelOutputText(body);
+    blocks = blocksFromModelText(rawText);
+    finishReason = getFinishReason(body);
+  }
 
   if (blocks.length === 0) {
+    const retry = await runFinalGeneration({
+      usePro: false,
+      structuredOnly: true,
+      modelOverride: fallbackModel,
+    });
+    mergeUsage(retry.model, extractUsage(retry.body, retry.model));
+    model = retry.model;
+    body = retry.body;
+    rawText = extractModelOutputText(body);
+    blocks = blocksFromModelText(rawText);
+    finishReason = getFinishReason(body);
+  }
+
+  if (blocks.length === 0) {
+    const plainContents: GeminiContent[] = [
+      ...contents,
+      { role: "user", parts: [{ text: buildPlainJsonFallbackPrompt() }] },
+    ];
+    const plain = await runFinalGeneration({
+      usePro: false,
+      structuredOnly: false,
+      modelOverride: fallbackModel,
+      contentsOverride: plainContents,
+    });
+    mergeUsage(plain.model, extractUsage(plain.body, plain.model));
+    model = plain.model;
+    body = plain.body;
+    rawText = extractModelOutputText(body);
+    blocks = blocksFromModelText(rawText);
+    finishReason = getFinishReason(body);
+  }
+
+  if (blocks.length === 0) {
+    console.error("[ai-agent] empty final blocks", {
+      model,
+      finishReason,
+      rawLen: rawText.length,
+      rawPreview: rawText.slice(0, 200),
+    });
     options.onProgress?.({ phase: "done", message: "Готово." });
     return {
       blocks: [
         {
           type: "markdown",
-          content: "Не успях да формирам структуриран отговор. Моля, опитайте отново или преформулирайте въпроса.",
+          content: finishReason
+            ? `Не успях да формирам структуриран отговор (${finishReason}). Моля, опитайте отново или преформулирайте въпроса.`
+            : "Не успях да формирам структуриран отговор. Моля, опитайте отново или преформулирайте въпроса.",
         },
       ],
       usage: totalUsage,
@@ -168,25 +284,8 @@ export async function runAgentTurn(
     };
   }
 
+  blocks = enrichBlocksFromPrefetch(blocks, prefetchedResults, userMessage);
+
   options.onProgress?.({ phase: "done", message: "Готово." });
   return { blocks, usage: totalUsage, toolCallsCount, model };
-}
-
-function parseBlocksFromText(text: string): AgentBlock[] {
-  const jsonStr = extractJsonFromText(text);
-  try {
-    const parsed = JSON.parse(jsonStr) as unknown;
-    const validated = AgentResponseSchema.safeParse(parsed);
-    if (validated.success) return validated.data.blocks;
-    if (parsed && typeof parsed === "object" && Array.isArray((parsed as { blocks?: unknown }).blocks)) {
-      const partial = AgentResponseSchema.safeParse({ blocks: (parsed as { blocks: unknown }).blocks });
-      if (partial.success) return partial.data.blocks;
-    }
-  } catch {
-    /* fall through */
-  }
-  if (text.trim()) {
-    return [{ type: "markdown", content: text.trim() }];
-  }
-  return [];
 }

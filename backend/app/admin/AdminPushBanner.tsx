@@ -20,15 +20,12 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
  * Сервизните акаунти нямат чат в менюто — не показваме банера, за да няма объркващ текст.
  */
 export function AdminPushBanner({ role }: { role: AdminRole }) {
-  if (role === "service_staff") {
-    return null;
-  }
-
   const vapidPublic = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim();
   const [state, setState] = useState<"idle" | "ready" | "subscribed" | "denied" | "busy" | "unsupported">("idle");
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
+    if (role === "service_staff") return;
     try {
       if (sessionStorage.getItem(DISMISS_KEY) === "1") setDismissed(true);
     } catch {
@@ -52,7 +49,7 @@ export function AdminPushBanner({ role }: { role: AdminRole }) {
     return () => {
       cancelled = true;
     };
-  }, [vapidPublic]);
+  }, [vapidPublic, role]);
 
   const subscribe = useCallback(async () => {
     if (!vapidPublic || state === "busy") return;
@@ -93,6 +90,7 @@ export function AdminPushBanner({ role }: { role: AdminRole }) {
     setDismissed(true);
   }, []);
 
+  if (role === "service_staff") return null;
   if (!vapidPublic || dismissed || state === "unsupported") return null;
   if (state === "subscribed") return null;
 

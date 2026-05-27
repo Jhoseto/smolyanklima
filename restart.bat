@@ -17,6 +17,12 @@ echo =========================================
 echo  Startirane na SmolyanKlima...
 echo =========================================
 
+REM Fresh Next.js build cache (fixes stale JS after code changes)
+if exist "%~dp0backend\.next" (
+  echo Clearing backend\.next ...
+  rmdir /s /q "%~dp0backend\.next"
+)
+
 REM Start Frontend (Vite) on :3000
 start "SmolyanKlima Frontend" cmd /k "cd /d %~dp0 && npm run dev"
 
@@ -27,6 +33,7 @@ echo.
 echo Started:
 echo - Frontend: http://localhost:3000
 echo - Backend:  http://localhost:3001
+echo - AI Agent: http://localhost:3001/admin/ai-agent
 echo.
 exit /b 0
 

@@ -15,6 +15,7 @@ import {
 } from "@/lib/ai/agent/supplierRegistry";
 import { truncateToolResult } from "@/lib/ai/agent/truncateToolResult";
 import { loadCatalogSyncRow } from "@/lib/ai/agent/agentTitle";
+import { describeActivityLog, formatActivityAction, formatActivityEntityType, formatActivityUser, humanizeAdminDisplayText } from "@/lib/admin/activityLogLabels";
 
 export type ToolContext = {
   db: SupabaseClient;
@@ -53,10 +54,42 @@ function floorHistoryDate(iso?: string): string {
   return from < floor ? floor : from;
 }
 
-function activityLogsSinceIso(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 30);
-  return d.toISOString();
+function countByField(rows: Record<string, unknown>[], field: string): Array<{ label: string; count: number }> {
+  const map = new Map<string, number>();
+  for (const row of rows) {
+    const key = humanizeAdminDisplayText(String(row[field] ?? "—"));
+    map.set(key, (map.get(key) ?? 0) + 1);
+  }
+  return [...map.entries()]
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+function formatWhenBg(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString("bg-BG", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return String(iso);
+  }
+}
+
+function activityRangeIso(from?: string, to?: string): { from: string; to: string } {
+  const now = new Date();
+  const defaultFrom = new Date();
+  defaultFrom.setDate(defaultFrom.getDate() - 7);
+  const fromDate = from?.trim().slice(0, 10) ?? defaultFrom.toISOString().slice(0, 10);
+  const toDate = to?.trim().slice(0, 10) ?? now.toISOString().slice(0, 10);
+  return {
+    from: `${floorHistoryDate(fromDate)}T00:00:00.000Z`,
+    to: `${toDate}T23:59:59.999Z`,
+  };
 }
 
 export const AGENT_FUNCTION_DECLARATIONS = [
@@ -64,11 +97,11 @@ export const AGENT_FUNCTION_DECLARATIONS = [
   { name: "get_dashboard_summary", description: "KPI counts: products, new inquiries, work today/overdue, outbox", parameters: { type: "OBJECT", properties: {} } },
   { name: "query_products", description: "List products with filters", parameters: { type: "OBJECT", properties: { q: { type: "STRING" }, stockStatus: { type: "STRING" }, brandName: { type: "STRING" }, limit: { type: "INTEGER" } } } },
   { name: "query_work_items", description: "Work items / sales / service / calendar", parameters: { type: "OBJECT", properties: { eventCode: { type: "STRING" }, status: { type: "STRING" }, from: { type: "STRING" }, to: { type: "STRING" }, q: { type: "STRING" }, limit: { type: "INTEGER" } } } },
-  { name: "query_inquiries", description: "Customer inquiries/leads", parameters: { type: "OBJECT", properties: { status: { type: "STRING" }, q: { type: "STRING" }, limit: { type: "INTEGER" } } } },
+  { name: "query_inquiries", description: "Customer inquiries with period summary for analysis", parameters: { type: "OBJECT", properties: { status: { type: "STRING" }, from: { type: "STRING" }, to: { type: "STRING" }, q: { type: "STRING" }, limit: { type: "INTEGER" } } } },
   { name: "query_contacts", description: "CRM contacts", parameters: { type: "OBJECT", properties: { kind: { type: "STRING" }, q: { type: "STRING" }, limit: { type: "INTEGER" } } } },
   { name: "aggregate_sales", description: "Sales aggregates by month", parameters: { type: "OBJECT", properties: { from: { type: "STRING" }, to: { type: "STRING" } } } },
   { name: "aggregate_inventory", description: "Inventory counts by stock_status and brand", parameters: { type: "OBJECT", properties: {} } },
-  { name: "query_activity_logs", description: "Recent admin activity (last 30 days)", parameters: { type: "OBJECT", properties: { limit: { type: "INTEGER" } } } },
+  { name: "query_activity_logs", description: "Admin activity with Bulgarian labels; use aggregate=true for weekly charts", parameters: { type: "OBJECT", properties: { from: { type: "STRING" }, to: { type: "STRING" }, limit: { type: "INTEGER" }, aggregate: { type: "BOOLEAN" } } } },
   { name: "query_ratings_summary", description: "Product ratings aggregates and top-rated products", parameters: { type: "OBJECT", properties: { productId: { type: "STRING" }, minReviews: { type: "INTEGER" }, limit: { type: "INTEGER" } } } },
   { name: "query_suppliers", description: "All suppliers from CRM with websites and counts", parameters: { type: "OBJECT", properties: {} } },
   { name: "query_supplier_products", description: "Products for a supplier contact id", parameters: { type: "OBJECT", properties: { supplierContactId: { type: "STRING" }, q: { type: "STRING" }, limit: { type: "INTEGER" } }, required: ["supplierContactId"] } },
@@ -173,17 +206,37 @@ export async function executeAgentTool(
         .limit(limit);
       if (args.eventCode) q = q.eq("event_code", String(args.eventCode));
       if (args.status) q = q.eq("status", String(args.status));
-      if (args.from) q = q.gte("due_date", String(args.from));
-      if (args.to) q = q.lte("due_date", String(args.to));
+      if (args.from) q = q.gte("due_date", String(args.from).slice(0, 10));
+      if (args.to) q = q.lte("due_date", String(args.to).slice(0, 10));
       const term = String(args.q ?? "").trim();
       if (term) q = q.or(`title.ilike.%${term}%,customer_name.ilike.%${term}%`);
       const { data, error } = await q;
       if (error) return { error: error.message };
+      const rows = (data ?? []) as Record<string, unknown>[];
+      const byEvent = countByField(rows, "event_code");
+      const byStatus = countByField(rows, "status");
       return truncateToolResult({
-        data: (data ?? []).map((r) => ({
+        period: args.from || args.to ? { from: args.from, to: args.to } : undefined,
+        summary: {
+          total: rows.length,
+          byEvent,
+          byStatus,
+          salesCount: rows.filter((r) => r.event_code === "sale").length,
+          installsCount: rows.filter((r) => r.event_code === "service_installation").length,
+        },
+        chartSuggestion: byEvent.length
+          ? {
+              chartType: "bar",
+              title: "Работа по тип",
+              labels: byEvent.slice(0, 8).map((x) => x.label),
+              values: byEvent.slice(0, 8).map((x) => x.count),
+            }
+          : undefined,
+        sample: rows.slice(0, 8).map((r) => ({
           ...r,
-          admin_href: workItemAdminHref(r),
+          admin_href: workItemAdminHref(r as Parameters<typeof workItemAdminHref>[0]),
         })),
+        note: "Използвай summary/chartSuggestion за KPI и графика — не изброявай всички редове.",
       });
     }
 
@@ -194,12 +247,34 @@ export async function executeAgentTool(
         .order("created_at", { ascending: false })
         .limit(limit);
       if (args.status) q = q.eq("status", String(args.status));
+      if (args.from) q = q.gte("created_at", `${String(args.from).slice(0, 10)}T00:00:00.000Z`);
+      if (args.to) q = q.lte("created_at", `${String(args.to).slice(0, 10)}T23:59:59.999Z`);
       const term = String(args.q ?? "").trim();
       if (term) q = q.or(`customer_name.ilike.%${term}%,customer_phone.ilike.%${term}%`);
       const { data, error } = await q;
       if (error) return { error: error.message };
+      const rows = (data ?? []) as Record<string, unknown>[];
+      const byStatus = countByField(rows, "status");
+      const byService = countByField(rows, "service_type");
       return truncateToolResult({
-        data: (data ?? []).map((r) => ({ ...r, admin_href: `/admin/inquiries/${r.id}` })),
+        period: args.from || args.to ? { from: args.from, to: args.to } : undefined,
+        summary: {
+          total: rows.length,
+          byStatus,
+          byService,
+          done: rows.filter((r) => r.status === "done").length,
+          newCount: rows.filter((r) => r.status === "new").length,
+        },
+        chartSuggestion: byStatus.length
+          ? {
+              chartType: "bar",
+              title: "Запитвания по статус",
+              labels: byStatus.map((x) => x.label),
+              values: byStatus.map((x) => x.count),
+            }
+          : undefined,
+        sample: rows.slice(0, 8).map((r) => ({ ...r, admin_href: `/admin/inquiries/${r.id}` })),
+        note: "Използвай summary/chartSuggestion за анализ — не dump на всички запитвания.",
       });
     }
 
@@ -254,15 +329,72 @@ export async function executeAgentTool(
     }
 
     case "query_activity_logs": {
-      const lim = Math.min(Number(args.limit ?? 20) || 20, 50);
+      const range = activityRangeIso(
+        args.from ? String(args.from) : undefined,
+        args.to ? String(args.to) : undefined,
+      );
+      const aggregate = args.aggregate === true || args.aggregate === "true";
+      const lim = Math.min(Number(args.limit ?? (aggregate ? 500 : 40)) || 40, aggregate ? 500 : 50);
+
       const { data, error } = await ctx.db
         .from("activity_logs")
-        .select("action,entity_type,created_at,details")
-        .gte("created_at", activityLogsSinceIso())
+        .select("action,entity_type,created_at,details,user_id,admin_users:user_id(name,email)")
+        .gte("created_at", range.from)
+        .lte("created_at", range.to)
         .order("created_at", { ascending: false })
         .limit(lim);
       if (error) return { error: error.message };
-      return truncateToolResult({ data: data ?? [], sinceDays: 30 });
+
+      const rows = data ?? [];
+
+      if (aggregate) {
+        const byAction = new Map<string, { actionLabel: string; section: string; count: number }>();
+        for (const row of rows) {
+          const label = formatActivityAction(String(row.action ?? ""));
+          const section = formatActivityEntityType(row.entity_type);
+          const key = String(row.action ?? label);
+          const prev = byAction.get(key);
+          if (prev) prev.count += 1;
+          else byAction.set(key, { actionLabel: label, section, count: 1 });
+        }
+        const summary = [...byAction.values()].sort((a, b) => b.count - a.count);
+        return truncateToolResult({
+          period: { from: range.from.slice(0, 10), to: range.to.slice(0, 10) },
+          totalEvents: rows.length,
+          byAction: summary,
+          chartSuggestion: {
+            chartType: "bar",
+            title: "Активност в админ панела",
+            labels: summary.map((s) => s.actionLabel),
+            values: summary.map((s) => s.count),
+          },
+          note: "Aggregate data — използвай за pattern analysis, НЕ копирай като „Топ действия“ таблица без интерпретация.",
+        });
+      }
+
+      const events = rows.map((row) => {
+        const adminUser = row.admin_users as { name?: string | null; email?: string | null } | null;
+        const described = describeActivityLog({
+          action: String(row.action ?? ""),
+          entity_type: row.entity_type,
+          details: (row.details as Record<string, unknown> | null) ?? null,
+        });
+        return {
+          when: row.created_at,
+          whenDisplay: formatWhenBg(String(row.created_at ?? "")),
+          adminName: formatActivityUser(adminUser).name,
+          actionLabel: described.actionLabel,
+          section: described.entityLabel,
+          summary: described.detailsText.split("\n")[0] || described.actionLabel,
+        };
+      });
+
+      return truncateToolResult({
+        period: { from: range.from.slice(0, 10), to: range.to.slice(0, 10) },
+        totalEvents: events.length,
+        events,
+        note: "Копирай adminName, whenDisplay, actionLabel от events. Забранено е да измисляш имена или дати.",
+      });
     }
 
     case "query_ratings_summary": {

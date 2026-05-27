@@ -1,6 +1,5 @@
 import type { getEnv } from "@/lib/env";
 import { AGENT_FUNCTION_DECLARATIONS } from "@/lib/ai/agent/agentTools";
-import { resolveAgentCachedContent } from "@/lib/ai/agent/agentContextCache";
 
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 
@@ -21,12 +20,36 @@ export type GeminiCallOptions = {
   timeoutMs?: number;
   signal?: AbortSignal;
   systemInstruction?: string;
-  cachedContent?: string | null;
   onTextDelta?: (chunk: string) => void;
+  modelOverride?: string;
 };
 
-function resolveThinkingBudget(env: ReturnType<typeof getEnv>, options: GeminiCallOptions): number {
-  if (options.structuredOnly) return 0;
+const GEMINI3_STRUCTURED_THINKING_BUDGET = 2048;
+
+function modelRequiresThinking(model: string): boolean {
+  return /gemini-3/i.test(model);
+}
+
+function resolveThinkingBudget(
+  env: ReturnType<typeof getEnv>,
+  options: GeminiCallOptions,
+  model: string,
+  thinkingOverride?: number,
+): number {
+  if (thinkingOverride !== undefined) {
+    if (thinkingOverride === 0 && modelRequiresThinking(model)) {
+      return GEMINI3_STRUCTURED_THINKING_BUDGET;
+    }
+    return thinkingOverride;
+  }
+
+  if (options.structuredOnly) {
+    if (modelRequiresThinking(model)) {
+      return GEMINI3_STRUCTURED_THINKING_BUDGET;
+    }
+    return 0;
+  }
+
   if (options.usePro) return env.AI_AGENT_THINKING_BUDGET_PRO ?? 8192;
   return env.AI_AGENT_THINKING_BUDGET ?? 4096;
 }
@@ -51,6 +74,44 @@ function throwIfAborted(signal?: AbortSignal) {
   if (signal?.aborted) throw new Error("AI заявката беше отменена.");
 }
 
+function buildGeminiPayload(
+  env: ReturnType<typeof getEnv>,
+  contents: GeminiContent[],
+  options: GeminiCallOptions,
+  model: string,
+  thinkingOverride?: number,
+): Record<string, unknown> {
+  const thinkingBudget = resolveThinkingBudget(env, options, model, thinkingOverride);
+  const generationConfig: Record<string, unknown> = {
+    temperature: 0.25,
+    maxOutputTokens: options.structuredOnly
+      ? Math.min(env.AI_MAX_OUTPUT_TOKENS ?? 16384, 16384)
+      : Math.min(env.AI_MAX_OUTPUT_TOKENS ?? 8192, 8192),
+    thinkingConfig: { thinkingBudget },
+  };
+
+  if (options.structuredOnly) {
+    generationConfig.responseMimeType = "application/json";
+  }
+
+  const useTools = options.withTools !== false && !options.structuredOnly;
+
+  const payload: Record<string, unknown> = {
+    contents,
+    generationConfig,
+  };
+
+  if (options.systemInstruction) {
+    payload.systemInstruction = { parts: [{ text: options.systemInstruction }] };
+  }
+  if (useTools) {
+    payload.tools = [{ functionDeclarations: AGENT_FUNCTION_DECLARATIONS }];
+    payload.toolConfig = { functionCallingConfig: { mode: "AUTO" } };
+  }
+
+  return payload;
+}
+
 async function callGeminiOnce(
   env: ReturnType<typeof getEnv>,
   contents: GeminiContent[],
@@ -60,41 +121,10 @@ async function callGeminiOnce(
 ): Promise<GeminiCallResult> {
   throwIfAborted(options.signal);
 
-  const useStream = Boolean(options.onTextDelta) && options.structuredOnly;
+  // Structured JSON must use non-streaming — Gemini 3 thinking + SSE often yields empty merged text.
+  const useStream = Boolean(options.onTextDelta) && !options.structuredOnly;
   const endpoint = useStream ? "streamGenerateContent" : "generateContent";
   const url = `${GEMINI_API_BASE}/models/${encodeURIComponent(model)}:${endpoint}?key=${encodeURIComponent(env.GEMINI_API_KEY!)}${useStream ? "&alt=sse" : ""}`;
-
-  const thinkingBudget = thinkingOverride ?? resolveThinkingBudget(env, options);
-  const generationConfig: Record<string, unknown> = {
-    temperature: 0.25,
-    maxOutputTokens: Math.min(env.AI_MAX_OUTPUT_TOKENS ?? 8192, 8192),
-    thinkingConfig: { thinkingBudget },
-  };
-
-  if (options.structuredOnly) {
-    generationConfig.responseMimeType = "application/json";
-  }
-
-  const payload: Record<string, unknown> = {
-    contents,
-    generationConfig,
-  };
-
-  let cachedContent = options.cachedContent;
-  if (!cachedContent && options.systemInstruction) {
-    cachedContent = await resolveAgentCachedContent(env, model, options.systemInstruction);
-  }
-
-  if (cachedContent) {
-    payload.cachedContent = cachedContent;
-  } else if (options.systemInstruction) {
-    payload.systemInstruction = { parts: [{ text: options.systemInstruction }] };
-  }
-
-  if (options.withTools !== false && !options.structuredOnly) {
-    payload.tools = [{ functionDeclarations: AGENT_FUNCTION_DECLARATIONS }];
-    payload.toolConfig = { functionCallingConfig: { mode: "AUTO" } };
-  }
 
   const controller = new AbortController();
   const timeoutMs = options.timeoutMs ?? env.AI_AGENT_TURN_TIMEOUT_MS ?? 120000;
@@ -103,13 +133,13 @@ async function callGeminiOnce(
   const onParentAbort = () => controller.abort();
   options.signal?.addEventListener("abort", onParentAbort);
 
-  try {
+  const executeRequest = async (body: Record<string, unknown>): Promise<GeminiCallResult> => {
     if (useStream && options.onTextDelta) {
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: controller.signal,
-        body: JSON.stringify(payload),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const errBody = await res.text().catch(() => "");
@@ -160,13 +190,18 @@ async function callGeminiOnce(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       signal: controller.signal,
-      body: JSON.stringify(payload),
+      body: JSON.stringify(body),
     });
-    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    const responseBody = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) {
-      throw new Error(`Gemini ${res.status}: ${JSON.stringify(body).slice(0, 400)}`);
+      throw new Error(`Gemini ${res.status}: ${JSON.stringify(responseBody).slice(0, 400)}`);
     }
-    return { body, model };
+    return { body: responseBody, model };
+  };
+
+  try {
+    const payload = buildGeminiPayload(env, contents, options, model, thinkingOverride);
+    return await executeRequest(payload);
   } catch (e) {
     const isAbort = e instanceof Error && (e.name === "AbortError" || e.message.includes("отменена"));
     throw new Error(isAbort ? "AI заявката беше отменена." : e instanceof Error ? e.message : String(e));
@@ -181,20 +216,12 @@ export async function callGeminiAgent(
   contents: GeminiContent[],
   options: GeminiCallOptions,
 ): Promise<GeminiCallResult> {
-  const primary = pickModel(env, options.usePro ?? false);
+  const primary = options.modelOverride ?? pickModel(env, options.usePro ?? false);
 
   try {
     return await callGeminiOnce(env, contents, options, primary);
   } catch (primaryErr) {
     if (options.signal?.aborted) throw primaryErr;
-    const msg = primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
-    if (/thinking|thinkingConfig/i.test(msg) && resolveThinkingBudget(env, options) > 0) {
-      try {
-        return await callGeminiOnce(env, contents, options, primary, 0);
-      } catch {
-        /* fall through to fallback model */
-      }
-    }
     const fallback = env.GEMINI_AGENT_FALLBACK_MODEL ?? "gemini-2.5-flash";
     if (fallback !== primary && isRetryableGeminiError(primaryErr)) {
       try {
@@ -233,15 +260,25 @@ export function extractTextFromParts(parts: Array<Record<string, unknown>>): str
     .trim();
 }
 
+/** Full model text from a generateContent response (non-streaming). */
+export function extractModelOutputText(body: Record<string, unknown>): string {
+  const parts = getCandidateParts(body);
+  const joined = extractTextFromParts(parts);
+  if (joined) return joined;
+
+  const finish = getFinishReason(body);
+  if (finish && finish !== "STOP") {
+    return "";
+  }
+  return joined;
+}
+
+export function getFinishReason(body: Record<string, unknown>): string | undefined {
+  return (body.candidates as Array<{ finishReason?: string }> | undefined)?.[0]?.finishReason;
+}
+
 export function extractFunctionCalls(parts: Array<Record<string, unknown>>): FunctionCallPart[] {
   return parts.filter((p) => p.functionCall && typeof p.functionCall === "object") as FunctionCallPart[];
 }
 
-export function extractJsonFromText(text: string): string {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fenced?.[1]) return fenced[1].trim();
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start >= 0 && end > start) return text.slice(start, end + 1);
-  return text.trim();
-}
+export { extractJsonFromText } from "@/lib/ai/agent/blockNormalize";

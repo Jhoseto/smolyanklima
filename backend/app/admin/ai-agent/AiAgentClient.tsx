@@ -28,7 +28,27 @@ type StreamPayload = {
   title?: string;
 };
 
+function AiAgentLoadingShell() {
+  return (
+    <div className="flex flex-col flex-1 min-h-0 gap-4" aria-busy="true">
+      <div className="flex items-center justify-between shrink-0 gap-2">
+        <span className="text-slate-900 font-bold text-sm md:text-base leading-snug">AI Agent</span>
+      </div>
+      <div className="flex-1 min-h-[320px] rounded-xl border border-slate-200 bg-white flex items-center justify-center">
+        <p className="text-sm text-slate-400">Зареждане…</p>
+      </div>
+    </div>
+  );
+}
+
 export default function AiAgentClient({ aiEnabled }: { aiEnabled: boolean }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return <AiAgentLoadingShell />;
+  return <AiAgentClientInner aiEnabled={aiEnabled} />;
+}
+
+function AiAgentClientInner({ aiEnabled }: { aiEnabled: boolean }) {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [conversationsLoading, setConversationsLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);

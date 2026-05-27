@@ -4,6 +4,7 @@ export const AgentBlockSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("markdown"), content: z.string().max(12000) }),
   z.object({
     type: z.literal("table"),
+    title: z.string().max(200).optional(),
     columns: z.array(z.string().max(120)).max(20),
     rows: z.array(z.array(z.string().max(500)).max(20)).max(50),
     links: z

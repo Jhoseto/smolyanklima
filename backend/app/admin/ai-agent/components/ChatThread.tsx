@@ -80,12 +80,12 @@ export function ChatThread({
                 <Bot className="w-4 h-4 text-white" />
               </div>
             )}
-            <div className={`max-w-[90%] md:max-w-[75%] ${isUser ? "order-first" : ""}`}>
+            <div className={`max-w-[92%] md:max-w-[82%] ${isUser ? "order-first" : ""}`}>
               <div
-                className={`rounded-2xl px-4 py-3 shadow-sm ${
+                className={`rounded-2xl px-4 py-3.5 shadow-sm ${
                   isUser
                     ? "bg-gradient-to-br from-brand-blue-500 to-brand-blue-700 text-white rounded-br-md"
-                    : "bg-white border border-slate-200 text-slate-800 rounded-bl-md"
+                    : "bg-white border border-slate-200/90 text-slate-800 rounded-bl-md"
                 }`}
               >
                 {isUser ? (
@@ -95,7 +95,9 @@ export function ChatThread({
                 )}
               </div>
               <div className={`flex items-center gap-2 mt-1 px-1 ${isUser ? "justify-end" : ""}`}>
-                <span className="text-[10px] text-slate-400">{formatTime(msg.created_at)}</span>
+                <span className="text-[10px] text-slate-400" suppressHydrationWarning>
+                  {formatTime(msg.created_at)}
+                </span>
                 <button
                   type="button"
                   onClick={() => void copyMessage(msg)}
@@ -135,7 +137,7 @@ export function ChatThread({
               <Loader2 className="w-4 h-4 animate-spin text-brand-blue-500 shrink-0" />
               {progressMessage ?? "Анализирам…"}
             </div>
-            {streamPreview && (
+            {streamPreview && !looksLikeAgentJson(streamPreview) && (
               <p className="text-xs text-slate-400 font-mono line-clamp-4 whitespace-pre-wrap">{streamPreview}</p>
             )}
           </div>
@@ -168,4 +170,9 @@ export function ChatThread({
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("bg-BG", { hour: "2-digit", minute: "2-digit" });
+}
+
+function looksLikeAgentJson(text: string): boolean {
+  const t = text.trim();
+  return t.startsWith("{") && t.includes('"blocks"');
 }
