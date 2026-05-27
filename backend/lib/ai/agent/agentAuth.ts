@@ -1,9 +1,21 @@
 import { adminDb, adminSession, requireRole, type AdminSession } from "@/lib/admin/db";
 
+/** master_admin + office_staff — чат с AI agent. */
+export async function requireAdminAgentSession(): Promise<AdminSession> {
+  const session = await adminSession();
+  requireRole(session, "master_admin", "office_staff");
+  return session;
+}
+
+/** Само master_admin — история, търсене, изтриване, експорт, scheduled reports. */
 export async function requireMasterAdminAgentSession(): Promise<AdminSession> {
   const session = await adminSession();
   requireRole(session, "master_admin");
   return session;
+}
+
+export function canBrowseAgentConversations(session: AdminSession): boolean {
+  return session.role === "master_admin";
 }
 
 export async function agentSessionForUserId(userId: string): Promise<AdminSession> {

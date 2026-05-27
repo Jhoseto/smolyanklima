@@ -41,6 +41,20 @@ const EnvSchemaBase = z.object({
   AI_AGENT_THINKING_BUDGET: z.coerce.number().int().min(0).max(24576).optional(),
   AI_AGENT_THINKING_BUDGET_PRO: z.coerce.number().int().min(0).max(24576).optional(),
   AI_AGENT_CONTEXT_CACHE_TTL_S: z.coerce.number().int().min(300).max(86400).optional(),
+  /** Max tools to prefetch via regex heuristics before optional Gemini tool loop. */
+  AI_AGENT_PREFETCH_MAX: z.coerce.number().int().min(0).max(8).optional(),
+  /** Extra Gemini tool rounds after prefetch (0 = synthesis only). */
+  AI_AGENT_POST_PREFETCH_TOOL_ROUNDS: z.coerce.number().int().min(0).max(6).optional(),
+  /** Nested Gemini+Google Search in research_supplier_online (default off). */
+  AI_AGENT_ALLOW_SUPPLIER_RESEARCH: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((v) => v === "true"),
+  /** When regex prefetch is weak, Gemini Flash picks tools (default on). */
+  AI_AGENT_GEMINI_TOOL_PLANNER: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((v) => v !== "false"),
   /** Качване на снимки (админ). Препоръка: CLOUDINARY_URL от Cloudinary Console. */
   CLOUDINARY_URL: z.string().min(1).optional(),
   CLOUDINARY_CLOUD_NAME: z.string().min(1).optional(),
@@ -95,6 +109,10 @@ export function getEnv() {
     AI_AGENT_THINKING_BUDGET: process.env.AI_AGENT_THINKING_BUDGET,
     AI_AGENT_THINKING_BUDGET_PRO: process.env.AI_AGENT_THINKING_BUDGET_PRO,
     AI_AGENT_CONTEXT_CACHE_TTL_S: process.env.AI_AGENT_CONTEXT_CACHE_TTL_S,
+    AI_AGENT_PREFETCH_MAX: process.env.AI_AGENT_PREFETCH_MAX,
+    AI_AGENT_POST_PREFETCH_TOOL_ROUNDS: process.env.AI_AGENT_POST_PREFETCH_TOOL_ROUNDS,
+    AI_AGENT_ALLOW_SUPPLIER_RESEARCH: process.env.AI_AGENT_ALLOW_SUPPLIER_RESEARCH,
+    AI_AGENT_GEMINI_TOOL_PLANNER: process.env.AI_AGENT_GEMINI_TOOL_PLANNER,
     CLOUDINARY_URL: emptyToUndefined(process.env.CLOUDINARY_URL),
     CLOUDINARY_CLOUD_NAME: emptyToUndefined(process.env.CLOUDINARY_CLOUD_NAME),
     CLOUDINARY_API_KEY: emptyToUndefined(process.env.CLOUDINARY_API_KEY),

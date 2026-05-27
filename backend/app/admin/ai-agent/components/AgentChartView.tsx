@@ -194,14 +194,82 @@ function buildCartesianOption(block: ChartBlock): EChartsOption {
   };
 }
 
+function buildScatterOption(block: ChartBlock): EChartsOption {
+  const ds = block.datasets[0];
+  const data = block.labels.map((label, i) => [i, ds?.data[i] ?? 0, label]);
+  return {
+    color: PALETTE,
+    tooltip: {
+      ...TOOLTIP,
+      trigger: "item",
+    },
+    grid: { left: 8, right: 12, top: 16, bottom: 8, containLabel: true },
+    xAxis: {
+      type: "value",
+      splitLine: { lineStyle: { color: "#f1f5f9", type: "dashed" } },
+      axisLabel: {
+        color: "#64748b",
+        fontSize: 11,
+        formatter: (v: number) => block.labels[v]?.slice(0, 12) ?? String(v),
+      },
+    },
+    yAxis: {
+      type: "value",
+      splitLine: { lineStyle: { color: "#f1f5f9", type: "dashed" } },
+      axisLabel: { color: "#94a3b8", fontSize: 11 },
+    },
+    series: [
+      {
+        type: "scatter",
+        symbolSize: 14,
+        data,
+        itemStyle: { color: PALETTE[0], shadowBlur: 8, shadowColor: "rgba(37,99,235,0.25)" },
+      },
+    ],
+  };
+}
+
+function buildFunnelOption(block: ChartBlock): EChartsOption {
+  const ds = block.datasets[0];
+  const data = block.labels.map((label, i) => ({
+    name: label,
+    value: ds?.data[i] ?? 0,
+  }));
+  return {
+    color: PALETTE,
+    tooltip: PIE_TOOLTIP,
+    series: [
+      {
+        type: "funnel",
+        left: "8%",
+        top: 16,
+        bottom: 8,
+        width: "84%",
+        min: 0,
+        max: Math.max(...data.map((d) => d.value), 1),
+        minSize: "8%",
+        maxSize: "100%",
+        sort: "descending",
+        gap: 4,
+        label: { show: true, position: "inside", fontSize: 11, color: "#fff" },
+        itemStyle: { borderColor: "#fff", borderWidth: 2 },
+        data,
+      },
+    ],
+  };
+}
+
 function buildOption(block: ChartBlock): EChartsOption {
   if (block.chartType === "pie") return buildPieOption(block);
+  if (block.chartType === "scatter") return buildScatterOption(block);
+  if (block.chartType === "funnel") return buildFunnelOption(block);
   return buildCartesianOption(block);
 }
 
 export function AgentChartView({ block }: { block: ChartBlock }) {
   const option = useMemo(() => buildOption(block), [block]);
-  const height = block.chartType === "pie" ? 300 : 280;
+  const height =
+    block.chartType === "pie" ? 300 : block.chartType === "funnel" ? 320 : 280;
 
   return (
     <div className="rounded-2xl border border-slate-200/80 bg-gradient-to-br from-white via-white to-slate-50/80 p-4 shadow-sm overflow-hidden">
@@ -209,7 +277,17 @@ export function AgentChartView({ block }: { block: ChartBlock }) {
         <div className="mb-3 flex items-center justify-between gap-2">
           <p className="text-sm font-bold text-slate-800 tracking-tight">{block.title}</p>
           <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-            {block.chartType === "pie" ? "Разпределение" : block.chartType === "line" ? "Тренд" : block.chartType === "area" ? "Обем" : "Сравнение"}
+            {block.chartType === "pie"
+              ? "Разпределение"
+              : block.chartType === "line"
+                ? "Тренд"
+                : block.chartType === "area"
+                  ? "Обем"
+                  : block.chartType === "scatter"
+                    ? "Корелация"
+                    : block.chartType === "funnel"
+                      ? "Етапи"
+                      : "Сравнение"}
           </span>
         </div>
       )}

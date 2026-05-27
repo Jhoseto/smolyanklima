@@ -4,12 +4,13 @@ import { getEnv } from "@/lib/env";
 import AiAgentClient from "./AiAgentClient";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "AI Agent | Смолян Клима Админ" };
+export const metadata = { title: "СК Help Agent | Смолян Клима Админ" };
 
 export default async function AdminAiAgentPage() {
+  let session;
   try {
-    const session = await adminSession();
-    if (session.role !== "master_admin") {
+    session = await adminSession();
+    if (session.role !== "master_admin" && session.role !== "office_staff") {
       redirect("/admin");
     }
   } catch {
@@ -19,5 +20,10 @@ export default async function AdminAiAgentPage() {
   const env = getEnv();
   const aiEnabled = env.AI_ENABLED !== false && Boolean(env.GEMINI_API_KEY);
 
-  return <AiAgentClient aiEnabled={aiEnabled} />;
+  return (
+    <AiAgentClient
+      aiEnabled={aiEnabled}
+      canBrowseConversations={session.role === "master_admin"}
+    />
+  );
 }

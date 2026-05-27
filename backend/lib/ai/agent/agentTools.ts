@@ -14,6 +14,12 @@ import {
   type SupplierRegistryEntry,
 } from "@/lib/ai/agent/supplierRegistry";
 import { truncateToolResult } from "@/lib/ai/agent/truncateToolResult";
+import {
+  searchAdminContactIds,
+  searchAdminInquiryIds,
+  searchAdminProductIds,
+} from "@/lib/ai/agent/agentSearch";
+import { sanitizeIlikeTerm } from "@/lib/security/sanitizeSearchTerm";
 import { loadCatalogSyncRow } from "@/lib/ai/agent/agentTitle";
 import { describeActivityLog, formatActivityAction, formatActivityEntityType, formatActivityUser, humanizeAdminDisplayText } from "@/lib/admin/activityLogLabels";
 
@@ -23,6 +29,8 @@ export type ToolContext = {
   suppliers: SupplierRegistryEntry[];
   supplierWebCallsThisTurn: { count: number };
   adminUserId: string;
+  /** Per-turn cache — avoids serverless module-level singleton stale data. */
+  dashboardCache?: { at: number; payload: Record<string, unknown> };
 };
 
 function todayKey() {
@@ -41,7 +49,6 @@ function stripHtml(html: string): string {
 }
 
 const DASHBOARD_CACHE_MS = 60_000;
-let dashboardCache: { at: number; payload: Record<string, unknown> } | null = null;
 
 const MAX_HISTORY_MONTHS = 24;
 
@@ -120,6 +127,13 @@ export const AGENT_FUNCTION_DECLARATIONS = [
   { name: "query_newsletter", description: "Newsletter subscribers stats and recent list", parameters: { type: "OBJECT", properties: { status: { type: "STRING" }, limit: { type: "INTEGER" } } } },
 ];
 
+const GATED_SUPPLIER_RESEARCH = "research_supplier_online";
+
+export function getAgentFunctionDeclarations(env: ReturnType<typeof getEnv>) {
+  if (env.AI_AGENT_ALLOW_SUPPLIER_RESEARCH) return AGENT_FUNCTION_DECLARATIONS;
+  return AGENT_FUNCTION_DECLARATIONS.filter((d) => d.name !== GATED_SUPPLIER_RESEARCH);
+}
+
 export async function executeAgentTool(
   name: string,
   args: Record<string, unknown>,
@@ -136,8 +150,8 @@ export async function executeAgentTool(
     }
 
     case "get_dashboard_summary": {
-      if (dashboardCache && Date.now() - dashboardCache.at < DASHBOARD_CACHE_MS) {
-        return truncateToolResult(dashboardCache.payload);
+      if (ctx.dashboardCache && Date.now() - ctx.dashboardCache.at < DASHBOARD_CACHE_MS) {
+        return truncateToolResult(ctx.dashboardCache.payload);
       }
       const [products, inquiriesNew, workToday, workOverdue, outboxPending, outboxFailed] = await Promise.all([
         ctx.db.from("products").select("id", { count: "exact", head: true }),
@@ -156,26 +170,49 @@ export async function executeAgentTool(
         outboxPending: outboxPending.count ?? 0,
         outboxFailed: outboxFailed.count ?? 0,
       };
-      dashboardCache = { at: Date.now(), payload };
+      ctx.dashboardCache = { at: Date.now(), payload };
       return truncateToolResult(payload);
     }
 
     case "query_products": {
-      let q = ctx.db
-        .from("products")
-        .select("id,name,slug,price,stock_status,stock_location,indoor_unit_serial,outdoor_unit_serial,source_url,brands:brand_id(name)")
-        .order("updated_at", { ascending: false })
-        .limit(limit);
-      const term = String(args.q ?? "").trim();
+      const term = sanitizeIlikeTerm(String(args.q ?? ""));
+      let rows: Record<string, unknown>[] = [];
+
       if (term) {
-        q = q.or(
-          `name.ilike.%${term}%,model_code.ilike.%${term}%,indoor_unit_serial.ilike.%${term}%,outdoor_unit_serial.ilike.%${term}%`,
-        );
+        const ids = await searchAdminProductIds(ctx.db, term, limit);
+        if (ids.length > 0) {
+          const { data, error } = await ctx.db
+            .from("products")
+            .select("id,name,slug,price,stock_status,stock_location,indoor_unit_serial,outdoor_unit_serial,source_url,brands:brand_id(name)")
+            .in("id", ids)
+            .limit(limit);
+          if (error) return { error: error.message };
+          rows = data ?? [];
+        } else {
+          const { data, error } = await ctx.db
+            .from("products")
+            .select("id,name,slug,price,stock_status,stock_location,indoor_unit_serial,outdoor_unit_serial,source_url,brands:brand_id(name)")
+            .or(
+              `name.ilike.%${term}%,model_code.ilike.%${term}%,indoor_unit_serial.ilike.%${term}%,outdoor_unit_serial.ilike.%${term}%`,
+            )
+            .order("updated_at", { ascending: false })
+            .limit(limit);
+          if (error) return { error: error.message };
+          rows = data ?? [];
+        }
+      } else {
+        const { data, error } = await ctx.db
+          .from("products")
+          .select("id,name,slug,price,stock_status,stock_location,indoor_unit_serial,outdoor_unit_serial,source_url,brands:brand_id(name)")
+          .order("updated_at", { ascending: false })
+          .limit(limit);
+        if (error) return { error: error.message };
+        rows = data ?? [];
       }
-      if (args.stockStatus) q = q.eq("stock_status", String(args.stockStatus));
-      const { data, error } = await q;
-      if (error) return { error: error.message };
-      let rows = data ?? [];
+
+      if (args.stockStatus) {
+        rows = rows.filter((r) => r.stock_status === String(args.stockStatus));
+      }
       const brandName = String(args.brandName ?? "").trim();
       if (brandName) {
         rows = rows.filter((r) => {
@@ -241,6 +278,7 @@ export async function executeAgentTool(
     }
 
     case "query_inquiries": {
+      const term = sanitizeIlikeTerm(String(args.q ?? ""));
       let q = ctx.db
         .from("inquiries")
         .select("id,customer_name,customer_phone,status,service_type,created_at")
@@ -249,8 +287,11 @@ export async function executeAgentTool(
       if (args.status) q = q.eq("status", String(args.status));
       if (args.from) q = q.gte("created_at", `${String(args.from).slice(0, 10)}T00:00:00.000Z`);
       if (args.to) q = q.lte("created_at", `${String(args.to).slice(0, 10)}T23:59:59.999Z`);
-      const term = String(args.q ?? "").trim();
-      if (term) q = q.or(`customer_name.ilike.%${term}%,customer_phone.ilike.%${term}%`);
+      if (term) {
+        const ids = await searchAdminInquiryIds(ctx.db, term, limit);
+        if (ids.length > 0) q = q.in("id", ids);
+        else q = q.or(`customer_name.ilike.%${term}%,customer_phone.ilike.%${term}%,message.ilike.%${term}%`);
+      }
       const { data, error } = await q;
       if (error) return { error: error.message };
       const rows = (data ?? []) as Record<string, unknown>[];
@@ -279,14 +320,18 @@ export async function executeAgentTool(
     }
 
     case "query_contacts": {
+      const term = sanitizeIlikeTerm(String(args.q ?? ""));
       let q = ctx.db
         .from("contacts")
         .select("id,full_name,phone,email,contact_kind,customer_status,notes")
         .order("full_name")
         .limit(limit);
       if (args.kind) q = q.eq("contact_kind", String(args.kind));
-      const term = String(args.q ?? "").trim();
-      if (term) q = q.or(`full_name.ilike.%${term}%,phone.ilike.%${term}%,email.ilike.%${term}%`);
+      if (term) {
+        const ids = await searchAdminContactIds(ctx.db, term, limit);
+        if (ids.length > 0) q = q.in("id", ids);
+        else q = q.or(`full_name.ilike.%${term}%,phone.ilike.%${term}%,email.ilike.%${term}%`);
+      }
       const { data, error } = await q;
       if (error) return { error: error.message };
       return truncateToolResult({ data: data ?? [] });
@@ -629,6 +674,11 @@ export async function executeAgentTool(
     }
 
     case "research_supplier_online": {
+      if (!ctx.env.AI_AGENT_ALLOW_SUPPLIER_RESEARCH) {
+        return {
+          error: "research_supplier_online е изключен. Ползвай query_suppliers, lookup_product_at_supplier или fetch_supplier_page.",
+        };
+      }
       const perTurnLimit = ctx.env.AI_AGENT_MAX_SUPPLIER_WEB_CALLS_PER_TURN ?? 5;
       const perDayLimit = ctx.env.AI_AGENT_MAX_SUPPLIER_WEB_CALLS_PER_DAY ?? 20;
 

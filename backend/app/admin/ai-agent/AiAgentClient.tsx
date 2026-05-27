@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bot, CalendarClock, ChevronRight, Download, Menu } from "lucide-react";
+import { CalendarClock, ChevronRight, Download, Menu, MessageSquarePlus } from "lucide-react";
 import { SectionTitle } from "../ui";
 import type { AgentBlock } from "@/lib/ai/agent/types";
 import { ChatComposer } from "./components/ChatComposer";
@@ -20,6 +20,16 @@ const SUGGESTED_PROMPTS = [
   "Покажи отворените запитвания от клиенти",
   "Статус на синхронизация с доставчиците",
   "Анализ на активността в админ панела за последната седмица",
+  "Какво има за днес в календара и кои задачи са просрочени?",
+  "Колко нови запитвания има тази седмица?",
+  "Кои монтажи чакат приключване?",
+  "Отворени поръчки към доставчици",
+  "Наличност по марки — обобщение с графика",
+  "Продукти в статус „Поръчва се“",
+  "Статус на изходящите имейли (outbox)",
+  "Как се прави продажба в админ панела?",
+  "Топ оценени продукти от клиенти",
+  "Има ли активни live чатове на сайта?",
 ];
 
 type StreamPayload = {
@@ -32,7 +42,7 @@ function AiAgentLoadingShell() {
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-4" aria-busy="true">
       <div className="flex items-center justify-between shrink-0 gap-2">
-        <span className="text-slate-900 font-bold text-sm md:text-base leading-snug">AI Agent</span>
+        <span className="text-slate-900 font-bold text-sm md:text-base leading-snug">СК Help Agent</span>
       </div>
       <div className="flex-1 min-h-[320px] rounded-xl border border-slate-200 bg-white flex items-center justify-center">
         <p className="text-sm text-slate-400">Зареждане…</p>
@@ -41,14 +51,28 @@ function AiAgentLoadingShell() {
   );
 }
 
-export default function AiAgentClient({ aiEnabled }: { aiEnabled: boolean }) {
+export default function AiAgentClient({
+  aiEnabled,
+  canBrowseConversations = true,
+}: {
+  aiEnabled: boolean;
+  canBrowseConversations?: boolean;
+}) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   if (!mounted) return <AiAgentLoadingShell />;
-  return <AiAgentClientInner aiEnabled={aiEnabled} />;
+  return (
+    <AiAgentClientInner aiEnabled={aiEnabled} canBrowseConversations={canBrowseConversations} />
+  );
 }
 
-function AiAgentClientInner({ aiEnabled }: { aiEnabled: boolean }) {
+function AiAgentClientInner({
+  aiEnabled,
+  canBrowseConversations,
+}: {
+  aiEnabled: boolean;
+  canBrowseConversations: boolean;
+}) {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [conversationsLoading, setConversationsLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -71,6 +95,10 @@ function AiAgentClientInner({ aiEnabled }: { aiEnabled: boolean }) {
   const abortRef = useRef<AbortController | null>(null);
 
   const fetchConversations = useCallback(async () => {
+    if (!canBrowseConversations) {
+      setConversationsLoading(false);
+      return;
+    }
     try {
       const res = await fetch("/api/admin/ai-agent/conversations");
       if (!res.ok) return;
@@ -81,13 +109,15 @@ function AiAgentClientInner({ aiEnabled }: { aiEnabled: boolean }) {
     } finally {
       setConversationsLoading(false);
     }
-  }, []);
+  }, [canBrowseConversations]);
 
   useEffect(() => {
-    fetchConversations();
-  }, [fetchConversations]);
+    if (canBrowseConversations) fetchConversations();
+    else setConversationsLoading(false);
+  }, [fetchConversations, canBrowseConversations]);
 
   useEffect(() => {
+    if (!canBrowseConversations) return;
     void (async () => {
       try {
         const res = await fetch("/api/admin/ai-agent/templates");
@@ -98,9 +128,10 @@ function AiAgentClientInner({ aiEnabled }: { aiEnabled: boolean }) {
         /* ignore */
       }
     })();
-  }, [reportsOpen]);
+  }, [reportsOpen, canBrowseConversations]);
 
   const loadMessages = useCallback(async (id: string) => {
+    if (!canBrowseConversations) return;
     setMessagesLoading(true);
     setError(null);
     try {
@@ -116,15 +147,15 @@ function AiAgentClientInner({ aiEnabled }: { aiEnabled: boolean }) {
     } finally {
       setMessagesLoading(false);
     }
-  }, []);
+  }, [canBrowseConversations]);
 
   useEffect(() => {
-    if (!selectedId) {
-      setMessages([]);
+    if (!canBrowseConversations || !selectedId) {
+      if (!selectedId) setMessages([]);
       return;
     }
     loadMessages(selectedId);
-  }, [selectedId, loadMessages]);
+  }, [selectedId, loadMessages, canBrowseConversations]);
 
   const handleNewChat = useCallback(() => {
     abortRef.current?.abort();
@@ -228,7 +259,7 @@ function AiAgentClientInner({ aiEnabled }: { aiEnabled: boolean }) {
             setSelectedId(convId);
           }
 
-          if (result.title) {
+          if (result.title && canBrowseConversations) {
             setConversations((prev) => {
               const exists = prev.some((c) => c.id === convId);
               const updated = exists
@@ -236,7 +267,7 @@ function AiAgentClientInner({ aiEnabled }: { aiEnabled: boolean }) {
                 : [{ id: convId, title: result.title!, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, ...prev];
               return updated.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
             });
-          } else {
+          } else if (canBrowseConversations) {
             setConversations((prev) =>
               prev
                 .map((c) => (c.id === convId ? { ...c, updated_at: new Date().toISOString() } : c))
@@ -253,7 +284,7 @@ function AiAgentClientInner({ aiEnabled }: { aiEnabled: boolean }) {
           setMessages((prev) => [...prev, assistantMsg]);
         });
 
-        if (!selectedId) await fetchConversations();
+        if (canBrowseConversations && !selectedId) await fetchConversations();
       } catch (e) {
         if (e instanceof Error && e.name === "AbortError") {
           setError("Заявката беше отменена.");
@@ -271,7 +302,7 @@ function AiAgentClientInner({ aiEnabled }: { aiEnabled: boolean }) {
         abortRef.current = null;
       }
     },
-    [fetchConversations, parseSseStream, selectedId],
+    [canBrowseConversations, fetchConversations, parseSseStream, selectedId],
   );
 
   const sendMessage = useCallback(
@@ -346,33 +377,53 @@ function AiAgentClientInner({ aiEnabled }: { aiEnabled: boolean }) {
   }, []);
 
   const showSuggestions = messages.length === 0 && !sending && !messagesLoading;
+  const mobileChatActive = canBrowseConversations ? mobilePane === "chat" : true;
 
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-4">
       <div className="flex items-center justify-between shrink-0 gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <button
-            type="button"
-            onClick={() => setSidebarMobile(true)}
-            className="md:hidden min-h-11 min-w-11 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-600 shrink-0"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
+          {canBrowseConversations && (
+            <button
+              type="button"
+              onClick={() => setSidebarMobile(true)}
+              className="md:hidden min-h-11 min-w-11 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-600 shrink-0"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+          )}
           <SectionTitle
-            title="AI Agent"
-            hint="Бизнес асистент с достъп до данни от системата. Само за главен администратор."
+            title="СК Help Agent"
+            hint={
+              canBrowseConversations
+                ? "Бизнес асистент с достъп до данни от системата."
+                : "Бизнес асистент с достъп до данни от системата. Нямате достъп до история на разговорите."
+            }
           />
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => setReportsOpen(true)}
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold border border-violet-200 text-violet-700 bg-violet-50 hover:bg-violet-100"
-          >
-            <CalendarClock className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Отчети</span>
-          </button>
-          {selectedId && (
+          {!canBrowseConversations && (
+            <button
+              type="button"
+              onClick={handleNewChat}
+              disabled={sending}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold border border-brand-blue-200 text-brand-blue-700 bg-brand-blue-50 hover:bg-brand-blue-100 disabled:opacity-50"
+            >
+              <MessageSquarePlus className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Нов разговор</span>
+            </button>
+          )}
+          {canBrowseConversations && (
+            <button
+              type="button"
+              onClick={() => setReportsOpen(true)}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold border border-violet-200 text-violet-700 bg-violet-50 hover:bg-violet-100"
+            >
+              <CalendarClock className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Отчети</span>
+            </button>
+          )}
+          {canBrowseConversations && selectedId && (
             <button
               type="button"
               onClick={handleExport}
@@ -382,38 +433,36 @@ function AiAgentClientInner({ aiEnabled }: { aiEnabled: boolean }) {
               Експорт
             </button>
           )}
-          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-50 border border-violet-100 text-[10px] font-bold text-violet-700">
-            <Bot className="w-3 h-3" />
-            Gemini
-          </div>
         </div>
       </div>
 
       <div className="flex-1 min-h-0 flex gap-3 overflow-hidden">
-        <ConversationSidebar
-          conversations={conversations}
-          selectedId={selectedId}
-          loading={conversationsLoading}
-          onSelect={(id) => {
-            setSelectedId(id);
-            setMobilePane("chat");
-          }}
-          onNew={handleNewChat}
-          onDelete={setDeleteTarget}
-          onBulkDelete={() => setBulkDeleteOpen(true)}
-          mobileOpen={sidebarMobile}
-          onMobileClose={() => setSidebarMobile(false)}
-          showOnMobile={mobilePane === "list"}
-          onUseTemplate={handleUseTemplate}
-          draftPrompt={input}
-        />
+        {canBrowseConversations && (
+          <ConversationSidebar
+            conversations={conversations}
+            selectedId={selectedId}
+            loading={conversationsLoading}
+            onSelect={(id) => {
+              setSelectedId(id);
+              setMobilePane("chat");
+            }}
+            onNew={handleNewChat}
+            onDelete={setDeleteTarget}
+            onBulkDelete={() => setBulkDeleteOpen(true)}
+            mobileOpen={sidebarMobile}
+            onMobileClose={() => setSidebarMobile(false)}
+            showOnMobile={mobilePane === "list"}
+            onUseTemplate={handleUseTemplate}
+            draftPrompt={input}
+          />
+        )}
 
         <div
           className={`${
-            mobilePane === "chat" ? "flex" : "hidden md:flex"
+            mobileChatActive ? "flex" : "hidden md:flex"
           } flex-1 flex-col bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden min-w-0`}
         >
-          {(selectedId || mobilePane === "chat") && (
+          {canBrowseConversations && (selectedId || mobilePane === "chat") && (
             <div className="shrink-0 flex items-center gap-2 px-3 py-2.5 border-b border-slate-100 md:hidden">
               <button
                 type="button"
@@ -449,18 +498,23 @@ function AiAgentClientInner({ aiEnabled }: { aiEnabled: boolean }) {
           />
 
           {showSuggestions && (
-            <div className="shrink-0 px-4 pb-2 flex flex-wrap gap-1.5">
-              {SUGGESTED_PROMPTS.map((prompt) => (
-                <button
-                  key={prompt}
-                  type="button"
-                  onClick={() => void sendMessage(prompt)}
-                  disabled={!aiEnabled || sending}
-                  className="px-3 py-1.5 rounded-xl text-[11px] font-semibold bg-slate-50 border border-slate-200 text-slate-600 hover:bg-brand-blue-50 hover:border-brand-blue-200 hover:text-brand-blue-700 transition-colors disabled:opacity-50 text-left"
-                >
-                  {prompt}
-                </button>
-              ))}
+            <div className="shrink-0 px-4 pb-2 max-h-36 overflow-y-auto">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+                Бързи въпроси
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {SUGGESTED_PROMPTS.map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    onClick={() => void sendMessage(prompt)}
+                    disabled={!aiEnabled || sending}
+                    className="px-3 py-1.5 rounded-xl text-[11px] font-semibold bg-slate-50 border border-slate-200 text-slate-600 hover:bg-brand-blue-50 hover:border-brand-blue-200 hover:text-brand-blue-700 transition-colors disabled:opacity-50 text-left"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -475,31 +529,35 @@ function AiAgentClientInner({ aiEnabled }: { aiEnabled: boolean }) {
         </div>
       </div>
 
-      <DeleteConfirmModal
-        open={Boolean(deleteTarget)}
-        title="Изтриване на разговор?"
-        description="Действието е необратимо за този чат."
-        onCancel={() => setDeleteTarget(null)}
-        onConfirm={() => void handleDelete()}
-        deleting={deleting}
-      />
+      {canBrowseConversations && (
+        <>
+          <DeleteConfirmModal
+            open={Boolean(deleteTarget)}
+            title="Изтриване на разговор?"
+            description="Действието е необратимо за този чат."
+            onCancel={() => setDeleteTarget(null)}
+            onConfirm={() => void handleDelete()}
+            deleting={deleting}
+          />
 
-      <DeleteConfirmModal
-        open={bulkDeleteOpen}
-        title="Изтриване на всички разговори?"
-        description="Ще бъдат soft-delete-нати всички ваши AI чатове."
-        confirmLabel="Изтрий всички"
-        onCancel={() => setBulkDeleteOpen(false)}
-        onConfirm={() => void handleBulkDelete()}
-        deleting={deleting}
-      />
+          <DeleteConfirmModal
+            open={bulkDeleteOpen}
+            title="Изтриване на всички разговори?"
+            description="Ще бъдат soft-delete-нати всички ваши AI чатове."
+            confirmLabel="Изтрий всички"
+            onCancel={() => setBulkDeleteOpen(false)}
+            onConfirm={() => void handleBulkDelete()}
+            deleting={deleting}
+          />
 
-      <ScheduledReportsPanel
-        open={reportsOpen}
-        onClose={() => setReportsOpen(false)}
-        templates={templates}
-        onOpenConversation={handleOpenConversation}
-      />
+          <ScheduledReportsPanel
+            open={reportsOpen}
+            onClose={() => setReportsOpen(false)}
+            templates={templates}
+            onOpenConversation={handleOpenConversation}
+          />
+        </>
+      )}
     </div>
   );
 }

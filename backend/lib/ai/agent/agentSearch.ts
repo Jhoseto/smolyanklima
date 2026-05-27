@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { blocksToPlainText } from "@/lib/ai/agent/blocksText";
 import type { AgentBlock } from "@/lib/ai/agent/types";
+import { sanitizeIlikeTerm } from "@/lib/security/sanitizeSearchTerm";
 
 export type AgentSearchHit = {
   conversationId: string;
@@ -52,7 +53,9 @@ export async function searchAgentConversations(
 
   if (convErr) throw new Error(convErr.message);
 
-  const convMap = new Map((conversations ?? []).map((c) => [c.id as string, c as { id: string; title: string; updated_at: string }]));
+  const convMap = new Map(
+    (conversations ?? []).map((c) => [c.id as string, c as { id: string; title: string; updated_at: string }]),
+  );
   const convIds = [...convMap.keys()];
   if (convIds.length === 0) return [];
 
@@ -105,4 +108,49 @@ export async function searchAgentConversations(
 
   hits.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   return hits.slice(0, limit);
+}
+
+export async function searchAdminProductIds(
+  db: SupabaseClient,
+  query: string,
+  limit: number,
+): Promise<string[]> {
+  const term = sanitizeIlikeTerm(query);
+  if (!term) return [];
+  const { data, error } = await db.rpc("search_admin_product_ids", {
+    search_query: term,
+    result_limit: limit,
+  });
+  if (error) return [];
+  return (data ?? []).map((r: { id: string }) => r.id).filter(Boolean);
+}
+
+export async function searchAdminContactIds(
+  db: SupabaseClient,
+  query: string,
+  limit: number,
+): Promise<string[]> {
+  const term = sanitizeIlikeTerm(query);
+  if (!term) return [];
+  const { data, error } = await db.rpc("search_admin_contact_ids", {
+    search_query: term,
+    result_limit: limit,
+  });
+  if (error) return [];
+  return (data ?? []).map((r: { id: string }) => r.id).filter(Boolean);
+}
+
+export async function searchAdminInquiryIds(
+  db: SupabaseClient,
+  query: string,
+  limit: number,
+): Promise<string[]> {
+  const term = sanitizeIlikeTerm(query);
+  if (!term) return [];
+  const { data, error } = await db.rpc("search_admin_inquiry_ids", {
+    search_query: term,
+    result_limit: limit,
+  });
+  if (error) return [];
+  return (data ?? []).map((r: { id: string }) => r.id).filter(Boolean);
 }

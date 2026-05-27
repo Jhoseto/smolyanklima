@@ -195,7 +195,14 @@ export function normalizeAgentBlock(raw: unknown): AgentBlock | null {
 
   if (type === "chart") {
     const chartType = b.chartType ?? b.chart_type ?? b.kind;
-    if (chartType !== "bar" && chartType !== "line" && chartType !== "pie" && chartType !== "area") {
+    if (
+      chartType !== "bar"
+      && chartType !== "line"
+      && chartType !== "pie"
+      && chartType !== "area"
+      && chartType !== "scatter"
+      && chartType !== "funnel"
+    ) {
       return null;
     }
     const labels = asStringArray(b.labels ?? b.categories, 60, 80);

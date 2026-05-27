@@ -60,6 +60,9 @@ export function MobileNav({
                   ]
                 : []),
               { href: "/admin/articles", label: "Статии", icon: FileText },
+              ...(role === "office_staff"
+                ? [{ href: "/admin/ai-agent", label: "СК Help Agent", icon: Bot }]
+                : []),
             ],
           },
           {
@@ -87,7 +90,7 @@ export function MobileNav({
               ...(role === "master_admin"
                 ? [
                     { href: "/admin/settings", label: "Настройки", icon: Settings },
-                    { href: "/admin/ai-agent", label: "AI Agent", icon: Bot },
+                    { href: "/admin/ai-agent", label: "СК Help Agent", icon: Bot },
                   ]
                 : []),
             ],

@@ -1,4 +1,4 @@
-import { isRawListRequest, requiresToolData } from "@/lib/ai/agent/agentAutoTools";
+import { isRawListRequest, requiresToolData, isAdminGuideQuestion } from "@/lib/ai/agent/agentAutoTools";
 
 /** Всяка заявка за данни от системата (освен изричен списък) изисква аналитичен отговор. */
 export function needsAnalyticalResponse(message: string): boolean {
@@ -61,4 +61,32 @@ export function buildPlainJsonFallbackPrompt(): string {
     "По възможност добави kpi и chart от summary/chartSuggestion в данните.",
     "Без измислени имена или дати. Без технически кодове.",
   ].join("\n");
+}
+
+const ADMIN_GUIDE_STRUCTURE = `
+СТРУКТУРА (обучителен материал / помощ за admin панела):
+1. markdown "### Резюме" — за кого е материалът и какво покрива
+2. markdown "### Навигация" — таблица: Раздел | Път (/admin/...) | Кога се ползва
+3. markdown "### Основни процеси" — numbered flows (запитване→продажба→монтаж, сервиз, доставчик…)
+4. markdown "### Стъпка по стъпка" — конкретни кликове/екрани за задачата на потребителя
+5. table (optional) — Чеклист Ден 1 / Седмица 1 за нов служител
+6. link blocks — директни линкове към /admin/... секции
+7. chart (optional) — само ако потребителят иска визуализация на процес (pie/bar на етапи)
+
+ЗАБРАНЕНО: да казваш че „нямаш достъп до UI" или „не можеш да генерираш обучение". Знаеш admin панела от ADMIN_PANEL_GUIDE.
+`.trim();
+
+export function isAdminGuideResponse(message: string): boolean {
+  return isAdminGuideQuestion(message);
+}
+
+export function buildAdminGuidePrompt(userMessage: string): string {
+  return [
+    'Отговори САМО с JSON {"blocks":[...]}. Без ``` fences.',
+    "Роля: старши обучител и вътрешен експерт по admin панела на „Смолян Клима“.",
+    "Използвай ADMIN_PANEL_GUIDE от system instruction — точни пътища, менюта, flows.",
+    ADMIN_GUIDE_STRUCTURE,
+    "markdown: {type, content}. link: {type, label, href}. columns на български.",
+    `Заявка: «${userMessage.slice(0, 500)}»`,
+  ].join("\n\n");
 }

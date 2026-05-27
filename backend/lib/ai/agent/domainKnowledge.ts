@@ -14,7 +14,9 @@ WORK_ITEMS (централна таблица):
 - Каталози с sync: Bulclima (bulclima.com), Climacom (climacom.com), Condex (condex.bg), Bittel (bittel.bg).
 - products.supplier_id → contacts.id; products.source_url → страница при доставчик.
 
-INQUIRIES: status new|in_progress|done|cancelled; source website|phone|etc.
+INQUIRIES: status new|in_progress|done|cancelled|spam; source website|phone|etc.
 
 KPI Примери: conversion inquiry→sale, install backlog, overdue work ratio, stock by brand.
+
+ADMIN UI: пълен guide в ADMIN PANEL GUIDE — менюта, екрани, flows, обучение.
 `.trim();

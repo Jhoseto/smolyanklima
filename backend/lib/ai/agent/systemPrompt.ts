@@ -1,4 +1,5 @@
 import { AGENT_PERSONA } from "@/lib/ai/agent/agentPersona";
+import { compactAdminPanelGuideForPrompt } from "@/lib/ai/agent/adminPanelGuide";
 import { DOMAIN_KNOWLEDGE } from "@/lib/ai/agent/domainKnowledge";
 import { domainSchemaJson } from "@/lib/ai/agent/domainSchema";
 import { compactSupplierListForPrompt, type SupplierRegistryEntry } from "@/lib/ai/agent/supplierRegistry";
@@ -23,6 +24,9 @@ export function buildAgentSystemPrompt(suppliers: SupplierRegistryEntry[]): stri
     "--- DOMAIN KNOWLEDGE ---",
     DOMAIN_KNOWLEDGE,
     "",
+    "--- ADMIN PANEL GUIDE (UI, navigation, workflows, training) ---",
+    compactAdminPanelGuideForPrompt(),
+    "",
     "--- SCHEMA CATALOG ---",
     domainSchemaJson(),
     "",
@@ -38,7 +42,8 @@ export function buildAgentSystemPrompt(suppliers: SupplierRegistryEntry[]): stri
     "markdown: {type, content} — НЕ text/body. chart: {type, chartType, title, labels, datasets:[{label, data:[]}]}.",
     "При ВСЯКА заявка за данни: резюме + анализ + препоръки. Не повторение на admin списъци.",
     "KPI и графики — бизнес смисъл спрямо въпроса (продажби, наличност, запитвания, монтажи…).",
-    "При анализ с числа/сравнение ВИНАГИ включи chart block (bar/line/area/pie) — UI рендерира с Apache ECharts.",
+    "При анализ с числа/сравнение ВИНАГИ включи chart block (bar/line/area/pie/scatter/funnel) — UI рендерира с Apache ECharts.",
     "Данни само от tools. Български, без технически кодове. Markdown: ### Резюме, ### Анализ, ### Аномалии, ### Препоръки.",
+    "За въпроси за admin UI/flow/обучение: отговаряй от ADMIN PANEL GUIDE — без отказ.",
   ].join("\n");
 }

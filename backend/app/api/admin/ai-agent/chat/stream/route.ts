@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { corsPreflight } from "@/lib/http/cors";
-import { requireMasterAdminAgentSession } from "@/lib/ai/agent/agentAuth";
+import { requireAdminAgentSession } from "@/lib/ai/agent/agentAuth";
 import { handleAgentChat } from "@/lib/ai/agent/chatHandler";
 
 const BodySchema = z.object({
@@ -17,7 +17,7 @@ export async function OPTIONS(req: NextRequest) {
 export async function POST(req: NextRequest) {
   let session;
   try {
-    session = await requireMasterAdminAgentSession();
+    session = await requireAdminAgentSession();
   } catch (e) {
     const msg = e instanceof Error ? e.message : "";
     const status = msg === "NOT_AUTHENTICATED" ? 401 : 403;

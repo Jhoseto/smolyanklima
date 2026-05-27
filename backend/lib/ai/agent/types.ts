@@ -13,7 +13,7 @@ export const AgentBlockSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("chart"),
-    chartType: z.enum(["bar", "line", "pie", "area"]),
+    chartType: z.enum(["bar", "line", "pie", "area", "scatter", "funnel"]),
     title: z.string().max(200),
     labels: z.array(z.string().max(80)).max(60),
     datasets: z

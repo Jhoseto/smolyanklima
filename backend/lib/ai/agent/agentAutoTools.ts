@@ -23,6 +23,20 @@ function detectPeriodDays(message: string): number {
 const META_QUESTION =
   /^(здрав|привет|благодар|help\b|какво можеш|с какво мож|кои си|как работиш|какви теми)/;
 
+/** Въпрос за UI, flow, обучение, навигация в admin панела — knowledge-based, не tools. */
+export function isAdminGuideQuestion(message: string): boolean {
+  const m = message.toLowerCase().trim();
+  if (/обучител|обучени|инструкци|rъководств|tutorial|manual\b|onboarding|обясни.*панел/.test(m)) return true;
+  if (/нов(?:и)?\s+(?:офис\s+)?(?:служител|служители|employee|staff)/.test(m)) return true;
+  if (/как (?:да|се) (?:работ|ползва|регистрира|създам|запиш|продам|добав|намер|отвор|клик|въвед|направ)/.test(m)) return true;
+  if (/къде (?:да|се|е) (?:намер|намирам|отид|кликна|въвед|отвор)/.test(m)) return true;
+  if (/(?:flow|процес|стъпк|workflow)/.test(m) && /(?:админ|панел|систем|офис|panel|admin)/.test(m)) return true;
+  if (/(?:интерфейс|меню|навигац|екран|бутон|форм)/.test(m) && /(?:админ|panel|admin|панел)/.test(m)) return true;
+  if (/административн(?:ия|ия)?\s+панел/.test(m)) return true;
+  if (/помощ.*(?:панел|admin|админ|интерфейс|систем)/.test(m)) return true;
+  return false;
+}
+
 /** Изрично иска списък — допустим е табличен отговор без пълен анализ. */
 export function isRawListRequest(message: string): boolean {
   const m = message.toLowerCase().trim();
@@ -34,6 +48,7 @@ export function isRawListRequest(message: string): boolean {
 export function requiresToolData(message: string): boolean {
   const m = message.toLowerCase().trim();
   if (!m || META_QUESTION.test(m)) return false;
+  if (isAdminGuideQuestion(message)) return false;
 
   return /анализ|активност|продаж|запитван|наличност|склад|монт|сервиз|протокол|отчет|статистик|колко|брой|седмиц|месец|годин|(?:последн|минал).*(?:ден|дни|седмиц|месец|годин)|фирм|компан|календар|доставчик|инвентар|рейтинг|имейл|бюлетин|backup|архив|одит|лог|действ|случил|направил|данни|kpi|показател|обобщ|преглед|продукт|климатик|клиент|контакт|crm|аксесоар|резервн|част|марка|btu|seer|scop|цена|поръчк|синхрон|каталог|блог|статия|чат|абонат|newsletter|екип|служител|персонал|staff|настройк|топ|най-|compare|сравн|препоръ|какво|колко|има ли|кои|where|къде/.test(
     m,
@@ -161,6 +176,25 @@ export function planAutoTools(message: string): AutoToolPlan[] {
   }
 
   return plans;
+}
+
+/** Cap regex prefetch — remainder can be fetched by Gemini tool loop. */
+export function capPrefetchPlans(plans: AutoToolPlan[], max: number): AutoToolPlan[] {
+  if (max <= 0 || plans.length <= max) return plans;
+  return plans.slice(0, max);
+}
+
+export function prefetchToolKey(name: string, args: Record<string, unknown>): string {
+  return `${name}:${JSON.stringify(args)}`;
+}
+
+export function postPrefetchToolNudge(): string {
+  return [
+    "Предварителни данни са заредени по-горе.",
+    "Ако липсва информация за въпроса — извикай допълнителни tools.",
+    "Не повтаряй същите tool calls със същите args.",
+    "След достатъчно данни — финален JSON отговор ще бъде поискан отделно.",
+  ].join(" ");
 }
 
 export function toolDataRefusalNudge(): string {
