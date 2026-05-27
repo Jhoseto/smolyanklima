@@ -493,7 +493,7 @@ export function ServiceTasksClient({
       {/* ═══════════════════════════════════════════════════════
           MOBILE layout (< md) — week strip + task cards
       ════════════════════════════════════════════════════════ */}
-      <div className="md:hidden flex flex-col -mx-3 -mt-3">
+      <div className="flex flex-col md:hidden">
         {/* Sticky top bar */}
         <div className="sticky top-0 z-20 bg-white border-b border-slate-200 shadow-sm">
           {/* Greeting + refresh */}

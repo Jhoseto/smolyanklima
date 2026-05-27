@@ -36,11 +36,7 @@ export function CompanyBlock() {
       <br />
       Управител: {c.managingDirector}
       <br />
-      Лице за контакт по поверителност: {c.privacyContactName} —{' '}
-      <a href={`mailto:${c.email}?subject=${encodeURIComponent(c.gdprEmailSubject)}`}>
-        {c.email}
-      </a>{' '}
-      (тема на имейла: „{c.gdprEmailSubject}“)
+      Лице за контакт по поверителност: {c.privacyContactName}
     </address>
   );
 }

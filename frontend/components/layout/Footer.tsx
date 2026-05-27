@@ -26,10 +26,10 @@ export const Footer = () => {
               Вашият доверен партньор за климатизация в Смолян и региона. Ние предлагаме качествени решения за вашия комфорт у дома и в офиса.
             </p>
             <div className="flex gap-4">
-              <a href="https://www.facebook.com/smolyanklima" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center hover:bg-[#FF4D00] hover:text-white transition-colors text-gray-400">
+              <a href="#" className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center hover:bg-[#FF4D00] hover:text-white transition-colors text-gray-400">
                 <Facebook className="w-5 h-5" />
               </a>
-              <a href="https://www.instagram.com/smolyanklima" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center hover:bg-[#FF4D00] hover:text-white transition-colors text-gray-400">
+              <a href="#" className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center hover:bg-[#FF4D00] hover:text-white transition-colors text-gray-400">
                 <Instagram className="w-5 h-5" />
               </a>
             </div>
@@ -44,8 +44,8 @@ export const Footer = () => {
 
           {/* Links */}
           <div>
-            <h3 className="text-lg font-bold mb-4">Бързи връзки</h3>
-            <ul className="space-y-2">
+            <h3 className="text-lg font-bold mb-6">Бързи връзки</h3>
+            <ul className="space-y-4">
               {[
                 { name: 'Начало', href: '#home' },
                 { name: 'Каталог', href: '/catalog' },
@@ -66,8 +66,8 @@ export const Footer = () => {
 
           {/* Services */}
           <div>
-            <h3 className="text-lg font-bold mb-4">Услуги</h3>
-            <ul className="space-y-2">
+            <h3 className="text-lg font-bold mb-6">Услуги</h3>
+            <ul className="space-y-4">
               {['Продажба на климатици', 'Професионален монтаж', 'Профилактика и почистване', 'Сервиз и ремонт', 'Оглед и консултация'].map((item) => (
                 <li key={item}>
                   <a href="#services" className="text-gray-400 hover:text-[#FF4D00] transition-colors text-sm font-medium">
@@ -80,14 +80,18 @@ export const Footer = () => {
 
           {/* Contact */}
           <div>
-            <h3 className="text-lg font-bold mb-4">Контакти</h3>
-            <ul className="space-y-2.5">
+            <h3 className="text-lg font-bold mb-6">Контакти</h3>
+            <ul className="space-y-4">
               <li className="flex gap-3 text-gray-400">
                 <MapPin className="w-5 h-5 text-[#FF4D00] shrink-0" />
                 <span className="text-sm">
                   {c.tradeAddress}
-                  <br />
-                  п.к. {c.postalCode}
+                  {c.postalCode.startsWith('[') ? null : (
+                    <>
+                      <br />
+                      п.к. {c.postalCode}
+                    </>
+                  )}
                 </span>
               </li>
               <li className="flex gap-3 text-gray-400">
@@ -120,14 +124,7 @@ export const Footer = () => {
             >
               Управление на бисквитки
             </button>
-            <a
-              href="https://www.facebook.com/kostadin.serezliev"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-white transition-colors"
-            >
-              Developed by K. Serezliev
-            </a>
+            <a href="#" className="hover:text-white transition-colors">Developed by K. Serezliev</a>
           </div>
         </div>
       </div>

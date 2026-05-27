@@ -5,17 +5,17 @@ import {
 import type { ProductStockLocation } from "@/lib/admin/productStockLocation";
 import type { ProductRegion } from "@/lib/admin/productRegion";
 
-export const ADMIN_PRODUCTS_LIST_FILTERS_KEY = "sk-admin-products-list-filters-v1";
+export const ADMIN_PRODUCTS_LIST_FILTERS_KEY = "sk-admin-products-list-filters-v2";
+/** Един заявка — целият филтриран списък (без странициране в UI). */
+export const ADMIN_PRODUCTS_LIST_FETCH_SIZE = 1000;
 const LEGACY_PER_PAGE_KEY = "admin-products-per-page";
+const LEGACY_FILTERS_V1_KEY = "sk-admin-products-list-filters-v1";
 
 export type CatalogKindFilter = "climatics" | "accessories" | "all";
 export type SortField = "name" | "price" | "purchase_price" | "product_condition" | "purchased_at";
 export type SortDir = "asc" | "desc";
-export const PRODUCTS_PER_PAGE_OPTS = [10, 20, 50, 100] as const;
-export type ProductsPerPage = (typeof PRODUCTS_PER_PAGE_OPTS)[number];
-
 export type AdminProductsListFiltersSnapshot = {
-  version: 1;
+  version: 2;
   q: string;
   catalogKind: CatalogKindFilter;
   condition: "" | "new" | "used";
@@ -35,13 +35,11 @@ export type AdminProductsListFiltersSnapshot = {
   purchasedTo: string;
   sortBy: SortField;
   sortDir: SortDir;
-  page: number;
-  perPage: ProductsPerPage;
   filtersOpen: boolean;
 };
 
 export const DEFAULT_ADMIN_PRODUCTS_LIST_FILTERS: AdminProductsListFiltersSnapshot = {
-  version: 1,
+  version: 2,
   q: "",
   catalogKind: "climatics",
   condition: "",
@@ -61,8 +59,6 @@ export const DEFAULT_ADMIN_PRODUCTS_LIST_FILTERS: AdminProductsListFiltersSnapsh
   purchasedTo: "",
   sortBy: "name",
   sortDir: "asc",
-  page: 1,
-  perPage: 20,
   filtersOpen: false,
 };
 
@@ -76,10 +72,6 @@ function isSortField(v: unknown): v is SortField {
 
 function isSortDir(v: unknown): v is SortDir {
   return v === "asc" || v === "desc";
-}
-
-function isPerPage(v: unknown): v is ProductsPerPage {
-  return typeof v === "number" && (PRODUCTS_PER_PAGE_OPTS as readonly number[]).includes(v);
 }
 
 function parsePriceRange(raw: unknown): [number, number] {
@@ -96,34 +88,32 @@ function parsePriceRange(raw: unknown): [number, number] {
   return [Math.min(min, max), Math.max(min, max)];
 }
 
-function readLegacyPerPage(): ProductsPerPage | null {
+function readStoredFiltersRaw(): string | null {
   if (typeof window === "undefined") return null;
-  try {
-    const n = Number(localStorage.getItem(LEGACY_PER_PAGE_KEY));
-    return isPerPage(n) ? n : null;
-  } catch {
-    return null;
-  }
+  return (
+    localStorage.getItem(ADMIN_PRODUCTS_LIST_FILTERS_KEY) ??
+    localStorage.getItem(LEGACY_FILTERS_V1_KEY)
+  );
 }
 
 export function loadAdminProductsListFilters(): AdminProductsListFiltersSnapshot {
   if (typeof window === "undefined") return { ...DEFAULT_ADMIN_PRODUCTS_LIST_FILTERS };
 
   try {
-    const raw = localStorage.getItem(ADMIN_PRODUCTS_LIST_FILTERS_KEY);
+    const raw = readStoredFiltersRaw();
     if (!raw) {
-      const legacyPerPage = readLegacyPerPage();
-      return {
-        ...DEFAULT_ADMIN_PRODUCTS_LIST_FILTERS,
-        ...(legacyPerPage ? { perPage: legacyPerPage } : {}),
-      };
+      return { ...DEFAULT_ADMIN_PRODUCTS_LIST_FILTERS };
     }
-    const parsed = JSON.parse(raw) as Partial<AdminProductsListFiltersSnapshot>;
+    const parsed = JSON.parse(raw) as Partial<AdminProductsListFiltersSnapshot> & {
+      page?: number;
+      perPage?: number;
+      version?: number;
+    };
     const stockLoc = parsed.stockLocationFilter;
     const region = parsed.productRegionFilter;
 
     return {
-      version: 1,
+      version: 2,
       q: typeof parsed.q === "string" ? parsed.q : "",
       catalogKind: isCatalogKind(parsed.catalogKind) ? parsed.catalogKind : "climatics",
       condition: parsed.condition === "new" || parsed.condition === "used" ? parsed.condition : "",
@@ -156,8 +146,6 @@ export function loadAdminProductsListFilters(): AdminProductsListFiltersSnapshot
       purchasedTo: typeof parsed.purchasedTo === "string" ? parsed.purchasedTo : "",
       sortBy: isSortField(parsed.sortBy) ? parsed.sortBy : "name",
       sortDir: isSortDir(parsed.sortDir) ? parsed.sortDir : "asc",
-      page: typeof parsed.page === "number" && parsed.page >= 1 ? Math.floor(parsed.page) : 1,
-      perPage: isPerPage(parsed.perPage) ? parsed.perPage : readLegacyPerPage() ?? 20,
       filtersOpen: Boolean(parsed.filtersOpen),
     };
   } catch {
@@ -169,7 +157,8 @@ export function saveAdminProductsListFilters(snapshot: AdminProductsListFiltersS
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(ADMIN_PRODUCTS_LIST_FILTERS_KEY, JSON.stringify(snapshot));
-    localStorage.setItem(LEGACY_PER_PAGE_KEY, String(snapshot.perPage));
+    localStorage.removeItem(LEGACY_FILTERS_V1_KEY);
+    localStorage.removeItem(LEGACY_PER_PAGE_KEY);
   } catch {
     /* quota / private mode */
   }

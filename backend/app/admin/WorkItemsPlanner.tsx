@@ -5,7 +5,7 @@ import { Card, Button, Select, Input, Textarea } from "./ui";
 import { ContactPersonPicker } from "./ContactPersonPicker";
 import { InstallationMountDetailModal } from "./InstallationMountDetailModal";
 import { SupplierOrderDetailModal } from "./SupplierOrderDetailModal";
-import { CalendarDays, CheckCircle2, List } from "lucide-react";
+import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, List } from "lucide-react";
 import { notifyFollowUpCallsChanged } from "@/lib/admin/follow-up-calls-events";
 
 type EventCode =
@@ -261,7 +261,9 @@ export function WorkItemsPlanner({
   }, [enabledEventFilters]);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmCompleteItem, setConfirmCompleteItem] = useState<WorkItem | null>(null);
-  const [displayMode, setDisplayMode] = useState<"calendar" | "agenda">("agenda");
+  const [displayMode, setDisplayMode] = useState<"day" | "month">("day");
+  const [mobileSelectedKey, setMobileSelectedKey] = useState(() => formatDateKey(new Date()));
+  const [weekAnchor, setWeekAnchor] = useState(() => new Date());
   const [mountDetailId, setMountDetailId] = useState<string | null>(null);
   const [supplierOrderDetailId, setSupplierOrderDetailId] = useState<string | null>(null);
 
@@ -382,6 +384,22 @@ export function WorkItemsPlanner({
 
   const agendaDates = [...agendaByDate.keys()].sort();
 
+  const mobileWeekDays = useMemo(() => weekOf(weekAnchor), [weekAnchor]);
+
+  const mobileDayItems = useMemo(() => {
+    return (byDate.get(mobileSelectedKey) ?? []).filter(matchesViewMode);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [byDate, mobileSelectedKey, enabledFiltersKey]);
+
+  useEffect(() => {
+    const d = new Date(`${mobileSelectedKey}T00:00:00`);
+    if (Number.isNaN(d.getTime())) return;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diffMonths = (d.getFullYear() - today.getFullYear()) * 12 + (d.getMonth() - today.getMonth());
+    setMonthOffset((current) => (current === diffMonths ? current : diffMonths));
+  }, [mobileSelectedKey]);
+
   // Memoize expensive calendar grid — avoids recomputing on every render tick
   const days = useMemo<Date[]>(() => {
     const grid: Date[] = [];
@@ -479,9 +497,21 @@ export function WorkItemsPlanner({
 
   function openDay(dateKey: string) {
     setSelectedDate(dateKey);
+    setMobileSelectedKey(dateKey);
     setAddForm(createDefaultForm(dateKey));
     setEditingId(null);
     setEditForm(createDefaultForm(dateKey));
+  }
+
+  function goMobileToday() {
+    const key = formatDateKey(new Date());
+    setWeekAnchor(new Date());
+    setMobileSelectedKey(key);
+    setMonthOffset(0);
+  }
+
+  function shiftMobileWeek(delta: number) {
+    setWeekAnchor((prev) => addDays(prev, delta * 7));
   }
 
   function closeDayModal() {
@@ -600,29 +630,29 @@ export function WorkItemsPlanner({
   }
 
   return (
-    <Card className="mt-3 p-3">
+    <Card className="mt-3 overflow-hidden p-0 md:p-3">
       {/* Header */}
-      <div className="flex justify-between items-center mb-2 gap-2 flex-wrap">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-3 md:border-0 md:px-0 md:py-0 md:mb-2">
         <div className="min-w-0">
           <div className="text-sm font-bold text-slate-900 leading-tight">Оперативен календар</div>
           <div className="text-xs text-slate-500 capitalize leading-tight">{title}</div>
         </div>
         <div className="flex gap-1 shrink-0 flex-wrap justify-end items-center">
           {/* Mobile view toggle */}
-          <div className="flex md:hidden border border-slate-200 rounded-lg overflow-hidden">
+          <div className="flex md:hidden overflow-hidden rounded-xl border border-slate-200">
             <button
               type="button"
-              onClick={() => setDisplayMode("agenda")}
-              className={`flex items-center gap-1 px-3 py-2 min-h-[44px] text-xs font-semibold transition-colors ${displayMode === "agenda" ? "bg-brand-blue-500 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+              onClick={() => setDisplayMode("day")}
+              className={`flex min-h-[44px] items-center gap-1.5 px-4 py-2 text-xs font-semibold transition-colors ${displayMode === "day" ? "bg-brand-blue-500 text-white" : "bg-white text-slate-600"}`}
             >
-              <List className="w-3.5 h-3.5" /> Списък
+              <CalendarDays className="h-4 w-4" /> Ден
             </button>
             <button
               type="button"
-              onClick={() => setDisplayMode("calendar")}
-              className={`flex items-center gap-1 px-3 py-2 min-h-[44px] text-xs font-semibold transition-colors ${displayMode === "calendar" ? "bg-brand-blue-500 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+              onClick={() => setDisplayMode("month")}
+              className={`flex min-h-[44px] items-center gap-1.5 px-4 py-2 text-xs font-semibold transition-colors ${displayMode === "month" ? "bg-brand-blue-500 text-white" : "bg-white text-slate-600"}`}
             >
-              <CalendarDays className="w-3.5 h-3.5" /> Кал.
+              <List className="h-4 w-4" /> Месец
             </button>
           </div>
           <Button variant="secondary" size="sm" onClick={() => setMonthOffset((x) => x - 1)}>◀</Button>
@@ -632,11 +662,12 @@ export function WorkItemsPlanner({
       </div>
 
       {/* Multi on/off филтри по тип събитие */}
-      <div className="flex gap-1.5 mb-2 flex-wrap">
+      <div className="-mx-3 mb-3 overflow-x-auto px-3 scrollbar-hide md:mx-0 md:px-0">
+        <div className="flex min-w-max gap-2 pb-1 md:flex-wrap">
         <button
           type="button"
           onClick={toggleAllEventFilters}
-          className={`rounded-full px-3 py-2 min-h-[36px] text-xs font-bold border transition-colors ${
+          className={`shrink-0 rounded-full px-3 py-2 min-h-[36px] text-xs font-bold border transition-colors ${
             allEventFiltersOn
               ? "border-brand-blue-500 bg-brand-blue-50 text-brand-blue-700"
               : "border-slate-300 bg-white text-slate-500 hover:bg-slate-50"
@@ -651,7 +682,7 @@ export function WorkItemsPlanner({
               key={m.id}
               type="button"
               onClick={() => toggleEventFilter(m.id)}
-              className={`rounded-full px-3 py-2 min-h-[36px] text-xs font-bold border transition-colors ${
+              className={`shrink-0 rounded-full px-3 py-2 min-h-[36px] text-xs font-bold border transition-colors ${
                 on
                   ? "border-brand-blue-500 bg-brand-blue-50 text-brand-blue-700"
                   : "border-slate-300 bg-white text-slate-500 hover:bg-slate-50 opacity-60"
@@ -661,12 +692,13 @@ export function WorkItemsPlanner({
             </button>
           );
         })}
+        </div>
       </div>
 
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-2 mb-2 text-xs font-medium">{error}</div>}
+      {error && <div className="mx-3 md:mx-0 bg-red-50 border border-red-200 text-red-700 rounded-lg p-2 mb-2 text-xs font-medium">{error}</div>}
 
-      {/* DESKTOP: Calendar grid (always visible on md+, hidden on mobile when agenda mode) */}
-      <div className={`${displayMode === "agenda" ? "hidden md:block" : "block"}`}>
+      {/* DESKTOP: Calendar grid */}
+      <div className="hidden md:block">
         <div className="grid grid-cols-7 gap-1">
           {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"].map((d) => (
             <div key={d} className="text-[10px] font-bold text-slate-500 text-center uppercase tracking-wide">{d}</div>
@@ -725,89 +757,177 @@ export function WorkItemsPlanner({
         </div>
       </div>
 
-      {/* MOBILE: Agenda view */}
-      <div className={`${displayMode === "agenda" ? "block md:hidden" : "hidden"}`}>
-        {agendaItems.length === 0 ? (
-          <div className="text-center py-8 text-sm text-slate-500 border border-dashed border-slate-200 rounded-xl">Няма събития за {title}.</div>
+      {/* MOBILE */}
+      <div className="md:hidden">
+        {displayMode === "day" ? (
+          <>
+            <div className="border-b border-slate-100 bg-slate-50/80 px-2 py-2">
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => shiftMobileWeek(-1)}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-500 active:bg-white"
+                  aria-label="Предишна седмица"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+                <div className="flex flex-1 gap-1.5 overflow-x-auto scrollbar-hide py-1">
+                  {mobileWeekDays.map((day) => {
+                    const dateKey = formatDateKey(day);
+                    const isSelected = dateKey === mobileSelectedKey;
+                    const isToday = dateKey === todayKey;
+                    const count = (byDate.get(dateKey) ?? []).filter(matchesViewMode).length;
+                    return (
+                      <button
+                        key={dateKey}
+                        type="button"
+                        onClick={() => setMobileSelectedKey(dateKey)}
+                        className={`flex h-[4.25rem] min-w-[3rem] shrink-0 flex-col items-center justify-center rounded-2xl px-2 transition-all ${
+                          isSelected
+                            ? "bg-brand-blue-500 text-white shadow-md shadow-brand-blue-200"
+                            : isToday
+                              ? "border border-brand-blue-200 bg-brand-blue-50 text-brand-blue-700"
+                              : "border border-slate-200 bg-white text-slate-700"
+                        }`}
+                      >
+                        <span className={`text-[10px] font-semibold ${isSelected ? "text-brand-blue-100" : "text-slate-400"}`}>
+                          {BG_WEEKDAY_SHORT[day.getDay()]}
+                        </span>
+                        <span className="text-base font-black tabular-nums leading-none">{day.getDate()}</span>
+                        {count > 0 ? (
+                          <span
+                            className={`mt-1 rounded-full px-1.5 text-[9px] font-bold leading-4 ${
+                              isSelected ? "bg-white/20 text-white" : "bg-amber-100 text-amber-800"
+                            }`}
+                          >
+                            {count}
+                          </span>
+                        ) : (
+                          <span className="mt-1 h-4" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => shiftMobileWeek(1)}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-500 active:bg-white"
+                  aria-label="Следваща седмица"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="mt-1 flex items-center justify-between px-2 pb-1">
+                <span className="text-[11px] font-medium capitalize text-slate-500">{title}</span>
+                {mobileSelectedKey !== todayKey && (
+                  <button type="button" onClick={goMobileToday} className="text-[11px] font-bold text-brand-blue-600">
+                    Към днес
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-3 px-3 py-3">
+              <div>
+                <h3 className="text-sm font-bold capitalize text-slate-900">
+                  {new Date(`${mobileSelectedKey}T00:00:00`).toLocaleDateString("bg-BG", {
+                    weekday: "long",
+                    day: "numeric",
+                    month: "long",
+                  })}
+                  {mobileSelectedKey === todayKey ? " · Днес" : ""}
+                </h3>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {mobileDayItems.length === 0
+                    ? "Няма събития за този ден"
+                    : `${mobileDayItems.length} ${mobileDayItems.length === 1 ? "събитие" : "събития"}`}
+                </p>
+              </div>
+
+              {mobileDayItems.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500">
+                  Няма събития за избрания ден.
+                  {!readOnly && (
+                    <button
+                      type="button"
+                      onClick={() => openDay(mobileSelectedKey)}
+                      className="mt-3 block w-full rounded-xl bg-brand-blue-500 px-4 py-3 text-sm font-bold text-white"
+                    >
+                      + Ново събитие
+                    </button>
+                  )}
+                </div>
+              ) : (
+                mobileDayItems.map((item) => (
+                  <MobilePlannerEventCard
+                    key={item.id}
+                    item={item}
+                    dateKey={mobileSelectedKey}
+                    readOnly={readOnly}
+                    savingBusy={savingBusy}
+                    onOpenDay={openDay}
+                    onRequestComplete={setConfirmCompleteItem}
+                    onMountDetail={setMountDetailId}
+                    onSupplierDetail={setSupplierOrderDetailId}
+                  />
+                ))
+              )}
+
+              {!readOnly && mobileDayItems.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => openDay(mobileSelectedKey)}
+                  className="w-full rounded-xl border border-dashed border-brand-blue-200 bg-brand-blue-50 px-4 py-3 text-sm font-bold text-brand-blue-700"
+                >
+                  + Ново събитие за деня
+                </button>
+              )}
+            </div>
+          </>
         ) : (
-          <div className="space-y-3">
-            {agendaDates.map((dateKey) => {
-              const dayEvts = agendaByDate.get(dateKey) ?? [];
-              const d = new Date(`${dateKey}T00:00:00`);
-              const isToday = dateKey === todayKey;
-              return (
-                <div key={dateKey}>
-                  <button
-                    type="button"
-                    onClick={() => openDay(dateKey)}
-                    className="w-full text-left"
-                  >
-                    <div className={`text-xs font-bold mb-1.5 px-1 ${isToday ? "text-brand-blue-700" : "text-slate-500"}`}>
+          <div className="space-y-3 px-3 py-3">
+            {agendaItems.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-500">
+                Няма събития за {title}.
+              </div>
+            ) : (
+              agendaDates.map((dateKey) => {
+                const dayEvts = agendaByDate.get(dateKey) ?? [];
+                const d = new Date(`${dateKey}T00:00:00`);
+                const isToday = dateKey === todayKey;
+                return (
+                  <div key={dateKey}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMobileSelectedKey(dateKey);
+                        setDisplayMode("day");
+                      }}
+                      className={`mb-2 w-full text-left px-1 text-xs font-bold ${isToday ? "text-brand-blue-700" : "text-slate-500"}`}
+                    >
                       {d.toLocaleDateString("bg-BG", { weekday: "long", day: "numeric", month: "long" })}
                       {isToday && " · Днес"}
-                    </div>
-                  </button>
-                  <div className="space-y-1.5">
-                    {dayEvts.map((item) => (
-                      <div key={item.id} className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => openDay(dateKey)}
-                          className={`flex-1 text-left rounded-xl border px-3 py-3 flex items-start gap-3 transition-colors shadow-sm ${
-                            item.status === "done"
-                              ? "border-green-200 bg-green-50 hover:border-green-300"
-                              : "border-slate-200 bg-white hover:border-brand-blue-200 active:bg-slate-50"
-                          }`}
-                        >
-                          <div className="w-1 self-stretch rounded-full shrink-0" style={{ backgroundColor: eventColor(item) }} />
-                          <div className="min-w-0 flex-1">
-                            <div className="text-sm font-bold text-slate-900 leading-tight">{item.title}</div>
-                            <div className="text-xs text-slate-500 mt-0.5">{eventCodeLabel(item)}</div>
-                            {(item.customer_name || item.customer_phone) && (
-                              <div className="text-xs text-slate-400 mt-0.5">
-                                {[item.customer_name, item.customer_phone].filter(Boolean).join(" · ")}
-                              </div>
-                            )}
-                          </div>
-                          <span className={workItemStatusPillClass(item)}>{statusLabel(item.status, item.event_code)}</span>
-                        </button>
-                        <WorkItemCompleteControl
+                    </button>
+                    <div className="space-y-2">
+                      {dayEvts.map((item) => (
+                        <MobilePlannerEventCard
+                          key={item.id}
                           item={item}
+                          dateKey={dateKey}
                           readOnly={readOnly}
                           savingBusy={savingBusy}
-                          variant="compact"
-                          onRequestComplete={() => setConfirmCompleteItem(item)}
+                          onOpenDay={openDay}
+                          onRequestComplete={setConfirmCompleteItem}
+                          onMountDetail={setMountDetailId}
+                          onSupplierDetail={setSupplierOrderDetailId}
                         />
-                        {item.event_code === "service_installation" && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setMountDetailId(item.id);
-                            }}
-                            className="shrink-0 self-center px-3 py-2.5 min-h-[44px] text-xs font-bold uppercase text-brand-blue-700 bg-brand-blue-50 rounded-lg border border-brand-blue-100"
-                          >
-                            Инфо
-                          </button>
-                        )}
-                        {item.event_code === "supplier_order" && item.status !== "done" && item.status !== "cancelled" && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSupplierOrderDetailId(item.id);
-                            }}
-                            className="shrink-0 self-center px-3 py-2.5 min-h-[44px] text-xs font-bold uppercase text-violet-800 bg-violet-50 rounded-lg border border-violet-200"
-                          >
-                            Детайли
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         )}
       </div>
@@ -860,12 +980,12 @@ export function WorkItemsPlanner({
                       }`}
                       style={{ borderLeftColor: eventColor(item) }}
                     >
-                      <div className="flex justify-between items-start gap-3">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-medium text-slate-500">{eventCodeLabel(item)}</div>
                           <div className="mt-0.5 text-base font-semibold text-slate-900">{item.title}</div>
                         </div>
-                        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                        <div className="flex w-full flex-col gap-2 sm:w-auto sm:shrink-0 sm:flex-row sm:flex-wrap sm:justify-end">
                           <span className={workItemStatusPillClass(item)}>{statusLabel(item.status, item.event_code)}</span>
                           <WorkItemCompleteControl
                             item={item}
@@ -975,11 +1095,9 @@ export function WorkItemsPlanner({
               </div>
 
               {!readOnly && (
-              <div className="shrink-0 overflow-visible bg-slate-50/90 p-3 lg:w-[320px] lg:max-w-[34%] xl:w-[340px]">
-                <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Ново събитие</h3>
-                <div
-                  className="grid grid-cols-1 gap-2 md:grid-cols-2 overflow-visible [&_label]:gap-1 [&_label>span]:text-[10px] [&_label>span]:font-medium [&_label>span]:text-slate-500 [&_input]:!min-h-0 [&_input]:!rounded-md [&_input]:!px-2 [&_input]:!py-1 [&_input]:!text-[11px] [&_select]:!rounded-md [&_select]:!px-2 [&_select]:!py-1 [&_select]:!text-[11px] [&_textarea]:!rounded-md [&_textarea]:!px-2 [&_textarea]:!py-1 [&_textarea]:!text-[11px] [&_textarea]:!min-h-[2.25rem]"
-                >
+              <div className="shrink-0 overflow-visible border-t border-slate-200 bg-slate-50/90 p-4 lg:w-[320px] lg:max-w-[34%] lg:border-t-0 xl:w-[340px]">
+                <h3 className="mb-3 text-sm font-semibold text-slate-800 lg:mb-2 lg:text-[11px] lg:uppercase lg:tracking-wide lg:text-slate-500">Ново събитие</h3>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:gap-2 lg:[&_input]:!min-h-0 lg:[&_input]:!rounded-md lg:[&_input]:!px-2 lg:[&_input]:!py-1 lg:[&_input]:!text-[11px] lg:[&_label>span]:text-[10px] lg:[&_select]:!rounded-md lg:[&_select]:!px-2 lg:[&_select]:!py-1 lg:[&_select]:!text-[11px] lg:[&_textarea]:!min-h-[2.25rem] lg:[&_textarea]:!rounded-md lg:[&_textarea]:!px-2 lg:[&_textarea]:!py-1 lg:[&_textarea]:!text-[11px]">
                   <FormField label="Тип събитие"><EventSelect form={addForm} setForm={setAddForm} /></FormField>
                   <FormField label="Заглавие"><Input value={addForm.title} onChange={(e) => setAddForm((f) => ({ ...f, title: e.target.value }))} /></FormField>
                   <FormField label="Дата"><Input type="date" value={addForm.dueDate} onChange={(e) => setAddForm((f) => ({ ...f, dueDate: e.target.value }))} /></FormField>
@@ -1002,7 +1120,7 @@ export function WorkItemsPlanner({
                   </div>
                   <FormField label="Бележки" full><Textarea value={addForm.notes} onChange={(e) => setAddForm((f) => ({ ...f, notes: e.target.value }))} rows={2} /></FormField>
                   <div className="col-span-full shrink-0 pt-1">
-                    <Button variant="primary" size="sm" className="w-full !py-2 !text-xs" type="button" onClick={() => void createItemInDay()} disabled={savingBusy}>
+                    <Button variant="primary" size="sm" className="w-full !py-3 !text-sm lg:!py-2 lg:!text-xs" type="button" onClick={() => void createItemInDay()} disabled={savingBusy}>
                       {savingBusy ? "Записване…" : "Добави събитие"}
                     </Button>
                   </div>
@@ -1060,6 +1178,94 @@ export function WorkItemsPlanner({
         </div>
       )}
     </Card>
+  );
+}
+
+function MobilePlannerEventCard({
+  item,
+  dateKey,
+  readOnly,
+  savingBusy,
+  onOpenDay,
+  onRequestComplete,
+  onMountDetail,
+  onSupplierDetail,
+}: {
+  item: WorkItem;
+  dateKey: string;
+  readOnly: boolean;
+  savingBusy: boolean;
+  onOpenDay: (key: string) => void;
+  onRequestComplete: (item: WorkItem) => void;
+  onMountDetail: (id: string) => void;
+  onSupplierDetail: (id: string) => void;
+}) {
+  const done = item.status === "done";
+  return (
+    <div
+      className={`overflow-hidden rounded-2xl border shadow-sm ${
+        done ? "border-green-200 bg-green-50/80" : "border-slate-200 bg-white"
+      }`}
+    >
+      <button type="button" onClick={() => onOpenDay(dateKey)} className="w-full p-4 text-left">
+        <div className="flex items-start gap-3">
+          <div className="w-1 self-stretch shrink-0 rounded-full" style={{ backgroundColor: eventColor(item) }} />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="text-sm font-bold leading-snug text-slate-900">{item.title}</div>
+                <div className="mt-1 text-xs text-slate-500">{eventCodeLabel(item)}</div>
+              </div>
+              <span className={workItemStatusPillClass(item)}>{statusLabel(item.status, item.event_code)}</span>
+            </div>
+            {(item.customer_name || item.customer_phone) && (
+              <div className="mt-2 text-xs leading-relaxed text-slate-600">
+                {[item.customer_name, item.customer_phone].filter(Boolean).join(" · ")}
+              </div>
+            )}
+            {item.customer_address && (
+              <div className="mt-1 text-xs leading-relaxed text-slate-500">{item.customer_address}</div>
+            )}
+          </div>
+        </div>
+      </button>
+      <div className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50/80 px-3 py-3">
+        <WorkItemCompleteControl
+          item={item}
+          readOnly={readOnly}
+          savingBusy={savingBusy}
+          variant="mobile"
+          onRequestComplete={() => onRequestComplete(item)}
+        />
+        <div className="grid grid-cols-2 gap-2">
+          {item.event_code === "service_installation" && (
+            <button
+              type="button"
+              onClick={() => onMountDetail(item.id)}
+              className="min-h-[44px] rounded-xl border border-brand-blue-100 bg-white px-3 py-2.5 text-xs font-bold text-brand-blue-700"
+            >
+              Детайли монтаж
+            </button>
+          )}
+          {item.event_code === "supplier_order" && item.status !== "done" && item.status !== "cancelled" && (
+            <button
+              type="button"
+              onClick={() => onSupplierDetail(item.id)}
+              className="min-h-[44px] rounded-xl border border-violet-200 bg-white px-3 py-2.5 text-xs font-bold text-violet-800"
+            >
+              Поръчка
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => onOpenDay(dateKey)}
+            className="min-h-[44px] rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700"
+          >
+            Отвори деня
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1194,6 +1400,20 @@ function formatDateKey(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+const BG_WEEKDAY_SHORT = ["Нд", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+
+function addDays(d: Date, n: number): Date {
+  const next = new Date(d);
+  next.setDate(next.getDate() + n);
+  return next;
+}
+
+function weekOf(anchor: Date): Date[] {
+  const day = anchor.getDay();
+  const monday = addDays(anchor, -(day === 0 ? 6 : day - 1));
+  return Array.from({ length: 7 }, (_, i) => addDays(monday, i));
 }
 
 function eventCodeLabel(item: WorkItem): string {
@@ -1384,7 +1604,7 @@ function WorkItemCompleteControl({
   item: WorkItem;
   readOnly: boolean;
   savingBusy: boolean;
-  variant: "compact" | "full";
+  variant: "compact" | "full" | "mobile";
   onRequestComplete: () => void;
 }) {
   if (readOnly || item.status === "cancelled") return null;
@@ -1413,9 +1633,23 @@ function WorkItemCompleteControl({
           onRequestComplete();
         }}
         disabled={savingBusy}
-        className="shrink-0 self-center inline-flex items-center gap-1 rounded-lg border border-green-700 bg-green-600 px-2.5 py-2 text-[10px] font-bold text-white hover:bg-green-700 disabled:opacity-50"
+        className="inline-flex shrink-0 items-center gap-1 self-center rounded-lg border border-green-700 bg-green-600 px-2.5 py-2 text-[10px] font-bold text-white hover:bg-green-700 disabled:opacity-50"
       >
         <CheckCircle2 className="h-3.5 w-3.5" />
+        {label}
+      </button>
+    );
+  }
+
+  if (variant === "mobile") {
+    return (
+      <button
+        type="button"
+        onClick={() => onRequestComplete()}
+        disabled={savingBusy}
+        className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-green-700 bg-green-600 px-4 py-3 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50"
+      >
+        <CheckCircle2 className="h-4 w-4" />
         {label}
       </button>
     );

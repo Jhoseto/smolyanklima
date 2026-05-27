@@ -57,13 +57,12 @@ import {
   type ProductRegion,
 } from "@/lib/admin/productRegion";
 import {
+  ADMIN_PRODUCTS_LIST_FETCH_SIZE,
   clearAdminProductsListFilters,
   DEFAULT_ADMIN_PRODUCTS_LIST_FILTERS,
   loadAdminProductsListFilters,
   saveAdminProductsListFilters,
-  PRODUCTS_PER_PAGE_OPTS,
   type CatalogKindFilter,
-  type ProductsPerPage,
   type SortDir,
   type SortField,
 } from "./productsListFiltersStorage";
@@ -560,9 +559,7 @@ export default function AdminProductsPage() {
   const [purchasedTo, setPurchasedTo] = useState("");
   const [sortBy, setSortBy] = useState<SortField>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
-  const [page, setPage] = useState(1);
-  const [perPage, setPerPage] = useState<ProductsPerPage>(20);
-  const [meta, setMeta] = useState({ page: 1, perPage: 20, total: 0 });
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saleFor, setSaleFor] = useState<ProductRow | null>(null);
@@ -622,8 +619,8 @@ export default function AdminProductsPage() {
     if (purchasedTo) sp.set("purchasedTo", purchasedTo);
     sp.set("sortBy", sortBy);
     sp.set("sortDir", sortDir);
-    sp.set("page", String(page));
-    sp.set("perPage", String(perPage));
+    sp.set("page", "1");
+    sp.set("perPage", String(ADMIN_PRODUCTS_LIST_FETCH_SIZE));
     return sp.toString();
   }, [
     debouncedQ,
@@ -645,15 +642,7 @@ export default function AdminProductsPage() {
     purchasedTo,
     sortBy,
     sortDir,
-    page,
-    perPage,
   ]);
-
-  function handlePerPageChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const n = Number(e.target.value) as ProductsPerPage;
-    setPerPage(n);
-    setPage(1);
-  }
 
   function applySavedListFilters() {
     const s = loadAdminProductsListFilters();
@@ -676,14 +665,12 @@ export default function AdminProductsPage() {
     setPurchasedTo(s.purchasedTo);
     setSortBy(s.sortBy);
     setSortDir(s.sortDir);
-    setPage(s.page);
-    setPerPage(s.perPage);
     setFiltersOpen(s.filtersOpen);
   }
 
   function snapshotListFilters() {
     return {
-      version: 1 as const,
+      version: 2 as const,
       q,
       catalogKind,
       condition,
@@ -703,8 +690,6 @@ export default function AdminProductsPage() {
       purchasedTo,
       sortBy,
       sortDir,
-      page,
-      perPage,
       filtersOpen,
     };
   }
@@ -762,7 +747,7 @@ export default function AdminProductsPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Грешка");
       setItems(json.data ?? []);
-      setMeta(json.meta ?? { page: 1, perPage: 20, total: 0 });
+      setTotalCount(json.meta?.total ?? (json.data?.length ?? 0));
       setSelected([]);
     } catch (e: any) {
       setError(String(e?.message ?? e));
@@ -801,8 +786,6 @@ export default function AdminProductsPage() {
     purchasedTo,
     sortBy,
     sortDir,
-    page,
-    perPage,
     filtersOpen,
   ]);
 
@@ -833,8 +816,6 @@ export default function AdminProductsPage() {
     setPurchasedTo(d.purchasedTo);
     setSortBy(d.sortBy);
     setSortDir(d.sortDir);
-    setPage(d.page);
-    setPerPage(d.perPage);
     clearAdminProductsListFilters();
   }
 
@@ -842,7 +823,6 @@ export default function AdminProductsPage() {
   //   • клик върху същата колона → обръща посоката (asc ↔ desc);
   //   • клик върху нова колона   → започва възходящо.
   function handleSort(field: SortField) {
-    setPage(1);
     if (sortBy === field) {
       setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
     } else {
@@ -1279,9 +1259,7 @@ export default function AdminProductsPage() {
     }
   }
 
-  const pages = Math.max(1, Math.ceil(meta.total / meta.perPage));
-  const rangeFrom = meta.total === 0 ? 0 : (page - 1) * meta.perPage + 1;
-  const rangeTo = meta.total === 0 ? 0 : Math.min(page * meta.perPage, meta.total);
+  const listTruncated = totalCount > items.length;
 
   // Списък с активни филтри — ползва се за брояча и за chip bar-а.
   const supplierName = supplierId ? suppliersById[supplierId] : null;
@@ -1294,7 +1272,6 @@ export default function AdminProductsPage() {
       key: "q",
       label: `Търсене: „${q.trim()}“`,
       onClear: () => {
-        setPage(1);
         setQ("");
       },
     });
@@ -1451,7 +1428,7 @@ export default function AdminProductsPage() {
         <div className="flex-1 min-w-0">
           <ProductSearchBox
             value={q}
-            onChange={(next) => { setPage(1); setQ(next); }}
+            onChange={(next) => { setQ(next); }}
             items={items}
             placeholder="Търси име, сериен №, фактура…"
           />
@@ -1472,7 +1449,7 @@ export default function AdminProductsPage() {
       <div className="md:hidden space-y-1.5">
         <div className="flex items-center justify-between gap-2">
           <span className="text-[10px] font-semibold text-slate-500 tabular-nums">
-            Намерени: <span className="text-slate-900">{meta.total}</span>
+            Намерени: <span className="text-slate-900">{totalCount}</span>
           </span>
           {activeFiltersCount > 0 ? (
             <button
@@ -1494,14 +1471,14 @@ export default function AdminProductsPage() {
           <div className="flex-1 hidden md:block min-w-0">
             <ProductSearchBox
               value={q}
-              onChange={(next) => { setPage(1); setQ(next); }}
+              onChange={(next) => { setQ(next); }}
               items={items}
               placeholder="Търси по име, slug, сериен номер (вътрешен/външен) или № на фактура от доставчик…"
             />
           </div>
           <div className="flex items-center justify-between gap-2 w-full sm:w-auto sm:ml-auto sm:justify-end flex-wrap">
             <span className="text-[10px] md:text-xs font-semibold text-slate-500 tabular-nums">
-              Намерени: <span className="text-slate-900">{meta.total}</span>
+              Намерени: <span className="text-slate-900">{totalCount}</span>
             </span>
             {activeFiltersCount > 0 && (
               <Button variant="secondary" size="sm" onClick={resetFilters} title="Изчисти всички филтри" className="gap-1 !py-1 !px-2 !text-[11px] md:!text-xs md:!py-1.5 md:!px-2.5">
@@ -1519,32 +1496,32 @@ export default function AdminProductsPage() {
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 md:gap-x-4 md:gap-y-2">
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mr-0.5">Състояние:</span>
-              <ChipToggle active={!condition} onClick={() => { setPage(1); setCondition(""); }}>Всички</ChipToggle>
-              <ChipToggle active={condition === "new"} onClick={() => { setPage(1); setCondition("new"); }}>Нови</ChipToggle>
-              <ChipToggle active={condition === "used"} onClick={() => { setPage(1); setCondition("used"); }}>Втора употреба</ChipToggle>
+              <ChipToggle active={!condition} onClick={() => { setCondition(""); }}>Всички</ChipToggle>
+              <ChipToggle active={condition === "new"} onClick={() => { setCondition("new"); }}>Нови</ChipToggle>
+              <ChipToggle active={condition === "used"} onClick={() => { setCondition("used"); }}>Втора употреба</ChipToggle>
             </div>
             <span className="hidden md:inline-block h-5 w-px bg-slate-200" aria-hidden />
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mr-0.5">Наличност:</span>
-              <ChipToggle active={!stockStatus} onClick={() => { setPage(1); setStockStatus(""); }}>Всички</ChipToggle>
+              <ChipToggle active={!stockStatus} onClick={() => { setStockStatus(""); }}>Всички</ChipToggle>
               <ChipToggle
                 active={stockStatus === "in_stock"}
                 tone="success"
-                onClick={() => { setPage(1); setStockStatus("in_stock"); }}
+                onClick={() => { setStockStatus("in_stock"); }}
               >
                 <PackageCheck className="w-3 h-3" /> В наличност
               </ChipToggle>
               <ChipToggle
                 active={stockStatus === "on_order"}
                 tone="warning"
-                onClick={() => { setPage(1); setStockStatus("on_order"); }}
+                onClick={() => { setStockStatus("on_order"); }}
               >
                 <Clock4 className="w-3 h-3" /> По поръчка
               </ChipToggle>
               <ChipToggle
                 active={stockStatus === "out_of_stock"}
                 tone="danger"
-                onClick={() => { setPage(1); setStockStatus("out_of_stock"); }}
+                onClick={() => { setStockStatus("out_of_stock"); }}
               >
                 <PackageX className="w-3 h-3" /> Изчерпан
               </ChipToggle>
@@ -1552,14 +1529,14 @@ export default function AdminProductsPage() {
               <ChipToggle
                 active={featured === "featured"}
                 tone="brand"
-                onClick={() => { setPage(1); setFeatured(featured === "featured" ? "" : "featured"); }}
+                onClick={() => { setFeatured(featured === "featured" ? "" : "featured"); }}
               >
                 <Star className="w-3 h-3 fill-current" /> Топ продукти
               </ChipToggle>
               <ChipToggle
                 active={publicCatalog === "visible"}
                 tone="brand"
-                onClick={() => { setPage(1); setPublicCatalog(publicCatalog === "visible" ? "" : "visible"); }}
+                onClick={() => { setPublicCatalog(publicCatalog === "visible" ? "" : "visible"); }}
               >
                 <Eye className="w-3 h-3" /> В публичен каталог
               </ChipToggle>
@@ -1571,7 +1548,7 @@ export default function AdminProductsPage() {
         <div className="space-y-1.5 md:space-y-2">
           <div className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500">Мощност (BTU)</div>
           <div className="flex flex-wrap items-center gap-1.5">
-            <ChipToggle active={!btuFilter} onClick={() => { setPage(1); setBtuFilter(""); }}>
+            <ChipToggle active={!btuFilter} onClick={() => { setBtuFilter(""); }}>
               Всички
             </ChipToggle>
             {CATALOG_BTU_OPTIONS.map((btu) => (
@@ -1579,7 +1556,6 @@ export default function AdminProductsPage() {
                 <ChipToggle
                   active={btuFilter === String(btu)}
                   onClick={() => {
-                    setPage(1);
                     setBtuFilter(btuFilter === String(btu) ? "" : String(btu));
                   }}
                 >
@@ -1596,21 +1572,21 @@ export default function AdminProductsPage() {
           <div className="grid grid-cols-2 md:grid-cols-6 gap-1.5 md:gap-3 [&_select]:text-xs md:[&_select]:text-sm">
             <Select
               value={catalogKind}
-              onChange={(e) => { setPage(1); setCatalogKind(e.target.value as CatalogKindFilter); }}
+              onChange={(e) => { setCatalogKind(e.target.value as CatalogKindFilter); }}
             >
               <option value="climatics">Климатици</option>
               <option value="accessories">Аксесоари</option>
               <option value="all">Всички</option>
             </Select>
-            <Select value={brandId} onChange={(e) => { setPage(1); setBrandId(e.target.value); }}>
+            <Select value={brandId} onChange={(e) => { setBrandId(e.target.value); }}>
               <option value="">Марка: всички</option>
               {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
             </Select>
-            <Select value={typeId} onChange={(e) => { setPage(1); setTypeId(e.target.value); }}>
+            <Select value={typeId} onChange={(e) => { setTypeId(e.target.value); }}>
               <option value="">Тип: всички</option>
               {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </Select>
-            <Select value={supplierId} onChange={(e) => { setPage(1); setSupplierId(e.target.value); }}>
+            <Select value={supplierId} onChange={(e) => { setSupplierId(e.target.value); }}>
               <option value="">Доставчик: всички</option>
               {Object.entries(suppliersById)
                 .sort((a, b) => a[1].localeCompare(b[1], "bg"))
@@ -1618,12 +1594,12 @@ export default function AdminProductsPage() {
                   <option key={id} value={id}>{name}</option>
                 ))}
             </Select>
-            <Select value={stockLocationFilter} onChange={(e) => { setPage(1); setStockLocationFilter(e.target.value as "" | ProductStockLocation); }}>
+            <Select value={stockLocationFilter} onChange={(e) => { setStockLocationFilter(e.target.value as "" | ProductStockLocation); }}>
               <option value="">Място: всички</option>
               <option value="showroom">В магазин</option>
               <option value="warehouse">В склада</option>
             </Select>
-            <Select value={productRegionFilter} onChange={(e) => { setPage(1); setProductRegionFilter(e.target.value as "" | ProductRegion); }}>
+            <Select value={productRegionFilter} onChange={(e) => { setProductRegionFilter(e.target.value as "" | ProductRegion); }}>
               <option value="">Страна: всички</option>
               <option value="europe">EUROPE</option>
               <option value="japan">JAPAN</option>
@@ -1640,7 +1616,6 @@ export default function AdminProductsPage() {
             <PriceRangeSlider
               value={priceRange}
               onChange={(next) => {
-                setPage(1);
                 setPriceRange(next);
               }}
             />
@@ -1651,7 +1626,7 @@ export default function AdminProductsPage() {
               <Input
                 type="date"
                 value={purchasedFrom}
-                onChange={(e) => { setPage(1); setPurchasedFrom(e.target.value); }}
+                onChange={(e) => { setPurchasedFrom(e.target.value); }}
                 max={purchasedTo || undefined}
                 className="!pt-4 !pb-1.5 !text-xs"
               />
@@ -1661,17 +1636,17 @@ export default function AdminProductsPage() {
               <Input
                 type="date"
                 value={purchasedTo}
-                onChange={(e) => { setPage(1); setPurchasedTo(e.target.value); }}
+                onChange={(e) => { setPurchasedTo(e.target.value); }}
                 min={purchasedFrom || undefined}
                 className="!pt-4 !pb-1.5 !text-xs"
               />
             </div>
-            <Select value={hasSerial} onChange={(e) => { setPage(1); setHasSerial(e.target.value as "" | "with" | "without"); }}>
+            <Select value={hasSerial} onChange={(e) => { setHasSerial(e.target.value as "" | "with" | "without"); }}>
               <option value="">Сериен №: всички</option>
               <option value="with">Само със сериен №</option>
               <option value="without">Само без сериен №</option>
             </Select>
-            <Select value={hasPurchasePrice} onChange={(e) => { setPage(1); setHasPurchasePrice(e.target.value as "" | "with" | "without"); }}>
+            <Select value={hasPurchasePrice} onChange={(e) => { setHasPurchasePrice(e.target.value as "" | "with" | "without"); }}>
               <option value="">Закупна цена: всички</option>
               <option value="with">Само с попълнена</option>
               <option value="without">Само без попълнена</option>
@@ -1733,7 +1708,6 @@ export default function AdminProductsPage() {
         <ActiveFilterChipsBar
           filters={activeFilters}
           onClearAll={resetFilters}
-          onBeforeClear={() => setPage(1)}
           compact
           className="px-3 py-2 border-b border-brand-blue-100 bg-brand-blue-50/40 rounded-none"
         />
@@ -2082,7 +2056,6 @@ export default function AdminProductsPage() {
         <ActiveFilterChipsBar
           filters={activeFilters}
           onClearAll={resetFilters}
-          onBeforeClear={() => setPage(1)}
           compact
         />
         {loading && (
@@ -2363,44 +2336,18 @@ export default function AdminProductsPage() {
         ))}
       </div>
 
-      {/* Pagination */}
-      <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 pt-1">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs md:text-sm text-slate-500 font-medium">
-          <span>Общо: {meta.total}</span>
-          {meta.total > 0 && (
-            <span className="text-slate-400 tabular-nums">
-              {rangeFrom}–{rangeTo} от {meta.total}
-            </span>
-          )}
-        </div>
-        <div className="flex flex-wrap items-center justify-end gap-2 md:gap-3">
-          <label className="inline-flex items-center gap-1.5 text-xs md:text-sm text-slate-600 font-medium">
-            <span className="whitespace-nowrap">На страница:</span>
-            <Select
-              value={String(perPage)}
-              onChange={handlePerPageChange}
-              className="!w-auto !py-1 !px-2 !text-xs md:!text-sm min-w-[4.25rem]"
-              aria-label="Брой продукти на страница"
-            >
-              {PRODUCTS_PER_PAGE_OPTS.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </Select>
-          </label>
-          <div className="flex items-center gap-1.5">
-          <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className="!text-xs md:!text-sm">
-            ‹ Пред.
-          </Button>
-          <span className="text-xs md:text-sm font-medium text-slate-600 tabular-nums px-1">
-            {page} / {pages}
+      <div className="pt-1 text-xs md:text-sm text-slate-500 font-medium">
+        <span>Общо: {totalCount}</span>
+        {items.length > 0 && (
+          <span className="text-slate-400 tabular-nums ml-2">
+            Показани: {items.length}
           </span>
-          <Button variant="secondary" size="sm" disabled={page >= pages} onClick={() => setPage((p) => p + 1)} className="!text-xs md:!text-sm">
-            Следв. ›
-          </Button>
-          </div>
-        </div>
+        )}
+        {listTruncated && (
+          <span className="block sm:inline sm:ml-2 text-amber-700">
+            Показани са първите {items.length} от {totalCount} — свържете се с администратор, ако списъкът е непълен.
+          </span>
+        )}
       </div>
 
       {saleFor && (() => {
