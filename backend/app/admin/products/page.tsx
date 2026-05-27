@@ -47,6 +47,7 @@ import {
   parseDecimalInput,
 } from "@/lib/admin/agreedPriceDiscount";
 import { notifyAdminCalendarReload } from "@/lib/admin/calendarReload";
+import { recordProductSale } from "@/lib/admin/recordProductSale";
 import {
   normalizeProductStockLocation,
   productStockLocationLabel,
@@ -235,6 +236,7 @@ function emptySaleModalForm() {
     notes: "",
     agreedPrice: "",
     agreedPriceDiscountPct: "",
+    includeMount: true,
     mountDate: defaultNextMountDate(),
     mountTimeFrom: "09:00",
     mountTimeTo: "13:00",
@@ -243,66 +245,11 @@ function emptySaleModalForm() {
 
 function saleModalFormForProduct(p: ProductRow) {
   const base = emptySaleModalForm();
-  if (p.stock_status !== "on_order") return base;
+  const withoutMount = isAccessoryRow(p) ? { ...base, includeMount: false } : base;
+  if (p.stock_status !== "on_order") return withoutMount;
   const catalog = Number(p.price);
-  if (!Number.isFinite(catalog) || catalog < 0) return base;
-  return { ...base, agreedPrice: formatAgreedPriceInput(catalog) };
-}
-
-/** Локална дата + час → ISO за `scheduled_start` / `scheduled_end`. */
-function toIsoFromDateAndTimeLocal(dateStr: string, timeStr: string | undefined | null): string | null {
-  const d0 = (dateStr ?? "").trim();
-  if (!d0) return null;
-  const rawT = (timeStr ?? "").trim();
-  const time = rawT.length >= 4 ? rawT : "09:00";
-  const m = /^(\d{1,2}):(\d{2})$/.exec(time);
-  if (!m) return null;
-  const h = Math.min(23, Math.max(0, parseInt(m[1], 10)));
-  const min = Math.min(59, Math.max(0, parseInt(m[2], 10)));
-  const d = new Date(`${d0}T${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}:00`);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString();
-}
-
-async function adminPostWorkItem(body: Record<string, unknown>): Promise<{
-  id: string;
-  linked_protocol?: { id: string; protocol_number: string };
-  protocol_warning?: string;
-}> {
-  const res = await fetch("/api/admin/work-items", {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const json = (await res.json().catch(() => ({}))) as {
-    error?: string;
-    data?: { id: string };
-    linked_protocol?: { id: string; protocol_number: string };
-    protocol_warning?: string;
-  };
-  if (!res.ok) throw new Error(json.error || "Грешка при създаване на задача");
-  if (!json.data?.id) throw new Error("Липсва ID на задача");
-  return {
-    id: json.data.id,
-    linked_protocol: json.linked_protocol,
-    protocol_warning: json.protocol_warning,
-  };
-}
-
-async function adminPatchWorkItem(itemId: string, body: Record<string, unknown>): Promise<void> {
-  const res = await fetch(`/api/admin/work-items/${itemId}`, {
-    method: "PUT",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const json = (await res.json().catch(() => ({}))) as { error?: string };
-  if (!res.ok) throw new Error(json.error || "Грешка при обновяване на задача");
-}
-
-async function adminDeleteWorkItem(itemId: string): Promise<void> {
-  await fetch(`/api/admin/work-items/${itemId}`, { method: "DELETE", credentials: "include" });
+  if (!Number.isFinite(catalog) || catalog < 0) return withoutMount;
+  return { ...withoutMount, agreedPrice: formatAgreedPriceInput(catalog) };
 }
 
 function fmtEuro(n: number | null | undefined) {
@@ -986,106 +933,38 @@ export default function AdminProductsPage() {
   async function markAsSold(
     prod: ProductRow,
     customer: { id?: string; name: string; phone: string; address: string; email?: string; notes: string },
-    mount: { date: string; timeFrom: string; timeTo: string },
+    mount: { date: string; timeFrom: string; timeTo: string } | null,
     salePrice?: number,
+    withInstallation = true,
   ) {
     if (!canRecordSale(prod)) return false;
-
-    const mountDate = mount.date.trim();
-    if (!mountDate) {
-      setError("Посочете дата за монтаж.");
-      return false;
-    }
 
     const unitPrice =
       salePrice != null && Number.isFinite(salePrice) && salePrice >= 0
         ? salePrice
         : Number(prod.price);
 
-    const schedStart = toIsoFromDateAndTimeLocal(mountDate, mount.timeFrom);
-    let schedEnd = toIsoFromDateAndTimeLocal(mountDate, mount.timeTo);
-    if (schedStart && schedEnd && new Date(schedEnd) < new Date(schedStart)) {
-      schedEnd = schedStart;
-    }
-
     const hasModelCode = Boolean((prod.model_code ?? "").trim());
     const currentQty = Math.max(0, Number(prod.stock_quantity ?? 0));
     const nextSold = Math.max(0, Number(prod.sold_quantity ?? 0) + 1);
     const nextQty = Math.max(0, currentQty - 1);
 
-    const putBody: Record<string, unknown> = { soldQuantity: nextSold };
-    if (!hasModelCode) {
-      putBody.stockQuantity = nextQty;
-    }
-    const nextStockStatus = stockStatusAfterSale(prod.stock_status, hasModelCode, nextQty);
-    if (nextStockStatus !== undefined) {
-      putBody.stockStatus = nextStockStatus;
-    }
-
-    let saleId: string | null = null;
-    let installId: string | null = null;
-
     try {
-      const saleRow = await adminPostWorkItem({
-        type: "sale",
-        eventCode: "sale",
-        title: `Продажба: ${prod.name}`,
-        status: "planned",
-        priority: "medium",
-        dueDate: mountDate,
-        saleInstallState: "pending_mount",
-        productId: prod.id,
-        contactId: customer.id || null,
-        customerName: customer.name || null,
-        customerPhone: customer.phone || null,
-        customerAddress: customer.address || null,
-        notes: customer.notes || null,
-      quantity: 1,
-      unitPrice,
-      totalAmount: unitPrice,
-    });
-      saleId = saleRow.id;
-
-      const noteLines = [customer.notes.trim() || null, `Връзка продажба: ${saleId}`].filter(Boolean) as string[];
-      const combinedNotes = noteLines.join("\n\n");
-
-      const inst = await adminPostWorkItem({
-        type: "service",
-        eventCode: "service_installation",
-        title: `Монтаж: ${prod.name}`,
-        status: "planned",
-        priority: "medium",
-        dueDate: mountDate,
-        scheduledStart: schedStart,
-        scheduledEnd: schedEnd,
-        productId: prod.id,
-        contactId: customer.id || null,
-        customerName: customer.name || null,
-        customerPhone: customer.phone || null,
-        customerAddress: customer.address || null,
-        notes: combinedNotes || null,
-        saleWorkItemId: saleId,
-        quantity: 1,
-        unitPrice: null,
-        totalAmount: null,
-      });
-      installId = inst.id;
-
-      await adminPatchWorkItem(saleId, { installationWorkItemId: installId });
-      if (inst.protocol_warning) {
-        console.warn("[markAsSold] acceptance protocol:", inst.protocol_warning);
-      }
-
-      const res = await fetch(`/api/admin/products/${prod.id}`, {
-        method: "PUT",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(putBody),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error((json as { error?: string }).error || "Грешка при маркиране на продажба в склада");
-      }
+      await recordProductSale(
+        {
+          id: prod.id,
+          name: prod.name,
+          price: unitPrice,
+          model_code: prod.model_code,
+          stock_status: prod.stock_status,
+          stock_quantity: prod.stock_quantity,
+          sold_quantity: prod.sold_quantity,
+          brand_id: prod.brand_id,
+        },
+        customer,
+        mount,
+        { withInstallation, salePrice: unitPrice },
+      );
 
       const modelKey = (prod.model_code ?? "").trim().toLowerCase();
       const soldRowStatus = stockStatusAfterSale(prod.stock_status, hasModelCode, nextQty) ?? prod.stock_status;
@@ -1111,10 +990,9 @@ export default function AdminProductsPage() {
         }),
       );
 
+      if (withInstallation) notifyAdminCalendarReload();
       return true;
     } catch (e: unknown) {
-      if (installId) void adminDeleteWorkItem(installId);
-      if (saleId) void adminDeleteWorkItem(saleId);
       setError(String(e instanceof Error ? e.message : e));
       return false;
     }
@@ -2352,6 +2230,8 @@ export default function AdminProductsPage() {
 
       {saleFor && (() => {
         const isBackOrder = saleFor.stock_status === "on_order";
+        const isClimateProduct = !isAccessoryRow(saleFor);
+        const withInstallation = isClimateProduct && saleForm.includeMount;
         return (
         <div
           className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/55 p-0 md:p-4 backdrop-blur-md"
@@ -2370,7 +2250,9 @@ export default function AdminProductsPage() {
               <div className="mt-1 text-sm font-medium text-slate-500 hidden sm:block">
                 {isBackOrder
                   ? "Поръчка към доставчик — клиентът не е задължителен. Попълни договорена цена; данните за клиент са по желание."
-                  : "Контакт за сделката (съществуващ или нов), дата и час за монтаж. Създава се продажба в панела „Продажби“ (чака монтаж) и отделно събитие „Монтаж“ в оперативния календар."}
+                  : withInstallation
+                    ? "Контакт за сделката, дата и час за монтаж. Създава се продажба (чака монтаж) и събитие „Монтаж“ в календара."
+                    : "Продажба без монтаж — записът в „Продажби“ се маркира директно като завършен, без дата в календара."}
               </div>
             </div>
 
@@ -2483,34 +2365,58 @@ export default function AdminProductsPage() {
                   </div>
                 </div>
               ) : (
-                <div className="col-span-full border-t border-slate-100 pt-3 mt-1">
-                  <div className="text-xs font-black uppercase tracking-wide text-brand-blue-700 mb-2">Монтаж</div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <label className="grid gap-1.5">
-                      <span className="text-xs font-bold text-slate-600">Дата *</span>
-                      <Input
-                        type="date"
-                        value={saleForm.mountDate}
-                        onChange={(e) => setSaleForm((s) => ({ ...s, mountDate: e.target.value }))}
+                <div className="col-span-full border-t border-slate-100 pt-3 mt-1 space-y-3">
+                  {isClimateProduct && (
+                    <label className="flex items-start gap-3 cursor-pointer rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5">
+                      <input
+                        type="checkbox"
+                        checked={saleForm.includeMount}
+                        onChange={(e) => setSaleForm((s) => ({ ...s, includeMount: e.target.checked }))}
+                        className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-blue-600 focus:ring-brand-blue-500"
                       />
+                      <span className="text-sm text-slate-700 leading-snug">
+                        <span className="font-bold text-slate-900">С монтаж</span>
+                        <span className="block text-xs text-slate-500 mt-0.5">
+                          Изключете за продажба само на уред — без насрочване в календара.
+                        </span>
+                      </span>
                     </label>
-                    <label className="grid gap-1.5">
-                      <span className="text-xs font-bold text-slate-600">Час от</span>
-                      <Input
-                        type="time"
-                        value={saleForm.mountTimeFrom}
-                        onChange={(e) => setSaleForm((s) => ({ ...s, mountTimeFrom: e.target.value }))}
-                      />
-                    </label>
-                    <label className="grid gap-1.5">
-                      <span className="text-xs font-bold text-slate-600">Час до</span>
-                      <Input
-                        type="time"
-                        value={saleForm.mountTimeTo}
-                        onChange={(e) => setSaleForm((s) => ({ ...s, mountTimeTo: e.target.value }))}
-                      />
-                    </label>
-                  </div>
+                  )}
+                  {withInstallation ? (
+                    <>
+                      <div className="text-xs font-black uppercase tracking-wide text-brand-blue-700">Монтаж</div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <label className="grid gap-1.5">
+                          <span className="text-xs font-bold text-slate-600">Дата *</span>
+                          <Input
+                            type="date"
+                            value={saleForm.mountDate}
+                            onChange={(e) => setSaleForm((s) => ({ ...s, mountDate: e.target.value }))}
+                          />
+                        </label>
+                        <label className="grid gap-1.5">
+                          <span className="text-xs font-bold text-slate-600">Час от</span>
+                          <Input
+                            type="time"
+                            value={saleForm.mountTimeFrom}
+                            onChange={(e) => setSaleForm((s) => ({ ...s, mountTimeFrom: e.target.value }))}
+                          />
+                        </label>
+                        <label className="grid gap-1.5">
+                          <span className="text-xs font-bold text-slate-600">Час до</span>
+                          <Input
+                            type="time"
+                            value={saleForm.mountTimeTo}
+                            onChange={(e) => setSaleForm((s) => ({ ...s, mountTimeTo: e.target.value }))}
+                          />
+                        </label>
+                      </div>
+                    </>
+                  ) : !isBackOrder ? (
+                    <p className="text-xs text-slate-500 rounded-lg border border-dashed border-slate-200 bg-white px-3 py-2">
+                      Продажбата ще бъде записана като <strong className="text-slate-700">завършена</strong> в панела „Продажби“.
+                    </p>
+                  ) : null}
                 </div>
               )}
             </div>
@@ -2577,7 +2483,12 @@ export default function AdminProductsPage() {
                 ) : (
                   <Button
                     variant="primary"
-                    disabled={saleBusy || !saleForm.customerName.trim() || !saleForm.customerPhone.trim() || !saleForm.mountDate.trim()}
+                    disabled={
+                      saleBusy ||
+                      !saleForm.customerName.trim() ||
+                      !saleForm.customerPhone.trim() ||
+                      (withInstallation && !saleForm.mountDate.trim())
+                    }
                     onClick={async () => {
                       setSaleBusy(true);
                       try {
@@ -2594,12 +2505,15 @@ export default function AdminProductsPage() {
                             email: saleForm.customerEmail.trim(),
                             notes: saleForm.notes.trim(),
                           },
-                          {
-                            date: saleForm.mountDate,
-                            timeFrom: saleForm.mountTimeFrom,
-                            timeTo: saleForm.mountTimeTo,
-                          },
+                          withInstallation
+                            ? {
+                                date: saleForm.mountDate,
+                                timeFrom: saleForm.mountTimeFrom,
+                                timeTo: saleForm.mountTimeTo,
+                              }
+                            : null,
                           Number.isFinite(resolvedPrice) ? resolvedPrice : Number(saleFor.price),
+                          withInstallation,
                         );
                         if (ok) {
                           setSaleSuccess({

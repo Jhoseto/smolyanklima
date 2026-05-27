@@ -12,8 +12,11 @@ import {
 import type { AdminRole } from "@/lib/admin/db";
 import type { LucideIcon } from "lucide-react";
 import { useInquiriesNewCount } from "@/lib/admin/useInquiriesNewCount";
+import { AdminNavCollapsibleSection } from "./AdminNavCollapsibleSection";
+import { useAdminNavSections, type AdminNavSectionId } from "@/lib/admin/useAdminNavSections";
 
 type DrawerSection = {
+  id: AdminNavSectionId;
   title: string;
   links: { href: string; label: string; icon: LucideIcon }[];
 };
@@ -46,6 +49,7 @@ export function MobileNav({
     : (() => {
         const sections: DrawerSection[] = [
           {
+            id: "office",
             title: "Офис",
             links: [
               { href: "/admin/products", label: "Продукти", icon: Package },
@@ -59,6 +63,7 @@ export function MobileNav({
             ],
           },
           {
+            id: "service",
             title: "Сервиз",
             links: [
               { href: "/admin/service/documents", label: "Документи", icon: FolderOpen },
@@ -67,6 +72,7 @@ export function MobileNav({
         ];
         if (role === "master_admin" || role === "office_staff") {
           sections.push({
+            id: "reports",
             title: "Отчети",
             links: [
               { href: "/admin/ratings", label: "Оценки", icon: Star },
@@ -74,6 +80,7 @@ export function MobileNav({
             ],
           });
           sections.push({
+            id: "admin",
             title: "Администрация",
             links: [
               { href: "/admin/staff", label: "Персонал", icon: ShieldCheck },
@@ -89,6 +96,7 @@ export function MobileNav({
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const inquiriesNewCount = useInquiriesNewCount();
+  const { open, toggle } = useAdminNavSections();
 
   function isActive(href: string, exact = false) {
     if (exact) return pathname === href;
@@ -158,34 +166,36 @@ export function MobileNav({
 
         <div className="px-4 pb-2 space-y-3 max-h-[55vh] overflow-y-auto">
           {drawerSections.map((section) => (
-            <div key={section.title}>
-              <div className="px-1 mb-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
-                {section.title}
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                {section.links.map((link) => {
-                  const Icon = link.icon;
-                  const active = isActive(link.href);
-                  return (
-                    <Link
-                      key={link.href}
-                      href={link.href}
-                      onClick={() => setDrawerOpen(false)}
-                      className={`flex flex-col items-center gap-2 p-4 rounded-2xl text-center transition-colors active:scale-95 ${
-                        active
-                          ? "bg-brand-orange-50 text-brand-orange-600"
-                          : "text-slate-600 hover:bg-slate-50 active:bg-slate-100"
-                      }`}
-                    >
-                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${active ? "bg-brand-orange-100 text-brand-orange-600" : "bg-slate-100"}`}>
-                        <Icon className="w-5 h-5" />
-                      </div>
-                      <span className="text-[11px] font-semibold leading-tight">{link.label}</span>
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
+            <AdminNavCollapsibleSection
+              key={section.id}
+              id={section.id}
+              label={section.title}
+              open={open[section.id]}
+              onToggle={toggle}
+              variant="drawer"
+            >
+              {section.links.map((link) => {
+                const Icon = link.icon;
+                const active = isActive(link.href);
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setDrawerOpen(false)}
+                    className={`flex flex-col items-center gap-2 p-4 rounded-2xl text-center transition-colors active:scale-95 ${
+                      active
+                        ? "bg-brand-orange-50 text-brand-orange-600"
+                        : "text-slate-600 hover:bg-slate-50 active:bg-slate-100"
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${active ? "bg-brand-orange-100 text-brand-orange-600" : "bg-slate-100"}`}>
+                      <Icon className="w-5 h-5" />
+                    </div>
+                    <span className="text-[11px] font-semibold leading-tight">{link.label}</span>
+                  </Link>
+                );
+              })}
+            </AdminNavCollapsibleSection>
           ))}
         </div>
 

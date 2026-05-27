@@ -126,7 +126,8 @@ export async function POST(req: NextRequest) {
   const isSaleWorkItem = parsed.data.type === "sale" || parsed.data.eventCode === "sale";
   if (isSaleWorkItem) {
     const fromProductSaleFlow =
-      Boolean(parsed.data.productId) && parsed.data.saleInstallState === "pending_mount";
+      Boolean(parsed.data.productId) &&
+      (parsed.data.saleInstallState === "pending_mount" || parsed.data.saleInstallState === "completed");
     if (!fromProductSaleFlow) {
       return withCors(
         req,
@@ -186,6 +187,9 @@ export async function POST(req: NextRequest) {
   }
   if (parsed.data.saleWorkItemId !== undefined) {
     payload.sale_work_item_id = parsed.data.saleWorkItemId;
+  }
+  if (parsed.data.status === "done") {
+    payload.completed_at = new Date().toISOString();
   }
 
   const { data, error } = await supabase.from("work_items").insert(payload).select("*").single();

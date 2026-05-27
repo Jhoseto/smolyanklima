@@ -1,5 +1,5 @@
 /**
- * Запис на продажба + монтаж (същият flow като от каталога „Продажба“).
+ * Запис на продажба (+ опционален монтаж).
  * Използва се от панела поръчки и от products page.
  */
 
@@ -29,6 +29,12 @@ export type RecordSaleProduct = {
   brand_id?: string | null;
 };
 
+export type RecordProductSaleOptions = {
+  /** По подразбиране true — създава и монтаж в календара. */
+  withInstallation?: boolean;
+  salePrice?: number;
+};
+
 function toIsoFromDateAndTimeLocal(dateStr: string, timeStr: string | undefined | null): string | null {
   const d0 = (dateStr ?? "").trim();
   if (!d0) return null;
@@ -51,6 +57,11 @@ function stockStatusAfterSale(
   if (priorStatus !== "in_stock") return undefined;
   if (hasModelCode) return "out_of_stock";
   return nextQty <= 0 ? "out_of_stock" : "in_stock";
+}
+
+function saleNotes(customer: RecordSaleCustomer, extra?: string | null): string | null {
+  const parts = [customer.notes.trim() || null, extra?.trim() || null].filter(Boolean) as string[];
+  return parts.length ? parts.join("\n\n") : null;
 }
 
 async function adminPostWorkItem(body: Record<string, unknown>): Promise<{
@@ -88,6 +99,17 @@ async function adminDeleteWorkItem(itemId: string): Promise<void> {
   await fetch(`/api/admin/work-items/${itemId}`, { method: "DELETE", credentials: "include" });
 }
 
+async function applyProductStockAfterSale(prod: RecordSaleProduct, putBody: Record<string, unknown>): Promise<void> {
+  const res = await fetch(`/api/admin/products/${prod.id}`, {
+    method: "PUT",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(putBody),
+  });
+  const json = (await res.json().catch(() => ({}))) as { error?: string };
+  if (!res.ok) throw new Error(json.error || "Грешка при маркиране на продажба в склада");
+}
+
 export function canRecordProductSale(stockStatus: string): boolean {
   return stockStatus === "in_stock" || stockStatus === "on_order";
 }
@@ -95,20 +117,18 @@ export function canRecordProductSale(stockStatus: string): boolean {
 export async function recordProductSale(
   prod: RecordSaleProduct,
   customer: RecordSaleCustomer,
-  mount: RecordSaleMount,
+  mount: RecordSaleMount | null,
+  options?: RecordProductSaleOptions,
 ): Promise<void> {
   if (!canRecordProductSale(prod.stock_status)) {
     throw new Error("Продажбата не е възможна за този статус на склада.");
   }
 
-  const mountDate = mount.date.trim();
-  if (!mountDate) throw new Error("Посочете дата за монтаж.");
-
-  const schedStart = toIsoFromDateAndTimeLocal(mountDate, mount.timeFrom);
-  let schedEnd = toIsoFromDateAndTimeLocal(mountDate, mount.timeTo);
-  if (schedStart && schedEnd && new Date(schedEnd) < new Date(schedStart)) {
-    schedEnd = schedStart;
-  }
+  const withInstallation = options?.withInstallation !== false;
+  const unitPrice =
+    options?.salePrice != null && Number.isFinite(options.salePrice) && options.salePrice >= 0
+      ? options.salePrice
+      : Number(prod.price);
 
   const hasModelCode = Boolean((prod.model_code ?? "").trim());
   const currentQty = Math.max(0, Number(prod.stock_quantity ?? 0));
@@ -124,6 +144,40 @@ export async function recordProductSale(
   let installId: string | null = null;
 
   try {
+    if (!withInstallation) {
+      const today = new Date().toISOString().slice(0, 10);
+      const saleRow = await adminPostWorkItem({
+        type: "sale",
+        eventCode: "sale",
+        title: `Продажба: ${prod.name}`,
+        status: "done",
+        priority: "medium",
+        dueDate: today,
+        saleInstallState: "completed",
+        productId: prod.id,
+        contactId: customer.id || null,
+        customerName: customer.name || null,
+        customerPhone: customer.phone || null,
+        customerAddress: customer.address || null,
+        notes: saleNotes(customer, "Продажба без монтаж"),
+        quantity: 1,
+        unitPrice,
+        totalAmount: unitPrice,
+      });
+      saleId = saleRow.id;
+      await applyProductStockAfterSale(prod, putBody);
+      return;
+    }
+
+    const mountDate = (mount?.date ?? "").trim();
+    if (!mountDate) throw new Error("Посочете дата за монтаж.");
+
+    const schedStart = toIsoFromDateAndTimeLocal(mountDate, mount?.timeFrom);
+    let schedEnd = toIsoFromDateAndTimeLocal(mountDate, mount?.timeTo);
+    if (schedStart && schedEnd && new Date(schedEnd) < new Date(schedStart)) {
+      schedEnd = schedStart;
+    }
+
     const saleRow = await adminPostWorkItem({
       type: "sale",
       eventCode: "sale",
@@ -137,10 +191,10 @@ export async function recordProductSale(
       customerName: customer.name || null,
       customerPhone: customer.phone || null,
       customerAddress: customer.address || null,
-      notes: customer.notes || null,
+      notes: saleNotes(customer),
       quantity: 1,
-      unitPrice: Number(prod.price),
-      totalAmount: Number(prod.price),
+      unitPrice,
+      totalAmount: unitPrice,
     });
     saleId = saleRow.id;
 
@@ -165,15 +219,7 @@ export async function recordProductSale(
     });
     installId = inst.id;
     await adminPatchWorkItem(saleId, { installationWorkItemId: installId });
-
-    const res = await fetch(`/api/admin/products/${prod.id}`, {
-      method: "PUT",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(putBody),
-    });
-    const json = (await res.json().catch(() => ({}))) as { error?: string };
-    if (!res.ok) throw new Error(json.error || "Грешка при маркиране на продажба в склада");
+    await applyProductStockAfterSale(prod, putBody);
   } catch (e) {
     if (installId) void adminDeleteWorkItem(installId);
     if (saleId) void adminDeleteWorkItem(saleId);

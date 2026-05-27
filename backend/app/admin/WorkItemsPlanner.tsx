@@ -232,6 +232,30 @@ function ContactDerivedSummary({ form }: { form: WorkForm }) {
   );
 }
 
+const BG_CALENDAR_MONTHS = [
+  "Януари",
+  "Февруари",
+  "Март",
+  "Април",
+  "Май",
+  "Юни",
+  "Юли",
+  "Август",
+  "Септември",
+  "Октомври",
+  "Ноември",
+  "Декември",
+] as const;
+
+function calendarYearOptions(selectedYear: number): number[] {
+  const current = new Date().getFullYear();
+  const min = Math.min(current - 3, selectedYear);
+  const max = Math.max(current + 2, selectedYear);
+  const years: number[] = [];
+  for (let y = min; y <= max; y++) years.push(y);
+  return years;
+}
+
 export function WorkItemsPlanner({
   readOnly = false,
   canDeleteEvents = false,
@@ -242,7 +266,8 @@ export function WorkItemsPlanner({
 }) {
   const [items, setItems] = useState<WorkItem[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [monthOffset, setMonthOffset] = useState(0);
+  const [viewYear, setViewYear] = useState(() => new Date().getFullYear());
+  const [viewMonth, setViewMonth] = useState(() => new Date().getMonth());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [addForm, setAddForm] = useState<WorkForm>(createDefaultForm());
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -267,19 +292,28 @@ export function WorkItemsPlanner({
   const [mountDetailId, setMountDetailId] = useState<string | null>(null);
   const [supplierOrderDetailId, setSupplierOrderDetailId] = useState<string | null>(null);
 
-  const now = useMemo(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    d.setMonth(d.getMonth() + monthOffset);
-    return d;
-  }, [monthOffset]);
-
   // Precomputed once per render cycle — avoids calling formatDateKey(new Date()) inside every calendar cell
   const todayKey = useMemo(() => formatDateKey(new Date()), []);
 
-  const monthStart = useMemo(() => new Date(now.getFullYear(), now.getMonth(), 1), [now]);
-  const monthEnd = useMemo(() => new Date(now.getFullYear(), now.getMonth() + 1, 0), [now]);
-  const title = useMemo(() => monthStart.toLocaleDateString("bg-BG", { month: "long", year: "numeric" }), [monthStart]);
+  const monthStart = useMemo(() => new Date(viewYear, viewMonth, 1), [viewYear, viewMonth]);
+  const monthEnd = useMemo(() => new Date(viewYear, viewMonth + 1, 0), [viewYear, viewMonth]);
+  const title = useMemo(
+    () => monthStart.toLocaleDateString("bg-BG", { month: "long", year: "numeric" }),
+    [monthStart],
+  );
+  const yearOptions = useMemo(() => calendarYearOptions(viewYear), [viewYear]);
+
+  function shiftViewMonth(delta: number) {
+    const d = new Date(viewYear, viewMonth + delta, 1);
+    setViewYear(d.getFullYear());
+    setViewMonth(d.getMonth());
+  }
+
+  function resetCalendarToToday() {
+    const t = new Date();
+    setViewYear(t.getFullYear());
+    setViewMonth(t.getMonth());
+  }
 
   const monthFrom = formatDateKey(monthStart);
   const monthTo = formatDateKey(monthEnd);
@@ -320,7 +354,7 @@ export function WorkItemsPlanner({
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthOffset]);
+  }, [viewYear, viewMonth]);
 
   useEffect(() => {
     const onReload = () => void load();
@@ -394,10 +428,8 @@ export function WorkItemsPlanner({
   useEffect(() => {
     const d = new Date(`${mobileSelectedKey}T00:00:00`);
     if (Number.isNaN(d.getTime())) return;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const diffMonths = (d.getFullYear() - today.getFullYear()) * 12 + (d.getMonth() - today.getMonth());
-    setMonthOffset((current) => (current === diffMonths ? current : diffMonths));
+    setViewYear((y) => (y === d.getFullYear() ? y : d.getFullYear()));
+    setViewMonth((m) => (m === d.getMonth() ? m : d.getMonth()));
   }, [mobileSelectedKey]);
 
   // Memoize expensive calendar grid — avoids recomputing on every render tick
@@ -507,7 +539,7 @@ export function WorkItemsPlanner({
     const key = formatDateKey(new Date());
     setWeekAnchor(new Date());
     setMobileSelectedKey(key);
-    setMonthOffset(0);
+    resetCalendarToToday();
   }
 
   function shiftMobileWeek(delta: number) {
@@ -655,9 +687,39 @@ export function WorkItemsPlanner({
               <List className="h-4 w-4" /> Месец
             </button>
           </div>
-          <Button variant="secondary" size="sm" onClick={() => setMonthOffset((x) => x - 1)}>◀</Button>
-          <Button variant="secondary" size="sm" onClick={() => setMonthOffset(0)}>Днес</Button>
-          <Button variant="secondary" size="sm" onClick={() => setMonthOffset((x) => x + 1)}>▶</Button>
+          <Select
+            value={String(viewMonth)}
+            onChange={(e) => setViewMonth(Number(e.target.value))}
+            className="!w-auto min-w-[7.75rem] !py-1.5 !px-2 !text-xs font-semibold capitalize"
+            aria-label="Месец"
+          >
+            {BG_CALENDAR_MONTHS.map((name, index) => (
+              <option key={name} value={index}>
+                {name}
+              </option>
+            ))}
+          </Select>
+          <Select
+            value={String(viewYear)}
+            onChange={(e) => setViewYear(Number(e.target.value))}
+            className="!w-auto min-w-[5.25rem] !py-1.5 !px-2 !text-xs font-semibold"
+            aria-label="Година"
+          >
+            {yearOptions.map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </Select>
+          <Button variant="secondary" size="sm" onClick={() => shiftViewMonth(-1)} aria-label="Предишен месец">
+            ◀
+          </Button>
+          <Button variant="secondary" size="sm" onClick={goMobileToday}>
+            Днес
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => shiftViewMonth(1)} aria-label="Следващ месец">
+            ▶
+          </Button>
         </div>
       </div>
 

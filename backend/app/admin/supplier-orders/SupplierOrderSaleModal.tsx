@@ -29,6 +29,7 @@ function emptyForm(order: NormalizedSupplierOrderRow) {
     customerAddress: order.customer_address ?? c?.address ?? "",
     customerEmail: c?.email ?? "",
     notes: order.notes ?? "",
+    includeMount: true,
     mountDate: defaultNextMountDate(),
     mountTimeFrom: "09:00",
     mountTimeTo: "13:00",
@@ -115,6 +116,7 @@ export function SupplierOrderSaleModal({
     setBusy(true);
     setError(null);
     try {
+      const withInstallation = form.includeMount;
       await recordProductSale(
         {
           id: dp.id,
@@ -134,11 +136,14 @@ export function SupplierOrderSaleModal({
           email: form.customerEmail.trim(),
           notes: form.notes.trim(),
         },
-        {
-          date: form.mountDate,
-          timeFrom: form.mountTimeFrom,
-          timeTo: form.mountTimeTo,
-        },
+        withInstallation
+          ? {
+              date: form.mountDate,
+              timeFrom: form.mountTimeFrom,
+              timeTo: form.mountTimeTo,
+            }
+          : null,
+        { withInstallation },
       );
       onSuccess();
       onClose();
@@ -163,7 +168,7 @@ export function SupplierOrderSaleModal({
           <div className="text-xs font-bold uppercase tracking-[0.24em] text-brand-blue-700">Продажба след доставка</div>
           <div className="mt-1 text-lg md:text-2xl font-black leading-tight text-slate-950">{productName}</div>
           <div className="mt-1 text-sm font-medium text-slate-500 hidden sm:block">
-            Клиентът от поръчката е попълнен по подразбиране — може да го промените. Създава се продажба и монтаж като от каталога.
+            Клиентът от поръчката е попълнен по подразбиране. Може да изберете продажба с или без монтаж.
           </div>
         </div>
 
@@ -237,22 +242,44 @@ export function SupplierOrderSaleModal({
             className="md:col-span-2 min-h-[2.75rem]"
           />
 
-          <div className="col-span-full border-t border-slate-100 pt-3">
-            <div className="mb-2 text-xs font-black uppercase tracking-wide text-brand-blue-700">Монтаж</div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <label className="grid gap-1.5">
-                <span className="text-xs font-bold text-slate-600">Дата *</span>
-                <Input type="date" value={form.mountDate} onChange={(e) => setForm((s) => ({ ...s, mountDate: e.target.value }))} />
-              </label>
-              <label className="grid gap-1.5">
-                <span className="text-xs font-bold text-slate-600">Час от</span>
-                <Input type="time" value={form.mountTimeFrom} onChange={(e) => setForm((s) => ({ ...s, mountTimeFrom: e.target.value }))} />
-              </label>
-              <label className="grid gap-1.5">
-                <span className="text-xs font-bold text-slate-600">Час до</span>
-                <Input type="time" value={form.mountTimeTo} onChange={(e) => setForm((s) => ({ ...s, mountTimeTo: e.target.value }))} />
-              </label>
-            </div>
+          <div className="col-span-full border-t border-slate-100 pt-3 space-y-3">
+            <label className="flex items-start gap-3 cursor-pointer rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5">
+              <input
+                type="checkbox"
+                checked={form.includeMount}
+                onChange={(e) => setForm((s) => ({ ...s, includeMount: e.target.checked }))}
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-blue-600 focus:ring-brand-blue-500"
+              />
+              <span className="text-sm text-slate-700 leading-snug">
+                <span className="font-bold text-slate-900">С монтаж</span>
+                <span className="block text-xs text-slate-500 mt-0.5">
+                  Изключете за продажба само на уред — без насрочване в календара.
+                </span>
+              </span>
+            </label>
+            {form.includeMount ? (
+              <>
+                <div className="text-xs font-black uppercase tracking-wide text-brand-blue-700">Монтаж</div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <label className="grid gap-1.5">
+                    <span className="text-xs font-bold text-slate-600">Дата *</span>
+                    <Input type="date" value={form.mountDate} onChange={(e) => setForm((s) => ({ ...s, mountDate: e.target.value }))} />
+                  </label>
+                  <label className="grid gap-1.5">
+                    <span className="text-xs font-bold text-slate-600">Час от</span>
+                    <Input type="time" value={form.mountTimeFrom} onChange={(e) => setForm((s) => ({ ...s, mountTimeFrom: e.target.value }))} />
+                  </label>
+                  <label className="grid gap-1.5">
+                    <span className="text-xs font-bold text-slate-600">Час до</span>
+                    <Input type="time" value={form.mountTimeTo} onChange={(e) => setForm((s) => ({ ...s, mountTimeTo: e.target.value }))} />
+                  </label>
+                </div>
+              </>
+            ) : (
+              <p className="text-xs text-slate-500 rounded-lg border border-dashed border-slate-200 bg-white px-3 py-2">
+                Продажбата ще бъде записана като <strong className="text-slate-700">завършена</strong> в панела „Продажби“.
+              </p>
+            )}
           </div>
         </div>
 

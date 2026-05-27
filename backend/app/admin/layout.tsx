@@ -4,17 +4,12 @@ import { logoutAction } from "@/app/login/actions";
 import { adminSession, type AdminRole } from "@/lib/admin/db";
 import { MobileNav } from "./MobileNav";
 import { SplashScreen } from "./SplashScreen";
-import { ChatNavBadge } from "./chat/ChatNavBadge";
-import { InquiriesNavBadge } from "./inquiries/InquiriesNavBadge";
+import { AdminSidebarNav } from "./AdminSidebarNav";
 import { AdminPushBanner } from "./AdminPushBanner";
 import { OfflineBootstrap } from "./OfflineBootstrap";
 import { OfflineExplainerCard } from "./OfflineExplainerCard";
 import { AdminLogo } from "./AdminLogo";
-import {
-  LayoutDashboard, Package, Users, FileText, Star,
-  Activity, Settings, LogOut,
-  ShieldCheck, FolderOpen, Receipt, Truck,
-} from "lucide-react";
+import { LogOut } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -40,15 +35,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   const initial = (userName || "?").trim().charAt(0).toUpperCase() || "?";
   const roleLabel = ROLE_LABELS[role] ?? role;
-
-  // Кои секции вижда текущата роля
-  const showOffice = role === "master_admin" || role === "office_staff";
-  const showService = true; // всички роли виждат секция Сервиз → Документи
-  const showReports = role === "master_admin" || role === "office_staff";
-  const showStaff = role === "master_admin" || role === "office_staff";
-  const showSettings = role === "master_admin";
-  // „Продажби" — master_admin + офис (списък продажби / work_items).
-  const showSales = role === "master_admin" || role === "office_staff";
 
   return (
     <>
@@ -92,62 +78,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             </div>
           </Link>
 
-          {/* Навигация */}
-          <nav className="flex flex-col gap-0.5 flex-1 p-2.5">
-            {/* Главно: Табло */}
-            <NavLink href="/admin" label="Табло" icon={<LayoutDashboard className="w-4 h-4" />} />
-
-            {showOffice && (
-              <>
-                <SectionLabel label="Офис" />
-                <NavLink href="/admin/contacts" label="Контакти" icon={<Users className="w-4 h-4" />} />
-                <ChatNavBadge />
-                <InquiriesNavBadge />
-                <NavLink href="/admin/products" label="Продукти" icon={<Package className="w-4 h-4" />} />
-                {showSales && (
-                  <>
-                    <NavLink href="/admin/history" label="Продажби" icon={<Receipt className="w-4 h-4" />} />
-                    <NavLink href="/admin/supplier-orders" label="Поръчки" icon={<Truck className="w-4 h-4" />} />
-                  </>
-                )}
-                <NavLink href="/admin/articles" label="Статии" icon={<FileText className="w-4 h-4" />} />
-              </>
-            )}
-
-            {role === "service_staff" && (
-              <>
-                <SectionLabel label="Каталог" />
-                <NavLink href="/admin/products" label="Продукти" icon={<Package className="w-4 h-4" />} />
-              </>
-            )}
-
-            {showService && (
-              <>
-                <SectionLabel label="Сервиз" />
-                <NavLink href="/admin/service/documents" label="Документи" icon={<FolderOpen className="w-4 h-4" />} />
-              </>
-            )}
-
-            {showReports && (
-              <>
-                <SectionLabel label="Отчети" />
-                <NavLink href="/admin/ratings" label="Оценки" icon={<Star className="w-4 h-4" />} />
-                <NavLink href="/admin/activity" label="Активност" icon={<Activity className="w-4 h-4" />} />
-              </>
-            )}
-
-            {(showStaff || showSettings) && (
-              <>
-                <SectionLabel label="Администрация" />
-                {showStaff && (
-                  <NavLink href="/admin/staff" label="Персонал" icon={<ShieldCheck className="w-4 h-4" />} />
-                )}
-                {showSettings && (
-                  <NavLink href="/admin/settings" label="Настройки" icon={<Settings className="w-4 h-4" />} />
-                )}
-              </>
-            )}
-          </nav>
+          <AdminSidebarNav role={role} />
 
           {/* Изход */}
           <div className="p-2.5 border-t border-slate-100">
@@ -180,25 +111,5 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <MobileNav role={role} userName={userName} avatarUrl={avatarUrl} />
       </div>
     </>
-  );
-}
-
-function SectionLabel({ label }: { label: string }) {
-  return (
-    <div className="mt-3 mb-1 px-2.5 text-[10px] font-extrabold text-slate-400 uppercase tracking-[0.14em]">
-      {label}
-    </div>
-  );
-}
-
-function NavLink({ href, label, icon }: { href: string; label: string; icon: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-slate-600 font-semibold no-underline bg-transparent hover:bg-slate-50 hover:text-slate-900 transition-colors text-xs border border-transparent focus:outline-none focus:ring-2 focus:ring-slate-200"
-    >
-      <span className="text-slate-400">{icon}</span>
-      <span>{label}</span>
-    </Link>
   );
 }
