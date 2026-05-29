@@ -46,6 +46,8 @@ export async function handleAgentChat(
   let userMessageId: string | null = null;
   let message = input.message?.trim() ?? "";
   let isRegenerate = Boolean(input.regenerate);
+  let regeneratePriorMessages: Array<{ role: string; content: unknown }> | null = null;
+  let assistantMessageIdToReplace: string | null = null;
 
   if (isRegenerate) {
     if (!conversationId) throw new Error("Липсва conversationId за regenerate.");
@@ -69,7 +71,10 @@ export async function handleAgentChat(
     if (lastAssistantIdx < 0) throw new Error("Няма отговор за регенериране.");
 
     const assistantIdx = msgs.length - 1 - lastAssistantIdx;
-    await session.db.from("admin_agent_messages").delete().eq("id", msgs[assistantIdx].id);
+    assistantMessageIdToReplace = msgs[assistantIdx].id;
+    regeneratePriorMessages = msgs
+      .filter((_, idx) => idx !== assistantIdx)
+      .map((m) => ({ role: m.role, content: m.content }));
 
     const userBefore = [...msgs.slice(0, assistantIdx)].reverse().find((m) => m.role === "user");
     if (!userBefore) throw new Error("Няма user съобщение за regenerate.");
@@ -114,12 +119,16 @@ export async function handleAgentChat(
     await assertConversationMessageLimit(session.db, activeConversationId, env);
   }
 
-  const { data: priorMessages } = await session.db
-    .from("admin_agent_messages")
-    .select("role,content")
-    .eq("conversation_id", activeConversationId)
-    .order("created_at", { ascending: true })
-    .limit(100);
+  let priorMessages = regeneratePriorMessages;
+  if (!priorMessages) {
+    const { data } = await session.db
+      .from("admin_agent_messages")
+      .select("role,content")
+      .eq("conversation_id", activeConversationId)
+      .order("created_at", { ascending: true })
+      .limit(100);
+    priorMessages = data ?? [];
+  }
 
   const history: Array<{ role: "user" | "assistant"; text: string }> = [];
   for (const m of priorMessages ?? []) {
@@ -153,6 +162,13 @@ export async function handleAgentChat(
       onProgress: options.onProgress,
       onTextDelta: options.onTextDelta,
     });
+    const { error: assistantMsgErr } = await session.db.from("admin_agent_messages").insert({
+      conversation_id: activeConversationId,
+      role: "assistant",
+      content: { blocks: result.blocks },
+      token_usage: result.usage,
+    });
+    if (assistantMsgErr) throw new Error(assistantMsgErr.message);
   } catch (turnErr) {
     if (!isRegenerate) {
       await rollbackFailedAgentTurn(session.db, {
@@ -164,12 +180,13 @@ export async function handleAgentChat(
     throw turnErr;
   }
 
-  await session.db.from("admin_agent_messages").insert({
-    conversation_id: activeConversationId,
-    role: "assistant",
-    content: { blocks: result.blocks },
-    token_usage: result.usage,
-  });
+  if (assistantMessageIdToReplace) {
+    const { error: replaceErr } = await session.db
+      .from("admin_agent_messages")
+      .delete()
+      .eq("id", assistantMessageIdToReplace);
+    if (replaceErr) throw new Error(replaceErr.message);
+  }
 
   let title: string | undefined;
   const isFirstExchange = history.length === 0 && !isRegenerate;
