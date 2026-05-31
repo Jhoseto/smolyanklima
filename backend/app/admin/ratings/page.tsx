@@ -524,7 +524,7 @@ export default function AdminRatingsPage() {
               <Select className={`w-[5.5rem] ${COMPACT_SELECT}`} value={filters.condition} onChange={(e) => patchFilters({ condition: e.target.value as ConditionFilter })}>
                 <option value="all">Всички</option>
                 <option value="new">Нов</option>
-                <option value="used">Употр.</option>
+                <option value="used">Употребяван</option>
               </Select>
             </CompactField>
 

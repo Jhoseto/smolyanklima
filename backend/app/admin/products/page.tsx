@@ -1856,7 +1856,7 @@ export default function AdminProductsPage() {
                         p.product_condition === "used" ? "bg-brand-orange-100 text-brand-orange-700" : "bg-brand-blue-100 text-brand-blue-700"
                       }`}
                     >
-                      {p.product_condition === "used" ? "Употр." : "Нов"}
+                      {p.product_condition === "used" ? "Употребяван" : "Нов"}
                     </span>
                   )}
                 </Td>
@@ -2113,7 +2113,7 @@ export default function AdminProductsPage() {
                         : "bg-brand-blue-100 text-brand-blue-800"
                     }`}
                   >
-                    {p.product_condition === "used" ? "Употр." : "Нов"}
+                    {p.product_condition === "used" ? "Употребяван" : "Нов"}
                   </span>
                   <button
                     type="button"

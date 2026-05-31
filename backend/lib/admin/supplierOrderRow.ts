@@ -60,6 +60,10 @@ export type NormalizedSupplierOrderRow = {
   notes: string | null;
   product_id: string | null;
   contact_id: string | null;
+  supplier_name: string | null;
+  supplier_invoice_number: string | null;
+  purchase_price: number | null;
+  order_product_condition: "new" | "used" | null;
   products: NormalizedSupplierOrderProduct | null;
   contacts: { id?: string; full_name?: string; phone?: string; email?: string; address?: string } | null;
   /** Складова бройка след „Доставен“ — за продажба от панела. */
@@ -135,6 +139,13 @@ export function normalizeSupplierOrderRow(row: Record<string, unknown>): Normali
     notes: (row.notes as string | null) ?? null,
     product_id: (row.product_id as string | null) ?? null,
     contact_id: (row.contact_id as string | null) ?? null,
+    supplier_name: (row.supplier_name as string | null) ?? null,
+    supplier_invoice_number: (row.supplier_invoice_number as string | null) ?? null,
+    purchase_price: row.purchase_price != null ? Number(row.purchase_price) : null,
+    order_product_condition:
+      row.order_product_condition === "new" || row.order_product_condition === "used"
+        ? row.order_product_condition
+        : null,
     products,
     contacts: contactRaw
       ? {
@@ -180,13 +191,9 @@ export function attachDeliveredProductsToOrders(
   }));
 }
 
-export const SUPPLIER_ORDER_SELECT = `
-  id, title, status, priority, due_date, customer_name, customer_phone,
-  customer_address, unit_price, total_amount, notes, created_at,
-  product_id, contact_id,
-  products:product_id (
+export const SUPPLIER_ORDER_PRODUCT_FIELDS = `
     id, name, model_code, price, price_with_mount, purchase_price, source_url, slug,
-    show_in_public_catalog, brand_id,
+    show_in_public_catalog, brand_id, product_condition, product_region, supplier_id,
     brands:brand_id (name),
     product_types:type_id (name),
     supplier:supplier_id (full_name),
@@ -195,6 +202,21 @@ export const SUPPLIER_ORDER_SELECT = `
       cooling_power_kw, heating_power_kw, energy_class_cool, energy_class_heat,
       coverage_m2, wifi, btu
     )
-  ),
+`;
+
+export function supplierOrderSelect(needsProductInner: boolean): string {
+  const productEmbed = needsProductInner
+    ? `products:product_id!inner(${SUPPLIER_ORDER_PRODUCT_FIELDS})`
+    : `products:product_id (${SUPPLIER_ORDER_PRODUCT_FIELDS})`;
+  return `
+  id, title, status, priority, due_date, completed_at, customer_name, customer_phone,
+  customer_address, unit_price, total_amount, notes, created_at,
+  product_id, contact_id, supplier_name, supplier_invoice_number, purchase_price,
+  order_product_condition,
+  ${productEmbed},
   contacts:contact_id (id, full_name, phone, email, address)
 `;
+}
+
+/** @deprecated използвайте supplierOrderSelect() */
+export const SUPPLIER_ORDER_SELECT = supplierOrderSelect(false);

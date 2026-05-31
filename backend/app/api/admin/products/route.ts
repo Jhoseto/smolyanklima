@@ -50,13 +50,13 @@ const MAX_IMAGES = 4;
 const FEATURED_COLS = ",featured_position,featured_badge";
 const SUPPLIER_JOIN = ",supplier:supplier_id(full_name)";
 const ADMIN_PRODUCT_LIST_SELECT_MIN =
-  `id,slug,name,price,purchase_price,product_condition,is_featured,is_active,show_in_public_catalog,stock_status,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,source_url,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,model_code,brand_id,brands:brand_id(name),product_types:type_id(name)${SUPPLIER_JOIN}`;
+  `id,slug,name,price,price_with_mount,purchase_price,product_condition,is_featured,is_active,show_in_public_catalog,stock_status,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,source_url,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,model_code,brand_id,brands:brand_id(name),product_types:type_id(name)${SUPPLIER_JOIN}`;
 const ADMIN_PRODUCT_LIST_SELECT_WITH_REGION =
-  `id,slug,name,price,purchase_price,product_condition,is_featured,is_active,show_in_public_catalog,stock_status,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,source_url,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,product_region,model_code,brand_id,brands:brand_id(name),product_types:type_id(name)${SUPPLIER_JOIN}`;
+  `id,slug,name,price,price_with_mount,purchase_price,product_condition,is_featured,is_active,show_in_public_catalog,stock_status,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,source_url,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,product_region,model_code,brand_id,brands:brand_id(name),product_types:type_id(name)${SUPPLIER_JOIN}`;
 const ADMIN_PRODUCT_LIST_SELECT_WITH_LOCATION =
-  `id,slug,name,price,purchase_price,product_condition,is_featured,is_active,show_in_public_catalog,stock_status,stock_location,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,source_url,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,model_code,brand_id,brands:brand_id(name),product_types:type_id(name)${SUPPLIER_JOIN}`;
+  `id,slug,name,price,price_with_mount,purchase_price,product_condition,is_featured,is_active,show_in_public_catalog,stock_status,stock_location,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,source_url,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,model_code,brand_id,brands:brand_id(name),product_types:type_id(name)${SUPPLIER_JOIN}`;
 const ADMIN_PRODUCT_LIST_SELECT_FULL =
-  `id,slug,name,price,purchase_price,product_condition,is_featured,is_active,show_in_public_catalog,stock_status,stock_location,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,source_url,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,product_region,model_code,brand_id,brands:brand_id(name),product_types:type_id(name)${SUPPLIER_JOIN}`;
+  `id,slug,name,price,price_with_mount,purchase_price,product_condition,is_featured,is_active,show_in_public_catalog,stock_status,stock_location,stock_quantity,sold_quantity,created_at,purchased_at,supplier_id,source_url,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,product_region,model_code,brand_id,brands:brand_id(name),product_types:type_id(name)${SUPPLIER_JOIN}`;
 /** Подмножество без `model_code` — fallback за DB без миграция 0038. */
 const ADMIN_PRODUCT_LIST_SELECT_NO_MODEL_CODE_MIN = ADMIN_PRODUCT_LIST_SELECT_MIN.replace(",model_code", "");
 const ADMIN_PRODUCT_LIST_SELECT_NO_MODEL_CODE_REGION = ADMIN_PRODUCT_LIST_SELECT_WITH_REGION.replace(",model_code", "");

@@ -183,6 +183,7 @@ export function SupplierOrderDetailModal({
   const [outdoorSerial, setOutdoorSerial] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [purchasedAt, setPurchasedAt] = useState(() => new Date().toISOString().slice(0, 10));
+  const [purchasePriceDraft, setPurchasePriceDraft] = useState("");
   const [indoorDup, setIndoorDup] = useState<SerialMatch[]>([]);
   const [outdoorDup, setOutdoorDup] = useState<SerialMatch[]>([]);
   const debouncedIndoor = useDebouncedValue(indoorSerial.trim(), 350);
@@ -199,6 +200,7 @@ export function SupplierOrderDetailModal({
     setOutdoorSerial("");
     setInvoiceNumber("");
     setPurchasedAt(new Date().toISOString().slice(0, 10));
+    setPurchasePriceDraft("");
     setIndoorDup([]);
     setOutdoorDup([]);
     (async () => {
@@ -219,6 +221,13 @@ export function SupplierOrderDetailModal({
             ? discountPercentFromAgreedPrice(catalog, agreed)
             : "",
         );
+        const purchaseHint =
+          row?.purchase_price != null
+            ? Number(row.purchase_price)
+            : row?.products?.purchase_price != null
+              ? Number(row.products.purchase_price)
+              : NaN;
+        setPurchasePriceDraft(Number.isFinite(purchaseHint) ? formatAgreedPriceInput(purchaseHint) : "");
       }
       setLoading(false);
     })();
@@ -261,13 +270,16 @@ export function SupplierOrderDetailModal({
     !indoorSerial.trim() ||
     !outdoorSerial.trim() ||
     !invoiceNumber.trim() ||
-    !purchasedAt.trim();
+    !purchasedAt.trim() ||
+    !purchasePriceDraft.trim() ||
+    !Number.isFinite(parseDecimalInput(purchasePriceDraft)) ||
+    parseDecimalInput(purchasePriceDraft) < 0;
   const deliveryHasDup = indoorDup.length > 0 || outdoorDup.length > 0;
   const canMarkDelivered = !deliveryIncomplete && !deliveryHasDup;
 
   const deliveryHint = useMemo(() => {
     if (deliveryHasDup) return "Серийните номера вече съществуват при друг продукт.";
-    if (deliveryIncomplete) return "Попълнете всички полета за доставка преди да отбележите получаване.";
+    if (deliveryIncomplete) return "Попълнете всички полета за доставка (вкл. доставна цена) преди да отбележите получаване.";
     return null;
   }, [deliveryHasDup, deliveryIncomplete]);
 
@@ -328,6 +340,7 @@ export function SupplierOrderDetailModal({
     setActionError(null);
     setDelivering(true);
     try {
+      const purchasePrice = parseDecimalInput(purchasePriceDraft);
       const res = await fetch(`/api/admin/supplier-orders/${order.id}/fulfill`, {
         method: "POST",
         credentials: "include",
@@ -337,6 +350,7 @@ export function SupplierOrderDetailModal({
           outdoorUnitSerial: outdoorSerial.trim(),
           supplierInvoiceNumber: invoiceNumber.trim(),
           purchasedAt: purchasedAt.trim(),
+          purchasePrice,
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -396,6 +410,7 @@ export function SupplierOrderDetailModal({
   const customerPhone = order?.customer_phone ?? order?.contacts?.phone ?? null;
   const customerAddress = order?.customer_address ?? null;
   const catalogPrice = prod?.price ?? null;
+  const catalogPurchasePrice = prod?.purchase_price ?? order?.purchase_price ?? null;
   const headerDate = order?.due_date ? formatBgDate(order.due_date) : order ? formatBgDateTime(order.created_at) : "";
   const isArchived = order?.status === "done" || order?.status === "cancelled";
   const delivered = order?.delivered_product ?? null;
@@ -770,7 +785,7 @@ export function SupplierOrderDetailModal({
                 Данни при получаване (задължителни)
               </p>
               <p className="mt-1 text-[11px] text-slate-500">
-                Без серийни номера, дата и фактура не се създава нова складова бройка — избягва се дублиране на модела.
+                Без серийни номера, дата, доставна цена и фактура не се създава нова складова бройка — избягва се дублиране на модела.
               </p>
               <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <div>
@@ -810,6 +825,29 @@ export function SupplierOrderDetailModal({
                     placeholder="напр. 0000123456"
                     className={deliveryIncomplete && !invoiceNumber.trim() ? "border-red-400" : ""}
                   />
+                </div>
+                <div>
+                  <FieldLabel label="Доставна цена (€)" className="text-slate-500" />
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    value={purchasePriceDraft}
+                    onChange={(e) => setPurchasePriceDraft(e.target.value)}
+                    placeholder="0"
+                    className={
+                      deliveryIncomplete &&
+                      (!purchasePriceDraft.trim() ||
+                        !Number.isFinite(parseDecimalInput(purchasePriceDraft)) ||
+                        parseDecimalInput(purchasePriceDraft) < 0)
+                        ? "border-red-400"
+                        : ""
+                    }
+                  />
+                  {catalogPurchasePrice != null && (
+                    <p className="mt-1 text-[10px] text-slate-500">
+                      От каталога: {fmtMoney(catalogPurchasePrice)}
+                    </p>
+                  )}
                 </div>
               </div>
               {deliveryHint && (

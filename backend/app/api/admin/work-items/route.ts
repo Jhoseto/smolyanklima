@@ -6,6 +6,9 @@ import { logAdminActivity } from "@/lib/admin/audit";
 import { ensureAcceptanceProtocolForInstallation } from "@/lib/admin/acceptanceProtocolFromInstall";
 import { syncConsultationContactFollowUp } from "@/lib/work-items/consultation-contact";
 import { buildAdminSearchOrFilter } from "@/lib/admin/phoneSearchPattern";
+import { parseMountPhaseCsv } from "@/lib/admin/salesHistoryQueryFilters";
+import { recordManualSale } from "@/lib/admin/recordManualSale";
+import { supplierFilterOrClause, normalizeSupplierKey } from "@/lib/admin/supplierNameNormalize";
 
 const WORK_ITEM_EVENT_CODES = [
   "item_added",
@@ -30,6 +33,19 @@ const QuerySchema = z.object({
   saleInstallState: z.enum(["pending_mount", "completed"]).optional(),
   /** Панел „Продажби“: нови / втора употреба (по products.product_condition). */
   productCondition: z.enum(["new", "used"]).optional(),
+  /** CSV: pending_mount, completed, cancelled */
+  mountPhase: z.string().optional(),
+  hasSupplier: z.enum(["yes", "no"]).optional(),
+  /** Групиран доставчик (нормализиран ключ — намира и „БИТТЕЛ“, и „БИТТЕЛ ЕООД“). */
+  supplierKey: z.string().max(160).optional(),
+  /** @deprecated използвайте supplierKey */
+  supplierName: z.string().max(160).optional(),
+  hasSupplierInvoice: z.enum(["yes", "no"]).optional(),
+  hasPurchasePrice: z.enum(["yes", "no"]).optional(),
+  brandId: z.string().uuid().optional(),
+  productRegion: z.enum(["europe", "japan"]).optional(),
+  amountMin: z.coerce.number().nonnegative().optional(),
+  amountMax: z.coerce.number().nonnegative().optional(),
   page: z.coerce.number().int().min(1).optional().default(1),
   perPage: z.coerce.number().int().min(1).max(500).optional().default(200),
   sortBy: z
@@ -77,6 +93,15 @@ const BodySchema = z.object({
   saleInstallState: z.enum(["pending_mount", "completed"]).optional().nullable(),
   installationWorkItemId: z.string().uuid().optional().nullable(),
   saleWorkItemId: z.string().uuid().optional().nullable(),
+  /** Ръчна продажба от панела „Продажби“ (история). */
+  manualHistorySale: z.boolean().optional(),
+  productName: z.string().max(200).optional(),
+  saleProductCondition: z.enum(["new", "used"]).optional().nullable(),
+  withInstallation: z.boolean().optional(),
+  mountDate: z.string().optional().nullable(),
+  mountTimeFrom: z.string().optional().nullable(),
+  mountTimeTo: z.string().optional().nullable(),
+  updateStock: z.boolean().optional(),
 });
 
 export async function OPTIONS(req: NextRequest) {
@@ -88,13 +113,39 @@ export async function GET(req: NextRequest) {
   const parsed = QuerySchema.safeParse(params);
   if (!parsed.success) return withCors(req, NextResponse.json({ error: "Невалидни параметри" }, { status: 400 }));
 
-  const { from, to, q, eventCode, type, status, saleInstallState, productCondition, page, perPage, sortBy, sortDir } =
-    parsed.data;
+  const {
+    from,
+    to,
+    q,
+    eventCode,
+    type,
+    status,
+    saleInstallState,
+    productCondition,
+    mountPhase,
+    hasSupplier,
+    hasSupplierInvoice,
+    hasPurchasePrice,
+    supplierName,
+    supplierKey,
+    brandId,
+    productRegion,
+    amountMin,
+    amountMax,
+    page,
+    perPage,
+    sortBy,
+    sortDir,
+  } = parsed.data;
   const ascending = sortDir === "asc";
   const supabase = await adminDb();
-  const productEmbed = productCondition
-    ? "products:product_id!inner(id,slug,name,model_code,price,product_condition,supplier_invoice_number,brands:brand_id(name))"
-    : "products:product_id(id,slug,name,model_code,price,product_condition,supplier_invoice_number,brands:brand_id(name))";
+  const mountPhases = parseMountPhaseCsv(mountPhase);
+  const needsProductInner = Boolean(brandId || productRegion);
+  const productFields =
+    "id,slug,name,model_code,price,product_condition,product_region,supplier_invoice_number,brands:brand_id(name)";
+  const productEmbed = needsProductInner
+    ? `products:product_id!inner(${productFields})`
+    : `products:product_id(${productFields})`;
   const workItemSelect = [
     "id",
     "type",
@@ -123,6 +174,7 @@ export async function GET(req: NextRequest) {
     "created_at",
     "cancel_reason",
     "sale_install_state",
+    "sale_product_condition",
     "installation_work_item_id",
     "sale_work_item_id",
     productEmbed,
@@ -187,6 +239,7 @@ export async function GET(req: NextRequest) {
     const orFilter = buildAdminSearchOrFilter(q, {
       textFields: [
         "title",
+        "notes",
         "customer_name",
         "customer_phone",
         "customer_address",
@@ -201,9 +254,38 @@ export async function GET(req: NextRequest) {
   if (type) query = query.eq("type", type);
   if (status) query = query.eq("status", status);
   if (saleInstallState) query = query.eq("sale_install_state", saleInstallState);
-  if (productCondition) {
-    query = query.eq("products.product_condition", productCondition);
+  if (mountPhases.length > 0) {
+    const orParts: string[] = [];
+    if (mountPhases.includes("pending_mount")) orParts.push("sale_install_state.eq.pending_mount");
+    if (mountPhases.includes("completed")) orParts.push("sale_install_state.eq.completed");
+    if (mountPhases.includes("cancelled")) orParts.push("status.eq.cancelled");
+    if (orParts.length > 0) query = query.or(orParts.join(","));
   }
+  if (productCondition) {
+    query = query.eq("sale_product_condition", productCondition);
+  }
+  if (brandId) query = query.eq("products.brand_id", brandId);
+  if (productRegion) query = query.eq("products.product_region", productRegion);
+  const supplierFilterRaw = (supplierKey ?? supplierName)?.trim();
+  if (supplierFilterRaw) {
+    query = query.or(supplierFilterOrClause(normalizeSupplierKey(supplierFilterRaw)));
+  } else if (hasSupplier === "yes") {
+    query = query.not("supplier_name", "is", null).neq("supplier_name", "");
+  } else if (hasSupplier === "no") {
+    query = query.or("supplier_name.is.null,supplier_name.eq.");
+  }
+  if (hasSupplierInvoice === "yes") {
+    query = query.not("supplier_invoice_number", "is", null).neq("supplier_invoice_number", "");
+  } else if (hasSupplierInvoice === "no") {
+    query = query.or("supplier_invoice_number.is.null,supplier_invoice_number.eq.");
+  }
+  if (hasPurchasePrice === "yes") {
+    query = query.not("purchase_price", "is", null);
+  } else if (hasPurchasePrice === "no") {
+    query = query.is("purchase_price", null);
+  }
+  if (amountMin != null) query = query.gte("total_amount", amountMin);
+  if (amountMax != null) query = query.lte("total_amount", amountMax);
   if (from) query = query.gte("due_date", from);
   if (to) query = query.lte("due_date", to);
 
@@ -231,12 +313,15 @@ export async function POST(req: NextRequest) {
   const parsed = BodySchema.safeParse(json);
   if (!parsed.success) return withCors(req, NextResponse.json({ error: "Невалидни данни" }, { status: 400 }));
 
+  const supabase = session.db;
+
   const isSaleWorkItem = parsed.data.type === "sale" || parsed.data.eventCode === "sale";
   if (isSaleWorkItem) {
     const fromProductSaleFlow =
       Boolean(parsed.data.productId) &&
       (parsed.data.saleInstallState === "pending_mount" || parsed.data.saleInstallState === "completed");
-    if (!fromProductSaleFlow) {
+    const fromManualHistorySale = parsed.data.manualHistorySale === true;
+    if (!fromProductSaleFlow && !fromManualHistorySale) {
       return withCors(
         req,
         NextResponse.json(
@@ -247,6 +332,87 @@ export async function POST(req: NextRequest) {
           { status: 400 },
         ),
       );
+    }
+
+    if (fromManualHistorySale) {
+      const salePrice =
+        parsed.data.totalAmount != null && Number.isFinite(parsed.data.totalAmount)
+          ? parsed.data.totalAmount
+          : parsed.data.unitPrice != null && Number.isFinite(parsed.data.unitPrice)
+            ? parsed.data.unitPrice
+            : NaN;
+      const productName = (parsed.data.productName ?? parsed.data.title.replace(/^Продажба:\s*/i, "")).trim();
+      const saleInstallState =
+        parsed.data.saleInstallState === "pending_mount" || parsed.data.saleInstallState === "completed"
+          ? parsed.data.saleInstallState
+          : parsed.data.withInstallation
+            ? "pending_mount"
+            : "completed";
+
+      try {
+        const result = await recordManualSale(supabase, {
+          productId: parsed.data.productId ?? null,
+          productName,
+          saleProductCondition: parsed.data.saleProductCondition ?? null,
+          contactId: parsed.data.contactId ?? null,
+          customerName: parsed.data.customerName ?? null,
+          customerPhone: parsed.data.customerPhone ?? null,
+          customerAddress: parsed.data.customerAddress ?? null,
+          notes: parsed.data.notes ?? null,
+          saleDate: parsed.data.dueDate?.trim() || new Date().toISOString().slice(0, 10),
+          salePrice,
+          purchasePrice: parsed.data.purchasePrice ?? null,
+          supplierName: parsed.data.supplierName ?? null,
+          supplierInvoiceNumber: parsed.data.supplierInvoiceNumber ?? null,
+          saleInstallState,
+          withInstallation: parsed.data.withInstallation,
+          mountDate: parsed.data.mountDate ?? null,
+          mountTimeFrom: parsed.data.mountTimeFrom ?? null,
+          mountTimeTo: parsed.data.mountTimeTo ?? null,
+          updateStock: parsed.data.updateStock,
+          createdBy: session.userId,
+        });
+
+        const { data: createdRow } = await supabase.from("work_items").select("*").eq("id", result.saleId).single();
+
+        await syncConsultationContactFollowUp(supabase, {
+          contactId: parsed.data.contactId,
+          dueDate: parsed.data.dueDate,
+          status: createdRow?.status ?? parsed.data.status,
+          eventCode: "sale",
+        });
+
+        await logAdminActivity({
+          action: "work_item.create",
+          entityType: "work_item",
+          entityId: result.saleId,
+          details: {
+            type: "sale",
+            event_code: "sale",
+            title: createdRow?.title ?? parsed.data.title,
+            customer_name: parsed.data.customerName ?? null,
+            status: createdRow?.status ?? parsed.data.status,
+            priority: parsed.data.priority,
+            due_date: parsed.data.dueDate,
+            sale_install_state: saleInstallState,
+            manual_history_sale: true,
+          },
+        });
+
+        return withCors(
+          req,
+          NextResponse.json(
+            {
+              data: createdRow,
+              ...(result.protocolWarning ? { protocol_warning: result.protocolWarning } : {}),
+            },
+            { status: 201 },
+          ),
+        );
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        return withCors(req, NextResponse.json({ error: message }, { status: 400 }));
+      }
     }
   }
 
@@ -263,7 +429,18 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const supabase = session.db;
+  let saleProductCondition: "new" | "used" | null = null;
+  if (parsed.data.saleProductCondition === "new" || parsed.data.saleProductCondition === "used") {
+    saleProductCondition = parsed.data.saleProductCondition;
+  } else if (parsed.data.productId && isSaleWorkItem) {
+    const { data: prodRow } = await supabase
+      .from("products")
+      .select("product_condition")
+      .eq("id", parsed.data.productId)
+      .maybeSingle();
+    const c = (prodRow as { product_condition?: string | null } | null)?.product_condition;
+    if (c === "new" || c === "used") saleProductCondition = c;
+  }
 
   const payload: Record<string, unknown> = {
     type: parsed.data.type,
@@ -292,6 +469,9 @@ export async function POST(req: NextRequest) {
   };
   if (parsed.data.saleInstallState !== undefined) {
     payload.sale_install_state = parsed.data.saleInstallState;
+  }
+  if (isSaleWorkItem && saleProductCondition) {
+    payload.sale_product_condition = saleProductCondition;
   }
   if (parsed.data.installationWorkItemId !== undefined) {
     payload.installation_work_item_id = parsed.data.installationWorkItemId;

@@ -38,7 +38,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   if (!data) return withCors(req, NextResponse.json({ error: "Поръчката не е намерена" }, { status: 404 }));
 
-  let row = normalizeSupplierOrderRow(data as Record<string, unknown>);
+  let row = normalizeSupplierOrderRow(data as unknown as Record<string, unknown>);
   if (row.status === "done") {
     const { data: instance } = await supabase
       .from("products")

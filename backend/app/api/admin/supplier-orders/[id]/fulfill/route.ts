@@ -20,6 +20,7 @@ const FulfillBodySchema = z.object({
   outdoorUnitSerial: z.string().min(1).max(200),
   supplierInvoiceNumber: z.string().min(1).max(120),
   purchasedAt: z.string().min(1).max(32),
+  purchasePrice: z.number().nonnegative(),
 });
 
 /**
@@ -50,7 +51,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       NextResponse.json(
         {
           error:
-            "Попълнете серийните номера, датата на доставка и номера на фактурата преди да отбележите доставката.",
+            "Попълнете серийните номера, датата на доставка, доставната цена и номера на фактурата преди да отбележите доставката.",
         },
         { status: 400 },
       ),
@@ -68,7 +69,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
   const { data: order, error: orderErr } = await supabase
     .from("work_items")
-    .select("id, status, event_code, product_id, contact_id, customer_name, customer_phone, customer_address, unit_price, notes, title")
+    .select("id, status, event_code, product_id, contact_id, customer_name, customer_phone, customer_address, unit_price, purchase_price, notes, title")
     .eq("id", id)
     .maybeSingle();
 
@@ -85,6 +86,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     customer_phone: string | null;
     customer_address: string | null;
     unit_price: number | null;
+    purchase_price: number | null;
     notes: string | null;
     title: string;
   };
@@ -149,11 +151,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     typeof orderRow.unit_price === "number" && Number.isFinite(orderRow.unit_price) && orderRow.unit_price >= 0
       ? orderRow.unit_price
       : null;
-  const purchaseFromOrder =
-    agreedFromOrder ??
-    (tpl.purchase_price != null && Number.isFinite(Number(tpl.purchase_price))
-      ? Number(tpl.purchase_price)
-      : null);
+  const purchasePrice = parsedBody.data.purchasePrice;
 
   const { data: newProduct, error: prodErr } = await supabase
     .from("products")
@@ -161,12 +159,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       name: tpl.name,
       slug: null,
       description: tpl.description ?? null,
-      price:
-        agreedFromOrder != null
-          ? agreedFromOrder
-          : Number(tpl.price ?? 0),
+      price: agreedFromOrder != null ? agreedFromOrder : Number(tpl.price ?? 0),
       price_with_mount: tpl.price_with_mount ?? null,
-      purchase_price: purchaseFromOrder,
+      purchase_price: purchasePrice,
       brand_id: tpl.brand_id ?? null,
       type_id: tpl.type_id ?? null,
       product_condition: tpl.product_condition ?? "new",
@@ -198,6 +193,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     .update({
       status: "done",
       completed_at: new Date().toISOString(),
+      purchase_price: purchasePrice,
     })
     .eq("id", id);
 
