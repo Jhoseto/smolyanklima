@@ -11,7 +11,7 @@ import {
 } from "@/lib/admin/contactPhoneDuplicate";
 import {
   buildAdminSearchOrFilter,
-  phoneFlexibleIlikePattern,
+  phoneFlexibleIlikePatterns,
 } from "@/lib/admin/phoneSearchPattern";
 
 const QuerySchema = z.object({
@@ -55,14 +55,20 @@ export async function GET(req: NextRequest) {
       textFields: ["full_name", "phone", "email", "address"],
       phoneFields: ["phone"],
     });
-    const phonePattern = phoneFlexibleIlikePattern(q);
+    const phonePatterns = phoneFlexibleIlikePatterns(q);
     let extraContactIds: string[] = [];
-    if (phonePattern) {
-      const { data: phoneRows } = await supabase
-        .from("contact_phones")
-        .select("contact_id")
-        .ilike("phone", phonePattern);
-      extraContactIds = [...new Set((phoneRows ?? []).map((row) => row.contact_id as string))];
+    if (phonePatterns.length) {
+      const idSet = new Set<string>();
+      for (const phonePattern of phonePatterns) {
+        const { data: phoneRows } = await supabase
+          .from("contact_phones")
+          .select("contact_id")
+          .ilike("phone", phonePattern);
+        for (const row of phoneRows ?? []) {
+          idSet.add(row.contact_id as string);
+        }
+      }
+      extraContactIds = [...idSet];
     }
     const orParts = [orFilter, extraContactIds.length ? `id.in.(${extraContactIds.join(",")})` : null].filter(
       Boolean,
@@ -86,14 +92,20 @@ export async function GET(req: NextRequest) {
         textFields: ["full_name", "phone", "email", "address"],
         phoneFields: ["phone"],
       });
-      const phonePattern = phoneFlexibleIlikePattern(q);
+      const phonePatterns = phoneFlexibleIlikePatterns(q);
       let extraContactIds: string[] = [];
-      if (phonePattern) {
-        const { data: phoneRows } = await supabase
-          .from("contact_phones")
-          .select("contact_id")
-          .ilike("phone", phonePattern);
-        extraContactIds = [...new Set((phoneRows ?? []).map((row) => row.contact_id as string))];
+      if (phonePatterns.length) {
+        const idSet = new Set<string>();
+        for (const phonePattern of phonePatterns) {
+          const { data: phoneRows } = await supabase
+            .from("contact_phones")
+            .select("contact_id")
+            .ilike("phone", phonePattern);
+          for (const row of phoneRows ?? []) {
+            idSet.add(row.contact_id as string);
+          }
+        }
+        extraContactIds = [...idSet];
       }
       const orParts = [orFilter, extraContactIds.length ? `id.in.(${extraContactIds.join(",")})` : null].filter(
         Boolean,

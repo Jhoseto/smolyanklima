@@ -10,10 +10,13 @@ import {
   evnEffectivePriceEur,
   roomCoolingLoadKw,
   isEnergyCompareEligible,
-  type InsulationLevel,
   type OldUnitTier,
   SIZING_STATUS_LABEL,
 } from '../../lib/catalog/energySavings';
+import {
+  calculateRoomSizing,
+  type InsulationLevel,
+} from '../../lib/catalog/roomSizing';
 
 type CompareEnergySavingsProps = {
   products: CatalogProduct[];
@@ -342,13 +345,12 @@ export function CompareEnergySavings({ products }: CompareEnergySavingsProps) {
 
 export const PowerCalculator = () => {
   const [area, setArea] = useState(25);
-  const [insulation, setInsulation] = useState<'good' | 'poor'>('good');
+  const [insulation, setInsulation] = useState<InsulationLevel>('good');
 
-  const btu = insulation === 'good' ? area * 180 : area * 250;
-  let recommended = '9000 BTU';
-  if (btu > 9000) recommended = '12000 BTU';
-  if (btu > 12000) recommended = '18000 BTU';
-  if (btu > 18000) recommended = '24000 BTU';
+  const sizing = useMemo(
+    () => calculateRoomSizing(area, insulation),
+    [area, insulation],
+  );
 
   return (
     <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
@@ -401,13 +403,19 @@ export const PowerCalculator = () => {
       <div className="mt-5 text-center">
         <p className="mb-1 text-xs text-gray-500">Препоръчителна мощност:</p>
         <motion.p
-          key={recommended}
+          key={sizing.label}
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           className="text-xl font-black text-[#FF4D00]"
         >
-          ~{recommended}
+          ~{sizing.label}
         </motion.p>
+        <p className="mt-1 text-[10px] leading-snug text-gray-400">
+          ≈ {sizing.requiredKw.toLocaleString('bg-BG', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kW
+          {' · '}
+          типично до ~{sizing.typicalMaxM2} m² при{' '}
+          {insulation === 'good' ? 'добра' : 'слаба'} изолация
+        </p>
       </div>
     </div>
   );

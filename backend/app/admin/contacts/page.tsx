@@ -177,9 +177,7 @@ function customerStatusLabel(status: ContactRow["customer_status"]): string {
   return "Нов клиент";
 }
 
-function normalizePhone(input: string | null | undefined): string {
-  return String(input ?? "").replace(/[^\d+]/g, "").trim();
-}
+import { canonicalPhoneDigits, phoneDigitsOnly } from "@/lib/admin/phoneSearchPattern";
 
 function normalizeEmail(input: string | null | undefined): string {
   return String(input ?? "").trim().toLowerCase();
@@ -191,14 +189,30 @@ function highlightMatch(text: string, query: string): ReactNode {
   if (!q || raw === "—") return raw;
   const lower = raw.toLowerCase();
   const idx = lower.indexOf(q.toLowerCase());
-  if (idx < 0) return raw;
-  return (
-    <>
-      {raw.slice(0, idx)}
-      <mark className="bg-yellow-200/90 text-slate-900 rounded px-0.5 not-italic">{raw.slice(idx, idx + q.length)}</mark>
-      {raw.slice(idx + q.length)}
-    </>
-  );
+  if (idx >= 0) {
+    return (
+      <>
+        {raw.slice(0, idx)}
+        <mark className="bg-yellow-200/90 text-slate-900 rounded px-0.5 not-italic">{raw.slice(idx, idx + q.length)}</mark>
+        {raw.slice(idx + q.length)}
+      </>
+    );
+  }
+
+  const qDigits = phoneDigitsOnly(q);
+  if (qDigits.length >= 3) {
+    const rawDigits = phoneDigitsOnly(raw);
+    const qCanon = canonicalPhoneDigits(q);
+    const rawCanon = canonicalPhoneDigits(raw);
+    const phoneMatch =
+      (qCanon.length >= 3 && rawCanon.includes(qCanon)) ||
+      (qDigits.length >= 3 && rawDigits.includes(qDigits));
+    if (phoneMatch) {
+      return <mark className="bg-yellow-200/90 text-slate-900 rounded px-0.5 not-italic">{raw}</mark>;
+    }
+  }
+
+  return raw;
 }
 
 function emptyNewContactForm(kind: ContactKind): NewContactForm {
@@ -260,6 +274,8 @@ function AdminContactsPageInner() {
   const [mergeSourceId, setMergeSourceId] = useState("");
   const [merging, setMerging] = useState(false);
   const [confirmMerge, setConfirmMerge] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [showMerge, setShowMerge] = useState(false);
   const [showHistory, setShowHistory] = useState(true);
   const [mobileView, setMobileView] = useState<"list" | "detail">("list");
@@ -384,12 +400,12 @@ function AdminContactsPageInner() {
 
   const duplicateSuggestions = useMemo(() => {
     if (!detail) return [];
-    const currentPhone = normalizePhone(detail.phone);
+    const currentPhone = canonicalPhoneDigits(detail.phone);
     const currentEmail = normalizeEmail(detail.email);
     return items
       .filter((c) => c.id !== detail.id)
       .map((c) => {
-        const samePhone = !!currentPhone && normalizePhone(c.phone) === currentPhone;
+        const samePhone = !!currentPhone && canonicalPhoneDigits(c.phone) === currentPhone;
         const sameEmail = !!currentEmail && normalizeEmail(c.email) === currentEmail;
         const score = (samePhone ? 2 : 0) + (sameEmail ? 1 : 0);
         return { row: c, samePhone, sameEmail, score };
@@ -491,6 +507,32 @@ function AdminContactsPageInner() {
       setError(String(e?.message ?? e));
     } finally {
       setSavingProfile(false);
+    }
+  }
+
+  async function deleteSelectedContact() {
+    if (!selected || !detail) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/contacts/${selected}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((json as any).error || "Грешка при изтриване");
+      setConfirmDelete(false);
+      setEditingProfile(false);
+      setSelected("");
+      setDetail(null);
+      setHistory([]);
+      setDetailPhones([]);
+      setMobileView("list");
+      await loadList();
+    } catch (e: any) {
+      setError(String(e?.message ?? e));
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -642,17 +684,28 @@ function AdminContactsPageInner() {
                       {detailKind === "client" ? customerStatusLabel(detail.customer_status) : "Доставчик"} · {new Date(detail.updated_at).toLocaleDateString("bg-BG")}
                     </p>
                   </div>
-                  {/* Десктоп: бутон „Редактирай" в самия header. */}
+                  {/* Десктоп: бутони за редакция и изтриване в header. */}
                   {!editingProfile && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setEditingProfile(true)}
-                      className="hidden lg:inline-flex items-center gap-1.5 shrink-0"
-                      title="Редактирай профила"
-                    >
-                      <Pencil className="w-3.5 h-3.5" /> Редактирай
-                    </Button>
+                    <div className="hidden lg:flex items-center gap-2 shrink-0">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setEditingProfile(true)}
+                        className="inline-flex items-center gap-1.5"
+                        title="Редактирай профила"
+                      >
+                        <Pencil className="w-3.5 h-3.5" /> Редактирай
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => setConfirmDelete(true)}
+                        className="inline-flex items-center gap-1.5"
+                        title="Изтрий контакта"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Изтрий
+                      </Button>
+                    </div>
                   )}
                   {/* Mobile quick action buttons (call / email / edit) */}
                   <div className="flex items-center gap-2 lg:hidden shrink-0">
@@ -673,6 +726,14 @@ function AdminContactsPageInner() {
                           title="Редактирай профила"
                         >
                           <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDelete(true)}
+                          className="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center active:bg-red-100 transition-colors"
+                          title="Изтрий контакта"
+                        >
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </>
                     )}
@@ -986,6 +1047,7 @@ function AdminContactsPageInner() {
                 open={showMerge}
                 onToggle={() => setShowMerge((v) => !v)}
                 accent={detailKind}
+                overflowVisible
               >
                 {duplicateSuggestions.length > 0 && (
                   <div className="mb-4">
@@ -1012,8 +1074,8 @@ function AdminContactsPageInner() {
                   </div>
                 )}
                 
-                <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center p-4 bg-slate-50 rounded-xl border border-slate-200">
-                  <div className="relative flex-1 w-full">
+                <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center p-4 bg-slate-50 rounded-xl border border-slate-200 overflow-visible">
+                  <div className={`relative flex-1 w-full ${mergeResults.length > 0 ? "z-50" : ""}`}>
                     <Input
                       value={mergeQuery}
                       onChange={(e) => {
@@ -1023,7 +1085,7 @@ function AdminContactsPageInner() {
                       placeholder="Търси дублиран контакт..."
                     />
                     {mergeResults.length > 0 && (
-                      <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-10 border border-slate-200 rounded-xl bg-white shadow-lg max-h-36 overflow-y-auto p-1">
+                      <div className="absolute left-0 right-0 bottom-[calc(100%+4px)] z-50 border border-slate-200 rounded-xl bg-white shadow-lg max-h-48 overflow-y-auto p-1">
                         {mergeResults.map((r) => (
                           <button
                             key={r.id}
@@ -1101,6 +1163,31 @@ function AdminContactsPageInner() {
           </div>
         </div>
       )}
+
+      {confirmDelete && detail && (
+        <div
+          className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/55 p-0 md:p-4 backdrop-blur-md"
+          onClick={() => !deleting && setConfirmDelete(false)}
+        >
+          <div className="w-full max-w-lg rounded-t-3xl md:rounded-3xl border border-white/70 bg-white p-5 md:p-6 shadow-[0_30px_90px_rgba(15,23,42,0.35)] pb-safe md:pb-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-center pb-2 md:hidden">
+              <div className="w-10 h-1 rounded-full bg-slate-200" />
+            </div>
+            <div className="text-lg md:text-xl font-black text-slate-950">Изтриване на контакт</div>
+            <div className="mt-2 text-sm leading-6 text-slate-500">
+              Сигурни ли сте, че искате да изтриете <strong className="text-slate-800">{detail.full_name}</strong>?
+              Действието е необратимо. Свързаните операции остават в историята, но вече няма да са обвързани с този контакт.
+              {detailKind === "supplier" && " Продуктите и аксесоарите с този доставчик ще останат без доставчик."}
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setConfirmDelete(false)} disabled={deleting}>Отказ</Button>
+              <Button variant="danger" onClick={() => void deleteSelectedContact()} disabled={deleting}>
+                {deleting ? "Изтриване..." : "Изтрий окончателно"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1113,6 +1200,7 @@ function CollapsiblePanel({
   onToggle,
   children,
   accent,
+  overflowVisible = false,
 }: {
   title: string;
   subtitle?: string;
@@ -1121,6 +1209,8 @@ function CollapsiblePanel({
   onToggle: () => void;
   children: React.ReactNode;
   accent?: ContactKind;
+  /** Позволява autocomplete/dropdown извън картата (без clip). */
+  overflowVisible?: boolean;
 }) {
   const accentBar = accent === "supplier"
     ? "border-l-4 border-l-brand-orange-400"
@@ -1138,7 +1228,7 @@ function CollapsiblePanel({
       ? "hover:bg-brand-blue-50/60"
       : "hover:bg-slate-50";
   return (
-    <Card className={`overflow-hidden ${accentBar}`}>
+    <Card className={`${accentBar} ${overflowVisible && open ? "overflow-visible relative z-20" : "overflow-hidden"}`}>
       <button
         type="button"
         onClick={onToggle}
@@ -1155,7 +1245,7 @@ function CollapsiblePanel({
           {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </div>
       </button>
-      {open && <div className="p-2.5 bg-white">{children}</div>}
+      {open && <div className={`p-2.5 bg-white ${overflowVisible ? "overflow-visible" : ""}`}>{children}</div>}
     </Card>
   );
 }

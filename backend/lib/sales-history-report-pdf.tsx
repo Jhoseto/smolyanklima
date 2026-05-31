@@ -2,7 +2,7 @@
  * PDF — аналитичен отчет по продажби (СМОЛЯНКЛИМА admin).
  */
 import React from "react";
-import { Document, Page, View, Text, StyleSheet, Font } from "@react-pdf/renderer";
+import { Document, Page, View, Text, StyleSheet, Font, Svg, Rect, Defs, LinearGradient, Stop } from "@react-pdf/renderer";
 import { ProtocolPdfBrandMark } from "@/lib/protocol-pdf-brand";
 import type { SalesHistoryReport } from "@/lib/admin/computeSalesHistoryReport";
 import {
@@ -16,6 +16,7 @@ import {
   shortMonthLabel,
   VerticalBarChart,
 } from "@/lib/sales-history-report-pdf-charts";
+import { SalesReportAiAnalysisPdf } from "@/lib/sales-history-report-pdf-ai";
 
 const NOTO_REG =
   "https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSans/NotoSans-Regular.ttf";
@@ -31,10 +32,11 @@ Font.register({
 });
 
 const BR = CHART;
-const PAD_X = 28;
-const PAD_TOP = 22;
-const PAD_BOTTOM = 34;
-const FOOTER_H = 20;
+const PAD_X = 26;
+const PAD_TOP = 20;
+const PAD_BOTTOM = 28;
+const FOOTER_H = 18;
+const CONTENT_H = 842 - PAD_TOP - PAD_BOTTOM;
 const chartW = 595 - PAD_X * 2 - 16;
 
 function fmtEuro(n: number | null | undefined): string {
@@ -65,12 +67,20 @@ const s = StyleSheet.create({
     color: BR.ink,
     position: "relative",
   },
-  topStripe: { position: "absolute", top: 0, left: 0, right: 0, height: 5, flexDirection: "row" },
-  stripeOrange: { flex: 1, backgroundColor: BR.orange },
-  stripeBlue: { flex: 1, backgroundColor: BR.blue },
+  topStripe: { position: "absolute", top: 0, left: 0, right: 0, height: 5 },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 3,
+    marginBottom: 4,
+    paddingBottom: 3,
+    borderBottomWidth: 0.5,
+    borderBottomColor: BR.grid,
+  },
   heroHeader: {
-    marginBottom: 6,
-    paddingBottom: 6,
+    marginBottom: 5,
+    paddingBottom: 5,
     borderBottomWidth: 1,
     borderBottomColor: BR.grid,
   },
@@ -123,7 +133,7 @@ const s = StyleSheet.create({
   },
   miniTitle: { fontFamily: PDF_FONT, fontSize: 11, fontWeight: "bold", color: BR.blue },
   miniMeta: { fontFamily: PDF_FONT, fontSize: 7, color: BR.muted, textAlign: "right", maxWidth: "55%" },
-  kpiRow: { flexDirection: "row", gap: 4, marginBottom: 4 },
+  kpiRow: { flexDirection: "row", gap: 3, marginBottom: 3 },
   kpiCard: {
     flex: 1,
     paddingVertical: 6,
@@ -157,14 +167,14 @@ const s = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: BR.grid,
     borderRadius: 6,
-    paddingVertical: 5,
+    paddingVertical: 4,
     paddingHorizontal: 7,
     backgroundColor: "#fcfdfe",
-    marginBottom: 4,
+    marginBottom: 3,
   },
   chartTitle: { fontFamily: PDF_FONT, fontSize: 8.5, fontWeight: "bold", color: BR.blue, marginBottom: 1 },
   chartSubtitle: { fontFamily: PDF_FONT, fontSize: 6.5, color: BR.muted, marginBottom: 3 },
-  row: { flexDirection: "row", gap: 5, marginBottom: 4 },
+  row: { flexDirection: "row", gap: 4, marginBottom: 3 },
   col: { flex: 1 },
   colWide: { flex: 1.3 },
   colNarrow: { flex: 0.75 },
@@ -195,29 +205,14 @@ const s = StyleSheet.create({
   footerText: { fontFamily: PDF_FONT, fontSize: 6.5, color: BR.muted },
   footerBrand: { fontFamily: PDF_FONT, fontSize: 6.5, fontWeight: "bold", color: BR.orange },
   tableMini: { marginTop: 1 },
-  tableRow: { flexDirection: "row", paddingVertical: 2, borderBottomWidth: 0.5, borderBottomColor: BR.grid },
-  tableHead: { backgroundColor: BR.blue, paddingVertical: 3, paddingHorizontal: 4, borderRadius: 3, marginBottom: 1 },
+  tableRow: { flexDirection: "row", alignItems: "flex-start", paddingVertical: 2, borderBottomWidth: 0.5, borderBottomColor: BR.grid },
+  tableRowDense: { flexDirection: "row", alignItems: "flex-start", paddingVertical: 1, borderBottomWidth: 0.5, borderBottomColor: BR.grid },
+  tableHead: { backgroundColor: BR.blue, paddingVertical: 3, paddingHorizontal: 3, borderRadius: 3, marginBottom: 1 },
+  tableHeadDense: { backgroundColor: BR.blue, paddingVertical: 2, paddingHorizontal: 3, borderRadius: 3, marginBottom: 1 },
   tableHeadText: { fontFamily: PDF_FONT, fontSize: 6.5, fontWeight: "bold", color: BR.white },
+  tableHeadTextDense: { fontFamily: PDF_FONT, fontSize: 6, fontWeight: "bold", color: BR.white },
   tableCell: { fontFamily: PDF_FONT, fontSize: 6.5, color: BR.ink },
-  summaryBand: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 2 },
-  summaryTile: { width: "32%", paddingVertical: 6, paddingHorizontal: 7, borderRadius: 5, borderWidth: 0.5 },
-  summaryTileLabel: { fontFamily: PDF_FONT, fontSize: 5.5, color: BR.muted, marginBottom: 2, textTransform: "uppercase" },
-  summaryTileValue: { fontFamily: PDF_FONT, fontSize: 10, fontWeight: "bold" },
-  page1Summary: {
-    flexDirection: "row",
-    gap: 5,
-    marginTop: 2,
-  },
-  page1SummaryTile: {
-    flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    borderWidth: 0.5,
-    alignItems: "center",
-  },
-  page1SummaryLabel: { fontFamily: PDF_FONT, fontSize: 6, color: BR.muted, marginBottom: 3, textTransform: "uppercase" },
-  page1SummaryValue: { fontFamily: PDF_FONT, fontSize: 11, fontWeight: "bold" },
+  tableCellDense: { fontFamily: PDF_FONT, fontSize: 6, color: BR.ink, lineHeight: 1.25 },
 });
 
 type Props = {
@@ -225,27 +220,57 @@ type Props = {
   sectionLabel?: string;
   filtersHint?: string;
   generatedAt?: string;
+  aiAnalysis?: string;
+  aiAnalysisGeneratedAt?: string;
 };
 
 function PageStripe() {
   return (
-    <View style={s.topStripe}>
-      <View style={s.stripeOrange} />
-      <View style={s.stripeBlue} />
+    <View style={s.topStripe} fixed>
+      <Svg width="595" height="5" viewBox="0 0 595 5">
+        <Defs>
+          <LinearGradient id="pdfStripeOrange" x1="0%" y1="0%" x2="100%" y2="0%">
+            <Stop offset="0%" stopColor={BR.orange} />
+            <Stop offset="100%" stopColor={BR.orangeMid} />
+          </LinearGradient>
+          <LinearGradient id="pdfStripeBlue" x1="0%" y1="0%" x2="100%" y2="0%">
+            <Stop offset="0%" stopColor={BR.blue} />
+            <Stop offset="100%" stopColor={BR.blueLight} />
+          </LinearGradient>
+        </Defs>
+        <Rect x="0" y="0" width="297.5" height="5" fill="url(#pdfStripeOrange)" />
+        <Rect x="297.5" y="0" width="297.5" height="5" fill="url(#pdfStripeBlue)" />
+      </Svg>
     </View>
   );
 }
 
-function PageFooter({ page, total }: { page: number; total: number }) {
+function PageFooter() {
   return (
     <View style={s.footer} fixed>
       <Text style={s.footerBrand}>СМОЛЯНКЛИМА</Text>
       <Text style={s.footerText}>Аналитичен отчет по продажби</Text>
-      <Text style={s.footerText}>
-        {page} / {total}
-      </Text>
+      <Text
+        style={s.footerText}
+        render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
+      />
     </View>
   );
+}
+
+function SectionHeader({ title, meta }: { title: string; meta?: string }) {
+  return (
+    <View style={s.sectionHeader} minPresenceAhead={60}>
+      <Text style={s.miniTitle}>{title}</Text>
+      {meta ? <Text style={s.miniMeta}>{meta}</Text> : null}
+    </View>
+  );
+}
+
+/** Динамична височина на тренд графиката — запълва страницата без фиксирани празнини. */
+function trendChartHeight(monthCount: number): number {
+  const base = monthCount <= 3 ? 118 : monthCount <= 6 ? 138 : monthCount <= 12 ? 158 : 172;
+  return Math.min(base, Math.round(CONTENT_H * 0.24));
 }
 
 function KpiCard({
@@ -305,18 +330,119 @@ function MiniMonthTable({
   );
 }
 
-const TOTAL_PAGES = 2;
+function fmtBgDatePdf(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("bg-BG");
+}
+
+/** Фиксирани ширини (pt) — сума ≈ ширината на A4 съдържанието. */
+const CLIENT_COL = {
+  rank: 14,
+  name: 108,
+  phone: 68,
+  count: 20,
+  revenue: 46,
+  margin: 42,
+  share: 24,
+  period: 62,
+  mount: 34,
+  extra: 121,
+} as const;
+
+function TopClientsSummaryStrip({ report, sum }: { report: SalesHistoryReport; sum: SalesHistoryReport["summary"] }) {
+  return (
+    <View style={s.statStrip}>
+      <View style={s.statItem}>
+        <Text style={s.statLabel}>Клиенти топ 20</Text>
+        <Text style={s.statValue}>{fmtNum(report.topClients.length)}</Text>
+      </View>
+      <View style={s.statItem}>
+        <Text style={s.statLabel}>Уникални общо</Text>
+        <Text style={s.statValue}>{fmtNum(sum.uniqueCustomers)}</Text>
+      </View>
+      <View style={s.statItem}>
+        <Text style={s.statLabel}>Оборот топ 20</Text>
+        <Text style={s.statValue}>{fmtEuro(sum.topClientsRevenue)}</Text>
+      </View>
+      <View style={s.statItem}>
+        <Text style={s.statLabel}>Дял от оборота</Text>
+        <Text style={s.statValue}>{fmtPct(sum.topClientsRevenueSharePercent)}</Text>
+      </View>
+    </View>
+  );
+}
+
+function TopClientsTablePdf({ clients }: { clients: SalesHistoryReport["topClients"] }) {
+  if (clients.length === 0) {
+    return <Text style={s.tableCellDense}>Няма данни за клиенти в избрания период.</Text>;
+  }
+
+  const head = (label: string, width: number) => (
+    <Text style={[s.tableHeadTextDense, { width }]}>{label}</Text>
+  );
+  const cell = (width: number, content: string, bold = false) => (
+    <Text style={[s.tableCellDense, { width }, bold ? { fontWeight: "bold" } : {}]}>{content}</Text>
+  );
+
+  return (
+    <View style={s.tableMini}>
+      <View style={[s.tableRowDense, s.tableHeadDense]}>
+        {head("#", CLIENT_COL.rank)}
+        {head("Клиент", CLIENT_COL.name)}
+        {head("Телефон", CLIENT_COL.phone)}
+        {head("Бр.", CLIENT_COL.count)}
+        {head("Оборот", CLIENT_COL.revenue)}
+        {head("Марж", CLIENT_COL.margin)}
+        {head("Дял", CLIENT_COL.share)}
+        {head("Период", CLIENT_COL.period)}
+        {head("Монт.", CLIENT_COL.mount)}
+        {head("Марка / продукт", CLIENT_COL.extra)}
+      </View>
+      {clients.map((c, i) => {
+        const period =
+          c.firstSaleDate === c.lastSaleDate
+            ? fmtBgDatePdf(c.firstSaleDate)
+            : `${fmtBgDatePdf(c.firstSaleDate)} – ${fmtBgDatePdf(c.lastSaleDate)}`;
+        const mount = `${c.completedCount}/${c.pendingMountCount}${c.cancelledCount > 0 ? `/${c.cancelledCount}` : ""}`;
+        const marginText =
+          c.marginPercent != null ? `${fmtEuro(c.margin)} (${c.marginPercent}%)` : fmtEuro(c.margin);
+        const extra = [c.topBrand, c.topProduct].filter(Boolean).join(" · ") || "—";
+
+        return (
+          <View key={c.key} style={[s.tableRowDense, i % 2 === 1 ? { backgroundColor: "#f8fafc" } : {}]}>
+            {cell(CLIENT_COL.rank, String(i + 1))}
+            {cell(CLIENT_COL.name, c.name, true)}
+            {cell(CLIENT_COL.phone, c.phone ?? "—")}
+            {cell(CLIENT_COL.count, fmtNum(c.count))}
+            {cell(CLIENT_COL.revenue, fmtEuro(c.revenue))}
+            {cell(CLIENT_COL.margin, marginText)}
+            {cell(CLIENT_COL.share, `${c.revenueSharePercent}%`)}
+            {cell(CLIENT_COL.period, period)}
+            {cell(CLIENT_COL.mount, mount)}
+            {cell(CLIENT_COL.extra, extra)}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
 
 export function SalesHistoryReportPDF({
   report,
   sectionLabel = "История на продажби",
   filtersHint = "Без допълнителни филтри",
   generatedAt,
+  aiAnalysis,
+  aiAnalysisGeneratedAt,
 }: Props) {
   const sum = report.summary;
   const now =
     generatedAt ??
     new Date().toLocaleString("bg-BG", { dateStyle: "medium", timeStyle: "short" });
+
+  const hasTopClients = report.topClients.length > 0;
+  const hasAiAnalysis = Boolean(aiAnalysis?.trim());
 
   const monthShortLabels = report.byMonth.map((m) => shortMonthLabel(m.month));
   const monthCounts = report.byMonth.map((m) => m.count);
@@ -327,11 +453,14 @@ export function SalesHistoryReportPDF({
 
   const mountSlices = report.byMountPhase.map((x) => ({ label: x.label, value: x.count }));
   const statusSlices = report.byOperationalStatus.map((x) => ({ label: x.label, value: x.count }));
+  const top10Clients = report.topClients.slice(0, 10);
+  const trendH = trendChartHeight(report.byMonth.length);
 
   return (
     <Document title="Аналитичен отчет по продажби" author="СМОЛЯНКЛИМА">
-      <Page size="A4" style={s.page}>
+      <Page size="A4" style={s.page} wrap>
         <PageStripe />
+        <PageFooter />
 
         <View style={s.heroHeader}>
           <View style={s.headerTopRow}>
@@ -410,7 +539,7 @@ export function SalesHistoryReportPDF({
             counts={monthCounts.length ? monthCounts : [0]}
             revenues={monthRevenues.length ? monthRevenues : [0]}
             width={chartW}
-            height={205}
+            height={trendH}
           />
         </ChartCard>
 
@@ -419,7 +548,7 @@ export function SalesHistoryReportPDF({
             <ChartCard title="Фаза на монтаж" subtitle="Разпределение">
               <DonutChart
                 items={mountSlices.length ? mountSlices : [{ label: "Няма данни", value: 1 }]}
-                size={112}
+                size={100}
                 centerValue={fmtNum(sum.saleCount)}
                 centerTitle="общо"
               />
@@ -429,7 +558,7 @@ export function SalesHistoryReportPDF({
             <ChartCard title="Оперативен статус" subtitle="Планирани · в процес · изпълнени">
               <DonutChart
                 items={statusSlices.length ? statusSlices : [{ label: "Няма данни", value: 1 }]}
-                size={112}
+                size={100}
                 centerValue={fmtNum(sum.saleCount)}
                 centerTitle="общо"
               />
@@ -437,38 +566,15 @@ export function SalesHistoryReportPDF({
           </View>
           <View style={s.colNarrow}>
             <ChartCard title="Марж %" subtitle="Доставна / оборот">
-              <MarginGauge percent={sum.marginPercent} width={138} />
+              <MarginGauge percent={sum.marginPercent} width={130} />
             </ChartCard>
           </View>
         </View>
 
-        <View style={s.page1Summary}>
-          <View style={[s.page1SummaryTile, { backgroundColor: BR.orangePale, borderColor: "#ffd4bc" }]}>
-            <Text style={s.page1SummaryLabel}>Общ оборот</Text>
-            <Text style={[s.page1SummaryValue, { color: BR.orange }]}>{fmtEuro(sum.totalRevenue)}</Text>
-          </View>
-          <View style={[s.page1SummaryTile, { backgroundColor: BR.bluePale, borderColor: "#b8ecf8" }]}>
-            <Text style={s.page1SummaryLabel}>Обща доставна</Text>
-            <Text style={[s.page1SummaryValue, { color: BR.blue }]}>{fmtEuro(sum.totalPurchase)}</Text>
-          </View>
-          <View style={[s.page1SummaryTile, { backgroundColor: BR.orangePale, borderColor: "#ffd4bc" }]}>
-            <Text style={s.page1SummaryLabel}>Нетен марж</Text>
-            <Text style={[s.page1SummaryValue, { color: BR.orange }]}>{fmtEuro(sum.totalMargin)}</Text>
-          </View>
-        </View>
-
-        <PageFooter page={1} total={TOTAL_PAGES} />
-      </Page>
-
-      <Page size="A4" style={s.page}>
-        <PageStripe />
-
-        <View style={s.miniHeader}>
-          <Text style={s.miniTitle}>Финансов анализ и класации</Text>
-          <Text style={s.miniMeta}>
-            {sectionLabel} · {fmtNum(report.totalMatching)} продажби
-          </Text>
-        </View>
+        <SectionHeader
+          title="Финансов анализ и класации"
+          meta={`${sectionLabel} · ${fmtNum(report.totalMatching)} продажби`}
+        />
 
         <ChartCard title="Оборот срещу доставна цена" subtitle="Месечно сравнение (€)">
           <GroupedBarChart
@@ -478,7 +584,7 @@ export function SalesHistoryReportPDF({
             nameA="Оборот"
             nameB="Доставна"
             width={chartW}
-            height={148}
+            height={Math.min(132, trendH - 10)}
           />
         </ChartCard>
 
@@ -489,7 +595,7 @@ export function SalesHistoryReportPDF({
                 labels={report.priceBuckets.length ? report.priceBuckets.map((b) => b.label) : ["—"]}
                 values={report.priceBuckets.length ? report.priceBuckets.map((b) => b.count) : [0]}
                 width={175}
-                height={115}
+                height={102}
                 color={BR.orange}
               />
             </ChartCard>
@@ -509,6 +615,7 @@ export function SalesHistoryReportPDF({
                 values={report.bySupplier.map((x) => x.revenue)}
                 displayValues={report.bySupplier.map((x) => fmtEuro(x.revenue))}
                 color={BR.blueLight}
+                dense
               />
             </ChartCard>
           </View>
@@ -519,6 +626,7 @@ export function SalesHistoryReportPDF({
                 values={report.byBrand.map((x) => x.revenue)}
                 displayValues={report.byBrand.map((x) => fmtEuro(x.revenue))}
                 color={BR.orange}
+                dense
               />
             </ChartCard>
           </View>
@@ -530,37 +638,45 @@ export function SalesHistoryReportPDF({
             values={report.byProduct.map((x) => x.count)}
             displayValues={report.byProduct.map((x) => `${fmtNum(x.count)} бр.`)}
             color={BR.blue}
+            dense
           />
         </ChartCard>
 
-        <View style={s.summaryBand}>
-          <View style={[s.summaryTile, { backgroundColor: BR.orangePale, borderColor: "#ffd4bc" }]}>
-            <Text style={s.summaryTileLabel}>Общ оборот</Text>
-            <Text style={[s.summaryTileValue, { color: BR.orange }]}>{fmtEuro(sum.totalRevenue)}</Text>
-          </View>
-          <View style={[s.summaryTile, { backgroundColor: BR.bluePale, borderColor: "#b8ecf8" }]}>
-            <Text style={s.summaryTileLabel}>Обща доставна</Text>
-            <Text style={[s.summaryTileValue, { color: BR.blue }]}>{fmtEuro(sum.totalPurchase)}</Text>
-          </View>
-          <View style={[s.summaryTile, { backgroundColor: BR.orangePale, borderColor: "#ffd4bc" }]}>
-            <Text style={s.summaryTileLabel}>Нетен марж</Text>
-            <Text style={[s.summaryTileValue, { color: BR.orange }]}>{fmtEuro(sum.totalMargin)}</Text>
-          </View>
-          <View style={[s.summaryTile, { backgroundColor: BR.bluePale, borderColor: "#b8ecf8" }]}>
-            <Text style={s.summaryTileLabel}>Марж %</Text>
-            <Text style={[s.summaryTileValue, { color: BR.blue }]}>{fmtPct(sum.marginPercent)}</Text>
-          </View>
-          <View style={[s.summaryTile, { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" }]}>
-            <Text style={s.summaryTileLabel}>Завършени монтажи</Text>
-            <Text style={[s.summaryTileValue, { color: "#15803d" }]}>{fmtNum(sum.completedMountCount)}</Text>
-          </View>
-          <View style={[s.summaryTile, { backgroundColor: "#fef2f2", borderColor: "#fecaca" }]}>
-            <Text style={s.summaryTileLabel}>Отказани</Text>
-            <Text style={[s.summaryTileValue, { color: "#b91c1c" }]}>{fmtNum(sum.cancelledCount)}</Text>
-          </View>
-        </View>
+        {hasTopClients ? (
+          <>
+            <View break />
+            <SectionHeader
+              title="Топ 20 клиенти"
+              meta={`оборот топ 20: ${fmtEuro(sum.topClientsRevenue)}${sum.topClientsRevenueSharePercent != null ? ` (${sum.topClientsRevenueSharePercent}%)` : ""}`}
+            />
+            <TopClientsSummaryStrip report={report} sum={sum} />
 
-        <PageFooter page={2} total={TOTAL_PAGES} />
+            <ChartCard title="Топ 10 клиенти" subtitle="По оборот € · от най-голям към най-малък">
+              <HorizontalBarChart
+                labels={top10Clients.map((x) => x.name)}
+                values={top10Clients.map((x) => x.revenue)}
+                displayValues={top10Clients.map((x) => fmtEuro(x.revenue))}
+                color={BR.blueLight}
+                dense
+              />
+            </ChartCard>
+
+            <ChartCard title="Детайлна таблица" subtitle="Пълни имена · оборот · марж · период · марка и продукт">
+              <TopClientsTablePdf clients={report.topClients} />
+            </ChartCard>
+          </>
+        ) : null}
+
+        {hasAiAnalysis ? (
+          <>
+            <View break />
+            <SectionHeader
+              title="AI аналитичен анализ"
+              meta={`${sectionLabel}${aiAnalysisGeneratedAt ? ` · ${aiAnalysisGeneratedAt}` : ""}`}
+            />
+            <SalesReportAiAnalysisPdf text={aiAnalysis!.trim()} generatedAt={aiAnalysisGeneratedAt} />
+          </>
+        ) : null}
       </Page>
     </Document>
   );

@@ -1,3 +1,5 @@
+import { canonicalPhoneDigits } from "@/lib/admin/phoneSearchPattern";
+
 export type SaleReportRow = {
   id: string;
   status: string;
@@ -13,6 +15,26 @@ export type SaleReportRow = {
     name?: string | null;
     brands?: { name?: string | null } | { name?: string | null }[] | null;
   } | null;
+};
+
+export type SalesReportClientRow = {
+  key: string;
+  name: string;
+  phone: string | null;
+  count: number;
+  revenue: number;
+  purchase: number;
+  margin: number;
+  avgSale: number;
+  revenueSharePercent: number;
+  marginPercent: number | null;
+  firstSaleDate: string | null;
+  lastSaleDate: string | null;
+  pendingMountCount: number;
+  completedCount: number;
+  cancelledCount: number;
+  topBrand: string | null;
+  topProduct: string | null;
 };
 
 export type SalesHistoryReport = {
@@ -36,6 +58,8 @@ export type SalesHistoryReport = {
     uniqueCustomers: number;
     minSale: number | null;
     maxSale: number | null;
+    topClientsRevenue: number;
+    topClientsRevenueSharePercent: number | null;
   };
   byMonth: Array<{ month: string; label: string; count: number; revenue: number; purchase: number; margin: number }>;
   byMountPhase: Array<{ key: string; label: string; count: number }>;
@@ -43,6 +67,7 @@ export type SalesHistoryReport = {
   bySupplier: Array<{ name: string; count: number; revenue: number }>;
   byBrand: Array<{ name: string; count: number; revenue: number }>;
   byProduct: Array<{ name: string; count: number; revenue: number }>;
+  topClients: SalesReportClientRow[];
   priceBuckets: Array<{ label: string; count: number }>;
   revenueVsPurchaseMonthly: Array<{ month: string; label: string; revenue: number; purchase: number }>;
 };
@@ -94,6 +119,121 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: "Отказана",
 };
 
+function saleDateIso(row: SaleReportRow): string | null {
+  return row.completed_at ?? row.due_date ?? null;
+}
+
+function clientGroupKey(row: SaleReportRow): string {
+  const phone = canonicalPhoneDigits(row.customer_phone);
+  if (phone.length >= 8) return `p:${phone}`;
+  const name = row.customer_name?.trim().toLowerCase();
+  if (name && name.length >= 2) return `n:${name}`;
+  return `u:${row.id}`;
+}
+
+function displayClientName(row: SaleReportRow): string {
+  const name = row.customer_name?.trim();
+  if (name) return name;
+  const phone = row.customer_phone?.trim();
+  if (phone) return phone;
+  return "Без име";
+}
+
+function displayClientPhone(row: SaleReportRow): string | null {
+  const phone = row.customer_phone?.trim();
+  return phone || null;
+}
+
+function bumpCountMap(map: Map<string, number>, key: string) {
+  map.set(key, (map.get(key) ?? 0) + 1);
+}
+
+function topKeyFromCountMap(map: Map<string, number>): string | null {
+  let best: string | null = null;
+  let bestCount = 0;
+  for (const [key, count] of map) {
+    if (count > bestCount) {
+      best = key;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+type ClientAgg = {
+  key: string;
+  name: string;
+  phone: string | null;
+  count: number;
+  revenue: number;
+  purchase: number;
+  purchaseRows: number;
+  pendingMountCount: number;
+  completedCount: number;
+  cancelledCount: number;
+  firstSaleDate: string | null;
+  lastSaleDate: string | null;
+  brandCounts: Map<string, number>;
+  productCounts: Map<string, number>;
+};
+
+function bumpClientAgg(map: Map<string, ClientAgg>, row: SaleReportRow, revenue: number, purchase: number | null) {
+  const key = clientGroupKey(row);
+  const cur =
+    map.get(key) ??
+    ({
+      key,
+      name: displayClientName(row),
+      phone: displayClientPhone(row),
+      count: 0,
+      revenue: 0,
+      purchase: 0,
+      purchaseRows: 0,
+      pendingMountCount: 0,
+      completedCount: 0,
+      cancelledCount: 0,
+      firstSaleDate: null,
+      lastSaleDate: null,
+      brandCounts: new Map(),
+      productCounts: new Map(),
+    } satisfies ClientAgg);
+
+  cur.count += 1;
+  cur.revenue += revenue;
+  if (purchase != null) {
+    cur.purchase += purchase;
+    cur.purchaseRows += 1;
+  }
+
+  const rowName = row.customer_name?.trim();
+  if (rowName && (rowName.length > cur.name.length || cur.name === "Без име")) {
+    cur.name = rowName;
+  }
+  const rowPhone = displayClientPhone(row);
+  if (rowPhone && !cur.phone) cur.phone = rowPhone;
+
+  const mp = mountPhaseKey(row);
+  if (mp === "pending_mount") cur.pendingMountCount += 1;
+  if (mp === "completed") cur.completedCount += 1;
+  if (mp === "cancelled") cur.cancelledCount += 1;
+
+  const saleDate = saleDateIso(row);
+  if (saleDate) {
+    if (!cur.firstSaleDate || saleDate < cur.firstSaleDate) cur.firstSaleDate = saleDate;
+    if (!cur.lastSaleDate || saleDate > cur.lastSaleDate) cur.lastSaleDate = saleDate;
+  }
+
+  const brand = brandName(row);
+  if (brand) bumpCountMap(cur.brandCounts, brand);
+  bumpCountMap(cur.productCounts, productName(row));
+
+  map.set(key, cur);
+}
+
+function roundMoney(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 function bumpMap(map: Map<string, number>, key: string, delta = 1) {
   map.set(key, (map.get(key) ?? 0) + delta);
 }
@@ -128,6 +268,7 @@ export function computeSalesHistoryReport(
   const brandMap = new Map<string, { count: number; revenue: number }>();
   const productMap = new Map<string, { count: number; revenue: number }>();
   const bucketMap = new Map<string, number>();
+  const clientMap = new Map<string, ClientAgg>();
 
   const BUCKETS = [
     { max: 500, label: "до €500" },
@@ -155,8 +296,9 @@ export function computeSalesHistoryReport(
 
     bumpMap(statusMap, row.status || "planned");
 
-    const cust = (row.customer_phone ?? row.customer_name ?? "").trim().toLowerCase();
-    if (cust) customerKeys.add(cust);
+    const custKey = clientGroupKey(row);
+    if (!custKey.startsWith("u:")) customerKeys.add(custKey);
+    bumpClientAgg(clientMap, row, revenue, purchase);
 
     if (Number.isFinite(revenue)) {
       minSale = minSale == null ? revenue : Math.min(minSale, revenue);
@@ -207,6 +349,40 @@ export function computeSalesHistoryReport(
   const topN = <T extends { revenue: number }>(arr: T[], n: number) =>
     [...arr].sort((a, b) => b.revenue - a.revenue).slice(0, n);
 
+  const topNByCount = <T extends { count: number }>(arr: T[], n: number) =>
+    [...arr].sort((a, b) => b.count - a.count).slice(0, n);
+
+  const topClients: SalesReportClientRow[] = [...clientMap.values()]
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 20)
+    .map((c) => {
+      const margin = c.purchaseRows > 0 ? c.revenue - c.purchase : 0;
+      return {
+        key: c.key,
+        name: c.name,
+        phone: c.phone,
+        count: c.count,
+        revenue: roundMoney(c.revenue),
+        purchase: roundMoney(c.purchase),
+        margin: roundMoney(margin),
+        avgSale: c.count ? roundMoney(c.revenue / c.count) : 0,
+        revenueSharePercent: totalRevenue > 0 ? roundMoney((c.revenue / totalRevenue) * 1000) / 10 : 0,
+        marginPercent:
+          c.purchaseRows > 0 && c.revenue > 0 ? roundMoney((margin / c.revenue) * 1000) / 10 : null,
+        firstSaleDate: c.firstSaleDate,
+        lastSaleDate: c.lastSaleDate,
+        pendingMountCount: c.pendingMountCount,
+        completedCount: c.completedCount,
+        cancelledCount: c.cancelledCount,
+        topBrand: topKeyFromCountMap(c.brandCounts),
+        topProduct: topKeyFromCountMap(c.productCounts),
+      };
+    });
+
+  const topClientsRevenue = roundMoney(topClients.reduce((acc, c) => acc + c.revenue, 0));
+  const topClientsRevenueSharePercent =
+    totalRevenue > 0 ? roundMoney((topClientsRevenue / totalRevenue) * 1000) / 10 : null;
+
   return {
     totalMatching,
     sampledCount: saleCount,
@@ -228,6 +404,8 @@ export function computeSalesHistoryReport(
       uniqueCustomers: customerKeys.size,
       minSale,
       maxSale,
+      topClientsRevenue,
+      topClientsRevenueSharePercent,
     },
     byMonth,
     byMountPhase: [...mountMap.entries()].map(([key, count]) => ({
@@ -248,10 +426,11 @@ export function computeSalesHistoryReport(
       [...brandMap.entries()].map(([name, v]) => ({ name, count: v.count, revenue: Math.round(v.revenue * 100) / 100 })),
       8,
     ),
-    byProduct: topN(
+    byProduct: topNByCount(
       [...productMap.entries()].map(([name, v]) => ({ name, count: v.count, revenue: Math.round(v.revenue * 100) / 100 })),
       8,
     ),
+    topClients,
     priceBuckets: BUCKETS.map((b) => ({ label: b.label, count: bucketMap.get(b.label) ?? 0 })).filter((b) => b.count > 0),
     revenueVsPurchaseMonthly: byMonth.map((m) => ({
       month: m.month,

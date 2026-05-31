@@ -40,8 +40,10 @@ const cs = StyleSheet.create({
   chartLegendItem: { flexDirection: "row", alignItems: "center", gap: 3 },
   chartLegendText: { fontFamily: PDF_FONT, fontSize: 7, color: CHART.ink },
   hBarRow: { marginBottom: 5 },
+  hBarRowDense: { marginBottom: 2 },
   hBarTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   hBarLabel: { fontFamily: PDF_FONT, fontSize: 7, fontWeight: "bold", color: CHART.ink, flex: 1, paddingRight: 6 },
+  hBarLabelDense: { fontFamily: PDF_FONT, fontSize: 6.5, fontWeight: "bold", color: CHART.ink, flex: 1, paddingRight: 4 },
   hBarValue: { fontFamily: PDF_FONT, fontSize: 7, color: CHART.muted },
   hBarTrack: { height: 7, backgroundColor: CHART.grid, borderRadius: 3, marginTop: 2 },
   hBarFill: { height: 7, borderRadius: 3 },
@@ -166,7 +168,8 @@ export function MarginGauge({ percent, width = 140 }: { percent: number | null; 
       <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
         <Defs>
           <LinearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <Stop offset="0%" stopColor={CHART.blueLight} />
+            <Stop offset="0%" stopColor={CHART.orangeLight} />
+            <Stop offset="50%" stopColor={CHART.orangeMid} />
             <Stop offset="100%" stopColor={CHART.orange} />
           </LinearGradient>
         </Defs>
@@ -398,25 +401,36 @@ export function HorizontalBarChart({
   values,
   displayValues,
   color = CHART.orange,
+  dense = false,
 }: {
   labels: string[];
   values: number[];
   displayValues?: string[];
   color?: string;
+  /** По-компактни редове — за топ клиенти и дълги списъци. */
+  dense?: boolean;
 }) {
-  const maxVal = Math.max(...values, 1);
+  const rows = labels
+    .map((label, i) => ({
+      label: label?.trim() || "—",
+      value: values[i] ?? 0,
+      display: displayValues?.[i],
+    }))
+    .filter((row) => row.label !== "—" || row.value > 0);
+
+  const maxVal = Math.max(...rows.map((r) => r.value), 1);
 
   return (
     <View>
-      {values.map((v, i) => {
-        const pct = Math.max(5, (v / maxVal) * 100);
+      {rows.map((row, i) => {
+        const pct = Math.max(4, (row.value / maxVal) * 100);
         return (
-          <View key={i} style={cs.hBarRow} wrap={false}>
+          <View key={`${i}-${row.label}`} style={dense ? cs.hBarRowDense : cs.hBarRow}>
             <View style={cs.hBarTop}>
-              <Text style={cs.hBarLabel}>
-                {i + 1}. {labels[i] ?? "—"}
+              <Text style={dense ? cs.hBarLabelDense : cs.hBarLabel}>
+                {i + 1}. {row.label}
               </Text>
-              <Text style={cs.hBarValue}>{displayValues?.[i] ?? String(v)}</Text>
+              <Text style={cs.hBarValue}>{row.display ?? String(row.value)}</Text>
             </View>
             <View style={cs.hBarTrack}>
               <View style={[cs.hBarFill, { width: `${pct}%`, backgroundColor: color }]} />

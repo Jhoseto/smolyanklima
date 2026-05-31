@@ -2,6 +2,7 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminDb } from "@/lib/admin/db";
+import { authErrorResponse, requireOfficeStaffSession } from "@/lib/admin/authGuard";
 import { logAdminActivity } from "@/lib/admin/audit";
 import {
   ContactPhoneInputSchema,
@@ -283,6 +284,64 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   });
 
   return withCors(req, NextResponse.json({ data }));
+}
+
+export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  let session;
+  try {
+    session = await requireOfficeStaffSession();
+  } catch (e) {
+    const err = authErrorResponse(e);
+    return withCors(req, NextResponse.json({ error: err.message }, { status: err.status }));
+  }
+
+  const { id } = await ctx.params;
+  const supabase = session.db;
+
+  const { data: contact, error: cErr } = await supabase
+    .from("contacts")
+    .select("id,full_name,phone,contact_kind")
+    .eq("id", id)
+    .maybeSingle();
+  if (cErr) return withCors(req, NextResponse.json({ error: cErr.message }, { status: 500 }));
+  if (!contact) return withCors(req, NextResponse.json({ error: "Контактът не е намерен" }, { status: 404 }));
+
+  const [{ count: linkedWorkItems }, { count: linkedProducts }, { count: linkedAccessories }] = await Promise.all([
+    supabase.from("work_items").select("id", { count: "exact", head: true }).eq("contact_id", id),
+    supabase.from("products").select("id", { count: "exact", head: true }).eq("supplier_id", id),
+    supabase.from("accessories").select("id", { count: "exact", head: true }).eq("supplier_id", id),
+  ]);
+
+  const { error: dErr } = await supabase.from("contacts").delete().eq("id", id);
+  if (dErr) return withCors(req, NextResponse.json({ error: dErr.message }, { status: 500 }));
+
+  await logAdminActivity({
+    action: "contact.delete",
+    entityType: "contact",
+    entityId: id,
+    details: {
+      fullName: (contact as any).full_name,
+      contactKind: (contact as any).contact_kind,
+      linkedWorkItems: linkedWorkItems ?? 0,
+      linkedProducts: linkedProducts ?? 0,
+      linkedAccessories: linkedAccessories ?? 0,
+    },
+  });
+
+  return withCors(
+    req,
+    NextResponse.json({
+      ok: true,
+      data: {
+        id,
+        unlinked: {
+          workItems: linkedWorkItems ?? 0,
+          products: linkedProducts ?? 0,
+          accessories: linkedAccessories ?? 0,
+        },
+      },
+    }),
+  );
 }
 
 /**

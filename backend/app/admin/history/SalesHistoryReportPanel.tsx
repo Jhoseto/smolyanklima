@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import ReactECharts from "echarts-for-react";
 import type { EChartsOption } from "echarts";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeSanitize from "rehype-sanitize";
 import {
   BarChart3,
   ChevronDown,
@@ -22,7 +25,17 @@ import {
   FileDown,
 } from "lucide-react";
 import { Button } from "../ui";
-import type { SalesHistoryReport } from "@/lib/admin/computeSalesHistoryReport";
+import type { SalesHistoryReport, SalesReportClientRow } from "@/lib/admin/computeSalesHistoryReport";
+import {
+  loadSalesReportAnalysisCache,
+  saveSalesReportAnalysisCache,
+} from "./salesReportAnalysisCache";
+import {
+  analysisEmptyHint,
+  analysisLoadingMessage,
+  analysisSubtitleHint,
+  inferAnalysisProfile,
+} from "@/lib/admin/salesReportAiAnalysis";
 
 /** Точни brand цветове — съвпадат с tailwind brand-orange / brand-blue */
 const C = {
@@ -107,6 +120,16 @@ function gradOrangeH(): object {
       { offset: 1, color: C.orangeMid },
     ],
   };
+}
+
+/** Две половини — оранжев и син gradient отделно, без смесване в „ръждив“ тон. */
+function BrandSplitStripe({ className = "h-1" }: { className?: string }) {
+  return (
+    <div className={`flex overflow-hidden ${className}`}>
+      <div className="flex-1 bg-gradient-to-r from-[#FF4D00] via-[#FF6A00] to-[#FF2A4D]" />
+      <div className="flex-1 bg-gradient-to-r from-[#0077B6] via-[#00B4D8] to-[#2cc1e6]" />
+    </div>
+  );
 }
 
 function fmtEuro(n: number | null | undefined): string {
@@ -356,13 +379,108 @@ function buildPieOption(items: { label: string; count: number }[], centerValue?:
   };
 }
 
+function fmtBgDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("bg-BG");
+}
+
+function buildTopClientsChart(clients: SalesReportClientRow[]): EChartsOption {
+  const top10 = [...clients].slice(0, 10);
+  return buildHBarOption(
+    top10.map((c) => ({ name: c.name, revenue: c.revenue, count: c.count })),
+    "revenue",
+    "blue",
+    { fullLabels: true },
+  );
+}
+
+function TopClientsTable({ clients }: { clients: SalesReportClientRow[] }) {
+  if (clients.length === 0) {
+    return (
+      <p className="py-8 text-center text-sm font-semibold text-slate-500">Няма данни за клиенти в избрания период.</p>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto rounded-xl border border-slate-100">
+      <table className="min-w-[980px] w-full text-left text-[11px]">
+        <thead>
+          <tr className="bg-gradient-to-r from-[#0077B6] to-[#00B4D8] text-white">
+            <th className="px-2.5 py-2 font-bold">#</th>
+            <th className="px-2.5 py-2 font-bold">Клиент</th>
+            <th className="px-2.5 py-2 font-bold">Телефон</th>
+            <th className="px-2.5 py-2 font-bold text-right">Продажби</th>
+            <th className="px-2.5 py-2 font-bold text-right">Оборот</th>
+            <th className="px-2.5 py-2 font-bold text-right">Марж</th>
+            <th className="px-2.5 py-2 font-bold text-right">Ср. продажба</th>
+            <th className="px-2.5 py-2 font-bold text-right">Дял</th>
+            <th className="px-2.5 py-2 font-bold">Първа / последна</th>
+            <th className="px-2.5 py-2 font-bold">Монтаж</th>
+            <th className="px-2.5 py-2 font-bold">Топ марка</th>
+            <th className="px-2.5 py-2 font-bold">Топ продукт</th>
+          </tr>
+        </thead>
+        <tbody>
+          {clients.map((c, idx) => (
+            <tr
+              key={c.key}
+              className={`border-t border-slate-100 ${idx % 2 === 1 ? "bg-slate-50/80" : "bg-white"} hover:bg-[#e6f9fd]/40 transition-colors`}
+            >
+              <td className="px-2.5 py-2 font-black text-slate-400 tabular-nums">{idx + 1}</td>
+              <td className="px-2.5 py-2 font-bold text-slate-900 whitespace-normal break-words min-w-[140px]">
+                {c.name}
+              </td>
+              <td className="px-2.5 py-2 text-slate-600 whitespace-nowrap">{c.phone ?? "—"}</td>
+              <td className="px-2.5 py-2 text-right font-bold text-slate-800 tabular-nums">{fmtNum(c.count)}</td>
+              <td className="px-2.5 py-2 text-right font-black text-[#0077B6] tabular-nums">{fmtEuro(c.revenue)}</td>
+              <td className="px-2.5 py-2 text-right tabular-nums">
+                <span className="font-bold text-[#FF4D00]">{fmtEuro(c.margin)}</span>
+                {c.marginPercent != null ? (
+                  <span className="ml-1 text-[10px] font-semibold text-slate-400">({c.marginPercent}%)</span>
+                ) : null}
+              </td>
+              <td className="px-2.5 py-2 text-right font-semibold text-slate-700 tabular-nums">{fmtEuro(c.avgSale)}</td>
+              <td className="px-2.5 py-2 text-right font-bold text-slate-600 tabular-nums">{c.revenueSharePercent}%</td>
+              <td className="px-2.5 py-2 text-slate-600 whitespace-nowrap">
+                {fmtBgDate(c.firstSaleDate)}
+                <span className="text-slate-300"> · </span>
+                {fmtBgDate(c.lastSaleDate)}
+              </td>
+              <td className="px-2.5 py-2 text-slate-600 whitespace-nowrap">
+                <span className="text-emerald-700 font-semibold">{c.completedCount}</span>
+                <span className="text-slate-300"> / </span>
+                <span className="text-[#0077B6] font-semibold">{c.pendingMountCount}</span>
+                {c.cancelledCount > 0 ? (
+                  <>
+                    <span className="text-slate-300"> / </span>
+                    <span className="text-red-600 font-semibold">{c.cancelledCount}</span>
+                  </>
+                ) : null}
+              </td>
+              <td className="px-2.5 py-2 text-slate-600 whitespace-normal break-words min-w-[100px]">
+                {c.topBrand ?? "—"}
+              </td>
+              <td className="px-2.5 py-2 text-slate-600 whitespace-normal break-words min-w-[120px]">
+                {c.topProduct ?? "—"}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function buildHBarOption(
   items: { name: string; revenue: number; count: number }[],
   valueKey: "revenue" | "count",
   grad: "orange" | "blue",
+  options?: { fullLabels?: boolean },
 ): EChartsOption {
   const sorted = [...items].reverse();
   const g = grad === "orange" ? gradOrangeH() : gradBlueH();
+  const fullLabels = options?.fullLabels === true;
   return {
     animationDuration: 800,
     tooltip: {
@@ -380,7 +498,7 @@ function buildHBarOption(
         }<br/><span style="color:#94a3b8">${row.count} продажби</span>`;
       },
     },
-    grid: { left: 4, right: 20, top: 8, bottom: 4, containLabel: true },
+    grid: { left: fullLabels ? 12 : 4, right: 20, top: 8, bottom: 4, containLabel: true },
     xAxis: {
       type: "value",
       splitLine: { lineStyle: { color: "#f1f5f9", type: "dashed" } },
@@ -391,7 +509,9 @@ function buildHBarOption(
       data: sorted.map((i) => i.name),
       axisLine: { show: false },
       axisTick: { show: false },
-      axisLabel: { color: "#475569", fontSize: 10, width: 92, overflow: "truncate" },
+      axisLabel: fullLabels
+        ? { color: "#475569", fontSize: 10, overflow: "none" }
+        : { color: "#475569", fontSize: 10, width: 92, overflow: "truncate" },
     },
     series: [
       {
@@ -506,11 +626,7 @@ function buildMarginGauge(marginPercent: number | null): EChartsOption {
         axisLine: {
           lineStyle: {
             width: 16,
-            color: [
-              [0.35, C.bluePale],
-              [0.65, C.blue],
-              [1, C.orange],
-            ],
+            color: [[1, "#e2e8f0"]],
           },
         },
         progress: {
@@ -524,8 +640,8 @@ function buildMarginGauge(marginPercent: number | null): EChartsOption {
               x2: 1,
               y2: 0,
               colorStops: [
-                { offset: 0, color: C.blueDeep },
-                { offset: 0.5, color: C.blue },
+                { offset: 0, color: C.orangeLight },
+                { offset: 0.5, color: C.orangeMid },
                 { offset: 1, color: C.orange },
               ],
             },
@@ -579,14 +695,81 @@ export function SalesHistoryReportPanel({
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<SalesHistoryReport | null>(null);
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
+  const [analysisText, setAnalysisText] = useState<string | null>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [analysisGeneratedAt, setAnalysisGeneratedAt] = useState<string | null>(null);
+  const [pdfExporting, setPdfExporting] = useState(false);
 
-  const exportPdf = useCallback(() => {
+  const reportDateRange = useMemo(() => {
     const sp = new URLSearchParams(queryString);
-    sp.set("sectionLabel", sectionLabel);
-    sp.set("filtersHint", filtersHint);
-    if (generatedAt) sp.set("generatedAt", generatedAt);
-    window.open(`/api/admin/work-items/sales-report/pdf?${sp.toString()}`, "_blank");
-  }, [queryString, sectionLabel, filtersHint, generatedAt]);
+    return {
+      from: sp.get("from") ?? undefined,
+      to: sp.get("to") ?? undefined,
+    };
+  }, [queryString]);
+
+  const analysisProfile = useMemo(() => {
+    const stubReport = report ?? ({ byMonth: [] } as Pick<SalesHistoryReport, "byMonth">);
+    return inferAnalysisProfile({
+      report: stubReport as SalesHistoryReport,
+      filtersHint,
+      dateFrom: reportDateRange.from,
+      dateTo: reportDateRange.to,
+    });
+  }, [report, filtersHint, reportDateRange.from, reportDateRange.to]);
+
+  useEffect(() => {
+    const cached = loadSalesReportAnalysisCache(queryString);
+    if (cached) {
+      setAnalysisText(cached.text);
+      setAnalysisGeneratedAt(cached.generatedAt);
+      setAnalysisError(null);
+    } else {
+      setAnalysisText(null);
+      setAnalysisGeneratedAt(null);
+      setAnalysisError(null);
+    }
+  }, [queryString]);
+
+  const exportPdf = useCallback(async () => {
+    setPdfExporting(true);
+    try {
+      const reportParams = Object.fromEntries(new URLSearchParams(queryString).entries());
+      const res = await fetch("/api/admin/work-items/sales-report/pdf", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...reportParams,
+          sectionLabel,
+          filtersHint,
+          generatedAt: generatedAt ?? undefined,
+          aiAnalysis: analysisText?.trim() || undefined,
+          aiAnalysisGeneratedAt: analysisGeneratedAt ?? undefined,
+        }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error((json as { error?: string }).error || "Грешка при PDF експорт");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const stamp = new Date().toISOString().slice(0, 10);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `otchet-prodazhbi-${stamp}.pdf`;
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: unknown) {
+      setError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setPdfExporting(false);
+    }
+  }, [queryString, sectionLabel, filtersHint, generatedAt, analysisText, analysisGeneratedAt]);
 
   const fetchReport = useCallback(async () => {
     setLoading(true);
@@ -598,6 +781,11 @@ export function SalesHistoryReportPanel({
       setReport(json.data as SalesHistoryReport);
       setGeneratedAt(new Date().toLocaleString("bg-BG"));
       setExpanded(true);
+      const cached = loadSalesReportAnalysisCache(queryString);
+      if (cached) {
+        setAnalysisText(cached.text);
+        setAnalysisGeneratedAt(cached.generatedAt);
+      }
     } catch (e: unknown) {
       setError(String(e instanceof Error ? e.message : e));
       setReport(null);
@@ -605,6 +793,39 @@ export function SalesHistoryReportPanel({
       setLoading(false);
     }
   }, [queryString]);
+
+  const generateAnalysis = useCallback(async () => {
+    if (!report || report.summary.saleCount === 0) return;
+    setAnalysisLoading(true);
+    setAnalysisError(null);
+    try {
+      const res = await fetch("/api/admin/work-items/sales-report/analysis", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          report,
+          sectionLabel,
+          filtersHint,
+          dateFrom: reportDateRange.from,
+          dateTo: reportDateRange.to,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((json as { error?: string }).error || "Грешка при AI анализ");
+      const text = String((json as { data?: { text?: string } }).data?.text ?? "").trim();
+      if (!text) throw new Error("AI не върна текст");
+      const at = new Date().toLocaleString("bg-BG");
+      setAnalysisText(text);
+      setAnalysisGeneratedAt(at);
+      saveSalesReportAnalysisCache(queryString, text, at);
+    } catch (e: unknown) {
+      setAnalysisError(String(e instanceof Error ? e.message : e));
+      setAnalysisText(null);
+    } finally {
+      setAnalysisLoading(false);
+    }
+  }, [report, sectionLabel, filtersHint, queryString, reportDateRange.from, reportDateRange.to]);
 
   useEffect(() => {
     if (!open || generateToken <= 0) return;
@@ -619,10 +840,11 @@ export function SalesHistoryReportPanel({
       status: buildPieOption(report.byOperationalStatus),
       suppliers: buildHBarOption(report.bySupplier, "revenue", "blue"),
       brands: buildHBarOption(report.byBrand, "revenue", "orange"),
-      products: buildHBarOption(report.byProduct, "count", "blue"),
+      products: buildHBarOption(report.byProduct, "count", "blue", { fullLabels: true }),
       revPurchase: buildRevenuePurchaseOption(report),
       buckets: buildPriceBucketsOption(report),
       marginGauge: buildMarginGauge(report.summary.marginPercent),
+      topClients: buildTopClientsChart(report.topClients),
     };
   }, [report]);
 
@@ -641,14 +863,19 @@ export function SalesHistoryReportPanel({
       <div className="relative border-b border-white/70 bg-white/50 px-4 py-4 backdrop-blur-md md:px-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#FF4D00] via-[#FF6A00] to-[#0077B6] p-[1px] shadow-lg shadow-[#FF4D00]/25">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#FF4D00] via-[#FF6A00] to-[#FF2A4D] p-[1px] shadow-lg shadow-[#FF4D00]/25">
               <div className="flex h-full w-full items-center justify-center rounded-[15px] bg-white/95">
                 <BarChart3 className="h-6 w-6 text-[#FF4D00]" />
               </div>
             </div>
             <div className="min-w-0">
-              <p className="bg-gradient-to-r from-[#FF4D00] via-[#FF6A00] to-[#0077B6] bg-clip-text text-base font-black tracking-tight text-transparent md:text-lg">
-                Аналитичен отчет
+              <p className="text-base font-black tracking-tight md:text-lg">
+                <span className="bg-gradient-to-r from-[#FF4D00] via-[#FF6A00] to-[#FF2A4D] bg-clip-text text-transparent">
+                  Аналитичен
+                </span>{" "}
+                <span className="bg-gradient-to-r from-[#0077B6] via-[#00B4D8] to-[#2cc1e6] bg-clip-text text-transparent">
+                  отчет
+                </span>
               </p>
               <p className="mt-0.5 text-[11px] font-semibold text-slate-600">{sectionLabel}</p>
               <p className="mt-0.5 truncate text-[10px] font-medium text-slate-500">{filtersHint}</p>
@@ -670,11 +897,11 @@ export function SalesHistoryReportPanel({
                   variant="secondary"
                   size="sm"
                   className="gap-1.5 border-[#FF4D00]/25 bg-white/80 text-[#FF4D00] hover:bg-[#fff3ed]"
-                  disabled={loading}
-                  onClick={exportPdf}
+                  disabled={loading || pdfExporting}
+                  onClick={() => void exportPdf()}
                 >
-                  <FileDown className="h-3.5 w-3.5" />
-                  PDF
+                  <FileDown className={`h-3.5 w-3.5 ${pdfExporting ? "animate-pulse" : ""}`} />
+                  {pdfExporting ? "PDF…" : "PDF"}
                 </Button>
                 <Button
                   variant="secondary"
@@ -713,7 +940,7 @@ export function SalesHistoryReportPanel({
           {loading && (
             <div className="flex flex-col items-center justify-center gap-3 py-20">
               <div className="relative h-14 w-14">
-                <div className="absolute inset-0 animate-spin rounded-full bg-gradient-to-r from-[#FF4D00] to-[#00B4D8] opacity-30 blur-sm" />
+                <div className="absolute inset-0 animate-spin rounded-full bg-gradient-to-r from-[#0077B6] to-[#00B4D8] opacity-30 blur-sm" />
                 <div className="absolute inset-1 flex items-center justify-center rounded-full bg-white">
                   <Loader2 className="h-6 w-6 animate-spin text-[#0077B6]" />
                 </div>
@@ -738,7 +965,7 @@ export function SalesHistoryReportPanel({
           {!loading && !error && report && s && chartOptions && (
             <div className="space-y-4">
               {report.truncated && (
-                <p className="rounded-2xl border border-[#FF6A00]/25 bg-gradient-to-r from-[#fff3ed]/90 to-[#e6f9fd]/50 px-4 py-2.5 text-[11px] font-semibold text-slate-700">
+                <p className="rounded-2xl border border-[#FF6A00]/25 bg-[#fff3ed]/90 px-4 py-2.5 text-[11px] font-semibold text-slate-700">
                   Статистика за първите {fmtNum(report.sampledCount)} от {fmtNum(report.totalMatching)} продажби по избраните критерии.
                 </p>
               )}
@@ -813,6 +1040,114 @@ export function SalesHistoryReportPanel({
                 <ChartCard title="Топ продукти" subtitle="По брой продажби" accent="orange" className="md:col-span-2 xl:col-span-2">
                   <ReactECharts option={chartOptions.products} style={{ height: 290 }} opts={{ renderer: "svg" }} />
                 </ChartCard>
+              </div>
+
+              <ChartCard
+                title="Топ 20 клиенти"
+                subtitle={
+                  s.topClientsRevenueSharePercent != null
+                    ? `По оборот € · топ 20 = ${fmtEuro(s.topClientsRevenue)} (${s.topClientsRevenueSharePercent}% от оборота)`
+                    : "По оборот € · детайлна статистика"
+                }
+                accent="blue"
+              >
+                <div className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-4">
+                  <div className="rounded-xl border border-[#00B4D8]/20 bg-gradient-to-br from-[#e6f9fd]/80 to-white px-3 py-2.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-[#0077B6]">Клиенти в топ 20</p>
+                    <p className="mt-1 font-black text-[#0077B6]">{fmtNum(report.topClients.length)}</p>
+                  </div>
+                  <div className="rounded-xl border border-[#FF4D00]/20 bg-gradient-to-br from-[#fff3ed]/90 to-white px-3 py-2.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-[#FF4D00]">Оборот топ 20</p>
+                    <p className="mt-1 font-black text-[#FF4D00]">{fmtEuro(s.topClientsRevenue)}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Дял от оборота</p>
+                    <p className="mt-1 font-black text-slate-900">
+                      {s.topClientsRevenueSharePercent != null ? `${s.topClientsRevenueSharePercent}%` : "—"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Уникални клиенти</p>
+                    <p className="mt-1 font-black text-slate-900">{fmtNum(s.uniqueCustomers)}</p>
+                  </div>
+                </div>
+
+                {report.topClients.length > 0 && (
+                  <div className="mb-4">
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Топ 10 по оборот</p>
+                    <ReactECharts
+                      option={chartOptions.topClients}
+                      style={{ height: Math.max(300, Math.min(report.topClients.length, 10) * 36) }}
+                      opts={{ renderer: "svg" }}
+                    />
+                  </div>
+                )}
+
+                <p className="mb-2 text-[10px] font-semibold text-slate-500">
+                  Монтаж: <span className="text-emerald-700">завършени</span> / <span className="text-[#0077B6]">чакащи</span> / <span className="text-red-600">отказани</span>
+                </p>
+                <TopClientsTable clients={report.topClients} />
+              </ChartCard>
+
+              <div className="overflow-hidden rounded-2xl border border-white/80 bg-white/90 shadow-[0_8px_32px_rgba(0,119,182,0.06)] backdrop-blur-sm">
+                <BrandSplitStripe />
+                <div className="p-4 md:p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-800">
+                        AI аналитичен текст
+                      </p>
+                      <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-slate-500">
+                        {analysisSubtitleHint(analysisProfile)}
+                      </p>
+                      {analysisGeneratedAt ? (
+                        <p className="mt-1 text-[10px] font-semibold text-[#0077B6]">Генериран: {analysisGeneratedAt}</p>
+                      ) : null}
+                    </div>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="gap-1.5 border-[#FF4D00]/25 bg-gradient-to-r from-[#fff3ed] to-white text-[#FF4D00] hover:bg-[#fff3ed]"
+                      disabled={analysisLoading || loading}
+                      onClick={() => void generateAnalysis()}
+                    >
+                      {analysisLoading ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-3.5 w-3.5" />
+                      )}
+                      {analysisLoading ? "Генериране…" : analysisText ? "Прегенерирай анализ" : "Генерирай AI анализ"}
+                    </Button>
+                  </div>
+
+                  {analysisError ? (
+                    <div className="mt-4 rounded-xl border border-[#FF4D00]/25 bg-[#fff3ed] px-4 py-3 text-sm font-semibold text-[#c63b00]">
+                      {analysisError}
+                    </div>
+                  ) : null}
+
+                  {!analysisText && !analysisLoading && !analysisError ? (
+                    <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-8 text-center">
+                      <Sparkles className="mx-auto h-8 w-8 text-[#FF4D00]/35" />
+                      <p className="mt-2 text-sm font-semibold text-slate-600">{analysisEmptyHint(analysisProfile)}</p>
+                    </div>
+                  ) : null}
+
+                  {analysisLoading ? (
+                    <div className="mt-4 flex items-center gap-3 rounded-xl border border-[#00B4D8]/20 bg-[#e6f9fd]/50 px-4 py-6">
+                      <Loader2 className="h-5 w-5 shrink-0 animate-spin text-[#0077B6]" />
+                      <p className="text-sm font-semibold text-[#0077B6]">{analysisLoadingMessage(analysisProfile)}</p>
+                    </div>
+                  ) : null}
+
+                  {analysisText && !analysisLoading ? (
+                    <div className="prose prose-sm prose-slate mt-4 max-w-none rounded-xl border border-slate-100 bg-gradient-to-br from-white to-slate-50/80 px-4 py-4 md:px-5 md:py-5 prose-headings:font-black prose-headings:tracking-tight prose-h2:mt-5 prose-h2:mb-2 prose-h2:text-base prose-h2:text-[#0077B6] prose-p:leading-relaxed prose-p:text-slate-700 prose-li:text-slate-700 prose-strong:text-slate-900">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>
+                        {analysisText}
+                      </ReactMarkdown>
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </div>
           )}

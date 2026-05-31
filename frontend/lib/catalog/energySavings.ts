@@ -1,4 +1,11 @@
 import type { CatalogProduct } from '../../data/types/product';
+import type { InsulationLevel } from './roomSizing';
+import { roomCoolingLoadKw } from './roomSizing';
+
+export type { InsulationLevel };
+export { roomCoolingLoadKw };
+export type OldUnitTier = 'very_old' | 'old' | 'average' | 'good';
+export type SizingStatus = 'undersized' | 'good' | 'oversized' | 'severely_oversized';
 
 /** КЕВР Решение № Ц-25 от 01.07.2025 — EVN България (Югоизток), с ДДС. */
 export const EVN_TARIFF = {
@@ -11,10 +18,6 @@ export const EVN_TARIFF = {
 
 const DAYS_PER_MONTH = 30;
 const AC_DAY_SHARE_DEFAULT = 0.82;
-
-export type InsulationLevel = 'good' | 'poor';
-export type OldUnitTier = 'very_old' | 'old' | 'average' | 'good';
-export type SizingStatus = 'undersized' | 'good' | 'oversized' | 'severely_oversized';
 
 /** SEER при номинал за стар уред (без inverter mult — инверторът е в k-кривата). */
 export const OLD_TIER_SEER: Record<OldUnitTier, number> = {
@@ -32,12 +35,6 @@ export function evnEffectivePriceEur(dayShare = AC_DAY_SHARE_DEFAULT): number {
   const dayEur = bgnToEur(EVN_TARIFF.dayBgnPerKwh);
   const nightEur = bgnToEur(EVN_TARIFF.nightBgnPerKwh);
   return dayShare * dayEur + (1 - dayShare) * nightEur;
-}
-
-/** Средна термична нужда за поддържане на температура (kW охлаждане). */
-export function roomCoolingLoadKw(areaM2: number, insulation: InsulationLevel): number {
-  const btu = insulation === 'good' ? areaM2 * 180 : areaM2 * 250;
-  return btu / 3412.14;
 }
 
 export function parseCoolingKw(kwStr?: string | null): number | null {
