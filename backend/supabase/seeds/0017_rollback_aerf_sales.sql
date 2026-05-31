@@ -11,6 +11,6 @@ WHERE wi.event_code = 'sale'
   AND wi.notes LIKE 'Импорт AERF VTORA, лист %';
 
 DELETE FROM public.products p
-WHERE p.slug LIKE 'aerf-%';
+WHERE p.slug ~ '^aerf-(europa|japan)-[0-9]+$';
 
 COMMIT;

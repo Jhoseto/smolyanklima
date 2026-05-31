@@ -4,7 +4,7 @@
 -- Редове: 59
 -- product_condition = new, stock_status = in_stock, product_region = europe | japan
 -- Идемпотентност: description LIKE 'Импорт AERF склад, лист %'
--- Rollback: seeds/0019_rollback_aerf_stock.sql
+-- Rollback: seeds/0023_rollback_aerf_stock.sql
 -- ВАЖНО: Един DO блок — пусни целия файл (Ctrl+A → Run).
 -- =====================================================================
 

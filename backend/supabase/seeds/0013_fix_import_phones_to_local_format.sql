@@ -122,9 +122,16 @@ BEGIN
   SET phone = public.fix_bg_phone_display(cp.phone)
   WHERE cp.phone LIKE '+359%'
     AND EXISTS (
-      SELECT 1 FROM public.contacts c
+      SELECT 1
+      FROM public.contacts c
+      JOIN public.work_items wi ON wi.contact_id = c.id AND wi.event_code = 'sale'
       WHERE c.id = cp.contact_id
         AND c.contact_kind = 'client'
+        AND (
+          wi.notes LIKE 'Импорт Book2023, ред %'
+          OR wi.notes LIKE 'Импорт Klimatici2023 VTORA, лист %'
+          OR wi.notes LIKE 'Импорт Klimatici2022 VTORA, лист %'
+        )
     );
 
   GET DIAGNOSTICS v_phones = ROW_COUNT;

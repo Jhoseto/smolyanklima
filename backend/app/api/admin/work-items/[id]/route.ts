@@ -300,6 +300,21 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     }
   }
 
+  if (
+    br.event_code === "sale" &&
+    br.sale_install_state === "pending_mount" &&
+    parsed.data.status === "done" &&
+    parsed.data.saleInstallState !== "completed"
+  ) {
+    return withCors(
+      req,
+      NextResponse.json(
+        { error: "Продажба с чакащ монтаж се завършва само през потвърждение на монтажа." },
+        { status: 400 },
+      ),
+    );
+  }
+
   if (markInstallCancelled && br.sale_work_item_id) {
     const { data: linkedSaleBefore } = await supabase
       .from("work_items")
@@ -314,10 +329,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     }
   }
 
-  const markMountCompletePreview =
-    !markSaleCancelled &&
-    (parsed.data.saleInstallState === "completed" ||
-      (parsed.data.status === "done" && br.event_code === "sale"));
+  const markMountCompletePreview = !markSaleCancelled && parsed.data.saleInstallState === "completed";
 
   const saleHistoryFieldEdit =
     br.event_code === "sale" &&
@@ -390,10 +402,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     patch.cancel_reason = parsed.data.cancelReason ?? null;
   }
 
-  const markMountComplete =
-    !markSaleCancelled &&
-    (parsed.data.saleInstallState === "completed" ||
-      (parsed.data.status === "done" && br.event_code === "sale"));
+  const markMountComplete = !markSaleCancelled && parsed.data.saleInstallState === "completed";
 
   if (markMountComplete && br.event_code === "sale") {
     patch.sale_install_state = "completed";
@@ -593,12 +602,31 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
   const supabase = session.db;
   const { data: existing } = await supabase
     .from("work_items")
-    .select("event_code,title,customer_name,type,installation_work_item_id,product_id,contact_id")
+    .select("event_code,title,customer_name,type,installation_work_item_id,product_id,contact_id,sale_install_state,status,quantity")
     .eq("id", id)
     .maybeSingle();
 
-  let cascadeMeta: { deletedSupplierOrderId?: string | null } = {};
+  let cascadeMeta: { deletedSupplierOrderId?: string | null; restoredProductId?: string | null } = {};
   if (existing?.event_code === "sale") {
+    if (existing.product_id && canRestoreStockForPendingSale(existing)) {
+      try {
+        const result = await restoreProductStockAfterPendingSaleCancel(
+          supabase,
+          existing.product_id,
+          existing.quantity ?? 1,
+        );
+        if (result.restored) cascadeMeta.restoredProductId = result.productId;
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        return withCors(
+          req,
+          NextResponse.json(
+            { error: `Продажбата не беше изтрита: възстановяването на склада не успя (${message})` },
+            { status: 500 },
+          ),
+        );
+      }
+    }
     const cascade = await cascadeDeleteBeforeSaleWorkItem(supabase, {
       id,
       installation_work_item_id: existing.installation_work_item_id,
@@ -607,7 +635,7 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
     if (cascade.error) {
       return withCors(req, NextResponse.json({ error: cascade.error }, { status: 500 }));
     }
-    cascadeMeta = { deletedSupplierOrderId: cascade.deletedSupplierOrderId ?? null };
+    cascadeMeta.deletedSupplierOrderId = cascade.deletedSupplierOrderId ?? null;
   } else if (existing?.event_code === "service_installation") {
     try {
       await deleteAcceptanceProtocolForInstallation(supabase, id, "install_cancelled");
@@ -632,6 +660,7 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
           ...(cascadeMeta.deletedSupplierOrderId
             ? { deleted_supplier_order_id: cascadeMeta.deletedSupplierOrderId }
             : {}),
+          ...(cascadeMeta.restoredProductId ? { restored_product_id: cascadeMeta.restoredProductId } : {}),
         }
       : undefined,
   });
