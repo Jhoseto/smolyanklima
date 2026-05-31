@@ -12,6 +12,8 @@ import { insertProductCatalogStockCalendarEvent } from "@/lib/admin/productCatal
 import { replaceProductImages, upsertProductSpecs, type ImageInput, type SpecsInput } from "@/lib/admin/syncProductChildren";
 import * as catalogBtu from "@/lib/catalog/productBtu";
 import { listAdminAccessories, listAdminCatalogMerged } from "@/lib/admin/adminCatalogList";
+import { applyProductListChipFilters, parseProductListChipFilters } from "@/lib/admin/productListQueryFilters";
+import { CATALOG_VISIBLE_PRODUCTS_OR_FILTER } from "@/lib/admin/productCatalogDisplay";
 import { sanitizeIlikeTerm } from "@/lib/security/sanitizeSearchTerm";
 
 const SpecsSchema = z.object({
@@ -74,11 +76,11 @@ const stripSupplyCols = (sel: string) =>
     .replace(/,purchase_price/g, "");
 const QuerySchema = z.object({
   q: z.string().optional(),
-  condition: z.enum(["new", "used"]).optional(),
-  featured: z.enum(["featured", "regular"]).optional(),
+  condition: z.string().optional(),
+  featured: z.string().optional(),
   /** Само видими / само скрити в публичния каталог (`show_in_public_catalog`). */
-  publicCatalog: z.enum(["visible", "hidden"]).optional(),
-  stockStatus: z.enum(["in_stock", "out_of_stock", "on_order"]).optional(),
+  publicCatalog: z.string().optional(),
+  stockStatus: z.string().optional(),
   stockLocation: z.enum(["showroom", "warehouse"]).optional(),
   productRegion: z.enum(["europe", "japan"]).optional(),
   brandId: z.string().uuid().optional(),
@@ -97,8 +99,8 @@ const QuerySchema = z.object({
   // „всичко закупено между X и Y“ — отчетност към счетоводител/доставчик.
   purchasedFrom: z.string().optional(),
   purchasedTo: z.string().optional(),
-  /** Номинал BTU (хиляди): 7, 9, 12, 14, 18, 24… */
-  btu: z.coerce.number().int().positive().optional(),
+  /** Номинал BTU (хиляди): 7, 9, 12… — един или повече, разделени със запетая. */
+  btu: z.string().optional(),
   /** Климатици (`products`), аксесоари (`accessories`) или обединен списък. */
   catalogKind: z.enum(["climatics", "accessories", "all"]).optional().default("climatics"),
   // Сортиране по дата (created_at) и филтриране по период по нея
@@ -127,6 +129,7 @@ const CreateSchema = z.object({
   typeId: z.string().uuid(),
   productCondition: z.enum(["new", "used"]).optional().default("new"),
   description: z.string().max(5000).optional(),
+  internalNote: z.string().max(5000).optional().nullable(),
   price: z.number().nonnegative(),
   priceWithMount: z.number().nonnegative().optional(),
   indoorUnitSerial: z.string().max(200).optional().nullable(),
@@ -179,12 +182,18 @@ export async function GET(req: NextRequest) {
     page,
     perPage,
   } = parsed.data;
-  const btuFilter = catalogBtu.parseBtuQueryParam(btuRaw !== undefined ? String(btuRaw) : undefined);
+  const chipFilters = parseProductListChipFilters({
+    condition,
+    stockStatus,
+    featured,
+    publicCatalog,
+  });
+  const btuFilters = catalogBtu.parseBtuCsvParam(btuRaw);
   const supabase = await adminDb();
 
   let btuProductIds: string[] | null = null;
-  if (btuFilter != null) {
-    btuProductIds = await catalogBtu.resolveProductIdsForBtu(supabase, btuFilter);
+  if (btuFilters.length > 0) {
+    btuProductIds = await catalogBtu.resolveProductIdsForBtuList(supabase, btuFilters);
     if (btuProductIds.length === 0 && catalogKind !== "all") {
       return withCors(
         req,
@@ -198,7 +207,10 @@ export async function GET(req: NextRequest) {
 
   const sharedListFilters = {
     q,
-    stockStatus,
+    stockStatuses:
+      chipFilters.stockStatuses.length > 0 && chipFilters.stockStatuses.length < 3
+        ? chipFilters.stockStatuses
+        : undefined,
     brandId,
     priceMin,
     priceMax,
@@ -244,12 +256,8 @@ export async function GET(req: NextRequest) {
         query = query.or(searchFields.join(","));
       }
     }
-    if (condition) query = query.eq("product_condition", condition);
-    if (featured === "featured") query = query.eq("is_featured", true);
-    if (featured === "regular") query = query.eq("is_featured", false);
-    if (publicCatalog === "visible") query = query.eq("show_in_public_catalog", true);
-    if (publicCatalog === "hidden") query = query.eq("show_in_public_catalog", false);
-    if (stockStatus) query = query.eq("stock_status", stockStatus);
+    query = applyProductListChipFilters(query, chipFilters) as typeof query;
+    query = query.or(CATALOG_VISIBLE_PRODUCTS_OR_FILTER);
     if (applyStockLocationFilter && stockLocation) query = query.eq("stock_location", stockLocation);
     if (applyRegionFilter && regionFilter) query = query.eq("product_region", regionFilter);
     if (brandId) query = query.eq("brand_id", brandId);
@@ -301,12 +309,8 @@ export async function GET(req: NextRequest) {
           );
         }
       }
-      if (condition) stubQuery = stubQuery.eq("product_condition", condition);
-      if (featured === "featured") stubQuery = stubQuery.eq("is_featured", true);
-      if (featured === "regular") stubQuery = stubQuery.eq("is_featured", false);
-      if (publicCatalog === "visible") stubQuery = stubQuery.eq("show_in_public_catalog", true);
-      if (publicCatalog === "hidden") stubQuery = stubQuery.eq("show_in_public_catalog", false);
-      if (stockStatus) stubQuery = stubQuery.eq("stock_status", stockStatus);
+      stubQuery = applyProductListChipFilters(stubQuery, chipFilters) as typeof stubQuery;
+      stubQuery = stubQuery.or(CATALOG_VISIBLE_PRODUCTS_OR_FILTER);
       if (stockLocation) stubQuery = stubQuery.eq("stock_location", stockLocation);
       if (regionFilter) stubQuery = stubQuery.eq("product_region", regionFilter);
       if (brandId) stubQuery = stubQuery.eq("brand_id", brandId);
@@ -457,6 +461,7 @@ export async function POST(req: NextRequest) {
     model_code: parsed.data.modelCode?.trim() || null,
     product_condition: parsed.data.productCondition,
     description: parsed.data.description,
+    internal_note: parsed.data.internalNote?.trim() || null,
     price: parsed.data.price,
     price_with_mount: parsed.data.priceWithMount,
     indoor_unit_serial: parsed.data.indoorUnitSerial?.trim() || null,
@@ -475,6 +480,8 @@ export async function POST(req: NextRequest) {
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { model_code: _mc, ...insertBaseNoModelCode } = insertBase;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { internal_note: _internalNote, ...insertBaseNoInternalNote } = insertBase;
   const insertVariants: Record<string, unknown>[] = [
     { ...insertBase, stock_location: loc, product_region: reg },
     { ...insertBase, product_region: reg },
@@ -485,6 +492,11 @@ export async function POST(req: NextRequest) {
     { ...insertBaseNoModelCode, product_region: reg },
     { ...insertBaseNoModelCode, stock_location: loc },
     insertBaseNoModelCode,
+    // Fallback за DB без миграция 0077 (`internal_note` колоната липсва).
+    { ...insertBaseNoInternalNote, stock_location: loc, product_region: reg },
+    { ...insertBaseNoInternalNote, product_region: reg },
+    { ...insertBaseNoInternalNote, stock_location: loc },
+    insertBaseNoInternalNote,
   ];
 
   let data: { id: string; slug?: string } | null = null;
@@ -497,7 +509,8 @@ export async function POST(req: NextRequest) {
     const missingLoc = isPostgrestMissingColumn(error, "stock_location");
     const missingReg = isPostgrestMissingColumn(error, "product_region");
     const missingMc = isPostgrestMissingColumn(error, "model_code");
-    if (!missingLoc && !missingReg && !missingMc) break;
+    const missingInternalNote = isPostgrestMissingColumn(error, "internal_note");
+    if (!missingLoc && !missingReg && !missingMc && !missingInternalNote) break;
   }
 
   if (error) {

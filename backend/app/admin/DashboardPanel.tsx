@@ -16,7 +16,7 @@ export type FollowUpStatusKind = "waiting" | "done";
 
 const PANEL_TIPS = {
   openInquiry: "Отвори запитването в пълния списък",
-  completeConsultation: "Маркирай консултацията като завършена",
+  completeConsultation: "Маркирай като завършено",
   viewDetails: "Виж подробности за обаждането",
   openAll: "Отвори пълния списък в CRM",
   close: "Затвори",
@@ -32,6 +32,10 @@ export type DashboardPanelItem = {
   inquiryId?: string;
   /** Чакаща консултация — бутон „Завърши“ в CRM панела. */
   consultationWorkItemId?: string;
+  /** Свързана задача от календара — „Завърши“ маркира задачата. */
+  followUpWorkItemId?: string;
+  /** CRM контакт с планирано обаждане — „Завърши“ нулира follow-up. */
+  contactFollowUpId?: string;
   consultationDueDate?: string | null;
   consultationCustomerName?: string | null;
   consultationCustomerPhone?: string | null;
@@ -199,20 +203,44 @@ export function DashboardPanel({
                         <p className="mt-1.5 text-xs leading-relaxed text-slate-500 line-clamp-3">{item.meta}</p>
                       )}
                       <div className="mt-2 flex flex-wrap items-center gap-2">
-                        {item.consultationWorkItemId &&
-                          item.statusKind === "waiting" &&
+                        {item.statusKind === "waiting" &&
                           !readOnly &&
+                          (item.followUpWorkItemId ?? item.consultationWorkItemId) &&
                           onRequestCompleteConsultation && (
                             <HoverTip tip={PANEL_TIPS.completeConsultation}>
                               <button
                                 type="button"
                                 aria-label={PANEL_TIPS.completeConsultation}
                                 onClick={() => onRequestCompleteConsultation(item)}
-                                disabled={completingConsultationId === item.consultationWorkItemId}
+                                disabled={
+                                  completingConsultationId ===
+                                  (item.followUpWorkItemId ?? item.consultationWorkItemId)
+                                }
                                 className="inline-flex items-center gap-1 rounded-lg border border-green-700 bg-green-600 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-green-700 disabled:opacity-50"
                               >
                                 <CheckCircle2 className="h-3.5 w-3.5" />
-                                {completingConsultationId === item.consultationWorkItemId ? "Запис..." : "Завърши"}
+                                {completingConsultationId ===
+                                (item.followUpWorkItemId ?? item.consultationWorkItemId)
+                                  ? "Запис..."
+                                  : "Завърши"}
+                              </button>
+                            </HoverTip>
+                          )}
+                        {item.statusKind === "waiting" &&
+                          !readOnly &&
+                          item.contactFollowUpId &&
+                          !(item.followUpWorkItemId ?? item.consultationWorkItemId) &&
+                          onRequestCompleteConsultation && (
+                            <HoverTip tip={PANEL_TIPS.completeConsultation}>
+                              <button
+                                type="button"
+                                aria-label={PANEL_TIPS.completeConsultation}
+                                onClick={() => onRequestCompleteConsultation(item)}
+                                disabled={completingConsultationId === item.contactFollowUpId}
+                                className="inline-flex items-center gap-1 rounded-lg border border-green-700 bg-green-600 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-green-700 disabled:opacity-50"
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                {completingConsultationId === item.contactFollowUpId ? "Запис..." : "Завърши"}
                               </button>
                             </HoverTip>
                           )}

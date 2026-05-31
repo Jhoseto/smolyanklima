@@ -11,6 +11,7 @@ type ProductQuickViewData = {
   slug: string;
   name: string;
   description?: string | null;
+  internal_note?: string | null;
   price: number;
   price_with_mount?: number | null;
   old_price?: number | null;
@@ -448,6 +449,14 @@ export function ProductQuickViewModal({ productId, onClose }: { productId: strin
               </div>
 
               {product.description && <p className="mb-5 text-sm leading-relaxed text-gray-600">{product.description}</p>}
+
+              {product.internal_note?.trim() ? (
+                <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                  <h3 className="mb-2 text-xs font-black uppercase tracking-wider text-amber-800">Вътрешна бележка</h3>
+                  <p className="text-sm leading-relaxed text-amber-950 whitespace-pre-line">{product.internal_note}</p>
+                  <p className="mt-2 text-[10px] font-medium text-amber-700/80">Само за екипа — не се вижда в публичния каталог.</p>
+                </div>
+              ) : null}
 
               <div className="mb-5 rounded-2xl bg-gray-50 p-4">
                 <h3 className="mb-3 text-xs font-black uppercase tracking-wider text-gray-500">Технически характеристики</h3>

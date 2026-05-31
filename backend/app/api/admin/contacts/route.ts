@@ -9,13 +9,16 @@ import {
   formatDuplicatePrimaryPhoneMessage,
   isPostgresContactsPhoneUniqueViolation,
 } from "@/lib/admin/contactPhoneDuplicate";
-import { sanitizeIlikeTerm } from "@/lib/security/sanitizeSearchTerm";
+import {
+  buildAdminSearchOrFilter,
+  phoneFlexibleIlikePattern,
+} from "@/lib/admin/phoneSearchPattern";
 
 const QuerySchema = z.object({
   q: z.string().optional(),
   kind: z.enum(["client", "supplier"]).optional(),
   page: z.coerce.number().int().min(1).optional().default(1),
-  perPage: z.coerce.number().int().min(1).max(500).optional().default(30),
+  perPage: z.coerce.number().int().min(1).max(5000).optional().default(30),
 });
 
 const BodySchema = z.object({
@@ -48,12 +51,23 @@ export async function GET(req: NextRequest) {
     .select("id,full_name,phone,email,address,notes,contact_kind,customer_status,next_follow_up_at,last_contacted_at,updated_at,created_at", { count: "exact" });
   if (kind) query = query.eq("contact_kind", kind);
   if (q?.trim()) {
-    const term = sanitizeIlikeTerm(q);
-    if (term) {
-      query = query.or(
-        `full_name.ilike.%${term}%,phone.ilike.%${term}%,email.ilike.%${term}%,address.ilike.%${term}%`,
-      );
+    const orFilter = buildAdminSearchOrFilter(q, {
+      textFields: ["full_name", "phone", "email", "address"],
+      phoneFields: ["phone"],
+    });
+    const phonePattern = phoneFlexibleIlikePattern(q);
+    let extraContactIds: string[] = [];
+    if (phonePattern) {
+      const { data: phoneRows } = await supabase
+        .from("contact_phones")
+        .select("contact_id")
+        .ilike("phone", phonePattern);
+      extraContactIds = [...new Set((phoneRows ?? []).map((row) => row.contact_id as string))];
     }
+    const orParts = [orFilter, extraContactIds.length ? `id.in.(${extraContactIds.join(",")})` : null].filter(
+      Boolean,
+    ) as string[];
+    if (orParts.length) query = query.or(orParts.join(","));
   }
   const from = (page - 1) * perPage;
   const to = from + perPage - 1;
@@ -68,12 +82,23 @@ export async function GET(req: NextRequest) {
       .select("id,full_name,phone,email,address,notes,contact_kind,updated_at,created_at", { count: "exact" });
     if (kind) fallback = fallback.eq("contact_kind", kind);
     if (q?.trim()) {
-      const term = sanitizeIlikeTerm(q);
-      if (term) {
-        fallback = fallback.or(
-          `full_name.ilike.%${term}%,phone.ilike.%${term}%,email.ilike.%${term}%,address.ilike.%${term}%`,
-        );
+      const orFilter = buildAdminSearchOrFilter(q, {
+        textFields: ["full_name", "phone", "email", "address"],
+        phoneFields: ["phone"],
+      });
+      const phonePattern = phoneFlexibleIlikePattern(q);
+      let extraContactIds: string[] = [];
+      if (phonePattern) {
+        const { data: phoneRows } = await supabase
+          .from("contact_phones")
+          .select("contact_id")
+          .ilike("phone", phonePattern);
+        extraContactIds = [...new Set((phoneRows ?? []).map((row) => row.contact_id as string))];
       }
+      const orParts = [orFilter, extraContactIds.length ? `id.in.(${extraContactIds.join(",")})` : null].filter(
+        Boolean,
+      ) as string[];
+      if (orParts.length) fallback = fallback.or(orParts.join(","));
     }
     const fallbackRes = await fallback
       .order("full_name", { ascending: true })

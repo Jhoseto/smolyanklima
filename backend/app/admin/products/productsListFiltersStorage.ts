@@ -4,10 +4,16 @@ import {
 } from "./PriceRangeSlider";
 import type { ProductStockLocation } from "@/lib/admin/productStockLocation";
 import type { ProductRegion } from "@/lib/admin/productRegion";
+import type {
+  FeaturedFilter,
+  ProductConditionFilter,
+  PublicCatalogFilter,
+  StockStatusFilter,
+} from "@/lib/admin/productListQueryFilters";
 
 export const ADMIN_PRODUCTS_LIST_FILTERS_KEY = "sk-admin-products-list-filters-v2";
-/** Един заявка — целият филтриран списък (без странициране в UI). */
-export const ADMIN_PRODUCTS_LIST_FETCH_SIZE = 1000;
+/** Брой артикула на страница в админ таблицата продукти. */
+export const ADMIN_PRODUCTS_LIST_PER_PAGE = 500;
 const LEGACY_PER_PAGE_KEY = "admin-products-per-page";
 const LEGACY_FILTERS_V1_KEY = "sk-admin-products-list-filters-v1";
 
@@ -15,17 +21,17 @@ export type CatalogKindFilter = "climatics" | "accessories" | "all";
 export type SortField = "name" | "price" | "purchase_price" | "product_condition" | "purchased_at";
 export type SortDir = "asc" | "desc";
 export type AdminProductsListFiltersSnapshot = {
-  version: 2;
+  version: 3;
   q: string;
   catalogKind: CatalogKindFilter;
-  condition: "" | "new" | "used";
-  featured: "" | "featured" | "regular";
-  publicCatalog: "" | "visible" | "hidden";
-  stockStatus: "" | "in_stock" | "out_of_stock" | "on_order";
+  conditions: ProductConditionFilter[];
+  featuredFlags: FeaturedFilter[];
+  publicCatalogFlags: PublicCatalogFilter[];
+  stockStatuses: StockStatusFilter[];
   stockLocationFilter: "" | ProductStockLocation;
   productRegionFilter: "" | ProductRegion;
   brandId: string;
-  btuFilter: string;
+  btuFilters: string[];
   typeId: string;
   supplierId: string;
   priceRange: [number, number];
@@ -39,17 +45,17 @@ export type AdminProductsListFiltersSnapshot = {
 };
 
 export const DEFAULT_ADMIN_PRODUCTS_LIST_FILTERS: AdminProductsListFiltersSnapshot = {
-  version: 2,
+  version: 3,
   q: "",
   catalogKind: "climatics",
-  condition: "",
-  featured: "",
-  publicCatalog: "",
-  stockStatus: "",
+  conditions: [],
+  featuredFlags: [],
+  publicCatalogFlags: [],
+  stockStatuses: [],
   stockLocationFilter: "",
   productRegionFilter: "",
   brandId: "",
-  btuFilter: "",
+  btuFilters: [],
   typeId: "",
   supplierId: "",
   priceRange: [ADMIN_PRICE_FILTER_MIN, ADMIN_PRICE_FILTER_MAX],
@@ -72,6 +78,34 @@ function isSortField(v: unknown): v is SortField {
 
 function isSortDir(v: unknown): v is SortDir {
   return v === "asc" || v === "desc";
+}
+
+function parseStringArray(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
+}
+
+function parseConditionArray(raw: unknown): ProductConditionFilter[] {
+  return parseStringArray(raw).filter((x): x is ProductConditionFilter => x === "new" || x === "used");
+}
+
+function parseStockStatusArray(raw: unknown): StockStatusFilter[] {
+  return parseStringArray(raw).filter(
+    (x): x is StockStatusFilter => x === "in_stock" || x === "out_of_stock" || x === "on_order",
+  );
+}
+
+function parseFeaturedArray(raw: unknown): FeaturedFilter[] {
+  return parseStringArray(raw).filter((x): x is FeaturedFilter => x === "featured" || x === "regular");
+}
+
+function parsePublicCatalogArray(raw: unknown): PublicCatalogFilter[] {
+  return parseStringArray(raw).filter((x): x is PublicCatalogFilter => x === "visible" || x === "hidden");
+}
+
+function migrateSingleToArray<T extends string>(value: unknown, allowed: readonly T[]): T[] {
+  if (typeof value !== "string" || !value.trim()) return [];
+  return allowed.includes(value as T) ? [value as T] : [];
 }
 
 function parsePriceRange(raw: unknown): [number, number] {
@@ -108,32 +142,51 @@ export function loadAdminProductsListFilters(): AdminProductsListFiltersSnapshot
       page?: number;
       perPage?: number;
       version?: number;
+      condition?: string;
+      featured?: string;
+      publicCatalog?: string;
+      stockStatus?: string;
+      btuFilter?: string;
     };
     const stockLoc = parsed.stockLocationFilter;
     const region = parsed.productRegionFilter;
 
+    const conditions =
+      parsed.version === 3 && Array.isArray(parsed.conditions)
+        ? parseConditionArray(parsed.conditions)
+        : migrateSingleToArray(parsed.condition, ["new", "used"] as const);
+    const stockStatuses =
+      parsed.version === 3 && Array.isArray(parsed.stockStatuses)
+        ? parseStockStatusArray(parsed.stockStatuses)
+        : migrateSingleToArray(parsed.stockStatus, ["in_stock", "out_of_stock", "on_order"] as const);
+    const featuredFlags =
+      parsed.version === 3 && Array.isArray(parsed.featuredFlags)
+        ? parseFeaturedArray(parsed.featuredFlags)
+        : migrateSingleToArray(parsed.featured, ["featured", "regular"] as const);
+    const publicCatalogFlags =
+      parsed.version === 3 && Array.isArray(parsed.publicCatalogFlags)
+        ? parsePublicCatalogArray(parsed.publicCatalogFlags)
+        : migrateSingleToArray(parsed.publicCatalog, ["visible", "hidden"] as const);
+    const btuFilters =
+      parsed.version === 3 && Array.isArray(parsed.btuFilters)
+        ? parseStringArray(parsed.btuFilters)
+        : typeof parsed.btuFilter === "string" && parsed.btuFilter.trim()
+          ? [parsed.btuFilter.trim()]
+          : [];
+
     return {
-      version: 2,
+      version: 3,
       q: typeof parsed.q === "string" ? parsed.q : "",
       catalogKind: isCatalogKind(parsed.catalogKind) ? parsed.catalogKind : "climatics",
-      condition: parsed.condition === "new" || parsed.condition === "used" ? parsed.condition : "",
-      featured:
-        parsed.featured === "featured" || parsed.featured === "regular" ? parsed.featured : "",
-      publicCatalog:
-        parsed.publicCatalog === "visible" || parsed.publicCatalog === "hidden"
-          ? parsed.publicCatalog
-          : "",
-      stockStatus:
-        parsed.stockStatus === "in_stock" ||
-        parsed.stockStatus === "out_of_stock" ||
-        parsed.stockStatus === "on_order"
-          ? parsed.stockStatus
-          : "",
+      conditions,
+      featuredFlags,
+      publicCatalogFlags,
+      stockStatuses,
       stockLocationFilter:
         stockLoc === "showroom" || stockLoc === "warehouse" ? stockLoc : "",
       productRegionFilter: region === "europe" || region === "japan" ? region : "",
       brandId: typeof parsed.brandId === "string" ? parsed.brandId : "",
-      btuFilter: typeof parsed.btuFilter === "string" ? parsed.btuFilter : "",
+      btuFilters,
       typeId: typeof parsed.typeId === "string" ? parsed.typeId : "",
       supplierId: typeof parsed.supplierId === "string" ? parsed.supplierId : "",
       priceRange: parsePriceRange(parsed.priceRange),

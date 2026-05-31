@@ -9,6 +9,7 @@ import {
   normalizeSupplierOrderRow,
   SUPPLIER_ORDER_SELECT,
 } from "@/lib/admin/supplierOrderRow";
+import { buildAdminSearchOrFilter } from "@/lib/admin/phoneSearchPattern";
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflight(req);
@@ -79,9 +80,11 @@ export async function GET(req: NextRequest) {
     .order("created_at", { ascending: false });
 
   if (q?.trim()) {
-    query = query.or(
-      `title.ilike.%${q.trim()}%,customer_name.ilike.%${q.trim()}%,customer_phone.ilike.%${q.trim()}%,customer_address.ilike.%${q.trim()}%`,
-    );
+    const orFilter = buildAdminSearchOrFilter(q, {
+      textFields: ["title", "customer_name", "customer_phone", "customer_address"],
+      phoneFields: ["customer_phone"],
+    });
+    if (orFilter) query = query.or(orFilter);
   }
   if (status) query = query.eq("status", status);
   else if (phase === "ordered" || phase === "active") {

@@ -54,15 +54,17 @@ const MAX_IMAGES = 4;
 // Включваме `model_code` (миграция 0038). Колоната е по избор —
 // при липсваща се прави fallback към варианти без нея.
 const ADMIN_PRODUCT_DETAIL_SELECT_WITH_LOCATION =
-  "id,slug,name,model_code,brand_id,type_id,product_condition,description,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,show_in_public_catalog,stock_status,stock_location,stock_quantity,sold_quantity,product_region,supplier_order_work_item_id";
+  "id,slug,name,model_code,brand_id,type_id,product_condition,description,internal_note,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,show_in_public_catalog,stock_status,stock_location,stock_quantity,sold_quantity,product_region,supplier_order_work_item_id";
 const ADMIN_PRODUCT_DETAIL_SELECT_BASE =
-  "id,slug,name,model_code,brand_id,type_id,product_condition,description,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,show_in_public_catalog,stock_status,stock_quantity,sold_quantity,product_region,supplier_order_work_item_id";
+  "id,slug,name,model_code,brand_id,type_id,product_condition,description,internal_note,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,show_in_public_catalog,stock_status,stock_quantity,sold_quantity,product_region,supplier_order_work_item_id";
 const ADMIN_PRODUCT_DETAIL_SELECT_NO_REGION =
-  "id,slug,name,model_code,brand_id,type_id,product_condition,description,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,stock_status,stock_location,stock_quantity,sold_quantity";
+  "id,slug,name,model_code,brand_id,type_id,product_condition,description,internal_note,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,stock_status,stock_location,stock_quantity,sold_quantity";
 const ADMIN_PRODUCT_DETAIL_SELECT_NO_REGION_NO_LOC =
-  "id,slug,name,model_code,brand_id,type_id,product_condition,description,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,stock_status,stock_quantity,sold_quantity";
+  "id,slug,name,model_code,brand_id,type_id,product_condition,description,internal_note,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,stock_status,stock_quantity,sold_quantity";
 const ADMIN_PRODUCT_DETAIL_SELECT_NO_MODEL_CODE =
-  "id,slug,name,brand_id,type_id,product_condition,description,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,stock_status,stock_quantity,sold_quantity";
+  "id,slug,name,brand_id,type_id,product_condition,description,internal_note,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,stock_status,stock_quantity,sold_quantity";
+const ADMIN_PRODUCT_DETAIL_SELECT_NO_INTERNAL_NOTE =
+  "id,slug,name,model_code,brand_id,type_id,product_condition,description,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,show_in_public_catalog,stock_status,stock_location,stock_quantity,sold_quantity,product_region,supplier_order_work_item_id";
 
 const UpdateSchema = z
   .object({
@@ -74,6 +76,7 @@ const UpdateSchema = z
   typeId: z.string().uuid().optional(),
   productCondition: z.enum(["new", "used"]).optional(),
   description: z.string().max(5000).optional().nullable(),
+  internalNote: z.string().max(5000).optional().nullable(),
   price: z.number().nonnegative().optional(),
   priceWithMount: z.number().nonnegative().optional().nullable(),
   indoorUnitSerial: z.string().max(200).optional().nullable(),
@@ -129,6 +132,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   // Fallback ако миграция 0038 (model_code) не е приложена.
   if (error && isPostgrestMissingColumn(error, "model_code")) {
     ({ data: row, error } = await supabase.from("products").select(ADMIN_PRODUCT_DETAIL_SELECT_NO_MODEL_CODE).eq("id", id).maybeSingle());
+  }
+  if (error && isPostgrestMissingColumn(error, "internal_note")) {
+    ({ data: row, error } = await supabase.from("products").select(ADMIN_PRODUCT_DETAIL_SELECT_NO_INTERNAL_NOTE).eq("id", id).maybeSingle());
   }
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   if (!row) return withCors(req, NextResponse.json({ error: "Not found" }, { status: 404 }));
@@ -203,6 +209,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   if (parsed.data.typeId !== undefined) patch.type_id = parsed.data.typeId;
   if (parsed.data.productCondition !== undefined) patch.product_condition = parsed.data.productCondition;
   if (parsed.data.description !== undefined) patch.description = parsed.data.description;
+  if (parsed.data.internalNote !== undefined) patch.internal_note = parsed.data.internalNote?.trim() || null;
   const isMaster = session.role === "master_admin";
   if (parsed.data.price !== undefined && isMaster) patch.price = parsed.data.price;
   if (parsed.data.priceWithMount !== undefined && isMaster) patch.price_with_mount = parsed.data.priceWithMount;
@@ -331,6 +338,11 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       const { show_in_public_catalog: _omitPub, ...patchRest4 } = patch;
       ({ data, error } = await supabase.from("products").update(patchRest4).eq("id", id).select("id,slug").maybeSingle());
       delete patch.show_in_public_catalog;
+    }
+    if (error && isPostgrestMissingColumn(error, "internal_note") && "internal_note" in patch) {
+      const { internal_note: _omitIn, ...patchRest5 } = patch;
+      ({ data, error } = await supabase.from("products").update(patchRest5).eq("id", id).select("id,slug").maybeSingle());
+      delete patch.internal_note;
     }
     if (error) {
       console.error("[admin/products][PUT] products.update failed", { id, patch, ...formatSupabaseError(error) });

@@ -628,7 +628,7 @@ export function WorkItemsPlanner({
       }
       await load();
       setConfirmCompleteItem(null);
-      if (item.event_code === "consultation") notifyFollowUpCallsChanged();
+      notifyFollowUpCallsChanged();
     } finally {
       setSavingBusy(false);
     }

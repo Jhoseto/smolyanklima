@@ -15,6 +15,7 @@ import {
 } from "@/lib/admin/restoreProductStockAfterSaleCancel";
 import { syncConsultationContactFollowUp } from "@/lib/work-items/consultation-contact";
 import { isSaleCancelReason } from "@/lib/admin/saleCancelReason";
+import { cascadeDeleteBeforeSaleWorkItem } from "@/lib/admin/deleteSaleWorkItemCascade";
 
 const WORK_ITEM_EVENT_CODES = [
   "item_added",
@@ -48,6 +49,7 @@ const UpdateSchema = z.object({
   quantity: z.number().int().positive().optional(),
   unitPrice: z.number().nonnegative().nullable().optional(),
   totalAmount: z.number().nonnegative().nullable().optional(),
+  purchasePrice: z.number().nonnegative().nullable().optional(),
   saleInstallState: z.enum(["pending_mount", "completed"]).optional().nullable(),
   installationWorkItemId: z.string().uuid().optional().nullable(),
   cancelReason: z.enum(["client_declined", "staff_error"]).optional().nullable(),
@@ -79,12 +81,15 @@ const WORK_ITEM_DETAIL_SELECT = [
   "quantity",
   "unit_price",
   "total_amount",
+  "purchase_price",
+  "supplier_name",
+  "supplier_invoice_number",
   "created_at",
   "completed_at",
   "cancel_reason",
   `products:product_id (
-    id, name, slug, model_code, price, price_with_mount, product_condition,
-    indoor_unit_serial, outdoor_unit_serial, stock_status, stock_quantity,
+    id, name, slug, model_code, price, price_with_mount, purchase_price, product_condition,
+    indoor_unit_serial, outdoor_unit_serial, stock_status, stock_quantity, supplier_invoice_number,
     brands:brand_id (name),
     product_types:type_id (name),
     product_images (url, is_main, sort_order)
@@ -309,6 +314,33 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     }
   }
 
+  const markMountCompletePreview =
+    !markSaleCancelled &&
+    (parsed.data.saleInstallState === "completed" ||
+      (parsed.data.status === "done" && br.event_code === "sale"));
+
+  const saleHistoryFieldEdit =
+    br.event_code === "sale" &&
+    !markSaleCancelled &&
+    !markMountCompletePreview &&
+    parsed.data.status === undefined &&
+    parsed.data.saleInstallState === undefined &&
+    (parsed.data.customerName !== undefined ||
+      parsed.data.customerPhone !== undefined ||
+      parsed.data.customerAddress !== undefined ||
+      parsed.data.purchasePrice !== undefined ||
+      parsed.data.totalAmount !== undefined ||
+      parsed.data.unitPrice !== undefined ||
+      parsed.data.dueDate !== undefined ||
+      parsed.data.notes !== undefined);
+
+  if (saleHistoryFieldEdit && session.role !== "master_admin") {
+    return withCors(
+      req,
+      NextResponse.json({ error: "Само главният администратор може да редактира записи в историята на продажбите." }, { status: 403 }),
+    );
+  }
+
   const patch: Record<string, unknown> = {};
   if (parsed.data.type !== undefined) patch.type = parsed.data.type;
   if (parsed.data.eventCode !== undefined) patch.event_code = parsed.data.eventCode;
@@ -329,9 +361,23 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   if (parsed.data.quantity !== undefined) patch.quantity = parsed.data.quantity;
   if (parsed.data.unitPrice !== undefined) patch.unit_price = parsed.data.unitPrice;
   if (parsed.data.totalAmount !== undefined) patch.total_amount = parsed.data.totalAmount;
+  if (parsed.data.purchasePrice !== undefined) patch.purchase_price = parsed.data.purchasePrice;
   if (parsed.data.saleInstallState !== undefined) patch.sale_install_state = parsed.data.saleInstallState;
   if (parsed.data.installationWorkItemId !== undefined) {
     patch.installation_work_item_id = parsed.data.installationWorkItemId;
+  }
+
+  const saleDateChanged =
+    br.event_code === "sale" &&
+    parsed.data.dueDate !== undefined &&
+    parsed.data.dueDate &&
+    parsed.data.dueDate !== br.due_date;
+
+  if (saleDateChanged && (br.status === "done" || br.sale_install_state === "completed")) {
+    const d = parsed.data.dueDate!.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+      patch.completed_at = new Date(`${d}T10:00:00.000Z`).toISOString();
+    }
   }
 
   if (parsed.data.status === "done") patch.completed_at = new Date().toISOString();
@@ -547,9 +593,30 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
   const supabase = session.db;
   const { data: existing } = await supabase
     .from("work_items")
-    .select("event_code,title,customer_name,type")
+    .select("event_code,title,customer_name,type,installation_work_item_id,product_id,contact_id")
     .eq("id", id)
     .maybeSingle();
+
+  let cascadeMeta: { deletedSupplierOrderId?: string | null } = {};
+  if (existing?.event_code === "sale") {
+    const cascade = await cascadeDeleteBeforeSaleWorkItem(supabase, {
+      id,
+      installation_work_item_id: existing.installation_work_item_id,
+      product_id: existing.product_id,
+    });
+    if (cascade.error) {
+      return withCors(req, NextResponse.json({ error: cascade.error }, { status: 500 }));
+    }
+    cascadeMeta = { deletedSupplierOrderId: cascade.deletedSupplierOrderId ?? null };
+  } else if (existing?.event_code === "service_installation") {
+    try {
+      await deleteAcceptanceProtocolForInstallation(supabase, id, "install_cancelled");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.error("[work-items DELETE] acceptance protocol delete failed:", message);
+    }
+  }
+
   const { error } = await supabase.from("work_items").delete().eq("id", id);
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   await logAdminActivity({
@@ -562,6 +629,9 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
           title: existing.title ?? null,
           customer_name: existing.customer_name ?? null,
           type: existing.type ?? null,
+          ...(cascadeMeta.deletedSupplierOrderId
+            ? { deleted_supplier_order_id: cascadeMeta.deletedSupplierOrderId }
+            : {}),
         }
       : undefined,
   });

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { CATALOG_BTU_OPTIONS } from "@/lib/catalog/productBtu";
 import { SectionTitle, Card, Button, Input, Select, Table, Th, Td, Textarea } from "../ui";
 import { ActiveFilterChipsBar, type ActiveFilterChip } from "./ActiveFilterChipsBar";
@@ -58,7 +58,7 @@ import {
   type ProductRegion,
 } from "@/lib/admin/productRegion";
 import {
-  ADMIN_PRODUCTS_LIST_FETCH_SIZE,
+  ADMIN_PRODUCTS_LIST_PER_PAGE,
   clearAdminProductsListFilters,
   DEFAULT_ADMIN_PRODUCTS_LIST_FILTERS,
   loadAdminProductsListFilters,
@@ -67,6 +67,20 @@ import {
   type SortDir,
   type SortField,
 } from "./productsListFiltersStorage";
+import {
+  buildProductCatalogDisplayRows,
+  filterProductsCatalogItems,
+  isGroupedExhaustedSelectable,
+  productShowsSupplierInvoice,
+} from "@/lib/admin/productCatalogDisplay";
+import {
+  csvParam,
+  toggleChipFilter,
+  type FeaturedFilter,
+  type ProductConditionFilter,
+  type PublicCatalogFilter,
+  type StockStatusFilter,
+} from "@/lib/admin/productListQueryFilters";
 
 export const dynamic = "force-dynamic";
 
@@ -418,10 +432,7 @@ function ProductSearchBox({
   );
 }
 
-// Малък toggle-чип за бързи филтри. Поддържа 4 визуални тона, за да
-// разграничим неутрален/успех/предупреждение/опасност (състояния на
-// продукт). Логиката е изцяло decorative — селекцията се контролира
-// чрез `active` пропа от родителя.
+// Toggle-чип за бързи филтри — клик включва/изключва стойност (multi-select).
 type ChipTone = "neutral" | "success" | "warning" | "danger" | "brand";
 function ChipToggle({
   active,
@@ -485,15 +496,15 @@ export default function AdminProductsPage() {
   const [shareProduct, setShareProduct] = useState<ProductRow | null>(null);
   const [featuredFor, setFeaturedFor] = useState<ProductRow | null>(null);
   const [q, setQ] = useState("");
-  const [condition, setCondition] = useState<"" | "new" | "used">("");
-  const [featured, setFeatured] = useState<"" | "featured" | "regular">("");
-  const [publicCatalog, setPublicCatalog] = useState<"" | "visible" | "hidden">("");
-  const [stockStatus, setStockStatus] = useState<"" | "in_stock" | "out_of_stock" | "on_order">("");
+  const [conditions, setConditions] = useState<ProductConditionFilter[]>([]);
+  const [featuredFlags, setFeaturedFlags] = useState<FeaturedFilter[]>([]);
+  const [publicCatalogFlags, setPublicCatalogFlags] = useState<PublicCatalogFilter[]>([]);
+  const [stockStatuses, setStockStatuses] = useState<StockStatusFilter[]>([]);
   const [stockLocationFilter, setStockLocationFilter] = useState<"" | ProductStockLocation>("");
   const [productRegionFilter, setProductRegionFilter] = useState<"" | ProductRegion>("");
   const [catalogKind, setCatalogKind] = useState<CatalogKindFilter>("climatics");
   const [brandId, setBrandId] = useState("");
-  const [btuFilter, setBtuFilter] = useState("");
+  const [btuFilters, setBtuFilters] = useState<string[]>([]);
   const [typeId, setTypeId] = useState("");
   const [supplierId, setSupplierId] = useState("");
   const [priceRange, setPriceRange] = useState<[number, number]>([
@@ -506,6 +517,7 @@ export default function AdminProductsPage() {
   const [purchasedTo, setPurchasedTo] = useState("");
   const [sortBy, setSortBy] = useState<SortField>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -544,18 +556,69 @@ export default function AdminProductsPage() {
    * При липса на права API връща грешка и UI я показва в червената лента горе.
    */
 
+  const listFiltersKey = useMemo(
+    () =>
+      JSON.stringify({
+        debouncedQ,
+        catalogKind,
+        conditions,
+        featuredFlags,
+        publicCatalogFlags,
+        stockStatuses,
+        stockLocationFilter,
+        productRegionFilter,
+        brandId,
+        btuFilters,
+        typeId,
+        supplierId,
+        priceRange,
+        hasSerial,
+        hasPurchasePrice,
+        purchasedFrom,
+        purchasedTo,
+        sortBy,
+        sortDir,
+      }),
+    [
+      debouncedQ,
+      catalogKind,
+      conditions,
+      featuredFlags,
+      publicCatalogFlags,
+      stockStatuses,
+      stockLocationFilter,
+      productRegionFilter,
+      brandId,
+      btuFilters,
+      typeId,
+      supplierId,
+      priceRange,
+      hasSerial,
+      hasPurchasePrice,
+      purchasedFrom,
+      purchasedTo,
+      sortBy,
+      sortDir,
+    ],
+  );
+
+  const listFiltersKeyRef = useRef(listFiltersKey);
+  const queryPage = listFiltersKeyRef.current !== listFiltersKey ? 1 : page;
+
   const qs = useMemo(() => {
     const sp = new URLSearchParams();
     if (debouncedQ.trim()) sp.set("q", debouncedQ.trim());
     sp.set("catalogKind", catalogKind);
-    if (condition) sp.set("condition", condition);
-    if (featured) sp.set("featured", featured);
-    if (publicCatalog) sp.set("publicCatalog", publicCatalog);
-    if (stockStatus) sp.set("stockStatus", stockStatus);
+    if (conditions.length) sp.set("condition", conditions.join(","));
+    const featuredParam = csvParam(featuredFlags);
+    if (featuredParam) sp.set("featured", featuredParam);
+    const publicCatalogParam = csvParam(publicCatalogFlags);
+    if (publicCatalogParam) sp.set("publicCatalog", publicCatalogParam);
+    if (stockStatuses.length) sp.set("stockStatus", stockStatuses.join(","));
     if (stockLocationFilter) sp.set("stockLocation", stockLocationFilter);
     if (productRegionFilter) sp.set("productRegion", productRegionFilter);
     if (brandId) sp.set("brandId", brandId);
-    if (btuFilter) sp.set("btu", btuFilter);
+    if (btuFilters.length) sp.set("btu", btuFilters.join(","));
     if (typeId) sp.set("typeId", typeId);
     if (supplierId) sp.set("supplierId", supplierId);
     if (priceRange[0] > ADMIN_PRICE_FILTER_MIN) sp.set("priceMin", String(priceRange[0]));
@@ -566,20 +629,20 @@ export default function AdminProductsPage() {
     if (purchasedTo) sp.set("purchasedTo", purchasedTo);
     sp.set("sortBy", sortBy);
     sp.set("sortDir", sortDir);
-    sp.set("page", "1");
-    sp.set("perPage", String(ADMIN_PRODUCTS_LIST_FETCH_SIZE));
+    sp.set("page", String(queryPage));
+    sp.set("perPage", String(ADMIN_PRODUCTS_LIST_PER_PAGE));
     return sp.toString();
   }, [
     debouncedQ,
     catalogKind,
-    condition,
-    featured,
-    publicCatalog,
-    stockStatus,
+    conditions,
+    featuredFlags,
+    publicCatalogFlags,
+    stockStatuses,
     stockLocationFilter,
     productRegionFilter,
     brandId,
-    btuFilter,
+    btuFilters,
     typeId,
     supplierId,
     priceRange,
@@ -589,20 +652,27 @@ export default function AdminProductsPage() {
     purchasedTo,
     sortBy,
     sortDir,
+    queryPage,
   ]);
+
+  useEffect(() => {
+    if (listFiltersKeyRef.current === listFiltersKey) return;
+    listFiltersKeyRef.current = listFiltersKey;
+    setPage(1);
+  }, [listFiltersKey]);
 
   function applySavedListFilters() {
     const s = loadAdminProductsListFilters();
     setQ(s.q);
     setCatalogKind(s.catalogKind);
-    setCondition(s.condition);
-    setFeatured(s.featured);
-    setPublicCatalog(s.publicCatalog);
-    setStockStatus(s.stockStatus);
+    setConditions(s.conditions);
+    setFeaturedFlags(s.featuredFlags);
+    setPublicCatalogFlags(s.publicCatalogFlags);
+    setStockStatuses(s.stockStatuses);
     setStockLocationFilter(s.stockLocationFilter);
     setProductRegionFilter(s.productRegionFilter);
     setBrandId(s.brandId);
-    setBtuFilter(s.btuFilter);
+    setBtuFilters(s.btuFilters);
     setTypeId(s.typeId);
     setSupplierId(s.supplierId);
     setPriceRange(s.priceRange);
@@ -617,17 +687,17 @@ export default function AdminProductsPage() {
 
   function snapshotListFilters() {
     return {
-      version: 2 as const,
+      version: 3 as const,
       q,
       catalogKind,
-      condition,
-      featured,
-      publicCatalog,
-      stockStatus,
+      conditions,
+      featuredFlags,
+      publicCatalogFlags,
+      stockStatuses,
       stockLocationFilter,
       productRegionFilter,
       brandId,
-      btuFilter,
+      btuFilters,
       typeId,
       supplierId,
       priceRange,
@@ -716,14 +786,14 @@ export default function AdminProductsPage() {
     listFiltersReady,
     q,
     catalogKind,
-    condition,
-    featured,
-    publicCatalog,
-    stockStatus,
+    conditions,
+    featuredFlags,
+    publicCatalogFlags,
+    stockStatuses,
     stockLocationFilter,
     productRegionFilter,
     brandId,
-    btuFilter,
+    btuFilters,
     typeId,
     supplierId,
     priceRange,
@@ -746,14 +816,14 @@ export default function AdminProductsPage() {
     const d = DEFAULT_ADMIN_PRODUCTS_LIST_FILTERS;
     setQ(d.q);
     setCatalogKind(d.catalogKind);
-    setCondition(d.condition);
-    setFeatured(d.featured);
-    setPublicCatalog(d.publicCatalog);
-    setStockStatus(d.stockStatus);
+    setConditions(d.conditions);
+    setFeaturedFlags(d.featuredFlags);
+    setPublicCatalogFlags(d.publicCatalogFlags);
+    setStockStatuses(d.stockStatuses);
     setStockLocationFilter(d.stockLocationFilter);
     setProductRegionFilter(d.productRegionFilter);
     setBrandId(d.brandId);
-    setBtuFilter(d.btuFilter);
+    setBtuFilters(d.btuFilters);
     setTypeId(d.typeId);
     setSupplierId(d.supplierId);
     setPriceRange(d.priceRange);
@@ -763,6 +833,7 @@ export default function AdminProductsPage() {
     setPurchasedTo(d.purchasedTo);
     setSortBy(d.sortBy);
     setSortDir(d.sortDir);
+    setPage(1);
     clearAdminProductsListFilters();
   }
 
@@ -955,6 +1026,9 @@ export default function AdminProductsPage() {
           id: prod.id,
           name: prod.name,
           price: unitPrice,
+          purchase_price: prod.purchase_price,
+          supplier_name: supplierLabel(prod) !== "—" ? supplierLabel(prod) : null,
+          supplier_invoice_number: prod.supplier_invoice_number?.trim() || null,
           model_code: prod.model_code,
           stock_status: prod.stock_status,
           stock_quantity: prod.stock_quantity,
@@ -1137,7 +1211,26 @@ export default function AdminProductsPage() {
     }
   }
 
-  const listTruncated = totalCount > items.length;
+  const listPages = Math.max(1, Math.ceil(totalCount / ADMIN_PRODUCTS_LIST_PER_PAGE));
+  const usedOnlyFilter = conditions.length === 1 && conditions[0] === "used";
+  const catalogEmptyMessage =
+    items.length === 0
+      ? usedOnlyFilter
+        ? "Няма налични или по поръчка климатици втора употреба. Продадените (изчерпани) са само в Продажби."
+        : "Няма намерени артикули."
+      : "Няма видими артикули в този изглед.";
+  const catalogEmptyMessageMobile =
+    items.length === 0
+      ? usedOnlyFilter
+        ? "Няма налични употребявани климатици. Продадените — в Продажби."
+        : "Няма намерени продукти."
+      : "Няма видими продукти в този изглед.";
+  const catalogVisibleItems = useMemo(() => filterProductsCatalogItems(items), [items]);
+  const displayRows = useMemo(() => buildProductCatalogDisplayRows(catalogVisibleItems), [catalogVisibleItems]);
+  const selectableDisplayIds = useMemo(
+    () => displayRows.filter(isGroupedExhaustedSelectable).map((d) => d.row.id),
+    [displayRows],
+  );
 
   // Списък с активни филтри — ползва се за брояча и за chip bar-а.
   const supplierName = supplierId ? suppliersById[supplierId] : null;
@@ -1161,35 +1254,39 @@ export default function AdminProductsPage() {
       onClear: () => setCatalogKind("climatics"),
     });
   }
-  if (condition) {
+  for (const c of conditions) {
     activeFilters.push({
-      key: "condition",
-      label: `Състояние: ${condition === "new" ? "Нови" : "Втора употреба"}`,
-      onClear: () => setCondition(""),
+      key: `condition-${c}`,
+      label: `Състояние: ${c === "new" ? "Нови" : "Втора употреба"}`,
+      onClear: () => setConditions((prev) => prev.filter((x) => x !== c)),
     });
   }
-  if (featured) {
+  for (const flag of featuredFlags) {
     activeFilters.push({
-      key: "featured",
-      label: featured === "featured" ? "Само топ продукти" : "Само нормални (без топ)",
-      onClear: () => setFeatured(""),
+      key: `featured-${flag}`,
+      label: flag === "featured" ? "Топ продукти" : "Без топ",
+      onClear: () => setFeaturedFlags((prev) => prev.filter((x) => x !== flag)),
     });
   }
-  if (publicCatalog) {
+  for (const flag of publicCatalogFlags) {
     activeFilters.push({
-      key: "publicCatalog",
-      label: publicCatalog === "visible" ? "Видими в публичния каталог" : "Скрити от публичния каталог",
-      onClear: () => setPublicCatalog(""),
+      key: `publicCatalog-${flag}`,
+      label: flag === "visible" ? "В публичен каталог" : "Скрит от каталог",
+      onClear: () => setPublicCatalogFlags((prev) => prev.filter((x) => x !== flag)),
     });
   }
-  if (stockStatus) {
+  for (const status of stockStatuses) {
     const label =
-      stockStatus === "in_stock"
+      status === "in_stock"
         ? "В наличност"
-        : stockStatus === "on_order"
+        : status === "on_order"
           ? "По поръчка"
           : "Изчерпан";
-    activeFilters.push({ key: "stockStatus", label: `Каталог: ${label}`, onClear: () => setStockStatus("") });
+    activeFilters.push({
+      key: `stockStatus-${status}`,
+      label: `Наличност: ${label}`,
+      onClear: () => setStockStatuses((prev) => prev.filter((x) => x !== status)),
+    });
   }
   if (stockLocationFilter) {
     activeFilters.push({
@@ -1206,11 +1303,11 @@ export default function AdminProductsPage() {
     });
   }
   if (brandId) activeFilters.push({ key: "brand", label: `Марка: ${brandName ?? "—"}`, onClear: () => setBrandId("") });
-  if (btuFilter) {
+  for (const btu of btuFilters) {
     activeFilters.push({
-      key: "btu",
-      label: `BTU: ${btuFilter} 000`,
-      onClear: () => setBtuFilter(""),
+      key: `btu-${btu}`,
+      label: `BTU: ${btu} 000`,
+      onClear: () => setBtuFilters((prev) => prev.filter((x) => x !== btu)),
     });
   }
   if (typeId) activeFilters.push({ key: "type", label: `Тип: ${typeName ?? "—"}`, onClear: () => setTypeId("") });
@@ -1307,7 +1404,7 @@ export default function AdminProductsPage() {
           <ProductSearchBox
             value={q}
             onChange={(next) => { setQ(next); }}
-            items={items}
+            items={catalogVisibleItems}
             placeholder="Търси име, сериен №, фактура…"
           />
         </div>
@@ -1350,7 +1447,7 @@ export default function AdminProductsPage() {
             <ProductSearchBox
               value={q}
               onChange={(next) => { setQ(next); }}
-              items={items}
+              items={catalogVisibleItems}
               placeholder="Търси по име, slug, сериен номер (вътрешен/външен) или № на фактура от доставчик…"
             />
           </div>
@@ -1374,47 +1471,57 @@ export default function AdminProductsPage() {
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 md:gap-x-4 md:gap-y-2">
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mr-0.5">Състояние:</span>
-              <ChipToggle active={!condition} onClick={() => { setCondition(""); }}>Всички</ChipToggle>
-              <ChipToggle active={condition === "new"} onClick={() => { setCondition("new"); }}>Нови</ChipToggle>
-              <ChipToggle active={condition === "used"} onClick={() => { setCondition("used"); }}>Втора употреба</ChipToggle>
+              <ChipToggle active={conditions.length === 0} onClick={() => { setConditions([]); }}>Всички</ChipToggle>
+              <ChipToggle
+                active={conditions.includes("new")}
+                onClick={() => { setConditions((prev) => toggleChipFilter(prev, "new")); }}
+              >
+                Нови
+              </ChipToggle>
+              <ChipToggle
+                active={conditions.includes("used")}
+                onClick={() => { setConditions((prev) => toggleChipFilter(prev, "used")); }}
+              >
+                Втора употреба
+              </ChipToggle>
             </div>
             <span className="hidden md:inline-block h-5 w-px bg-slate-200" aria-hidden />
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mr-0.5">Наличност:</span>
-              <ChipToggle active={!stockStatus} onClick={() => { setStockStatus(""); }}>Всички</ChipToggle>
+              <ChipToggle active={stockStatuses.length === 0} onClick={() => { setStockStatuses([]); }}>Всички</ChipToggle>
               <ChipToggle
-                active={stockStatus === "in_stock"}
+                active={stockStatuses.includes("in_stock")}
                 tone="success"
-                onClick={() => { setStockStatus("in_stock"); }}
+                onClick={() => { setStockStatuses((prev) => toggleChipFilter(prev, "in_stock")); }}
               >
                 <PackageCheck className="w-3 h-3" /> В наличност
               </ChipToggle>
               <ChipToggle
-                active={stockStatus === "on_order"}
+                active={stockStatuses.includes("on_order")}
                 tone="warning"
-                onClick={() => { setStockStatus("on_order"); }}
+                onClick={() => { setStockStatuses((prev) => toggleChipFilter(prev, "on_order")); }}
               >
                 <Clock4 className="w-3 h-3" /> По поръчка
               </ChipToggle>
               <ChipToggle
-                active={stockStatus === "out_of_stock"}
+                active={stockStatuses.includes("out_of_stock")}
                 tone="danger"
-                onClick={() => { setStockStatus("out_of_stock"); }}
+                onClick={() => { setStockStatuses((prev) => toggleChipFilter(prev, "out_of_stock")); }}
               >
                 <PackageX className="w-3 h-3" /> Изчерпан
               </ChipToggle>
               <span className="hidden md:inline-block h-5 w-px bg-slate-200 mx-0.5" aria-hidden />
               <ChipToggle
-                active={featured === "featured"}
+                active={featuredFlags.includes("featured")}
                 tone="brand"
-                onClick={() => { setFeatured(featured === "featured" ? "" : "featured"); }}
+                onClick={() => { setFeaturedFlags((prev) => toggleChipFilter(prev, "featured")); }}
               >
                 <Star className="w-3 h-3 fill-current" /> Топ продукти
               </ChipToggle>
               <ChipToggle
-                active={publicCatalog === "visible"}
+                active={publicCatalogFlags.includes("visible")}
                 tone="brand"
-                onClick={() => { setPublicCatalog(publicCatalog === "visible" ? "" : "visible"); }}
+                onClick={() => { setPublicCatalogFlags((prev) => toggleChipFilter(prev, "visible")); }}
               >
                 <Eye className="w-3 h-3" /> В публичен каталог
               </ChipToggle>
@@ -1426,15 +1533,15 @@ export default function AdminProductsPage() {
         <div className="space-y-1.5 md:space-y-2">
           <div className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500">Мощност (BTU)</div>
           <div className="flex flex-wrap items-center gap-1.5">
-            <ChipToggle active={!btuFilter} onClick={() => { setBtuFilter(""); }}>
+            <ChipToggle active={btuFilters.length === 0} onClick={() => { setBtuFilters([]); }}>
               Всички
             </ChipToggle>
             {CATALOG_BTU_OPTIONS.map((btu) => (
               <span key={btu} title={`${btu * 1000} BTU`} className="inline-flex">
                 <ChipToggle
-                  active={btuFilter === String(btu)}
+                  active={btuFilters.includes(String(btu))}
                   onClick={() => {
-                    setBtuFilter(btuFilter === String(btu) ? "" : String(btu));
+                    setBtuFilters((prev) => toggleChipFilter(prev, String(btu)));
                   }}
                 >
                   {btu}
@@ -1619,8 +1726,8 @@ export default function AdminProductsPage() {
                   <input
                     type="checkbox"
                     className="rounded border-slate-300 text-brand-blue-500 focus:ring-brand-blue-500"
-                    checked={items.length > 0 && selected.length === items.length}
-                    onChange={(e) => setSelected(e.target.checked ? items.map((x) => x.id) : [])}
+                    checked={selectableDisplayIds.length > 0 && selectableDisplayIds.every((id) => selected.includes(id))}
+                    onChange={(e) => setSelected(e.target.checked ? selectableDisplayIds : [])}
                   />
                 </span>
               </Th>
@@ -1647,15 +1754,19 @@ export default function AdminProductsPage() {
             </tr>
           </thead>
           <tbody className="[&>tr>td]:align-middle">
-            {!loading && items.map((p) => (
-              <tr key={p.id} className="hover:bg-slate-50 transition-colors group">
+            {!loading && displayRows.map(({ row: p, groupKey, groupedCount, isGroupedExhausted }) => {
+              const groupedExhausted = isGroupedExhausted && groupedCount > 1;
+              return (
+              <tr key={groupKey} className="hover:bg-slate-50 transition-colors group">
                 {canMutateProductRows && (
                 <Td className="text-center align-middle whitespace-nowrap">
                   <span className="inline-flex w-full justify-center">
                     <input
                       type="checkbox"
-                      className="rounded border-slate-300 text-brand-blue-500 focus:ring-brand-blue-500"
+                      className="rounded border-slate-300 text-brand-blue-500 focus:ring-brand-blue-500 disabled:opacity-40"
                       checked={selected.includes(p.id)}
+                      disabled={groupedExhausted}
+                      title={groupedExhausted ? `${groupedCount} изчерпани единици — изберете от пълния запис` : undefined}
                       onChange={(e) => setSelected((prev) => e.target.checked ? [...prev, p.id] : prev.filter((x) => x !== p.id))}
                     />
                   </span>
@@ -1717,10 +1828,20 @@ export default function AdminProductsPage() {
                   })()}
                 </Td>
                 <Td className="text-center align-middle whitespace-nowrap">
-                  <span
-                    className={`inline-flex items-center px-1 py-px rounded text-[10px] font-bold leading-none ${catalogStockBadgeClass(p.stock_status)}`}
-                  >
-                    {catalogStockBadgeText(p.stock_status, true)}
+                  <span className="inline-flex items-center justify-center gap-0.5">
+                    <span
+                      className={`inline-flex items-center px-1 py-px rounded text-[10px] font-bold leading-none ${catalogStockBadgeClass(p.stock_status)}`}
+                    >
+                      {catalogStockBadgeText(p.stock_status, true)}
+                    </span>
+                    {groupedExhausted && (
+                      <span
+                        className="inline-flex items-center px-1 py-px rounded text-[9px] font-bold text-slate-600 bg-slate-100 leading-none"
+                        title={`${groupedCount} продадени единици с този модел`}
+                      >
+                        ×{groupedCount}
+                      </span>
+                    )}
                   </span>
                 </Td>
                 <Td className="text-center align-middle min-w-0 truncate whitespace-nowrap" title={p.brands?.name ?? undefined}>
@@ -1846,8 +1967,17 @@ export default function AdminProductsPage() {
                 <Td className="text-center align-middle min-w-0 truncate whitespace-nowrap" title={isAccessoryRow(p) ? undefined : supplierLabel(p)}>
                   <span className="block truncate">{isAccessoryRow(p) ? "—" : supplierLabel(p)}</span>
                 </Td>
-                <Td className="text-[10px] text-slate-700 text-center align-middle truncate" title={(p.supplier_invoice_number ?? "").trim() || undefined}>
-                  {isAccessoryRow(p) ? "—" : truncCell(p.supplier_invoice_number, 8)}
+                <Td
+                  className="text-[10px] text-slate-700 text-center align-middle truncate"
+                  title={
+                    !isAccessoryRow(p) && productShowsSupplierInvoice(p.stock_status)
+                      ? (p.supplier_invoice_number ?? "").trim() || undefined
+                      : undefined
+                  }
+                >
+                  {isAccessoryRow(p) || !productShowsSupplierInvoice(p.stock_status)
+                    ? "—"
+                    : truncCell(p.supplier_invoice_number, 8)}
                 </Td>
                 <Td className="text-center align-middle whitespace-nowrap">
                   <span className="inline-flex items-center px-1 py-px rounded text-[10px] font-bold text-slate-700 bg-slate-100 leading-none">
@@ -1921,9 +2051,10 @@ export default function AdminProductsPage() {
                   )}
                 </Td>
               </tr>
-            ))}
-            {!loading && items.length === 0 && (
-              <tr><Td colSpan={canMutateProductRows ? 15 : 14} className="text-center py-8 text-slate-500">Няма намерени артикули.</Td></tr>
+            );
+            })}
+            {!loading && displayRows.length === 0 && (
+              <tr><Td colSpan={canMutateProductRows ? 15 : 14} className="text-center py-8 text-slate-500">{catalogEmptyMessage}</Td></tr>
             )}
           </tbody>
         </Table>
@@ -1939,22 +2070,26 @@ export default function AdminProductsPage() {
         {loading && (
           <div className="text-center py-6 text-slate-500 text-xs">Зареждане...</div>
         )}
-        {!loading && items.length === 0 && (
+        {!loading && displayRows.length === 0 && (
           <div className="bg-white rounded-lg border border-slate-200 px-3 py-4 text-center text-slate-500 text-xs">
-            Няма намерени продукти.
+            {catalogEmptyMessageMobile}
           </div>
         )}
-        {!loading && items.map((p) => (
+        {!loading && displayRows.map(({ row: p, groupKey, groupedCount, isGroupedExhausted }) => {
+          const groupedExhausted = isGroupedExhausted && groupedCount > 1;
+          return (
           <article
-            key={p.id}
+            key={groupKey}
             className="rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden active:bg-slate-50/90 transition-colors"
           >
             <div className="px-2.5 pt-2 pb-1.5 flex gap-2 items-start min-w-0">
               {canMutateProductRows && (
                 <input
                   type="checkbox"
-                  className="mt-0.5 rounded border-slate-300 text-brand-blue-500 focus:ring-brand-blue-500 w-3.5 h-3.5 shrink-0"
+                  className="mt-0.5 rounded border-slate-300 text-brand-blue-500 focus:ring-brand-blue-500 w-3.5 h-3.5 shrink-0 disabled:opacity-40"
                   checked={selected.includes(p.id)}
+                  disabled={groupedExhausted}
+                  title={groupedExhausted ? `${groupedCount} изчерпани единици — изберете от пълния запис` : undefined}
                   onChange={(e) =>
                     setSelected((prev) =>
                       e.target.checked ? [...prev, p.id] : prev.filter((x) => x !== p.id),
@@ -2003,6 +2138,14 @@ export default function AdminProductsPage() {
                   >
                     {catalogStockBadgeText(p.stock_status)}
                   </span>
+                  {groupedExhausted && (
+                    <span
+                      className="inline-flex items-center px-1 py-px rounded text-[9px] font-bold text-slate-600 bg-slate-100"
+                      title={`${groupedCount} продадени единици с този модел`}
+                    >
+                      ×{groupedCount}
+                    </span>
+                  )}
                   {p.is_active === false && (
                     <span className="inline-flex items-center px-1 py-px rounded text-[10px] font-bold bg-slate-200 text-slate-700">
                       Скрит
@@ -2141,12 +2284,14 @@ export default function AdminProductsPage() {
                   {supplierLabel(p)}
                 </span>
               </div>
+              {!isAccessoryRow(p) && productShowsSupplierInvoice(p.stock_status) && (
               <div className="col-span-2 min-w-0">
                 <span className="text-slate-400">Фактура </span>
                 <span className="text-slate-900 break-all" title={(p.supplier_invoice_number ?? "").trim() || undefined}>
                   {truncCell(p.supplier_invoice_number, 36)}
                 </span>
               </div>
+              )}
             </div>
 
             {canMutateProductRows ? (
@@ -2211,21 +2356,43 @@ export default function AdminProductsPage() {
               </div>
             )}
           </article>
-        ))}
+        );
+        })}
       </div>
 
-      <div className="pt-1 text-xs md:text-sm text-slate-500 font-medium">
-        <span>Общо: {totalCount}</span>
-        {items.length > 0 && (
-          <span className="text-slate-400 tabular-nums ml-2">
-            Показани: {items.length}
+      <div className="pt-1 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-xs md:text-sm text-slate-500 font-medium">
+          <span>Общо: {totalCount}</span>
+          {displayRows.length > 0 && (
+            <span className="text-slate-400 tabular-nums ml-2">
+              На страницата: {displayRows.length} реда
+              {displayRows.length < catalogVisibleItems.length ? (
+                <span className="text-slate-400"> ({catalogVisibleItems.length} артикула)</span>
+              ) : null}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 md:gap-3">
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={loading || queryPage <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            ‹ Пред.
+          </Button>
+          <span className="text-xs md:text-sm font-medium text-slate-600 tabular-nums">
+            {queryPage} / {listPages}
           </span>
-        )}
-        {listTruncated && (
-          <span className="block sm:inline sm:ml-2 text-amber-700">
-            Показани са първите {items.length} от {totalCount} — свържете се с администратор, ако списъкът е непълен.
-          </span>
-        )}
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={loading || queryPage >= listPages}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Следв. ›
+          </Button>
+        </div>
       </div>
 
       {saleFor && (() => {

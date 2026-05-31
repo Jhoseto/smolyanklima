@@ -5,6 +5,7 @@ import { adminDb, adminSession, requireRole } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
 import { ensureAcceptanceProtocolForInstallation } from "@/lib/admin/acceptanceProtocolFromInstall";
 import { syncConsultationContactFollowUp } from "@/lib/work-items/consultation-contact";
+import { buildAdminSearchOrFilter } from "@/lib/admin/phoneSearchPattern";
 
 const WORK_ITEM_EVENT_CODES = [
   "item_added",
@@ -27,8 +28,27 @@ const QuerySchema = z.object({
   status: z.enum(["planned", "in_progress", "done", "cancelled"]).optional(),
   /** Филтър за панела „Продажби“: чака монтаж / завършен. */
   saleInstallState: z.enum(["pending_mount", "completed"]).optional(),
+  /** Панел „Продажби“: нови / втора употреба (по products.product_condition). */
+  productCondition: z.enum(["new", "used"]).optional(),
   page: z.coerce.number().int().min(1).optional().default(1),
   perPage: z.coerce.number().int().min(1).max(500).optional().default(200),
+  sortBy: z
+    .enum([
+      "product",
+      "sale_install_state",
+      "status",
+      "customer_name",
+      "customer_phone",
+      "customer_address",
+      "supplier",
+      "supplier_invoice",
+      "purchase_price",
+      "total_amount",
+      "sale_date",
+      "created_at",
+    ])
+    .optional(),
+  sortDir: z.enum(["asc", "desc"]).optional().default("desc"),
 });
 
 const BodySchema = z.object({
@@ -51,6 +71,9 @@ const BodySchema = z.object({
   quantity: z.number().int().positive().optional().default(1),
   unitPrice: z.number().nonnegative().optional().nullable(),
   totalAmount: z.number().nonnegative().optional().nullable(),
+  purchasePrice: z.number().nonnegative().optional().nullable(),
+  supplierName: z.string().max(160).optional().nullable(),
+  supplierInvoiceNumber: z.string().max(120).optional().nullable(),
   saleInstallState: z.enum(["pending_mount", "completed"]).optional().nullable(),
   installationWorkItemId: z.string().uuid().optional().nullable(),
   saleWorkItemId: z.string().uuid().optional().nullable(),
@@ -65,22 +88,95 @@ export async function GET(req: NextRequest) {
   const parsed = QuerySchema.safeParse(params);
   if (!parsed.success) return withCors(req, NextResponse.json({ error: "Невалидни параметри" }, { status: 400 }));
 
-  const { from, to, q, eventCode, type, status, saleInstallState, page, perPage } = parsed.data;
+  const { from, to, q, eventCode, type, status, saleInstallState, productCondition, page, perPage, sortBy, sortDir } =
+    parsed.data;
+  const ascending = sortDir === "asc";
   const supabase = await adminDb();
-  let query = supabase
-    .from("work_items")
-    .select(
-      "id,type,event_code,status,priority,title,notes,due_date,scheduled_start,scheduled_end,product_id,contact_id,inquiry_id,customer_name,customer_phone,customer_address,quantity,unit_price,total_amount,assigned_to,completed_at,created_at,cancel_reason,sale_install_state,installation_work_item_id,sale_work_item_id,products:product_id(id,slug,name,model_code,price,product_condition,brands:brand_id(name)),contacts:contact_id(id,full_name,phone,email,address)",
-      {
-      count: "exact",
-    },
-    );
+  const productEmbed = productCondition
+    ? "products:product_id!inner(id,slug,name,model_code,price,product_condition,supplier_invoice_number,brands:brand_id(name))"
+    : "products:product_id(id,slug,name,model_code,price,product_condition,supplier_invoice_number,brands:brand_id(name))";
+  const workItemSelect = [
+    "id",
+    "type",
+    "event_code",
+    "status",
+    "priority",
+    "title",
+    "notes",
+    "due_date",
+    "scheduled_start",
+    "scheduled_end",
+    "product_id",
+    "contact_id",
+    "inquiry_id",
+    "customer_name",
+    "customer_phone",
+    "customer_address",
+    "quantity",
+    "unit_price",
+    "total_amount",
+    "purchase_price",
+    "supplier_name",
+    "supplier_invoice_number",
+    "assigned_to",
+    "completed_at",
+    "created_at",
+    "cancel_reason",
+    "sale_install_state",
+    "installation_work_item_id",
+    "sale_work_item_id",
+    productEmbed,
+    "contacts:contact_id(id,full_name,phone,email,address)",
+  ].join(",");
+  let query = supabase.from("work_items").select(workItemSelect, {
+    count: "exact",
+  });
 
-  // Панел „История на продажбите“ — най-новите (по дата на запис / монтаж) отгоре.
-  if (eventCode === "sale") {
+  if (sortBy) {
+    switch (sortBy) {
+      case "product":
+        query = query.order("name", { ascending, foreignTable: "products", nullsFirst: ascending });
+        break;
+      case "sale_install_state":
+        query = query.order("sale_install_state", { ascending, nullsFirst: ascending });
+        break;
+      case "status":
+        query = query.order("status", { ascending, nullsFirst: ascending });
+        break;
+      case "customer_name":
+        query = query.order("customer_name", { ascending, nullsFirst: ascending });
+        break;
+      case "customer_phone":
+        query = query.order("customer_phone", { ascending, nullsFirst: ascending });
+        break;
+      case "customer_address":
+        query = query.order("customer_address", { ascending, nullsFirst: ascending });
+        break;
+      case "supplier":
+        query = query.order("supplier_name", { ascending, nullsFirst: ascending });
+        break;
+      case "supplier_invoice":
+        query = query.order("supplier_invoice_number", { ascending, nullsFirst: ascending });
+        break;
+      case "purchase_price":
+        query = query.order("purchase_price", { ascending, nullsFirst: ascending });
+        break;
+      case "total_amount":
+        query = query.order("total_amount", { ascending, nullsFirst: ascending });
+        break;
+      case "sale_date":
+        query = query
+          .order("due_date", { ascending, nullsFirst: ascending })
+          .order("completed_at", { ascending, nullsFirst: ascending });
+        break;
+      case "created_at":
+        query = query.order("created_at", { ascending, nullsFirst: ascending });
+        break;
+    }
+  } else if (eventCode === "sale") {
     query = query
-      .order("created_at", { ascending: false, nullsFirst: false })
-      .order("due_date", { ascending: false, nullsFirst: true });
+      .order("due_date", { ascending: false, nullsFirst: true })
+      .order("completed_at", { ascending: false, nullsFirst: true });
   } else {
     query = query
       .order("due_date", { ascending: true, nullsFirst: false })
@@ -88,14 +184,26 @@ export async function GET(req: NextRequest) {
   }
 
   if (q?.trim()) {
-    query = query.or(
-      `title.ilike.%${q.trim()}%,customer_name.ilike.%${q.trim()}%,customer_phone.ilike.%${q.trim()}%,customer_address.ilike.%${q.trim()}%`,
-    );
+    const orFilter = buildAdminSearchOrFilter(q, {
+      textFields: [
+        "title",
+        "customer_name",
+        "customer_phone",
+        "customer_address",
+        "supplier_name",
+        "supplier_invoice_number",
+      ],
+      phoneFields: ["customer_phone"],
+    });
+    if (orFilter) query = query.or(orFilter);
   }
   if (eventCode) query = query.eq("event_code", eventCode);
   if (type) query = query.eq("type", type);
   if (status) query = query.eq("status", status);
   if (saleInstallState) query = query.eq("sale_install_state", saleInstallState);
+  if (productCondition) {
+    query = query.eq("products.product_condition", productCondition);
+  }
   if (from) query = query.gte("due_date", from);
   if (to) query = query.lte("due_date", to);
 
@@ -177,6 +285,9 @@ export async function POST(req: NextRequest) {
     quantity: parsed.data.quantity,
     unit_price: parsed.data.unitPrice ?? null,
     total_amount: parsed.data.totalAmount ?? null,
+    purchase_price: parsed.data.purchasePrice ?? null,
+    supplier_name: parsed.data.supplierName?.trim() || null,
+    supplier_invoice_number: parsed.data.supplierInvoiceNumber?.trim() || null,
     created_by: session.userId,
   };
   if (parsed.data.saleInstallState !== undefined) {

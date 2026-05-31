@@ -5,7 +5,7 @@ export type AdminCatalogKind = "climatics" | "accessories" | "all";
 
 export type AdminCatalogListFilters = {
   q?: string;
-  stockStatus?: "in_stock" | "out_of_stock" | "on_order";
+  stockStatuses?: ("in_stock" | "out_of_stock" | "on_order")[];
   brandId?: string;
   priceMin?: number;
   priceMax?: number;
@@ -87,7 +87,13 @@ function applyAccessoryFilters(
     const t = sanitizeIlikeTerm(filters.q);
     if (t) query = query.or(`name.ilike.%${t}%,slug.ilike.%${t}%,description.ilike.%${t}%`);
   }
-  if (filters.stockStatus) query = query.eq("stock_status", filters.stockStatus);
+  if (filters.stockStatuses?.length) {
+    if (filters.stockStatuses.length === 1) {
+      query = query.eq("stock_status", filters.stockStatuses[0]);
+    } else {
+      query = query.in("stock_status", filters.stockStatuses);
+    }
+  }
   if (filters.brandId) query = query.eq("brand_id", filters.brandId);
   if (filters.priceMin !== undefined) query = query.gte("price", filters.priceMin);
   if (filters.priceMax !== undefined) query = query.lte("price", filters.priceMax);

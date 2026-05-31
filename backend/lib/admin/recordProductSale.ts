@@ -22,6 +22,9 @@ export type RecordSaleProduct = {
   id: string;
   name: string;
   price: number;
+  purchase_price?: number | null;
+  supplier_name?: string | null;
+  supplier_invoice_number?: string | null;
   model_code?: string | null;
   stock_status: string;
   stock_quantity?: number;
@@ -129,6 +132,10 @@ export async function recordProductSale(
     options?.salePrice != null && Number.isFinite(options.salePrice) && options.salePrice >= 0
       ? options.salePrice
       : Number(prod.price);
+  const purchasePrice =
+    prod.purchase_price != null && Number.isFinite(Number(prod.purchase_price)) && Number(prod.purchase_price) >= 0
+      ? Number(prod.purchase_price)
+      : null;
 
   const hasModelCode = Boolean((prod.model_code ?? "").trim());
   const currentQty = Math.max(0, Number(prod.stock_quantity ?? 0));
@@ -163,6 +170,9 @@ export async function recordProductSale(
         quantity: 1,
         unitPrice,
         totalAmount: unitPrice,
+        purchasePrice,
+        supplierName: prod.supplier_name?.trim() || null,
+        supplierInvoiceNumber: prod.supplier_invoice_number?.trim() || null,
       });
       saleId = saleRow.id;
       await applyProductStockAfterSale(prod, putBody);
@@ -195,6 +205,9 @@ export async function recordProductSale(
       quantity: 1,
       unitPrice,
       totalAmount: unitPrice,
+      purchasePrice,
+      supplierName: prod.supplier_name?.trim() || null,
+      supplierInvoiceNumber: prod.supplier_invoice_number?.trim() || null,
     });
     saleId = saleRow.id;
 

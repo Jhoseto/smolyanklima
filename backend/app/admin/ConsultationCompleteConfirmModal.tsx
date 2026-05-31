@@ -7,6 +7,7 @@ export type ConsultationCompletePreview = {
   customerName?: string | null;
   customerPhone?: string | null;
   dueDate?: string | null;
+  kind?: "consultation" | "contact" | "task";
 };
 
 function formatDueDateBg(due: string | null | undefined): string {
@@ -20,9 +21,28 @@ function buildCopy(preview: ConsultationCompletePreview) {
   const when = formatDueDateBg(preview.dueDate);
   const contactLine = phone ? `${who} (${phone})` : who;
 
+  if (preview.kind === "contact") {
+    return {
+      title: "Завършване на обаждане",
+      description: `Ще маркирате CRM обаждането с ${contactLine} на ${when} като завършено. Планираното follow-up излиза от чакащите.`,
+      eventLabel: "CRM обаждане",
+      confirmLabel: "Завърши",
+    };
+  }
+
+  if (preview.kind === "task") {
+    return {
+      title: "Завършване на задача",
+      description: `Ще маркирате задачата „${preview.title}“ с ${contactLine} на ${when} като завършена. Свързаното CRM follow-up се нулира.`,
+      eventLabel: "Задача",
+      confirmLabel: "Завърши",
+    };
+  }
+
   return {
     title: "Завършване на консултация",
     description: `Ще маркирате обаждането за консултация с ${contactLine} на ${when} като завършено. Събитието излиза от чакащите обаждания; планираното CRM follow-up се нулира.`,
+    eventLabel: "Консултация",
     confirmLabel: "Завърши",
   };
 }
@@ -62,7 +82,7 @@ export function ConsultationCompleteConfirmModal({
         <div className="mt-4 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
           <div>
             <span className="font-semibold text-slate-500">Събитие: </span>
-            <span className="font-semibold text-slate-900">Консултация</span>
+            <span className="font-semibold text-slate-900">{copy.eventLabel}</span>
           </div>
           <div>
             <span className="font-semibold text-slate-500">Заглавие: </span>

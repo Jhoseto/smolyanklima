@@ -13,6 +13,7 @@ import {
   formatDuplicatePrimaryPhoneMessage,
   isPostgresContactsPhoneUniqueViolation,
 } from "@/lib/admin/contactPhoneDuplicate";
+import { phoneFlexibleIlikePattern } from "@/lib/admin/phoneSearchPattern";
 
 const UpdateSchema = z.object({
   fullName: z.string().min(2).max(200).optional(),
@@ -48,6 +49,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   const phoneRaw = String((contact as any).phone ?? "").trim();
   const emailRaw = String((contact as any).email ?? "").trim().toLowerCase();
   const phoneDigits = phoneRaw.replace(/[^\d+]/g, "");
+  const phonePattern = phoneFlexibleIlikePattern(phoneRaw);
 
   const workByContactQ = supabase
     .from("work_items")
@@ -69,11 +71,11 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       : Promise.resolve({ data: [], error: null } as any);
 
   const workByDigitsQ =
-    phoneDigits.length >= 6
+    phonePattern || phoneDigits.length >= 6
       ? supabase
           .from("work_items")
           .select("id,event_code,type,status,title,due_date,customer_name,customer_phone,customer_address,quantity,unit_price,total_amount,created_at,product_id,products:product_id(name,slug)")
-          .ilike("customer_phone", `%${phoneDigits}%`)
+          .ilike("customer_phone", phonePattern ?? `%${phoneDigits}%`)
           .order("due_date", { ascending: false, nullsFirst: false })
           .order("created_at", { ascending: false })
           .limit(500)
@@ -90,11 +92,11 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       : Promise.resolve({ data: [], error: null } as any);
 
   const inqByDigitsQ =
-    phoneDigits.length >= 6
+    phonePattern || phoneDigits.length >= 6
       ? supabase
           .from("inquiries")
           .select("id,service_type,status,message,customer_name,customer_phone,customer_email,created_at,product_id,products:product_id(id,name,slug)")
-          .ilike("customer_phone", `%${phoneDigits}%`)
+          .ilike("customer_phone", phonePattern ?? `%${phoneDigits}%`)
           .order("created_at", { ascending: false })
           .limit(500)
       : Promise.resolve({ data: [], error: null } as any);

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminDb } from "@/lib/admin/db";
 import { isPostgrestMissingColumn } from "@/lib/admin/pgMissingColumn";
-import { sanitizeIlikeTerm } from "@/lib/security/sanitizeSearchTerm";
+import { buildAdminSearchOrFilter } from "@/lib/admin/phoneSearchPattern";
 import {
   INQUIRY_ADMIN_SELECT,
   INQUIRY_ADMIN_SELECT_BASE,
@@ -39,17 +39,11 @@ export async function GET(req: NextRequest) {
     if (parsed.data.status) query = query.eq("status", parsed.data.status);
     if (parsed.data.source) query = query.eq("source", parsed.data.source);
     if (parsed.data.q) {
-      const q = sanitizeIlikeTerm(parsed.data.q);
-      if (q) {
-        query = query.or(
-          [
-            `customer_name.ilike.%${q}%`,
-            `customer_phone.ilike.%${q}%`,
-            `customer_email.ilike.%${q}%`,
-            `message.ilike.%${q}%`,
-          ].join(","),
-        );
-      }
+      const orFilter = buildAdminSearchOrFilter(parsed.data.q, {
+        textFields: ["customer_name", "customer_phone", "customer_email", "message"],
+        phoneFields: ["customer_phone"],
+      });
+      if (orFilter) query = query.or(orFilter);
     }
     return query.order("created_at", { ascending: false }).range(from, to);
   };

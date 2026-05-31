@@ -9,6 +9,7 @@ import {
   optionalProtocolPhone,
   optionalUnitSerial,
 } from "@/lib/protocol-contact-fields";
+import { buildAdminSearchOrFilter } from "@/lib/admin/phoneSearchPattern";
 
 const QuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional().default(1),
@@ -106,10 +107,11 @@ export async function GET(req: NextRequest) {
   }
   if (status) query = query.eq("status", status);
   if (q?.trim()) {
-    const term = q.trim();
-    query = query.or(
-      `client_name.ilike.%${term}%,protocol_number.ilike.%${term}%,ac_model.ilike.%${term}%,address.ilike.%${term}%,client_phone.ilike.%${term}%`,
-    );
+    const orFilter = buildAdminSearchOrFilter(q, {
+      textFields: ["client_name", "protocol_number", "ac_model", "address", "client_phone"],
+      phoneFields: ["client_phone"],
+    });
+    if (orFilter) query = query.or(orFilter);
   }
 
   const { data, error, count } = await query;

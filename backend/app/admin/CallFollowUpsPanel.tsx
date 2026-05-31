@@ -15,12 +15,22 @@ import {
 import { countWaitingFollowUps } from "@/lib/admin/call-follow-up-items";
 
 function panelItemToPreview(item: DashboardPanelItem): ConsultationCompletePreview {
+  const workItemId = item.followUpWorkItemId ?? item.consultationWorkItemId;
+  let kind: ConsultationCompletePreview["kind"] = "consultation";
+  if (!workItemId && item.contactFollowUpId) kind = "contact";
+  else if (workItemId && item.contactFollowUpId && !item.consultationWorkItemId) kind = "task";
+
   return {
     title: item.title,
     customerName: item.consultationCustomerName,
     customerPhone: item.consultationCustomerPhone,
     dueDate: item.consultationDueDate,
+    kind,
   };
+}
+
+function completingKey(item: DashboardPanelItem): string | null {
+  return item.followUpWorkItemId ?? item.consultationWorkItemId ?? item.contactFollowUpId ?? null;
 }
 
 export function CallFollowUpsPanel({
@@ -63,21 +73,43 @@ export function CallFollowUpsPanel({
   }, [refresh]);
 
   async function confirmComplete() {
-    if (!confirmItem?.consultationWorkItemId) return;
-    const workItemId = confirmItem.consultationWorkItemId;
-    setCompletingId(workItemId);
+    if (!confirmItem) return;
+    const workItemId = confirmItem.followUpWorkItemId ?? confirmItem.consultationWorkItemId;
+    const contactId = confirmItem.contactFollowUpId;
+    const busyKey = completingKey(confirmItem);
+    if (!workItemId && !contactId) return;
+
+    setCompletingId(busyKey);
     try {
-      const res = await fetch(`/api/admin/work-items/${workItemId}`, {
-        method: "PUT",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "done" }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        alert((json as { error?: string }).error || "Грешка при маркиране като завършена");
-        return;
+      if (workItemId) {
+        const res = await fetch(`/api/admin/work-items/${workItemId}`, {
+          method: "PUT",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "done" }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          alert((json as { error?: string }).error || "Грешка при маркиране като завършена");
+          return;
+        }
+      } else if (contactId) {
+        const res = await fetch(`/api/admin/contacts/${contactId}`, {
+          method: "PUT",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            nextFollowUpAt: null,
+            lastContactedAt: new Date().toISOString(),
+          }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          alert((json as { error?: string }).error || "Грешка при маркиране на обаждането");
+          return;
+        }
       }
+
       setConfirmItem(null);
       await refresh();
       notifyFollowUpCallsChanged();

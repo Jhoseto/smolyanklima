@@ -58,6 +58,8 @@ export type AdminProductForm = {
   typeId: string;
   productCondition: "new" | "used";
   description: string;
+  /** Само админ — не се показва в публичния каталог. */
+  internalNote: string;
   price: number;
   priceWithMount: string;
   indoorUnitSerial: string;
@@ -111,6 +113,7 @@ export function emptyProductForm(): AdminProductForm {
     typeId: "",
     productCondition: "new",
     description: "",
+    internalNote: "",
     price: 0,
     priceWithMount: "",
     indoorUnitSerial: "",
@@ -367,6 +370,7 @@ export function buildPostBody(form: AdminProductForm) {
     typeId: form.typeId,
     productCondition: form.productCondition,
     description: form.description.trim() || undefined,
+    internalNote: form.internalNote.trim() || undefined,
     price: Number(form.price),
     priceWithMount: pwm ?? undefined,
     indoorUnitSerial: form.indoorUnitSerial.trim() || null,
@@ -405,6 +409,7 @@ export function buildPutBody(form: AdminProductForm) {
     typeId: form.typeId,
     productCondition: form.productCondition,
     description: form.description.trim() || null,
+    internalNote: form.internalNote.trim() || null,
     price: Number(form.price),
     priceWithMount: pwm,
     indoorUnitSerial: form.indoorUnitSerial.trim() || null,
@@ -439,6 +444,7 @@ export function mapLoadedProductToForm(p: {
   type_id: string;
   product_condition?: "new" | "used";
   description?: string | null;
+  internal_note?: string | null;
   price: number;
   price_with_mount?: number | null;
   indoor_unit_serial?: string | null;
@@ -472,6 +478,7 @@ export function mapLoadedProductToForm(p: {
     typeId: p.type_id,
     productCondition: p.product_condition === "used" ? "used" : "new",
     description: p.description ?? "",
+    internalNote: p.internal_note ?? "",
     price: Number(p.price),
     priceWithMount: p.price_with_mount != null ? String(p.price_with_mount) : "",
     indoorUnitSerial: p.indoor_unit_serial ?? "",
@@ -1640,6 +1647,21 @@ export function ProductFormFields({
               </Button>
             </div>
             <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} className="max-md:min-h-[5.5rem] md:min-h-[7rem]" />
+          </label>
+
+          <label className="block">
+            <FieldTitle
+              label="Вътрешна бележка"
+              info="Само за екипа в админ панела — не се показва в публичния каталог."
+            />
+            <Textarea
+              value={form.internalNote}
+              onChange={(e) => setForm({ ...form, internalNote: e.target.value })}
+              rows={2}
+              placeholder="Бележки за склад, резервации, особености…"
+              className="max-md:min-h-[4rem] md:min-h-[5rem] border-amber-200/80 bg-amber-50/40 focus:border-amber-300"
+              disabled={readOnly}
+            />
           </label>
         </div>
 
