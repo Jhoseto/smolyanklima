@@ -27,7 +27,7 @@ export const PAGE_SEO: Record<string, PageSeoConfig> = {
   home: {
     title: 'Климатици Смолян | Продажба, монтаж и сервиз — Смолян Клима',
     description:
-      'Смолян Клима — официален магазин за климатици в Смолян. Продажба, професионален монтаж за 24–48 ч, гаранция и сервиз. Daikin, Mitsubishi, Samsung. Обслужваме Смолян, Рудозем, Мадан, Девин и региона.',
+      'Смолян Клима — официален магазин за климатици в Смолян. Продажба, професионален монтаж за 24–48 ч, гаранция и сервиз. Daikin, Mitsubishi, Fudjitsu, Toshiba. Обслужваме Смолян, Рудозем, Мадан, Девин и региона.',
     keywords: [...REGION_KEYWORDS, 'инверторен климатик', 'монтаж климатик цена', 'климатик на изплащане'],
     canonicalPath: '/',
     ogImage: DEFAULT_OG_IMAGE,
@@ -122,7 +122,7 @@ export const LANDING_PAGE_SEO: Record<string, LandingSeoConfig> = {
   smolyan: {
     ...{
       title: 'Климатици Смолян | Продажба и монтаж — Смолян Клима',
-      description: 'Купете климатик в Смолян с професионален монтаж и гаранция. Официален дилър Daikin, Mitsubishi, Samsung. Магазин в кв. Райково.',
+      description: 'Купете климатик в Смолян с професионален монтаж и гаранция. Официален дилър Daikin, Mitsubishi, Fudjitsu, Toshiba. Магазин в кв. Райково.',
       keywords: ['климатик смолян', 'климатици смолян', 'магазин климатици смолян'],
       canonicalPath: '/klimatik-smolyan',
       ogImage: DEFAULT_OG_IMAGE,

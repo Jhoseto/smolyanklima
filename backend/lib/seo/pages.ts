@@ -24,7 +24,7 @@ export const STATIC_PAGES: Record<string, SeoPage> = {
   '/': {
     title: 'Климатици Смолян | Продажба, монтаж и сервиз — Смолян Клима',
     description:
-      'Смолян Клима — официален магазин за климатици в Смолян. Продажба, монтаж за 24–48 ч, гаранция и сервиз. Daikin, Mitsubishi, Samsung.',
+      'Смолян Клима — официален магазин за климатици в Смолян. Продажба, монтаж за 24–48 ч, гаранция и сервиз. Daikin, Mitsubishi, Fudjitsu, Toshiba.',
     keywords: [...REGION_KW, 'инверторен климатик', 'климатик на изплащане'],
     canonicalPath: '/',
     ogImage: OG,
@@ -84,7 +84,7 @@ export const LANDING_PAGES: Record<string, SeoPage> = {
   '/klimatik-smolyan': {
     title: 'Климатици Смолян | Продажба и монтаж — Смолян Клима',
     description:
-      'Купете климатик в Смолян с професионален монтаж и гаранция. Официален дилър Daikin, Mitsubishi, Samsung. Магазин в кв. Райково.',
+      'Купете климатик в Смолян с професионален монтаж и гаранция. Официален дилър Daikin, Mitsubishi, Fujitsu, Toshiba. Магазин в кв. Райково.',
     keywords: ['климатик смолян', 'климатици смолян', 'магазин климатици смолян', 'монтаж климатик смолян'],
     canonicalPath: '/klimatik-smolyan',
     ogImage: OG,
