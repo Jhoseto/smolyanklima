@@ -9,12 +9,17 @@
       <stop offset="0%" stop-color="#00B4D8"/>
       <stop offset="100%" stop-color="#0077B6"/>
     </linearGradient>
+    <clipPath id="round">
+      <circle cx="100" cy="100" r="100"/>
+    </clipPath>
   </defs>
-  <rect width="200" height="200" rx="36" fill="white"/>
-  <g transform="translate(100,100) scale(2.47887324) translate(-40,-50)">
-    <path d="M70 15.4A40 40 0 0 0 10.1 47L28.2 47A22 22 0 0 1 61 30.9Z" fill="url(#og)"/>
-    <path d="M10.1 53A40 40 0 0 0 70 84.6L61 69.1A22 22 0 0 1 28.2 53Z" fill="url(#ob)"/>
-    <path d="M62.6 47A13 13 0 0 0 37.4 47Z" fill="url(#og)"/>
-    <path d="M37.4 53A13 13 0 0 0 62.6 53Z" fill="url(#ob)"/>
+  <g clip-path="url(#round)">
+    <circle cx="100" cy="100" r="100" fill="white"/>
+    <g transform="translate(77,100) scale(2.30) translate(-40,-50)">
+      <path d="M70 15.4A40 40 0 0 0 10.1 47L28.2 47A22 22 0 0 1 61 30.9Z" fill="url(#og)"/>
+      <path d="M10.1 53A40 40 0 0 0 70 84.6L61 69.1A22 22 0 0 1 28.2 53Z" fill="url(#ob)"/>
+      <path d="M62.6 47A13 13 0 0 0 37.4 47Z" fill="url(#og)"/>
+      <path d="M37.4 53A13 13 0 0 0 62.6 53Z" fill="url(#ob)"/>
+    </g>
   </g>
 </svg>

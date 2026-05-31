@@ -6,7 +6,7 @@ import { logAdminActivity } from "@/lib/admin/audit";
 import { ensureAcceptanceProtocolForInstallation } from "@/lib/admin/acceptanceProtocolFromInstall";
 import { syncConsultationContactFollowUp } from "@/lib/work-items/consultation-contact";
 import { buildAdminSearchOrFilter } from "@/lib/admin/phoneSearchPattern";
-import { parseMountPhaseCsv } from "@/lib/admin/salesHistoryQueryFilters";
+import { parseMountPhaseCsv, parseProductConditionCsv } from "@/lib/admin/salesHistoryQueryFilters";
 import { recordManualSale } from "@/lib/admin/recordManualSale";
 import { supplierFilterOrClause, normalizeSupplierKey } from "@/lib/admin/supplierNameNormalize";
 
@@ -31,8 +31,8 @@ const QuerySchema = z.object({
   status: z.enum(["planned", "in_progress", "done", "cancelled"]).optional(),
   /** Филтър за панела „Продажби“: чака монтаж / завършен. */
   saleInstallState: z.enum(["pending_mount", "completed"]).optional(),
-  /** Панел „Продажби“: нови / втора употреба (по products.product_condition). */
-  productCondition: z.enum(["new", "used"]).optional(),
+  /** Панел „Продажби“: CSV new,used — on/off chip филтри. */
+  productCondition: z.string().optional(),
   /** CSV: pending_mount, completed, cancelled */
   mountPhase: z.string().optional(),
   hasSupplier: z.enum(["yes", "no"]).optional(),
@@ -262,7 +262,12 @@ export async function GET(req: NextRequest) {
     if (orParts.length > 0) query = query.or(orParts.join(","));
   }
   if (productCondition) {
-    query = query.eq("sale_product_condition", productCondition);
+    const productConditions = parseProductConditionCsv(productCondition);
+    if (productConditions.length === 1) {
+      query = query.eq("sale_product_condition", productConditions[0]);
+    } else if (productConditions.length > 1) {
+      query = query.in("sale_product_condition", productConditions);
+    }
   }
   if (brandId) query = query.eq("products.brand_id", brandId);
   if (productRegion) query = query.eq("products.product_region", productRegion);

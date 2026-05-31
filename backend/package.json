@@ -12,7 +12,8 @@
     "import:condex": "tsx scripts/sync-condex-catalog.ts",
     "reclassify:accessories": "tsx scripts/reclassify-bulclima-accessories.ts",
     "catalog:images": "node scripts/sync-ddg-images.mjs",
-    "catalog:images:stale": "node scripts/sync-ddg-images.mjs --only-stale"
+    "catalog:images:stale": "node scripts/sync-ddg-images.mjs --only-stale",
+    "icons:generate": "tsx scripts/generate-public-icons.ts"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.5.1",

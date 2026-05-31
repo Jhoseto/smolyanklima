@@ -11,21 +11,26 @@ const SYM_VBH = 71;
 
 /** JSX за next/og ImageResponse → PNG икони (админ PWA). Плоски цветове за satori. */
 export function PwaIconJsx(size: number): ReactElement {
+  const pad = Math.round(size * 0.04);
+  const glyph = Math.round(size * 0.92);
   return (
     <div
       style={{
         width: size,
         height: size,
         background: "white",
+        borderRadius: "50%",
         display: "flex",
         alignItems: "center",
-        justifyContent: "center",
+        justifyContent: "flex-start",
+        overflow: "hidden",
+        paddingLeft: pad,
       }}
     >
       <svg
         viewBox={`${SYM_VBX} ${SYM_VBY} ${SYM_VBW} ${SYM_VBH}`}
-        width={size}
-        height={size}
+        width={glyph}
+        height={glyph}
         xmlns="http://www.w3.org/2000/svg"
       >
         <path

@@ -3,7 +3,7 @@
  * Admin PWA uses /admin/sw-admin.js separately.
  */
 const CACHE = "sk-public-v1";
-const PRECACHE = ["/", "/index.html", "/manifest.json", "/icon-192.png", "/icon.svg"];
+const PRECACHE = ["/", "/index.html", "/manifest.json", "/favicon.ico", "/icon-192.png", "/icon.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

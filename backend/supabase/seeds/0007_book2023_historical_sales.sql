@@ -2,7 +2,7 @@
 -- Seed: Исторически продажби от Book2023-2.xls (зелени редове)
 -- =====================================================================
 -- Редове: 2345
--- Изисква: 0037_contacts_phone_nullable, 0075_work_items_purchase_price
+-- Изисква: 0037_contacts_phone_nullable, 0075_work_items_purchase_price, 0078_work_items_sale_product_condition
 -- Идемпотентност: пропуска продукт с вече съществуващ сериен + sale work_item
 -- ВАЖНО: Един-единствен DO блок — пусни целия файл (Ctrl+A → Run).
 -- =====================================================================
@@ -20,6 +20,14 @@ DECLARE
   v_imported int := 0;
   v_skipped int := 0;
 BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'work_items'
+      AND column_name = 'supplier_invoice_number'
+  ) THEN
+    RAISE EXCEPTION 'Seed 0007 изисква миграция 0076_work_items_supplier_fields.';
+  END IF;
+
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_schema = 'public' AND table_name = 'work_items'
@@ -2486,15 +2494,18 @@ BEGIN
     INSERT INTO public.work_items (
       type, event_code, status, priority, title, notes, due_date, completed_at,
       product_id, contact_id, customer_name, customer_phone, customer_address,
-      quantity, unit_price, total_amount, purchase_price, sale_install_state
+      quantity, unit_price, total_amount, purchase_price, supplier_name, supplier_invoice_number,
+      sale_install_state, sale_product_condition
     ) VALUES (
       'sale', 'sale', 'done', 'medium',
       'Продажба: ' || v_name,
-      'Импорт Book2023, ред ' || r.sheet_row || coalesce(' · доставчик: ' || r.supplier, ''),
+      'Импорт Book2023, ред ' || r.sheet_row,
       coalesce(r.sale_date, r.purchase_date),
       (coalesce(r.sale_date, r.purchase_date) + time '12:00:00') AT TIME ZONE 'Europe/Sofia',
       v_product_id, v_contact_id, r.client_name, r.client_phone, r.client_address,
-      1, coalesce(r.sale_price, 0), coalesce(r.sale_price, 0), r.purchase_price, 'completed'
+      1, coalesce(r.sale_price, 0), coalesce(r.sale_price, 0), r.purchase_price,
+      nullif(btrim(r.supplier), ''), nullif(btrim(r.purchase_invoice), ''),
+      'completed', 'new'
     ) RETURNING id INTO v_sale_id;
     v_imported := v_imported + 1;
   END LOOP;

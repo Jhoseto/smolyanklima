@@ -437,7 +437,7 @@ export default function SupplierOrdersHistoryPage() {
         <div className="flex items-center gap-2">
           <Button variant="primary" onClick={() => setManualDeliveryOpen(true)} className="gap-2 shadow-sm">
             <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Ръчна доставка</span>
+            <span className="hidden sm:inline">Ръчна поръчка</span>
           </Button>
           <Button variant="secondary" onClick={() => void load()} className="gap-2 shadow-sm">
             <RefreshCw className="h-4 w-4" />

@@ -36,7 +36,7 @@ const nextConfig = {
     return [
       {
         source:
-          "/:path((?!api/|admin/|login$|_next/|assets/|images/|favicon\\.ico|manifest\\.webmanifest|manifest\\.json|icon\\.svg|icon-192\\.png|icon-512\\.png|apple-touch-icon\\.png|llms\\.txt|robots\\.txt|sitemap\\.xml|rss\\.xml).*)",
+          "/:path((?!api/|admin/|login$|_next/|assets/|images/|favicon\\.ico|favicon-16x16\\.png|favicon-32x32\\.png|manifest\\.webmanifest|manifest\\.json|icon\\.svg|icon-192\\.png|icon-512\\.png|apple-touch-icon\\.png|llms\\.txt|robots\\.txt|sitemap\\.xml|rss\\.xml).*)",
         destination: "/index.html",
       },
     ];

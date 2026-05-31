@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { SectionTitle, Card, Input, Select, Button, Table, Th, Td } from "../ui";
-import { RefreshCw, CheckCircle2, Ban, Eye, ArrowUpDown, ArrowUp, ArrowDown, Sparkles, Recycle, FilterX, Plus } from "lucide-react";
+import { RefreshCw, CheckCircle2, Ban, Eye, ArrowUpDown, ArrowUp, ArrowDown, Sparkles, Recycle, FilterX, Plus, BarChart3 } from "lucide-react";
 import { ProductQuickViewButton } from "../ProductQuickView";
 import { SaleDetailModal } from "./SaleDetailModal";
 import { ManualSaleModal } from "./ManualSaleModal";
+import { SalesHistoryReportPanel } from "./SalesHistoryReportPanel";
 import {
   SALE_CANCEL_REASONS,
   SALE_CANCEL_REASON_LABELS,
@@ -15,9 +16,12 @@ import {
 import { saleSupplierInvoice, saleSupplierName } from "@/lib/admin/saleWorkItemMeta";
 import {
   mountPhaseCsv,
+  productConditionCsv,
+  saleProductConditionFilterLabel,
   toggleSaleChipFilter,
   type SaleDataFlagFilter,
   type SaleMountPhaseFilter,
+  type SaleProductConditionFilter,
 } from "@/lib/admin/salesHistoryQueryFilters";
 import type { ProductRegion } from "@/lib/admin/productRegion";
 import { groupSupplierNames, mergeSupplierGroups, type GroupedSupplier } from "@/lib/admin/supplierNameNormalize";
@@ -249,6 +253,12 @@ function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+function emptySalesMessage(conditions: SaleProductConditionFilter[]): string {
+  if (conditions.length === 1 && conditions[0] === "new") return "Няма продажби на нови продукти.";
+  if (conditions.length === 1 && conditions[0] === "used") return "Няма продажби на втора употреба.";
+  return "Няма продажби по избраните критерии.";
+}
+
 function periodRange(preset: string): { from: string; to: string } {
   const now = new Date();
   if (preset === "month") {
@@ -272,7 +282,7 @@ function periodRange(preset: string): { from: string; to: string } {
 const PERIOD_YEARS = [2026, 2025, 2024, 2023, 2022] as const;
 
 export default function AdminHistoryPage() {
-  const [section, setSection] = useState<SaleSection>("new");
+  const [productConditions, setProductConditions] = useState<SaleProductConditionFilter[]>([]);
   const [items, setItems] = useState<WorkRow[]>([]);
   const [q, setQ] = useState("");
   const [mountPhases, setMountPhases] = useState<SaleMountPhaseFilter[]>([]);
@@ -295,8 +305,29 @@ export default function AdminHistoryPage() {
   const [cancelReason, setCancelReason] = useState<SaleCancelReason | "">("");
   const [detailSaleId, setDetailSaleId] = useState<string | null>(null);
   const [manualSaleOpen, setManualSaleOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportGenerateToken, setReportGenerateToken] = useState(0);
+  const [isMasterAdmin, setIsMasterAdmin] = useState(false);
   const [sortBy, setSortBy] = useState<SortField>("sale_date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/admin/whoami", { credentials: "include" });
+        const json = (await res.json().catch(() => ({}))) as { data?: { admin?: { role?: string } | null } };
+        if (!cancelled && res.ok) {
+          setIsMasterAdmin(json.data?.admin?.role === "master_admin");
+        }
+      } catch {
+        if (!cancelled) setIsMasterAdmin(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     void Promise.all([
@@ -320,8 +351,12 @@ export default function AdminHistoryPage() {
       });
   }, []);
 
+  const manualSaleSection: SaleSection =
+    productConditions.length === 1 ? productConditions[0] : "new";
+
   const activeFiltersCount = useMemo(() => {
     let n = 0;
+    if (productConditions.length > 0) n += 1;
     if (mountPhases.length) n += 1;
     if (dataFlags.length) n += dataFlags.length;
     if (productRegion) n += 1;
@@ -332,11 +367,12 @@ export default function AdminHistoryPage() {
     if (fromDate || toDate) n += 1;
     if (q.trim()) n += 1;
     return n;
-  }, [mountPhases, dataFlags, productRegion, brandId, supplierKey, amountMin, amountMax, fromDate, toDate, q]);
+  }, [productConditions, mountPhases, dataFlags, productRegion, brandId, supplierKey, amountMin, amountMax, fromDate, toDate, q]);
 
   function resetFilters() {
     setPage(1);
     setQ("");
+    setProductConditions([]);
     setMountPhases([]);
     setDataFlags([]);
     setProductRegion("");
@@ -382,11 +418,81 @@ export default function AdminHistoryPage() {
     if (toDate) sp.set("to", toDate);
     sp.set("page", String(page));
     sp.set("perPage", "30");
-    sp.set("productCondition", section);
+    const conditionCsv = productConditionCsv(productConditions);
+    if (conditionCsv) sp.set("productCondition", conditionCsv);
     sp.set("sortBy", sortBy);
     sp.set("sortDir", sortDir);
     return sp.toString();
-  }, [q, mountPhases, dataFlags, productRegion, brandId, supplierKey, amountMin, amountMax, fromDate, toDate, page, section, sortBy, sortDir]);
+  }, [q, mountPhases, dataFlags, productRegion, brandId, supplierKey, amountMin, amountMax, fromDate, toDate, page, productConditions, sortBy, sortDir]);
+
+  const reportQs = useMemo(() => {
+    const sp = new URLSearchParams();
+    if (q.trim()) sp.set("q", q.trim());
+    const mountCsv = mountPhaseCsv(mountPhases);
+    if (mountCsv) sp.set("mountPhase", mountCsv);
+    if (supplierKey.trim()) sp.set("supplierKey", supplierKey.trim());
+    if (dataFlags.includes("invoice")) sp.set("hasSupplierInvoice", "yes");
+    if (dataFlags.includes("purchase")) sp.set("hasPurchasePrice", "yes");
+    if (productRegion) sp.set("productRegion", productRegion);
+    if (brandId) sp.set("brandId", brandId);
+    const min = amountMin.trim() ? Number(amountMin.replace(",", ".")) : NaN;
+    const max = amountMax.trim() ? Number(amountMax.replace(",", ".")) : NaN;
+    if (Number.isFinite(min)) sp.set("amountMin", String(min));
+    if (Number.isFinite(max)) sp.set("amountMax", String(max));
+    if (fromDate) sp.set("from", fromDate);
+    if (toDate) sp.set("to", toDate);
+    const conditionCsv = productConditionCsv(productConditions);
+    if (conditionCsv) sp.set("productCondition", conditionCsv);
+    return sp.toString();
+  }, [q, mountPhases, dataFlags, productRegion, brandId, supplierKey, amountMin, amountMax, fromDate, toDate, productConditions]);
+
+  const reportFiltersHint = useMemo(() => {
+    const parts: string[] = [saleProductConditionFilterLabel(productConditions)];
+    if (fromDate || toDate) {
+      parts.push(`${fromDate || "…"} → ${toDate || "…"}`);
+    } else if (periodPreset === "month") {
+      parts.push("Този месец");
+    } else if (periodPreset === "90d") {
+      parts.push("Последни 90 дни");
+    } else if (periodPreset) {
+      parts.push(`${periodPreset} г.`);
+    }
+    if (q.trim()) parts.push(`Търсене: „${q.trim()}“`);
+    if (mountPhases.length) parts.push(`Монтаж: ${mountPhases.length} статуса`);
+    if (brandId) {
+      const b = brands.find((x) => x.id === brandId);
+      if (b) parts.push(`Марка: ${b.name}`);
+    }
+    if (supplierKey) {
+      const s = supplierOptions.find((x) => x.key === supplierKey);
+      parts.push(`Доставчик: ${s?.label ?? supplierKey}`);
+    }
+    if (productRegion === "europe") parts.push("Регион: Европа");
+    if (productRegion === "japan") parts.push("Регион: Япония");
+    if (amountMin.trim() || amountMax.trim()) {
+      parts.push(`€ ${amountMin || "0"} – ${amountMax || "∞"}`);
+    }
+    return parts.join(" · ");
+  }, [
+    productConditions,
+    fromDate,
+    toDate,
+    periodPreset,
+    q,
+    mountPhases,
+    brandId,
+    brands,
+    supplierKey,
+    supplierOptions,
+    productRegion,
+    amountMin,
+    amountMax,
+  ]);
+
+  function generateReport() {
+    setReportOpen(true);
+    setReportGenerateToken((t) => t + 1);
+  }
 
   async function load() {
     setError(null);
@@ -496,39 +602,6 @@ export default function AdminHistoryPage() {
         </div>
       </div>
 
-      <div className="flex rounded-xl border border-slate-200 p-0.5 bg-white w-full sm:w-auto sm:min-w-[320px] shadow-sm">
-        <button
-          type="button"
-          onClick={() => {
-            setPage(1);
-            setSection("new");
-          }}
-          className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold transition-colors ${
-            section === "new"
-              ? "bg-brand-blue-500 text-white shadow-sm"
-              : "text-slate-500 hover:bg-brand-blue-50 hover:text-brand-blue-700"
-          }`}
-        >
-          <Sparkles className="w-3.5 h-3.5" />
-          Нови
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setPage(1);
-            setSection("used");
-          }}
-          className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold transition-colors ${
-            section === "used"
-              ? "bg-amber-600 text-white shadow-sm"
-              : "text-slate-500 hover:bg-amber-50 hover:text-amber-800"
-          }`}
-        >
-          <Recycle className="w-3.5 h-3.5" />
-          Втора употреба
-        </button>
-      </div>
-
       <Card className="p-2.5 md:p-3 space-y-2">
         <div className="flex flex-col sm:flex-row sm:items-center gap-2">
           <Input
@@ -553,6 +626,33 @@ export default function AdminHistoryPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+          <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Състояние:</span>
+          <ChipToggle
+            active={productConditions.includes("new")}
+            onClick={() => {
+              setPage(1);
+              setProductConditions((p) => toggleSaleChipFilter(p, "new"));
+            }}
+          >
+            <span className="inline-flex items-center gap-1">
+              <Sparkles className="w-3 h-3" />
+              Нови
+            </span>
+          </ChipToggle>
+          <ChipToggle
+            active={productConditions.includes("used")}
+            tone="amber"
+            onClick={() => {
+              setPage(1);
+              setProductConditions((p) => toggleSaleChipFilter(p, "used"));
+            }}
+          >
+            <span className="inline-flex items-center gap-1">
+              <Recycle className="w-3 h-3" />
+              Втора употреба
+            </span>
+          </ChipToggle>
+          <span className="hidden sm:inline h-4 w-px bg-slate-200 mx-0.5" aria-hidden />
           <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Монтаж:</span>
           <ChipToggle
             active={mountPhases.includes("pending_mount")}
@@ -715,8 +815,30 @@ export default function AdminHistoryPage() {
             inputMode="decimal"
             className="!w-[4.5rem] !py-1 !text-xs"
           />
+          {isMasterAdmin && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={generateReport}
+              className="ml-auto gap-1.5 border-[#00B4D8]/35 bg-gradient-to-r from-white to-[#e6f9fd]/80 text-[#0077B6] shadow-sm hover:border-[#00B4D8]/60 hover:from-[#e6f9fd]/50"
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              Създай отчет
+            </Button>
+          )}
         </div>
       </Card>
+
+      {isMasterAdmin && (
+        <SalesHistoryReportPanel
+          open={reportOpen}
+          onClose={() => setReportOpen(false)}
+          queryString={reportQs}
+          sectionLabel={saleProductConditionFilterLabel(productConditions)}
+          filtersHint={reportFiltersHint}
+          generateToken={reportGenerateToken}
+        />
+      )}
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm font-medium">{error}</div>}
 
@@ -831,7 +953,7 @@ export default function AdminHistoryPage() {
             {items.length === 0 && (
               <tr>
                 <Td colSpan={11} className="text-center py-8 text-slate-500">
-                  {section === "new" ? "Няма продажби на нови продукти." : "Няма продажби на втора употреба."}
+                  {emptySalesMessage(productConditions)}
                 </Td>
               </tr>
             )}
@@ -843,7 +965,7 @@ export default function AdminHistoryPage() {
       <div className="md:hidden space-y-2">
         {items.length === 0 && (
           <div className="bg-white rounded-xl border border-slate-200 p-6 text-center text-slate-500 text-sm">
-            {section === "new" ? "Няма продажби на нови продукти." : "Няма продажби на втора употреба."}
+            {emptySalesMessage(productConditions)}
           </div>
         )}
         {items.map((row) => {
@@ -930,7 +1052,7 @@ export default function AdminHistoryPage() {
 
       <div className="flex justify-between items-center">
         <span className="text-sm text-slate-500 font-medium">
-          {section === "new" ? "Нови" : "Втора употреба"} · общо: {meta.total}
+          {saleProductConditionFilterLabel(productConditions)} · общо: {meta.total}
         </span>
         <div className="flex items-center gap-2 md:gap-3">
           <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
@@ -949,7 +1071,7 @@ export default function AdminHistoryPage() {
 
       {manualSaleOpen && (
         <ManualSaleModal
-          section={section}
+          section={manualSaleSection}
           onClose={() => setManualSaleOpen(false)}
           onSuccess={() => void load()}
         />
