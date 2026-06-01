@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { notifyAdminsLiveChat } from "@/lib/admin-web-push";
+import { processChatInactivity } from "@/lib/live-chat/inactivity";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -18,7 +19,7 @@ async function resolveChat(chatId: string, sessionToken: string) {
   const supabase = createSupabaseServiceRoleClient();
   const { data, error } = await supabase
     .from("live_chats")
-    .select("id, session_token, visitor_name, visitor_email, status, created_at, last_message_at")
+    .select("id, session_token, visitor_name, visitor_email, status, created_at, last_message_at, last_warned_at")
     .eq("id", chatId)
     .maybeSingle();
   if (error || !data) return { chat: null, supabase };
@@ -35,13 +36,28 @@ export async function GET(req: NextRequest, { params }: Params) {
   const { chat, supabase } = await resolveChat(id, token);
   if (!chat) return withCors(req, NextResponse.json({ error: "NOT_FOUND" }, { status: 404 }));
 
+  if (chat.status === "active") {
+    await processChatInactivity(supabase, {
+      id: chat.id,
+      status: chat.status,
+      last_warned_at: chat.last_warned_at as string | null,
+      created_at: chat.created_at as string,
+    });
+  }
+
   const { data: messages } = await supabase
     .from("live_chat_messages")
     .select("id, sender_role, content, created_at, metadata")
     .eq("chat_id", id)
     .order("created_at", { ascending: true });
 
-  return withCors(req, NextResponse.json({ chat, messages: messages ?? [] }));
+  const { data: freshChat } = await supabase
+    .from("live_chats")
+    .select("id, visitor_name, visitor_email, status, created_at, last_message_at, last_warned_at")
+    .eq("id", id)
+    .maybeSingle();
+
+  return withCors(req, NextResponse.json({ chat: freshChat ?? chat, messages: messages ?? [] }));
 }
 
 const SendSchema = z.object({
@@ -77,6 +93,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     .from("live_chats")
     .update({
       last_message_at: new Date().toISOString(),
+      last_warned_at: null,
       ...(chat.status === "waiting" ? { status: "waiting" } : {}),
     })
     .eq("id", id);

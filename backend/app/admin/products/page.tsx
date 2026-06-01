@@ -308,23 +308,79 @@ function catalogStockBadgeClass(status: string) {
   return "bg-slate-100 text-slate-700 border border-slate-200/70";
 }
 
+function searchTokens(query: string): string[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const seen = new Set<string>();
+  const tokens: string[] = [];
+  for (const part of q.split(/[\s\-_/]+/)) {
+    const t = part.trim();
+    if (!t) continue;
+    if (t.length < 2 && !/\d/.test(t)) continue;
+    if (seen.has(t)) continue;
+    seen.add(t);
+    tokens.push(t);
+  }
+  return tokens;
+}
+
 /**
- * Подсветка на текстов фрагмент, който отговаря на текущия search query.
- * Регистър-нечувствително. Връща JSX с обвити в <mark> съвпадения.
+ * Подсветка на съвпадения от търсенето (целия низ или всяка дума поотделно).
  */
 function highlightMatch(text: string | null | undefined, query: string): ReactNode {
   const value = text ?? "";
   const q = query.trim();
   if (!value || !q) return value || "—";
-  const idx = value.toLowerCase().indexOf(q.toLowerCase());
-  if (idx < 0) return value;
-  return (
-    <>
-      {value.slice(0, idx)}
-      <mark className="bg-yellow-100 text-slate-900 rounded px-0.5">{value.slice(idx, idx + q.length)}</mark>
-      {value.slice(idx + q.length)}
-    </>
-  );
+
+  const fullIdx = value.toLowerCase().indexOf(q.toLowerCase());
+  if (fullIdx >= 0) {
+    return (
+      <>
+        {value.slice(0, fullIdx)}
+        <mark className="bg-yellow-100 text-slate-900 rounded px-0.5">{value.slice(fullIdx, fullIdx + q.length)}</mark>
+        {value.slice(fullIdx + q.length)}
+      </>
+    );
+  }
+
+  const tokens = searchTokens(q);
+  if (tokens.length === 0) return value;
+
+  type Span = { start: number; end: number };
+  const spans: Span[] = [];
+  const lower = value.toLowerCase();
+  for (const tok of tokens) {
+    let from = 0;
+    while (from < lower.length) {
+      const idx = lower.indexOf(tok, from);
+      if (idx < 0) break;
+      spans.push({ start: idx, end: idx + tok.length });
+      from = idx + tok.length;
+    }
+  }
+  if (spans.length === 0) return value;
+
+  spans.sort((a, b) => a.start - b.start || a.end - b.end);
+  const merged: Span[] = [];
+  for (const s of spans) {
+    const last = merged[merged.length - 1];
+    if (!last || s.start > last.end) merged.push({ ...s });
+    else last.end = Math.max(last.end, s.end);
+  }
+
+  const out: ReactNode[] = [];
+  let cursor = 0;
+  for (const s of merged) {
+    if (s.start > cursor) out.push(value.slice(cursor, s.start));
+    out.push(
+      <mark key={`${s.start}-${s.end}`} className="bg-yellow-100 text-slate-900 rounded px-0.5">
+        {value.slice(s.start, s.end)}
+      </mark>,
+    );
+    cursor = s.end;
+  }
+  if (cursor < value.length) out.push(value.slice(cursor));
+  return <>{out}</>;
 }
 
 /**
@@ -355,6 +411,13 @@ function ProductSearchBox({
   // dropdown-а като контекст: „Сериен (вътр): SN-…“ / „Фактура: …“.
   function describeMatch(p: ProductRow): { label: string; value: string } | null {
     if (!q) return null;
+    const matchesField = (value: string | null | undefined) => {
+      if (!value) return false;
+      const hay = value.toLowerCase();
+      if (hay.includes(q)) return true;
+      const tokens = searchTokens(q);
+      return tokens.length > 0 && tokens.every((tok) => hay.includes(tok));
+    };
     const candidates: Array<{ label: string; value: string | null | undefined }> = [
       { label: "Сериен (вътр)", value: p.indoor_unit_serial },
       { label: "Сериен (външ)", value: p.outdoor_unit_serial },
@@ -362,7 +425,7 @@ function ProductSearchBox({
       { label: "Slug",          value: p.slug },
     ];
     for (const c of candidates) {
-      if (c.value && c.value.toLowerCase().includes(q)) return { label: c.label, value: c.value };
+      if (matchesField(c.value)) return { label: c.label, value: c.value! };
     }
     return null;
   }

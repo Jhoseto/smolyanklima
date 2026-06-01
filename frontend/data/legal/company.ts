@@ -29,7 +29,7 @@ export const LEGAL_COMPANY = {
   /** Лице за контакт по въпроси, свързани с поверителността */
   privacyContactName: '[Лице за контакт по поверителност — попълнете]',
 
-  email: 'office@smolyanklima.bg',
+  email: 'smolyanklima@gmail.com',
   phone: '0888 58 58 16',
   phoneE164: '+359888585816',
 

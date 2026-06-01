@@ -131,11 +131,12 @@ function App() {
   const [assistantOpenSignal, setAssistantOpenSignal] = useState(0);
   const [liveUnread, setLiveUnread] = useState(0);
   const [hasLiveSession, setHasLiveSession] = useState(() => !!loadLiveChatSession());
-  const lastAdminMsgCountRef = useRef(-1);
+  const lastInboundMsgCountRef = useRef(-1);
 
-  // Background polling — when widget is minimized but session is active
+  // Background polling — when widget is minimized but session is active.
+  // GET /api/chat/[id] also runs inactivity checks server-side (no SSE needed).
   useEffect(() => {
-    if (liveChat.open) { lastAdminMsgCountRef.current = -1; return; }
+    if (liveChat.open) { lastInboundMsgCountRef.current = -1; return; }
     const session = loadLiveChatSession();
     if (!session) { setHasLiveSession(false); return; }
     setHasLiveSession(true);
@@ -147,14 +148,19 @@ function App() {
         });
         if (!res.ok) { setHasLiveSession(false); return; }
         const data = await res.json();
-        if (data.chat?.status === "closed") { setHasLiveSession(false); return; }
-        const adminCount = (data.messages ?? []).filter((m: { sender_role: string }) => m.sender_role === "admin").length;
-        if (lastAdminMsgCountRef.current >= 0 && adminCount > lastAdminMsgCountRef.current) {
-          const newMsgs = adminCount - lastAdminMsgCountRef.current;
+        const inboundCount = (data.messages ?? []).filter(
+          (m: { sender_role: string }) => m.sender_role === "admin" || m.sender_role === "system",
+        ).length;
+        if (lastInboundMsgCountRef.current >= 0 && inboundCount > lastInboundMsgCountRef.current) {
+          const newMsgs = inboundCount - lastInboundMsgCountRef.current;
           setLiveUnread(prev => prev + newMsgs);
           playBgNotificationSound();
+          setLiveChat(prev => ({ ...prev, open: true }));
         }
-        lastAdminMsgCountRef.current = adminCount;
+        lastInboundMsgCountRef.current = inboundCount;
+        if (data.chat?.status === "closed") {
+          setHasLiveSession(false);
+        }
       } catch { /* network error, ignore */ }
     };
 

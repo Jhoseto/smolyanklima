@@ -19,6 +19,9 @@ export { articleTihiKlimatici } from './posts/article-tihi-klimatici';
 export { articleNeOhlazhda } from './posts/article-ne-ohlazhda';
 export { articleWifiSmart } from './posts/article-wifi-smart';
 export { articleZaOtoplenie } from './posts/article-za-otoplenie';
+export { articleChistVazduhSmolyan } from './posts/article-chist-vazduh-smolyan';
+export { articleKlimaticiEvro2026 } from './posts/article-klimatici-evro-2026';
+export { articleHyperHeatingSmolyan } from './posts/article-hyper-heating-smolyan';
 
 // Categories, authors, tags
 export * from './categories';
@@ -38,9 +41,15 @@ import { articleTihiKlimatici } from './posts/article-tihi-klimatici';
 import { articleNeOhlazhda } from './posts/article-ne-ohlazhda';
 import { articleWifiSmart } from './posts/article-wifi-smart';
 import { articleZaOtoplenie } from './posts/article-za-otoplenie';
+import { articleChistVazduhSmolyan } from './posts/article-chist-vazduh-smolyan';
+import { articleKlimaticiEvro2026 } from './posts/article-klimatici-evro-2026';
+import { articleHyperHeatingSmolyan } from './posts/article-hyper-heating-smolyan';
 import type { Article } from './types';
 
 export const articles: Article[] = [
+  articleHyperHeatingSmolyan,
+  articleKlimaticiEvro2026,
+  articleChistVazduhSmolyan,
   article25kvm,
   articleSmolyan,
   articleMontaj,

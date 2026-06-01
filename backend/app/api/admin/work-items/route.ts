@@ -29,6 +29,8 @@ const QuerySchema = z.object({
   eventCode: z.enum(WORK_ITEM_EVENT_CODES).optional(),
   type: z.enum(["sale", "service", "stock_in", "stock_out", "task"]).optional(),
   status: z.enum(["planned", "in_progress", "done", "cancelled"]).optional(),
+  /** CSV planned,in_progress,done,cancelled — панел услуги. */
+  statusCsv: z.string().optional(),
   /** Филтър за панела „Продажби“: чака монтаж / завършен. */
   saleInstallState: z.enum(["pending_mount", "completed"]).optional(),
   /** Панел „Продажби“: CSV new,used — on/off chip филтри. */
@@ -120,6 +122,7 @@ export async function GET(req: NextRequest) {
     eventCode,
     type,
     status,
+    statusCsv,
     saleInstallState,
     productCondition,
     mountPhase,
@@ -252,7 +255,17 @@ export async function GET(req: NextRequest) {
   }
   if (eventCode) query = query.eq("event_code", eventCode);
   if (type) query = query.eq("type", type);
-  if (status) query = query.eq("status", status);
+  const statusFilters = (statusCsv ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s): s is "planned" | "in_progress" | "done" | "cancelled" =>
+      ["planned", "in_progress", "done", "cancelled"].includes(s),
+    );
+  if (statusFilters.length > 0) {
+    query = query.in("status", statusFilters);
+  } else if (status) {
+    query = query.eq("status", status);
+  }
   if (saleInstallState) query = query.eq("sale_install_state", saleInstallState);
   if (mountPhases.length > 0) {
     const orParts: string[] = [];

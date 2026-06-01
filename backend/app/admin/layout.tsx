@@ -9,6 +9,7 @@ import { AdminPushBanner } from "./AdminPushBanner";
 import { OfflineBootstrap } from "./OfflineBootstrap";
 import { OfflineExplainerCard } from "./OfflineExplainerCard";
 import { AdminLogo } from "./AdminLogo";
+import { AdminChatAlertsShell } from "./AdminChatAlertsShell";
 import { LogOut } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -101,7 +102,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               <OfflineExplainerCard />
               <AdminPushBanner role={role} />
               <div className="flex flex-col flex-1 min-h-0 min-w-0">
-                {children}
+                <AdminChatAlertsShell role={role}>{children}</AdminChatAlertsShell>
               </div>
             </div>
           </OfflineBootstrap>

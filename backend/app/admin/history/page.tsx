@@ -7,6 +7,14 @@ import { ProductQuickViewButton } from "../ProductQuickView";
 import { SaleDetailModal } from "./SaleDetailModal";
 import { ManualSaleModal } from "./ManualSaleModal";
 import { SalesHistoryReportPanel } from "./SalesHistoryReportPanel";
+import { ServiceSalesTable, ServiceStatusChips, type ServiceSortField } from "./ServiceSalesTable";
+import { ServiceDetailModal } from "./ServiceDetailModal";
+import {
+  SALES_PANEL_TABS,
+  PAID_SERVICE_EVENT_LABELS,
+  salesPanelEventCode,
+  type SalesPanelTabId,
+} from "@/lib/admin/serviceEventCodes";
 import {
   SALE_CANCEL_REASONS,
   SALE_CANCEL_REASON_LABELS,
@@ -281,7 +289,19 @@ function periodRange(preset: string): { from: string; to: string } {
 
 const PERIOD_YEARS = [2026, 2025, 2024, 2023, 2022] as const;
 
+function emptyServiceMessage(tab: SalesPanelTabId): string {
+  if (tab === "products") return "Няма записи.";
+  const label = PAID_SERVICE_EVENT_LABELS[tab];
+  return `Няма записи за „${label}“.`;
+}
+
+function toggleChipFilter<T extends string>(current: T[], value: T): T[] {
+  return current.includes(value) ? current.filter((v) => v !== value) : [...current, value];
+}
+
 export default function AdminHistoryPage() {
+  const [salesTab, setSalesTab] = useState<SalesPanelTabId>("products");
+  const [serviceStatuses, setServiceStatuses] = useState<WorkRow["status"][]>([]);
   const [productConditions, setProductConditions] = useState<SaleProductConditionFilter[]>([]);
   const [items, setItems] = useState<WorkRow[]>([]);
   const [q, setQ] = useState("");
@@ -308,8 +328,12 @@ export default function AdminHistoryPage() {
   const [reportOpen, setReportOpen] = useState(false);
   const [reportGenerateToken, setReportGenerateToken] = useState(0);
   const [isMasterAdmin, setIsMasterAdmin] = useState(false);
+  const [detailServiceId, setDetailServiceId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortField>("sale_date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  const isProductSales = salesTab === "products";
+  const serviceSortBy = sortBy as ServiceSortField;
 
   useEffect(() => {
     let cancelled = false;
@@ -356,18 +380,39 @@ export default function AdminHistoryPage() {
 
   const activeFiltersCount = useMemo(() => {
     let n = 0;
-    if (productConditions.length > 0) n += 1;
-    if (mountPhases.length) n += 1;
-    if (dataFlags.length) n += dataFlags.length;
-    if (productRegion) n += 1;
-    if (brandId) n += 1;
-    if (supplierKey) n += 1;
+    if (isProductSales) {
+      if (productConditions.length > 0) n += 1;
+      if (mountPhases.length) n += 1;
+      if (dataFlags.length) n += dataFlags.length;
+      if (productRegion) n += 1;
+      if (brandId) n += 1;
+      if (supplierKey) n += 1;
+    } else if (serviceStatuses.length) {
+      n += 1;
+    }
     if (amountMin.trim()) n += 1;
     if (amountMax.trim()) n += 1;
     if (fromDate || toDate) n += 1;
     if (q.trim()) n += 1;
     return n;
-  }, [productConditions, mountPhases, dataFlags, productRegion, brandId, supplierKey, amountMin, amountMax, fromDate, toDate, q]);
+  }, [isProductSales, productConditions, mountPhases, dataFlags, productRegion, brandId, supplierKey, serviceStatuses, amountMin, amountMax, fromDate, toDate, q]);
+
+  function switchSalesTab(tab: SalesPanelTabId) {
+    setPage(1);
+    setSalesTab(tab);
+    setSortBy("sale_date");
+    setSortDir("desc");
+    if (tab === "products") {
+      setServiceStatuses([]);
+    } else {
+      setProductConditions([]);
+      setMountPhases([]);
+      setDataFlags([]);
+      setProductRegion("");
+      setBrandId("");
+      setSupplierKey("");
+    }
+  }
 
   function resetFilters() {
     setPage(1);
@@ -378,6 +423,7 @@ export default function AdminHistoryPage() {
     setProductRegion("");
     setBrandId("");
     setSupplierKey("");
+    setServiceStatuses([]);
     setAmountMin("");
     setAmountMax("");
     setFromDate("");
@@ -402,14 +448,20 @@ export default function AdminHistoryPage() {
   const qs = useMemo(() => {
     const sp = new URLSearchParams();
     if (q.trim()) sp.set("q", q.trim());
-    sp.set("eventCode", "sale");
-    const mountCsv = mountPhaseCsv(mountPhases);
-    if (mountCsv) sp.set("mountPhase", mountCsv);
-    if (supplierKey.trim()) sp.set("supplierKey", supplierKey.trim());
-    if (dataFlags.includes("invoice")) sp.set("hasSupplierInvoice", "yes");
-    if (dataFlags.includes("purchase")) sp.set("hasPurchasePrice", "yes");
-    if (productRegion) sp.set("productRegion", productRegion);
-    if (brandId) sp.set("brandId", brandId);
+    sp.set("eventCode", salesPanelEventCode(salesTab));
+    if (isProductSales) {
+      const mountCsv = mountPhaseCsv(mountPhases);
+      if (mountCsv) sp.set("mountPhase", mountCsv);
+      if (supplierKey.trim()) sp.set("supplierKey", supplierKey.trim());
+      if (dataFlags.includes("invoice")) sp.set("hasSupplierInvoice", "yes");
+      if (dataFlags.includes("purchase")) sp.set("hasPurchasePrice", "yes");
+      if (productRegion) sp.set("productRegion", productRegion);
+      if (brandId) sp.set("brandId", brandId);
+      const conditionCsv = productConditionCsv(productConditions);
+      if (conditionCsv) sp.set("productCondition", conditionCsv);
+    } else if (serviceStatuses.length > 0) {
+      sp.set("statusCsv", serviceStatuses.join(","));
+    }
     const min = amountMin.trim() ? Number(amountMin.replace(",", ".")) : NaN;
     const max = amountMax.trim() ? Number(amountMax.replace(",", ".")) : NaN;
     if (Number.isFinite(min)) sp.set("amountMin", String(min));
@@ -418,12 +470,10 @@ export default function AdminHistoryPage() {
     if (toDate) sp.set("to", toDate);
     sp.set("page", String(page));
     sp.set("perPage", "30");
-    const conditionCsv = productConditionCsv(productConditions);
-    if (conditionCsv) sp.set("productCondition", conditionCsv);
     sp.set("sortBy", sortBy);
     sp.set("sortDir", sortDir);
     return sp.toString();
-  }, [q, mountPhases, dataFlags, productRegion, brandId, supplierKey, amountMin, amountMax, fromDate, toDate, page, productConditions, sortBy, sortDir]);
+  }, [q, salesTab, isProductSales, mountPhases, dataFlags, productRegion, brandId, supplierKey, amountMin, amountMax, fromDate, toDate, page, productConditions, serviceStatuses, sortBy, sortDir]);
 
   const reportQs = useMemo(() => {
     const sp = new URLSearchParams();
@@ -581,25 +631,63 @@ export default function AdminHistoryPage() {
     }
   }
 
+  function handleServiceSort(field: ServiceSortField) {
+    setPage(1);
+    if (sortBy === field) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(field);
+      setSortDir(defaultSortDir(field));
+    }
+  }
+
+  const activeTabLabel = SALES_PANEL_TABS.find((t) => t.id === salesTab)?.label ?? "Продажби";
+
   return (
     <div className="w-full space-y-3">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h1 className="text-lg md:text-xl font-bold text-slate-900 leading-tight">
           <SectionTitle
             title="Панел на продажбите"
-            hint="Разделено на нови и втора употреба. Статус по монтаж: чака монтаж / завършен / отказана."
+            hint={
+              isProductSales
+                ? "Климатици — нови и втора употреба. Отделни табове за монтаж, профилактика и сервиз."
+                : `${activeTabLabel} — услуги с цена от календара. Консултациите не се показват тук.`
+            }
           />
         </h1>
         <div className="flex items-center gap-2">
-          <Button variant="primary" onClick={() => setManualSaleOpen(true)} className="gap-2 shadow-sm">
-            <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">Ръчна продажба</span>
-          </Button>
+          {isProductSales && (
+            <Button variant="primary" onClick={() => setManualSaleOpen(true)} className="gap-2 shadow-sm">
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Ръчна продажба</span>
+            </Button>
+          )}
           <Button variant="secondary" onClick={() => void load()} className="gap-2 shadow-sm">
             <RefreshCw className="w-4 h-4" />
             <span className="hidden sm:inline">Обнови</span>
           </Button>
         </div>
+      </div>
+
+      <div className="flex flex-wrap gap-1 border-b border-slate-200 pb-0.5">
+        {SALES_PANEL_TABS.map((tab) => {
+          const active = salesTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => switchSalesTab(tab.id)}
+              className={`px-3 py-2 text-xs font-bold rounded-t-lg border-b-2 transition-colors ${
+                active
+                  ? "border-brand-blue-500 text-brand-blue-700 bg-brand-blue-50/60"
+                  : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+              }`}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
       <Card className="p-2.5 md:p-3 space-y-2">
@@ -610,7 +698,11 @@ export default function AdminHistoryPage() {
               setPage(1);
               setQ(e.target.value);
             }}
-            placeholder="Клиент, телефон, продукт, бележка, доставчик, фактура…"
+            placeholder={
+              isProductSales
+                ? "Клиент, телефон, продукт, бележка, доставчик, фактура…"
+                : "Клиент, телефон, заглавие, бележка…"
+            }
             className="flex-1 text-sm"
           />
           <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
@@ -625,107 +717,120 @@ export default function AdminHistoryPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-          <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Състояние:</span>
-          <ChipToggle
-            active={productConditions.includes("new")}
-            onClick={() => {
-              setPage(1);
-              setProductConditions((p) => toggleSaleChipFilter(p, "new"));
-            }}
-          >
-            <span className="inline-flex items-center gap-1">
-              <Sparkles className="w-3 h-3" />
-              Нови
-            </span>
-          </ChipToggle>
-          <ChipToggle
-            active={productConditions.includes("used")}
-            tone="amber"
-            onClick={() => {
-              setPage(1);
-              setProductConditions((p) => toggleSaleChipFilter(p, "used"));
-            }}
-          >
-            <span className="inline-flex items-center gap-1">
-              <Recycle className="w-3 h-3" />
-              Втора употреба
-            </span>
-          </ChipToggle>
-          <span className="hidden sm:inline h-4 w-px bg-slate-200 mx-0.5" aria-hidden />
-          <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Монтаж:</span>
-          <ChipToggle
-            active={mountPhases.includes("pending_mount")}
-            tone="warning"
-            onClick={() => {
-              setPage(1);
-              setMountPhases((p) => toggleSaleChipFilter(p, "pending_mount"));
-            }}
-          >
-            Чака
-          </ChipToggle>
-          <ChipToggle
-            active={mountPhases.includes("completed")}
-            tone="success"
-            onClick={() => {
-              setPage(1);
-              setMountPhases((p) => toggleSaleChipFilter(p, "completed"));
-            }}
-          >
-            Завършен
-          </ChipToggle>
-          <ChipToggle
-            active={mountPhases.includes("cancelled")}
-            tone="danger"
-            onClick={() => {
-              setPage(1);
-              setMountPhases((p) => toggleSaleChipFilter(p, "cancelled"));
-            }}
-          >
-            Отказана
-          </ChipToggle>
-          <span className="hidden sm:inline h-4 w-px bg-slate-200 mx-0.5" aria-hidden />
-          <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Данни:</span>
-          <ChipToggle
-            active={dataFlags.includes("invoice")}
-            onClick={() => {
-              setPage(1);
-              setDataFlags((p) => toggleSaleChipFilter(p, "invoice"));
-            }}
-          >
-            Фактура
-          </ChipToggle>
-          <ChipToggle
-            active={dataFlags.includes("purchase")}
-            onClick={() => {
-              setPage(1);
-              setDataFlags((p) => toggleSaleChipFilter(p, "purchase"));
-            }}
-          >
-            Доставна
-          </ChipToggle>
-          <span className="hidden sm:inline h-4 w-px bg-slate-200 mx-0.5" aria-hidden />
-          <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Регион:</span>
-          <ChipToggle
-            active={productRegion === "europe"}
-            onClick={() => {
-              setPage(1);
-              setProductRegion((r) => (r === "europe" ? "" : "europe"));
-            }}
-          >
-            EU
-          </ChipToggle>
-          <ChipToggle
-            active={productRegion === "japan"}
-            tone="amber"
-            onClick={() => {
-              setPage(1);
-              setProductRegion((r) => (r === "japan" ? "" : "japan"));
-            }}
-          >
-            JAPAN
-          </ChipToggle>
-        </div>
+        {isProductSales ? (
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Състояние:</span>
+            <ChipToggle
+              active={productConditions.includes("new")}
+              onClick={() => {
+                setPage(1);
+                setProductConditions((p) => toggleSaleChipFilter(p, "new"));
+              }}
+            >
+              <span className="inline-flex items-center gap-1">
+                <Sparkles className="w-3 h-3" />
+                Нови
+              </span>
+            </ChipToggle>
+            <ChipToggle
+              active={productConditions.includes("used")}
+              tone="amber"
+              onClick={() => {
+                setPage(1);
+                setProductConditions((p) => toggleSaleChipFilter(p, "used"));
+              }}
+            >
+              <span className="inline-flex items-center gap-1">
+                <Recycle className="w-3 h-3" />
+                Втора употреба
+              </span>
+            </ChipToggle>
+            <span className="hidden sm:inline h-4 w-px bg-slate-200 mx-0.5" aria-hidden />
+            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Монтаж:</span>
+            <ChipToggle
+              active={mountPhases.includes("pending_mount")}
+              tone="warning"
+              onClick={() => {
+                setPage(1);
+                setMountPhases((p) => toggleSaleChipFilter(p, "pending_mount"));
+              }}
+            >
+              Чака
+            </ChipToggle>
+            <ChipToggle
+              active={mountPhases.includes("completed")}
+              tone="success"
+              onClick={() => {
+                setPage(1);
+                setMountPhases((p) => toggleSaleChipFilter(p, "completed"));
+              }}
+            >
+              Завършен
+            </ChipToggle>
+            <ChipToggle
+              active={mountPhases.includes("cancelled")}
+              tone="danger"
+              onClick={() => {
+                setPage(1);
+                setMountPhases((p) => toggleSaleChipFilter(p, "cancelled"));
+              }}
+            >
+              Отказана
+            </ChipToggle>
+            <span className="hidden sm:inline h-4 w-px bg-slate-200 mx-0.5" aria-hidden />
+            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Данни:</span>
+            <ChipToggle
+              active={dataFlags.includes("invoice")}
+              onClick={() => {
+                setPage(1);
+                setDataFlags((p) => toggleSaleChipFilter(p, "invoice"));
+              }}
+            >
+              Фактура
+            </ChipToggle>
+            <ChipToggle
+              active={dataFlags.includes("purchase")}
+              onClick={() => {
+                setPage(1);
+                setDataFlags((p) => toggleSaleChipFilter(p, "purchase"));
+              }}
+            >
+              Доставна
+            </ChipToggle>
+            <span className="hidden sm:inline h-4 w-px bg-slate-200 mx-0.5" aria-hidden />
+            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Регион:</span>
+            <ChipToggle
+              active={productRegion === "europe"}
+              onClick={() => {
+                setPage(1);
+                setProductRegion((r) => (r === "europe" ? "" : "europe"));
+              }}
+            >
+              EU
+            </ChipToggle>
+            <ChipToggle
+              active={productRegion === "japan"}
+              tone="amber"
+              onClick={() => {
+                setPage(1);
+                setProductRegion((r) => (r === "japan" ? "" : "japan"));
+              }}
+            >
+              JAPAN
+            </ChipToggle>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+            <ServiceStatusChips
+              statuses={serviceStatuses}
+              onToggle={(s) => {
+                setPage(1);
+                setServiceStatuses((p) => toggleChipFilter(p, s));
+              }}
+              ChipToggle={ChipToggle}
+            />
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mr-0.5">Период:</span>
@@ -770,7 +875,7 @@ export default function AdminHistoryPage() {
               setPage(1);
               setBrandId(e.target.value);
             }}
-            className="!w-auto min-w-[7rem] max-w-[9rem] !py-1 !text-xs"
+            className={`!w-auto min-w-[7rem] max-w-[9rem] !py-1 !text-xs ${isProductSales ? "" : "hidden"}`}
           >
             <option value="">Марка</option>
             {brands.map((b) => (
@@ -785,7 +890,7 @@ export default function AdminHistoryPage() {
               setPage(1);
               setSupplierKey(e.target.value);
             }}
-            className="!w-auto min-w-[8rem] max-w-[11rem] !py-1 !text-xs"
+            className={`!w-auto min-w-[8rem] max-w-[11rem] !py-1 !text-xs ${isProductSales ? "" : "hidden"}`}
             title="Доставчик"
           >
             <option value="">Доставчик</option>
@@ -815,7 +920,7 @@ export default function AdminHistoryPage() {
             inputMode="decimal"
             className="!w-[4.5rem] !py-1 !text-xs"
           />
-          {isMasterAdmin && (
+          {isMasterAdmin && isProductSales && (
             <Button
               variant="secondary"
               size="sm"
@@ -829,7 +934,7 @@ export default function AdminHistoryPage() {
         </div>
       </Card>
 
-      {isMasterAdmin && (
+      {isMasterAdmin && isProductSales && (
         <SalesHistoryReportPanel
           open={reportOpen}
           onClose={() => setReportOpen(false)}
@@ -842,6 +947,8 @@ export default function AdminHistoryPage() {
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm font-medium">{error}</div>}
 
+      {isProductSales ? (
+        <>
       {/* Desktop table */}
       <div className="hidden md:block">
         <Table>
@@ -1049,10 +1156,21 @@ export default function AdminHistoryPage() {
           );
         })}
       </div>
+        </>
+      ) : (
+        <ServiceSalesTable
+          items={items}
+          sortBy={serviceSortBy}
+          sortDir={sortDir}
+          onSort={handleServiceSort}
+          onDetail={setDetailServiceId}
+          emptyMessage={emptyServiceMessage(salesTab)}
+        />
+      )}
 
       <div className="flex justify-between items-center">
         <span className="text-sm text-slate-500 font-medium">
-          {saleProductConditionFilterLabel(productConditions)} · общо: {meta.total}
+          {isProductSales ? saleProductConditionFilterLabel(productConditions) : activeTabLabel} · общо: {meta.total}
         </span>
         <div className="flex items-center gap-2 md:gap-3">
           <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
@@ -1068,6 +1186,7 @@ export default function AdminHistoryPage() {
       </div>
 
       <SaleDetailModal saleId={detailSaleId} onClose={() => setDetailSaleId(null)} onChanged={() => void load()} />
+      <ServiceDetailModal serviceId={detailServiceId} onClose={() => setDetailServiceId(null)} />
 
       {manualSaleOpen && (
         <ManualSaleModal

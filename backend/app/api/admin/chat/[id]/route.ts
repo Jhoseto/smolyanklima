@@ -59,3 +59,28 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (error || !data) return NextResponse.json({ error: error?.message ?? "DB_ERROR" }, { status: 500 });
   return NextResponse.json({ chat: data });
 }
+
+/** DELETE /api/admin/chat/[id] — изтриване само на приключени чатове */
+export async function DELETE(_req: NextRequest, { params }: Params) {
+  const { id } = await params;
+  const session = await adminSessionIfChatOperator();
+  if (!session) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+  const supabase = session.db;
+
+  const { data: chat, error: fetchErr } = await supabase
+    .from("live_chats")
+    .select("id, status, visitor_name")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (fetchErr) return NextResponse.json({ error: fetchErr.message }, { status: 500 });
+  if (!chat) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+  if (chat.status !== "closed") {
+    return NextResponse.json({ error: "Може да се изтриват само приключени чатове." }, { status: 400 });
+  }
+
+  const { error: delErr } = await supabase.from("live_chats").delete().eq("id", id);
+  if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
+
+  return NextResponse.json({ ok: true, id });
+}

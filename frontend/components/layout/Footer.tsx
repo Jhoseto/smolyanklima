@@ -1,6 +1,7 @@
 import React from 'react';
-import { Facebook, Instagram, Lock, Mail, MapPin, Phone } from 'lucide-react';
+import { Lock, Mail, MapPin, Phone } from 'lucide-react';
 import { Logo } from '../ui/Logo';
+import { FacebookBrandIcon, InstagramBrandIcon } from '../ui/SocialBrandIcons';
 import { LEGAL_COMPANY } from '../../data/legal/company';
 
 function adminLoginHref(): string {
@@ -25,12 +26,24 @@ export const Footer = () => {
             <p className="text-gray-400 text-sm leading-relaxed">
               Вашият доверен партньор за климатизация в Смолян и региона. Ние предлагаме качествени решения за вашия комфорт у дома и в офиса.
             </p>
-            <div className="flex gap-4">
-              <a href="#" className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center hover:bg-[#FF4D00] hover:text-white transition-colors text-gray-400">
-                <Facebook className="w-5 h-5" />
+            <div className="flex gap-3">
+              <a
+                href="https://www.facebook.com/smolyanklima"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Facebook — Смолян Клима"
+                className="rounded-full transition-transform hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FF4D00]"
+              >
+                <FacebookBrandIcon className="w-7 h-7" />
               </a>
-              <a href="#" className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center hover:bg-[#FF4D00] hover:text-white transition-colors text-gray-400">
-                <Instagram className="w-5 h-5" />
+              <a
+                href="https://www.instagram.com/smolyanklima"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Instagram — Смолян Клима"
+                className="rounded-full transition-transform hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FF4D00]"
+              >
+                <InstagramBrandIcon className="w-7 h-7" />
               </a>
             </div>
             <a

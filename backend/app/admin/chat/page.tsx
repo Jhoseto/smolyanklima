@@ -5,10 +5,12 @@ import {
   MessageCircle, Send, X, CheckCircle2, Clock, Loader2, User,
   RefreshCw, Phone, Mail, AlertCircle, Circle, Users,
   CheckCheck, Archive, Wifi, WifiOff, Info, StickyNote,
-  ChevronRight, Headphones, Globe, Zap, ExternalLink,
+  ChevronRight, Headphones, Globe, Zap, ExternalLink, Trash2,
 } from "lucide-react";
 import { SectionTitle } from "../ui";
 import { CatalogProductImage } from "@/app/admin/components/CatalogProductImage";
+import { useAdminChatAlerts } from "../AdminChatAlertsProvider";
+import { viberChatUrl } from "@/lib/admin/viberLink";
 
 type ProductCardData = {
   id: string; name: string; slug: string;
@@ -48,51 +50,6 @@ type ChatDetail = {
 
 type CannedResponse = { id: string; shortcut: string; content: string };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-// Reuse a single AudioContext — creating one per notification is wasteful
-// and breaks on older browsers that suspend new contexts until user gesture.
-let _audioCtx: AudioContext | null = null;
-
-function getAudioCtx(): AudioContext | null {
-  try {
-    // Support older Safari/Chrome with webkit prefix
-    const Ctor = (typeof AudioContext !== "undefined"
-      ? AudioContext
-      : (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext) ?? null;
-    if (!Ctor) return null;
-    if (!_audioCtx || _audioCtx.state === "closed") _audioCtx = new Ctor();
-    return _audioCtx;
-  } catch { return null; }
-}
-
-function playAdminSound() {
-  try {
-    const ctx = getAudioCtx();
-    if (!ctx) return;
-    // Resume suspended context (required after user gesture on most browsers)
-    if (ctx.state === "suspended") void ctx.resume();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.type = "sine"; osc.frequency.value = 660;
-    gain.gain.setValueAtTime(0.2, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
-    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.25);
-  } catch { /* ignore */ }
-}
-
-function requestBrowserNotification(title: string, body: string) {
-  if (!("Notification" in window)) return;
-  if (Notification.permission === "granted") {
-    new Notification(title, { body, icon: "/icon-192.png" });
-  } else if (Notification.permission === "default") {
-    Notification.requestPermission().then(p => {
-      if (p === "granted") new Notification(title, { body, icon: "/icon-192.png" });
-    });
-  }
-}
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AdminChatPage() {
@@ -100,6 +57,8 @@ export default function AdminChatPage() {
 }
 
 function AdminChatClient() {
+  const { streamConnected: alertsStreamConnected, setViewingChatId, acknowledgeUserMessage, subscribeInboxChange } =
+    useAdminChatAlerts();
   const [chats, setChats] = useState<LiveChat[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -107,7 +66,6 @@ function AdminChatClient() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [sending, setSending] = useState(false);
-  const [liveConnected, setLiveConnected] = useState(false);
   const [msgConnected, setMsgConnected] = useState(false);
   const [filter, setFilter] = useState<"" | ChatStatus>("");
   const [notesValue, setNotesValue] = useState("");
@@ -116,21 +74,14 @@ function AdminChatClient() {
   const [userTyping, setUserTyping] = useState(false);
   const [cannedResponses, setCannedResponses] = useState<CannedResponse[]>([]);
   const [showCanned, setShowCanned] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const inboxAbortRef = useRef<AbortController | null>(null);
   const msgAbortRef = useRef<AbortController | null>(null);
   const lastTypingSentRef = useRef<number>(0);
-  const prevChatsCountRef = useRef<number>(0);
-
-  // ── Request notification permission on mount ──────────────────────────────
-
-  useEffect(() => {
-    if ("Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission();
-    }
-  }, []);
 
   // ── Fetch canned responses ────────────────────────────────────────────────
 
@@ -143,22 +94,16 @@ function AdminChatClient() {
 
   // ── Fetch inbox ───────────────────────────────────────────────────────────
 
-  const fetchChats = useCallback(async (notifyNew = false) => {
+  const fetchChats = useCallback(async () => {
     const qs = filter ? `?status=${filter}` : "";
     try {
       const res = await fetch(`/api/admin/chat${qs}`);
       if (!res.ok) return;
       const data = await res.json();
-      const list: LiveChat[] = data.data ?? [];
-      const waitingCount = list.filter(c => c.status === "waiting").length;
-      if (notifyNew && waitingCount > prevChatsCountRef.current) {
-        const newest = list.find(c => c.status === "waiting");
-        playAdminSound();
-        requestBrowserNotification("Нов чат запитване", `${newest?.visitor_name ?? "Посетител"} изчаква консултант`);
-      }
-      prevChatsCountRef.current = waitingCount;
-      setChats(list);
-    } catch { /* ignore */ } finally {
+      setChats(data.data ?? []);
+    } catch {
+      /* ignore */
+    } finally {
       setLoading(false);
     }
   }, [filter]);
@@ -168,39 +113,17 @@ function AdminChatClient() {
     fetchChats();
   }, [fetchChats]);
 
-  // ── SSE: inbox changes ────────────────────────────────────────────────────
+  useEffect(() => subscribeInboxChange(() => void fetchChats()), [subscribeInboxChange, fetchChats]);
 
   useEffect(() => {
-    let aborted = false;
-    const ctrl = new AbortController();
-    inboxAbortRef.current?.abort();
-    inboxAbortRef.current = ctrl;
+    const viewing =
+      selectedId && (mobilePane === "chat" || (typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches))
+        ? selectedId
+        : null;
+    setViewingChatId(viewing);
+  }, [selectedId, mobilePane, setViewingChatId]);
 
-    (async () => {
-      try {
-        const res = await fetch("/api/admin/chat/stream", { signal: ctrl.signal });
-        if (!res.ok || !res.body) return;
-        setLiveConnected(true);
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buf = "";
-        while (!aborted) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          const parts = buf.split("\n\n");
-          buf = parts.pop() ?? "";
-          for (const part of parts) {
-            if (part.includes("event: changed")) fetchChats(true);
-          }
-        }
-      } catch { /* aborted */ } finally {
-        if (!aborted) setLiveConnected(false);
-      }
-    })();
-
-    return () => { aborted = true; ctrl.abort(); setLiveConnected(false); };
-  }, [fetchChats]);
+  useEffect(() => () => setViewingChatId(null), [setViewingChatId]);
 
   // ── Load detail ───────────────────────────────────────────────────────────
 
@@ -213,21 +136,32 @@ function AdminChatClient() {
       const data: ChatDetail = await res.json();
       setDetail(data);
       setNotesValue(data.chat.admin_notes ?? "");
+      const lastUser = [...(data.messages ?? [])].reverse().find((m) => m.sender_role === "user");
+      if (lastUser) acknowledgeUserMessage(chatId, lastUser.id);
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
     } catch { /* ignore */ } finally {
       setDetailLoading(false);
     }
-  }, []);
+  }, [acknowledgeUserMessage]);
 
   useEffect(() => {
     if (!selectedId) return;
+    const isViewing =
+      mobilePane === "chat" || (typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches);
+    if (!isViewing) return;
     loadDetail(selectedId);
-  }, [selectedId, loadDetail]);
+  }, [selectedId, mobilePane, loadDetail]);
 
-  // ── SSE: messages for selected chat ──────────────────────────────────────
+  // ── SSE: messages for selected chat (само когато панелът е отворен) ─────
 
   useEffect(() => {
     if (!selectedId) return;
+    const isViewing =
+      mobilePane === "chat" || (typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches);
+    if (!isViewing) {
+      setMsgConnected(false);
+      return;
+    }
     let aborted = false;
     const ctrl = new AbortController();
     msgAbortRef.current?.abort();
@@ -255,8 +189,11 @@ function AdminChatClient() {
             const payload = JSON.parse(dataLine[1]);
 
             if (eventType === "messages" && payload.messages?.length > 0) {
-              const hasUserMsg = payload.messages.some((m: ChatMsg) => m.sender_role === "user");
-              if (hasUserMsg) playAdminSound();
+              const userMsgs = (payload.messages as ChatMsg[]).filter((m) => m.sender_role === "user");
+              if (userMsgs.length > 0 && selectedId) {
+                const last = userMsgs[userMsgs.length - 1];
+                acknowledgeUserMessage(selectedId, last.id);
+              }
               setDetail((prev) => {
                 if (!prev) return prev;
                 const existingIds = new Set(prev.messages.map((m) => m.id));
@@ -282,7 +219,7 @@ function AdminChatClient() {
     })();
 
     return () => { aborted = true; ctrl.abort(); setMsgConnected(false); setUserTyping(false); };
-  }, [selectedId]);
+  }, [selectedId, mobilePane, acknowledgeUserMessage]);
 
   // Scroll on message change
   useEffect(() => {
@@ -354,6 +291,27 @@ function AdminChatClient() {
     }
   }, [selectedId, notesValue]);
 
+  const handleDeleteChat = useCallback(async (chatId: string) => {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/admin/chat/${chatId}`, { method: "DELETE" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((json as { error?: string }).error || "Грешка при изтриване");
+      setChats((prev) => prev.filter((c) => c.id !== chatId));
+      if (selectedId === chatId) {
+        setSelectedId(null);
+        setDetail(null);
+        setMobilePane("list");
+      }
+      setConfirmDeleteId(null);
+    } catch (e: unknown) {
+      setDeleteError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setDeleting(false);
+    }
+  }, [selectedId]);
+
   const waitingCount = chats.filter((c) => c.status === "waiting").length;
   const handleSelectChat = (id: string) => { setSelectedId(id); setMobilePane("chat"); };
 
@@ -364,7 +322,7 @@ function AdminChatClient() {
       {/* Title row */}
       <div className="flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
-          <SectionTitle title="Чат на живо" hint="Разговори с посетителите в реално време. Нови съобщения пристигат без опресняване." />
+          <SectionTitle title="Чат на живо" hint="Звук при нов разговор (дълъг сигнал) и при ново съобщение, ако чатът не е отворен. Работи в целия admin panel." />
           {waitingCount > 0 && (
             <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-orange-500 text-white text-[10px] font-black">
               {waitingCount}
@@ -372,9 +330,9 @@ function AdminChatClient() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <div className={`flex items-center gap-1 text-xs font-medium ${liveConnected ? "text-emerald-600" : "text-slate-400"}`}>
-            {liveConnected ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
-            {liveConnected ? "На живо" : "Преповторно..."}
+          <div className={`flex items-center gap-1 text-xs font-medium ${alertsStreamConnected ? "text-emerald-600" : "text-slate-400"}`}>
+            {alertsStreamConnected ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
+            {alertsStreamConnected ? "На живо" : "Преповторно..."}
           </div>
           <button onClick={() => fetchChats()} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
             <RefreshCw className="w-3.5 h-3.5" /> Обнови
@@ -412,7 +370,13 @@ function AdminChatClient() {
               </div>
             ) : (
               chats.map((chat) => (
-                <ChatRow key={chat.id} chat={chat} selected={selectedId === chat.id} onClick={() => handleSelectChat(chat.id)} />
+                <ChatRow
+                  key={chat.id}
+                  chat={chat}
+                  selected={selectedId === chat.id}
+                  onClick={() => handleSelectChat(chat.id)}
+                  onDelete={chat.status === "closed" ? () => { setDeleteError(null); setConfirmDeleteId(chat.id); } : undefined}
+                />
               ))
             )}
           </div>
@@ -452,6 +416,14 @@ function AdminChatClient() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
+                  {detail.chat.status === "closed" && (
+                    <ActionButton
+                      onClick={() => { setDeleteError(null); setConfirmDeleteId(detail.chat.id); }}
+                      color="red"
+                      icon={<Trash2 className="w-3.5 h-3.5" />}
+                      label="Изтрий"
+                    />
+                  )}
                   {detail.chat.status !== "closed" && (
                     <>
                       {detail.chat.status === "waiting" && (
@@ -460,12 +432,25 @@ function AdminChatClient() {
                       <ActionButton onClick={() => handleStatus("closed")} color="red" icon={<X className="w-3.5 h-3.5" />} label="Затвори" />
                     </>
                   )}
-                  {detail.chat.visitor_phone && (
-                    <a href={`tel:${detail.chat.visitor_phone}`}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-50 border border-slate-200 text-slate-600 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700 transition-colors">
-                      <Phone className="w-3.5 h-3.5" /> Обади се
-                    </a>
-                  )}
+                  {detail.chat.visitor_phone && (() => {
+                    const viberHref = viberChatUrl(detail.chat.visitor_phone);
+                    return viberHref ? (
+                      <a
+                        href={viberHref}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[#7360f2]/10 border border-[#7360f2]/30 text-[#5b4cdb] hover:bg-[#7360f2]/20 hover:border-[#7360f2]/50 transition-colors"
+                        title="Отваря Viber чат с този номер — от там може да позвъните"
+                      >
+                        <Phone className="w-3.5 h-3.5" /> Позвъни в Viber
+                      </a>
+                    ) : (
+                      <a
+                        href={`tel:${detail.chat.visitor_phone}`}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-50 border border-slate-200 text-slate-600 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700 transition-colors"
+                      >
+                        <Phone className="w-3.5 h-3.5" /> Обади се
+                      </a>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -590,33 +575,105 @@ function AdminChatClient() {
           )}
         </div>
       </div>
+
+      {confirmDeleteId && (
+        <div
+          className="fixed inset-0 z-[70] flex items-end md:items-center justify-center bg-slate-950/50 p-0 md:p-4 backdrop-blur-sm"
+          onClick={() => !deleting && setConfirmDeleteId(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-t-3xl md:rounded-2xl border border-slate-200 bg-white shadow-2xl p-5 pb-safe md:pb-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-center pb-2 md:hidden">
+              <div className="w-10 h-1 rounded-full bg-slate-200" />
+            </div>
+            <div className="text-lg font-black text-slate-900">Изтриване на чат</div>
+            <p className="mt-2 text-sm text-slate-600 leading-relaxed">
+              Сигурни ли сте, че искате да изтриете този приключен разговор? Всички съобщения ще бъдат премахнати
+              перманентно.
+            </p>
+            {deleteError && (
+              <p className="mt-3 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                {deleteError}
+              </p>
+            )}
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => setConfirmDeleteId(null)}
+                className="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Отказ
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => void handleDeleteChat(confirmDeleteId)}
+                className="px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 inline-flex items-center gap-2"
+              >
+                {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                Изтрий
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function ChatRow({ chat, selected, onClick }: { chat: LiveChat; selected: boolean; onClick: () => void }) {
+function ChatRow({
+  chat,
+  selected,
+  onClick,
+  onDelete,
+}: {
+  chat: LiveChat;
+  selected: boolean;
+  onClick: () => void;
+  onDelete?: () => void;
+}) {
   const time = chat.last_message_at ?? chat.created_at;
   return (
-    <button onClick={onClick}
-      className={`w-full text-left flex items-center gap-3 px-3 py-3 border-b border-slate-50 hover:bg-slate-50 transition-colors ${selected ? "bg-brand-blue-50 border-l-2 border-l-brand-blue-500" : ""}`}>
-      <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${selected ? "bg-brand-blue-100" : "bg-slate-100"}`}>
-        <User className={`w-4 h-4 ${selected ? "text-brand-blue-500" : "text-slate-500"}`} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between gap-1">
-          <span className="text-xs font-bold text-slate-900 truncate leading-none">{chat.visitor_name}</span>
-          <span className="text-[10px] text-slate-400 shrink-0">{timeAgo(time)}</span>
+    <div
+      className={`flex items-center gap-1 border-b border-slate-50 ${selected ? "bg-brand-blue-50 border-l-2 border-l-brand-blue-500" : ""}`}
+    >
+      <button onClick={onClick}
+        className={`flex-1 min-w-0 text-left flex items-center gap-3 px-3 py-3 hover:bg-slate-50 transition-colors ${selected ? "" : ""}`}>
+        <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${selected ? "bg-brand-blue-100" : "bg-slate-100"}`}>
+          <User className={`w-4 h-4 ${selected ? "text-brand-blue-500" : "text-slate-500"}`} />
         </div>
-        <div className="flex items-center gap-1.5 mt-1">
-          <StatusDot status={chat.status} />
-          <span className="text-[10px] text-slate-500 truncate">
-            {chat.status === "waiting" ? "Изчаква консултант..." : chat.status === "active" ? "Активен разговор" : "Приключен"}
-          </span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-xs font-bold text-slate-900 truncate leading-none">{chat.visitor_name}</span>
+            <span className="text-[10px] text-slate-400 shrink-0">{timeAgo(time)}</span>
+          </div>
+          <div className="flex items-center gap-1.5 mt-1">
+            <StatusDot status={chat.status} />
+            <span className="text-[10px] text-slate-500 truncate">
+              {chat.status === "waiting" ? "Изчаква консултант..." : chat.status === "active" ? "Активен разговор" : "Приключен"}
+            </span>
+          </div>
         </div>
-      </div>
-    </button>
+      </button>
+      {onDelete && (
+        <button
+          type="button"
+          title="Изтрий приключен чат"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          className="shrink-0 mr-2 p-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      )}
+    </div>
   );
 }
 

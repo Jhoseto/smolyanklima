@@ -112,7 +112,7 @@ Usage: npm run import:blog [--dry-run]
           tags: a.tags ?? [],
           author_slug: a.author,
           featured_image: a.featuredImage,
-          images: [],
+          images: a.images ?? [],
           seo: a.seo ?? { title: a.title, description: a.excerpt ?? "", keywords: a.tags ?? [], ogImage: a.featuredImage },
           schema,
           is_published: isPublished,

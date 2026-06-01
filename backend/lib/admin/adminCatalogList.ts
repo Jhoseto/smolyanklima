@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { sanitizeIlikeTerm } from "@/lib/security/sanitizeSearchTerm";
+import { applyAdminAccessorySearchFilter } from "@/lib/admin/productSearchFilter";
 
 export type AdminCatalogKind = "climatics" | "accessories" | "all";
 
@@ -84,8 +84,7 @@ function applyAccessoryFilters(
 ) {
   let query = supabase.from("accessories").select(select, withCount ? { count: "exact" } : undefined);
   if (filters.q?.trim()) {
-    const t = sanitizeIlikeTerm(filters.q);
-    if (t) query = query.or(`name.ilike.%${t}%,slug.ilike.%${t}%,description.ilike.%${t}%`);
+    query = applyAdminAccessorySearchFilter(query, filters.q);
   }
   if (filters.stockStatuses?.length) {
     if (filters.stockStatuses.length === 1) {

@@ -7,6 +7,7 @@ import { InstallationMountDetailModal } from "./InstallationMountDetailModal";
 import { SupplierOrderDetailModal } from "./SupplierOrderDetailModal";
 import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, List } from "lucide-react";
 import { notifyFollowUpCallsChanged } from "@/lib/admin/follow-up-calls-events";
+import { isPaidServiceEventCode } from "@/lib/admin/serviceEventCodes";
 
 type EventCode =
   | "item_added"
@@ -204,7 +205,7 @@ function ReadonlyMini({
   );
 }
 
-/** След избор на CRM: телефон, адрес, брой и суми само за преглед (без отделни input полета). */
+/** След избор на CRM: телефон и адрес само за преглед. Цената се въвежда отделно при платени услуги. */
 function ContactDerivedSummary({ form }: { form: WorkForm }) {
   const has = Boolean(form.contactId?.trim());
   if (!has) {
@@ -212,23 +213,46 @@ function ContactDerivedSummary({ form }: { form: WorkForm }) {
       <div className="col-span-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
         <div className="text-xs font-bold text-amber-950">Няма избран CRM контакт</div>
         <p className="mt-1 text-[11px] leading-relaxed text-amber-900/95">
-          След избор от полето по-горе тук автоматично се показват <strong>телефон</strong>, <strong>адрес</strong>, <strong>брой</strong> и{" "}
-          <strong>суми</strong> към събитието (само за преглед). За смяна на контакт изчистете името и изберете друг.
+          След избор от полето по-горе тук автоматично се показват <strong>телефон</strong> и <strong>адрес</strong> към
+          контакта (само за преглед). За смяна на контакт изчистете името и изберете друг.
         </p>
       </div>
     );
   }
   return (
-    <div className="col-span-full grid grid-cols-1 gap-2 rounded-xl border border-slate-200 bg-slate-100/90 p-3 md:grid-cols-3">
+    <div className="col-span-full grid grid-cols-1 gap-2 rounded-xl border border-slate-200 bg-slate-100/90 p-3 md:grid-cols-2">
       <div className="col-span-full text-[10px] font-bold uppercase tracking-wide text-slate-500">
-        От контакт и събитието <span className="font-semibold normal-case text-slate-600">(само преглед)</span>
+        От контакт <span className="font-semibold normal-case text-slate-600">(само преглед)</span>
       </div>
       <ReadonlyMini label="Телефон" value={form.customerPhone} />
-      <ReadonlyMini label="Адрес" value={form.customerAddress} className="md:col-span-2" />
-      <ReadonlyMini label="Брой" value={form.quantity} />
-      <ReadonlyMini label="Единична цена" value={form.unitPrice.trim() ? form.unitPrice : "—"} />
-      <ReadonlyMini label="Обща сума" value={form.totalAmount.trim() ? form.totalAmount : "—"} />
+      <ReadonlyMini label="Адрес" value={form.customerAddress} />
     </div>
+  );
+}
+
+function ServicePriceField({
+  form,
+  setForm,
+}: {
+  form: WorkForm;
+  setForm: React.Dispatch<React.SetStateAction<WorkForm>>;
+}) {
+  if (!isPaidServiceEventCode(form.eventCode)) return null;
+  return (
+    <FormField label="Цена услуга (€)" full>
+      <Input
+        type="number"
+        min="0"
+        step="0.01"
+        inputMode="decimal"
+        value={form.totalAmount}
+        onChange={(e) => {
+          const v = e.target.value;
+          setForm((f) => ({ ...f, totalAmount: v, unitPrice: v, quantity: "1" }));
+        }}
+        placeholder="0.00"
+      />
+    </FormField>
   );
 }
 
@@ -1099,6 +1123,11 @@ export function WorkItemsPlanner({
                       <div className="mt-3 text-sm text-slate-600">
                         {[item.customer_name, item.customer_phone, item.customer_address].filter(Boolean).join(" · ") || "Без контакт"}
                       </div>
+                      {isPaidServiceEventCode(item.event_code) && item.total_amount != null && (
+                        <div className="mt-2 text-sm font-bold text-slate-900">
+                          Цена: €{Number(item.total_amount).toLocaleString("bg-BG", { minimumFractionDigits: 2 })}
+                        </div>
+                      )}
                       {item.notes && <div className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">{item.notes}</div>}
 
                       {editingId === item.id && !readOnly && (
@@ -1133,6 +1162,7 @@ export function WorkItemsPlanner({
                                 />
                               </div>
                               <ContactDerivedSummary form={editForm} />
+                              <ServicePriceField form={editForm} setForm={setEditForm} />
                             </>
                           ) : (
                             <div className="col-span-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-600">
@@ -1180,6 +1210,7 @@ export function WorkItemsPlanner({
                   <div className="col-span-full md:col-span-2">
                     <ContactDerivedSummary form={addForm} />
                   </div>
+                  <ServicePriceField form={addForm} setForm={setAddForm} />
                   <FormField label="Бележки" full><Textarea value={addForm.notes} onChange={(e) => setAddForm((f) => ({ ...f, notes: e.target.value }))} rows={2} /></FormField>
                   <div className="col-span-full shrink-0 pt-1">
                     <Button variant="primary" size="sm" className="w-full !py-3 !text-sm lg:!py-2 lg:!text-xs" type="button" onClick={() => void createItemInDay()} disabled={savingBusy}>
@@ -1381,9 +1412,14 @@ function EventSelect({
           const next: WorkForm = { ...f, eventCode, type: matched?.type ?? f.type };
           if (eventCode === "consultation") {
             next.status = "planned";
+            next.unitPrice = "";
+            next.totalAmount = "";
             if (!next.title.trim() && next.customerName.trim()) {
               next.title = `Консултация: ${next.customerName.trim()}`;
             }
+          } else if (!isPaidServiceEventCode(eventCode)) {
+            next.unitPrice = "";
+            next.totalAmount = "";
           }
           return next;
         });

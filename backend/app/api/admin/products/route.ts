@@ -14,7 +14,7 @@ import * as catalogBtu from "@/lib/catalog/productBtu";
 import { listAdminAccessories, listAdminCatalogMerged } from "@/lib/admin/adminCatalogList";
 import { applyProductListChipFilters, parseProductListChipFilters } from "@/lib/admin/productListQueryFilters";
 import { CATALOG_VISIBLE_PRODUCTS_OR_FILTER } from "@/lib/admin/productCatalogDisplay";
-import { sanitizeIlikeTerm } from "@/lib/security/sanitizeSearchTerm";
+import { applyAdminProductSearchFilter } from "@/lib/admin/productSearchFilter";
 
 const SpecsSchema = z.object({
   coverage_m2: z.number().nonnegative().nullable().optional(),
@@ -238,23 +238,7 @@ export async function GET(req: NextRequest) {
     let query = supabase.from("products").select(selectCols, { count: "exact" });
     if (btuProductIds) query = query.in("id", btuProductIds);
     if (q?.trim()) {
-      // Универсално търсене: име, slug, серийни номера (вътрешен/външен
-      // блок) и номер на фактура от доставчик. Запетайките в `q` се
-      // премахват, защото PostgREST ползва запетая като разделител в
-      // `or` израза и невалиден синтаксис би върнал 400.
-      const t = sanitizeIlikeTerm(q);
-      if (t) {
-        const searchFields = applySupplyFields
-          ? [
-              `name.ilike.%${t}%`,
-              `slug.ilike.%${t}%`,
-              `indoor_unit_serial.ilike.%${t}%`,
-              `outdoor_unit_serial.ilike.%${t}%`,
-              `supplier_invoice_number.ilike.%${t}%`,
-            ]
-          : [`name.ilike.%${t}%`, `slug.ilike.%${t}%`];
-        query = query.or(searchFields.join(","));
-      }
+      query = applyAdminProductSearchFilter(query, q, applySupplyFields);
     }
     query = applyProductListChipFilters(query, chipFilters) as typeof query;
     query = query.or(CATALOG_VISIBLE_PRODUCTS_OR_FILTER);
@@ -296,18 +280,7 @@ export async function GET(req: NextRequest) {
       let stubQuery = supabase.from("products").select(stubSelect, { count: "exact" });
       if (btuProductIds) stubQuery = stubQuery.in("id", btuProductIds);
       if (q?.trim()) {
-        const t = sanitizeIlikeTerm(q);
-        if (t) {
-          stubQuery = stubQuery.or(
-            [
-              `name.ilike.%${t}%`,
-              `slug.ilike.%${t}%`,
-              `indoor_unit_serial.ilike.%${t}%`,
-              `outdoor_unit_serial.ilike.%${t}%`,
-              `supplier_invoice_number.ilike.%${t}%`,
-            ].join(","),
-          );
-        }
+        stubQuery = applyAdminProductSearchFilter(stubQuery, q, true);
       }
       stubQuery = applyProductListChipFilters(stubQuery, chipFilters) as typeof stubQuery;
       stubQuery = stubQuery.or(CATALOG_VISIBLE_PRODUCTS_OR_FILTER);
