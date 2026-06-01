@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card, Input, Select, Textarea, Button, Table, Th, Td } from "../ui";
-import { ChevronDown, ChevronUp, UserPlus, Users, Activity, FileText, Phone, Mail, MapPin, X, Truck, Plus, Trash2, Save, Pencil } from "lucide-react";
+import { ChevronDown, ChevronUp, UserPlus, Users, Activity, FileText, Phone, Mail, MapPin, X, Truck, Plus, Trash2, Save, Pencil, Package } from "lucide-react";
 import { ProductQuickViewButton } from "../ProductQuickView";
 import { useDebounce } from "@/lib/hooks/useDebounce";
 import { assertNoContactPrimaryPhoneDuplicate } from "@/lib/admin/contactPhoneConflictClient";
@@ -132,6 +132,22 @@ type PhoneDraft = {
   label: string;
 };
 
+type ContactLinkedProductRow = {
+  id: string;
+  kind: "product" | "accessory";
+  name: string;
+  slug: string | null;
+  price: number | null;
+  purchase_price: number | null;
+  stock_status: string | null;
+  purchased_at: string | null;
+};
+
+function fmtEuro(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(Number(n))) return "—";
+  return `€${Number(n).toLocaleString("bg-BG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 type ContactHistoryRow = {
   id: string;
   source?: "work_item" | "inquiry";
@@ -253,6 +269,7 @@ function AdminContactsPageInner() {
    */
   const [phonesDraft, setPhonesDraft] = useState<PhoneDraft[]>([]);
   const [history, setHistory] = useState<ContactHistoryRow[]>([]);
+  const [linkedProducts, setLinkedProducts] = useState<ContactLinkedProductRow[]>([]);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -278,6 +295,7 @@ function AdminContactsPageInner() {
   const [deleting, setDeleting] = useState(false);
   const [showMerge, setShowMerge] = useState(false);
   const [showHistory, setShowHistory] = useState(true);
+  const [showLinkedProducts, setShowLinkedProducts] = useState(true);
   const [mobileView, setMobileView] = useState<"list" | "detail">("list");
   const [contactsTotal, setContactsTotal] = useState(0);
   const CONTACTS_FETCH_LIMIT = 5000;
@@ -335,6 +353,7 @@ function AdminContactsPageInner() {
           .map((p) => ({ phone: p.phone, label: p.label ?? "" })),
       );
       setHistory((json.data?.history ?? []) as ContactHistoryRow[]);
+      setLinkedProducts((json.data?.linkedProducts ?? []) as ContactLinkedProductRow[]);
     } catch (e: any) {
       setError(String(e?.message ?? e));
     }
@@ -526,6 +545,7 @@ function AdminContactsPageInner() {
       setSelected("");
       setDetail(null);
       setHistory([]);
+      setLinkedProducts([]);
       setDetailPhones([]);
       setMobileView("list");
       await loadList();
@@ -965,6 +985,86 @@ function AdminContactsPageInner() {
               </Card>
 
               <CollapsiblePanel
+                title="Обвързани продукти"
+                subtitle={
+                  linkedProducts.length
+                    ? `${linkedProducts.length} артикул${linkedProducts.length === 1 ? "" : "а"} · цени в EUR`
+                    : "Няма свързани артикули"
+                }
+                icon={<Package className="w-4 h-4" />}
+                open={showLinkedProducts}
+                onToggle={() => setShowLinkedProducts((v) => !v)}
+                accent={detailKind}
+              >
+                {linkedProducts.length === 0 ? (
+                  <div className="text-center py-6 text-slate-500 text-sm">
+                    {detailKind === "supplier"
+                      ? "Няма продукти или аксесоари с този доставчик."
+                      : "Няма продажби или операции с каталожен продукт за този клиент."}
+                  </div>
+                ) : (
+                  <>
+                    <div className="hidden md:block border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                      <Table>
+                        <thead>
+                          <tr>
+                            <Th>Име</Th>
+                            <Th>Тип</Th>
+                            <Th>Продажна</Th>
+                            <Th>Закупна</Th>
+                            <Th>Наличност</Th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {linkedProducts.map((p) => (
+                            <tr key={`${p.kind}:${p.id}`} className="hover:bg-slate-50 transition-colors">
+                              <Td className="font-medium text-slate-900">
+                                {p.kind === "product" ? (
+                                  <ProductQuickViewButton productId={p.id} productName={p.name} />
+                                ) : (
+                                  p.name
+                                )}
+                              </Td>
+                              <Td>
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700">
+                                  {p.kind === "product" ? "Климатик" : "Аксесоар"}
+                                </span>
+                              </Td>
+                              <Td className="font-semibold tabular-nums">{fmtEuro(p.price)}</Td>
+                              <Td className="font-semibold tabular-nums text-slate-700">{fmtEuro(p.purchase_price)}</Td>
+                              <Td className="text-xs text-slate-600">{p.stock_status ?? "—"}</Td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </Table>
+                    </div>
+                    <div className="md:hidden space-y-2">
+                      {linkedProducts.map((p) => (
+                        <div key={`${p.kind}:${p.id}`} className="bg-white rounded-xl border border-slate-200 p-3">
+                          <div className="font-semibold text-slate-900 text-sm leading-snug mb-1">
+                            {p.kind === "product" ? (
+                              <ProductQuickViewButton productId={p.id} productName={p.name} />
+                            ) : (
+                              p.name
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-sm">
+                            <span className="text-slate-500">{p.kind === "product" ? "Климатик" : "Аксесоар"}</span>
+                            <span className="font-black text-slate-900 tabular-nums">{fmtEuro(p.price)}</span>
+                          </div>
+                          {p.purchase_price != null && (
+                            <div className="text-[11px] text-slate-500 mt-1 tabular-nums">
+                              Закупна: {fmtEuro(p.purchase_price)}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </CollapsiblePanel>
+
+              <CollapsiblePanel
                 title={`История на ${detailTheme.titleSingular === "доставчик" ? "доставчика" : "клиента"}`}
                 subtitle={history.length ? `Записи: ${history.length}` : "Няма записи"}
                 icon={<Activity className="w-4 h-4" />}
@@ -1000,8 +1100,8 @@ function AdminContactsPageInner() {
                           <Td>
                             {r.products?.name ? <ProductQuickViewButton productId={r.products.id} productName={r.products.name} /> : "—"}
                           </Td>
-                          <Td className="font-semibold">
-                            {r.total_amount != null ? `€${Number(r.total_amount).toLocaleString()}` : "—"}
+                          <Td className="font-semibold tabular-nums">
+                            {r.total_amount != null ? fmtEuro(r.total_amount) : "—"}
                           </Td>
                           <Td className="text-xs">{new Date(r.due_date || r.created_at).toLocaleString()}</Td>
                         </tr>
@@ -1024,7 +1124,7 @@ function AdminContactsPageInner() {
                           {r.source === "inquiry" ? `Запитване${r.service_type ? ` — ${inquiryServiceTypeLabel(r.service_type)}` : ""}` : r.title}
                         </div>
                         {r.total_amount != null && (
-                          <span className="font-black text-slate-900 text-sm shrink-0">€{Number(r.total_amount).toLocaleString()}</span>
+                          <span className="font-black text-slate-900 text-sm shrink-0 tabular-nums">{fmtEuro(r.total_amount)}</span>
                         )}
                       </div>
                       <div className="flex items-center gap-2 flex-wrap">

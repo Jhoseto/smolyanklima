@@ -16,20 +16,11 @@ import {
   requestChatBrowserNotification,
   installAdminChatAudioUnlock,
 } from "@/lib/admin/chatSounds";
-
-type AlertSnapshot = {
-  waiting: Array<{ id: string; visitorName: string; visitorPhone: string | null; createdAt: string }>;
-  userMessages: Array<{
-    chatId: string;
-    visitorName: string;
-    visitorPhone: string | null;
-    messageId: string;
-    createdAt: string;
-  }>;
-};
+import type { ChatAlertSnapshot } from "@/lib/live-chat/chatAlertSnapshot";
 
 type AdminChatAlertsContextValue = {
   streamConnected: boolean;
+  waitingCount: number;
   setViewingChatId: (chatId: string | null) => void;
   acknowledgeUserMessage: (chatId: string, messageId: string) => void;
   subscribeInboxChange: (cb: () => void) => () => void;
@@ -37,11 +28,15 @@ type AdminChatAlertsContextValue = {
 
 const AdminChatAlertsContext = createContext<AdminChatAlertsContextValue | null>(null);
 
+const ALERTS_DEBOUNCE_MS = 12_000;
+const STREAM_RECONNECT_MS = 8_000;
+
 export function useAdminChatAlerts(): AdminChatAlertsContextValue {
   const ctx = useContext(AdminChatAlertsContext);
   if (!ctx) {
     return {
       streamConnected: false,
+      waitingCount: 0,
       setViewingChatId: () => {},
       acknowledgeUserMessage: () => {},
       subscribeInboxChange: () => () => {},
@@ -63,11 +58,15 @@ export function AdminChatAlertsProvider({
 }) {
   const enabled = isChatOperator(role);
   const [streamConnected, setStreamConnected] = useState(false);
+  const [waitingCount, setWaitingCount] = useState(0);
+  const streamConnectedRef = useRef(false);
   const viewingChatIdRef = useRef<string | null>(null);
   const knownWaitingIdsRef = useRef<Set<string>>(new Set());
   const lastUserMsgIdRef = useRef<Map<string, string>>(new Map());
   const seededRef = useRef(false);
   const inboxListenersRef = useRef(new Set<() => void>());
+  const lastAlertsFetchAtRef = useRef(0);
+  const alertsInFlightRef = useRef(false);
 
   const setViewingChatId = useCallback((chatId: string | null) => {
     viewingChatIdRef.current = chatId;
@@ -94,7 +93,7 @@ export function AdminChatAlertsProvider({
     }
   }, []);
 
-  const processSnapshot = useCallback((snapshot: AlertSnapshot, notify: boolean) => {
+  const processSnapshot = useCallback((snapshot: ChatAlertSnapshot, notify: boolean) => {
     const newWaiting = snapshot.waiting.filter((w) => !knownWaitingIdsRef.current.has(w.id));
     const newWaitingIdSet = new Set(newWaiting.map((w) => w.id));
 
@@ -108,6 +107,7 @@ export function AdminChatAlertsProvider({
     }
 
     knownWaitingIdsRef.current = new Set(snapshot.waiting.map((w) => w.id));
+    setWaitingCount(snapshot.waiting.length);
 
     for (const msg of snapshot.userMessages) {
       if (newWaitingIdSet.has(msg.chatId)) {
@@ -136,14 +136,22 @@ export function AdminChatAlertsProvider({
   }, []);
 
   const fetchAlerts = useCallback(
-    async (notify: boolean) => {
+    async (notify: boolean, opts?: { force?: boolean }) => {
+      const now = Date.now();
+      if (!opts?.force && now - lastAlertsFetchAtRef.current < ALERTS_DEBOUNCE_MS) return;
+      if (alertsInFlightRef.current) return;
+
+      alertsInFlightRef.current = true;
       try {
         const res = await fetch("/api/admin/chat/alerts", { credentials: "include" });
         if (!res.ok) return;
-        const snapshot = (await res.json()) as AlertSnapshot;
+        const snapshot = (await res.json()) as ChatAlertSnapshot;
+        lastAlertsFetchAtRef.current = Date.now();
         processSnapshot(snapshot, notify);
       } catch {
         /* ignore */
+      } finally {
+        alertsInFlightRef.current = false;
       }
     },
     [processSnapshot],
@@ -158,27 +166,46 @@ export function AdminChatAlertsProvider({
       Notification.requestPermission();
     }
 
-    void fetchAlerts(false);
+    void fetchAlerts(false, { force: true });
 
     let aborted = false;
-    const ctrl = new AbortController();
-    let pollTimer: ReturnType<typeof setInterval> | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let activeCtrl: AbortController | null = null;
+    let connecting = false;
 
-    const pollAlerts = () => {
-      if (aborted || (typeof document !== "undefined" && document.hidden)) return;
-      void fetchAlerts(true);
+    const setStreamState = (connected: boolean) => {
+      streamConnectedRef.current = connected;
+      setStreamConnected(connected);
     };
 
-    pollTimer = setInterval(pollAlerts, 3_000);
+    const scheduleReconnect = () => {
+      if (aborted || reconnectTimer || connecting) return;
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        if (!aborted) void connectStream();
+      }, STREAM_RECONNECT_MS);
+    };
 
-    (async () => {
+    const connectStream = async () => {
+      if (aborted || connecting) return;
+      connecting = true;
+      activeCtrl?.abort();
+      activeCtrl = new AbortController();
+      const ctrl = activeCtrl;
+
       try {
         const res = await fetch("/api/admin/chat/stream", { signal: ctrl.signal, credentials: "include" });
-        if (!res.ok || !res.body) return;
-        setStreamConnected(true);
+        if (!res.ok || !res.body) {
+          setStreamState(false);
+          scheduleReconnect();
+          return;
+        }
+
+        setStreamState(true);
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buf = "";
+
         while (!aborted) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -187,29 +214,42 @@ export function AdminChatAlertsProvider({
           buf = parts.pop() ?? "";
           for (const part of parts) {
             if (part.includes("event: changed")) {
-              await fetchAlerts(true);
+              void fetchAlerts(true);
               notifyInboxListeners();
             }
           }
         }
       } catch {
-        /* aborted */
+        /* aborted or network */
       } finally {
-        if (!aborted) setStreamConnected(false);
+        connecting = false;
+        if (!aborted) {
+          setStreamState(false);
+          scheduleReconnect();
+        }
       }
-    })();
+    };
+
+    void connectStream();
+
+    const onVisibility = () => {
+      if (!document.hidden && !aborted) void fetchAlerts(true);
+    };
+    document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
       aborted = true;
-      ctrl.abort();
-      if (pollTimer) clearInterval(pollTimer);
-      setStreamConnected(false);
+      activeCtrl?.abort();
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      document.removeEventListener("visibilitychange", onVisibility);
+      setStreamState(false);
       removeUnlock();
     };
   }, [enabled, fetchAlerts, notifyInboxListeners]);
 
   const value: AdminChatAlertsContextValue = {
     streamConnected,
+    waitingCount,
     setViewingChatId,
     acknowledgeUserMessage,
     subscribeInboxChange,

@@ -124,6 +124,14 @@ function playBgNotificationSound() {
   } catch { /* autoplay policy */ }
 }
 
+function clearLiveChatSession() {
+  try {
+    localStorage.removeItem(LIVE_SESSION_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 function App() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -133,40 +141,90 @@ function App() {
   const [hasLiveSession, setHasLiveSession] = useState(() => !!loadLiveChatSession());
   const lastInboundMsgCountRef = useRef(-1);
 
+  // Изчиства мъртва live chat сесия в localStorage (404 spam в лога).
+  useEffect(() => {
+    const session = loadLiveChatSession();
+    if (!session) return;
+    void fetch(`${LIVE_API}/api/chat/${session.chatId}`, {
+      headers: { "Content-Type": "application/json", "X-Chat-Session-Token": session.sessionToken },
+    }).then((res) => {
+      if (!res.ok) {
+        clearLiveChatSession();
+        setHasLiveSession(false);
+      }
+    }).catch(() => { /* ignore */ });
+  }, []);
+
   // Background polling — when widget is minimized but session is active.
   // GET /api/chat/[id] also runs inactivity checks server-side (no SSE needed).
   useEffect(() => {
-    if (liveChat.open) { lastInboundMsgCountRef.current = -1; return; }
+    if (liveChat.open) {
+      lastInboundMsgCountRef.current = -1;
+      return;
+    }
     const session = loadLiveChatSession();
-    if (!session) { setHasLiveSession(false); return; }
+    if (!session) {
+      setHasLiveSession(false);
+      return;
+    }
     setHasLiveSession(true);
 
+    let stopped = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    const stopPolling = () => {
+      stopped = true;
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
+
     const poll = async () => {
+      if (stopped || (typeof document !== "undefined" && document.hidden)) return;
       try {
         const res = await fetch(`${LIVE_API}/api/chat/${session.chatId}`, {
           headers: { "Content-Type": "application/json", "X-Chat-Session-Token": session.sessionToken },
         });
-        if (!res.ok) { setHasLiveSession(false); return; }
+        if (!res.ok) {
+          clearLiveChatSession();
+          setHasLiveSession(false);
+          stopPolling();
+          return;
+        }
         const data = await res.json();
         const inboundCount = (data.messages ?? []).filter(
           (m: { sender_role: string }) => m.sender_role === "admin" || m.sender_role === "system",
         ).length;
         if (lastInboundMsgCountRef.current >= 0 && inboundCount > lastInboundMsgCountRef.current) {
           const newMsgs = inboundCount - lastInboundMsgCountRef.current;
-          setLiveUnread(prev => prev + newMsgs);
+          setLiveUnread((prev) => prev + newMsgs);
           playBgNotificationSound();
-          setLiveChat(prev => ({ ...prev, open: true }));
+          setLiveChat((prev) => ({ ...prev, open: true }));
         }
         lastInboundMsgCountRef.current = inboundCount;
         if (data.chat?.status === "closed") {
+          clearLiveChatSession();
           setHasLiveSession(false);
+          stopPolling();
         }
-      } catch { /* network error, ignore */ }
+      } catch {
+        /* network error, ignore */
+      }
     };
 
-    poll();
-    const timer = setInterval(poll, 5_000);
-    return () => clearInterval(timer);
+    void poll();
+    timer = setInterval(() => void poll(), 15_000);
+
+    const onVisibility = () => {
+      if (!document.hidden && !stopped) void poll();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      stopPolling();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [liveChat.open]);
 
   const openAssistantFromHero = () => {

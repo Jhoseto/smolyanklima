@@ -306,8 +306,15 @@ function mapApiToCatalogProduct(raw: ApiProduct): CatalogProduct {
 // ── Замени САМО ТУК при реален backend ──
 // ──────────────────────────────────────
 
-/** Всички продукти */
-export async function getAllProducts(): Promise<CatalogProduct[]> {
+const PRODUCT_CACHE_TTL_MS = 5 * 60 * 1000;
+let allProductsCache: { at: number; data: Promise<CatalogProduct[]> } | null = null;
+const productByIdCache = new Map<string, { at: number; data: Promise<CatalogProduct | undefined> }>();
+
+function cacheFresh<T>(entry: { at: number; data: T } | null | undefined): entry is { at: number; data: T } {
+  return Boolean(entry && Date.now() - entry.at < PRODUCT_CACHE_TTL_MS);
+}
+
+async function loadAllProductsFromApi(): Promise<CatalogProduct[]> {
   const all: CatalogProduct[] = [];
   let page = 1;
   const perPage = 100;
@@ -319,7 +326,6 @@ export async function getAllProducts(): Promise<CatalogProduct[]> {
     all.push(
       ...batch
         .map(mapApiToCatalogProduct)
-        // Каталогът показва основните продукти (климатици). Аксесоари/части се отделят по-късно.
         .filter((p) => !isAccessoryLike(p)),
     );
     if (batch.length < perPage) break;
@@ -328,14 +334,31 @@ export async function getAllProducts(): Promise<CatalogProduct[]> {
   return all;
 }
 
+/** Всички продукти (кеш ~5 мин — AI/wizard/блог не дърпат каталога многократно). */
+export async function getAllProducts(): Promise<CatalogProduct[]> {
+  if (cacheFresh(allProductsCache)) return allProductsCache.data;
+  const data = loadAllProductsFromApi();
+  allProductsCache = { at: Date.now(), data };
+  return data;
+}
+
 /** Един продукт по slug или UUID (само публично видими). */
 export async function getProductById(id: string): Promise<CatalogProduct | undefined> {
-  const res = await fetch(`/api/products/${encodeURIComponent(id)}`);
-  if (res.status === 404) return undefined;
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) return undefined;
-  if (!json.data) return undefined;
-  return mapApiToCatalogProduct(json.data as ApiProduct);
+  const key = id.trim().toLowerCase();
+  const hit = productByIdCache.get(key);
+  if (cacheFresh(hit)) return hit.data;
+
+  const data = (async () => {
+    const res = await fetch(`/api/products/${encodeURIComponent(id)}`);
+    if (res.status === 404) return undefined;
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) return undefined;
+    if (!json.data) return undefined;
+    return mapApiToCatalogProduct(json.data as ApiProduct);
+  })();
+
+  productByIdCache.set(key, { at: Date.now(), data });
+  return data;
 }
 
 /** До 3 подобни продукта от публичния каталог (сървърно ранжиране). */

@@ -15,6 +15,8 @@ import {
   isPostgresContactsPhoneUniqueViolation,
 } from "@/lib/admin/contactPhoneDuplicate";
 import { phoneFlexibleIlikePattern } from "@/lib/admin/phoneSearchPattern";
+import { loadContactLinkedProducts } from "@/lib/admin/contactLinkedProducts";
+import { workItemAmountAsEur } from "@/lib/admin/normalizeLegacyEurAmount";
 
 const UpdateSchema = z.object({
   fullName: z.string().min(2).max(200).optional(),
@@ -54,7 +56,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
   const workByContactQ = supabase
     .from("work_items")
-      .select("id,event_code,type,status,title,due_date,customer_name,customer_phone,customer_address,quantity,unit_price,total_amount,created_at,product_id,products:product_id(id,name,slug)")
+      .select("id,event_code,type,status,title,due_date,completed_at,customer_name,customer_phone,customer_address,quantity,unit_price,total_amount,amounts_converted_from_bgn_at,created_at,product_id,products:product_id(id,name,slug)")
     .eq("contact_id", id)
     .order("due_date", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
@@ -64,7 +66,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     phoneRaw.length > 0
       ? supabase
           .from("work_items")
-          .select("id,event_code,type,status,title,due_date,customer_name,customer_phone,customer_address,quantity,unit_price,total_amount,created_at,product_id,products:product_id(id,name,slug)")
+          .select("id,event_code,type,status,title,due_date,completed_at,customer_name,customer_phone,customer_address,quantity,unit_price,total_amount,amounts_converted_from_bgn_at,created_at,product_id,products:product_id(id,name,slug)")
           .eq("customer_phone", phoneRaw)
           .order("due_date", { ascending: false, nullsFirst: false })
           .order("created_at", { ascending: false })
@@ -75,7 +77,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     phonePattern || phoneDigits.length >= 6
       ? supabase
           .from("work_items")
-          .select("id,event_code,type,status,title,due_date,customer_name,customer_phone,customer_address,quantity,unit_price,total_amount,created_at,product_id,products:product_id(name,slug)")
+          .select("id,event_code,type,status,title,due_date,completed_at,customer_name,customer_phone,customer_address,quantity,unit_price,total_amount,amounts_converted_from_bgn_at,created_at,product_id,products:product_id(id,name,slug)")
           .ilike("customer_phone", phonePattern ?? `%${phoneDigits}%`)
           .order("due_date", { ascending: false, nullsFirst: false })
           .order("created_at", { ascending: false })
@@ -146,7 +148,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       status: w.status,
       title: w.title,
       due_date: w.due_date ?? null,
-      total_amount: w.total_amount ?? null,
+      total_amount: workItemAmountAsEur(w),
       created_at: w.created_at,
       products: w.products ?? null,
       service_type: null,
@@ -178,7 +180,18 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     return db - da;
   });
 
-  return withCors(req, NextResponse.json({ data: { contact, phones, history } }));
+  let linkedProducts: Awaited<ReturnType<typeof loadContactLinkedProducts>> = [];
+  try {
+    linkedProducts = await loadContactLinkedProducts(supabase, {
+      id,
+      contact_kind: (contact as { contact_kind?: string | null }).contact_kind,
+      phone: phoneRaw,
+    });
+  } catch (linkedErr) {
+    console.warn("[contacts.get] linked products:", linkedErr);
+  }
+
+  return withCors(req, NextResponse.json({ data: { contact, phones, history, linkedProducts } }));
 }
 
 export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
