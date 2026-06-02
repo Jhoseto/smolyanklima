@@ -11,6 +11,8 @@ export type SaleReportRow = {
   customer_phone?: string | null;
   due_date?: string | null;
   completed_at?: string | null;
+  created_at?: string | null;
+  amounts_converted_from_bgn_at?: string | null;
   products?: {
     name?: string | null;
     brands?: { name?: string | null } | { name?: string | null }[] | null;
@@ -168,6 +170,7 @@ type ClientAgg = {
   revenue: number;
   purchase: number;
   purchaseRows: number;
+  monetaryCount: number;
   pendingMountCount: number;
   completedCount: number;
   cancelledCount: number;
@@ -177,7 +180,13 @@ type ClientAgg = {
   productCounts: Map<string, number>;
 };
 
-function bumpClientAgg(map: Map<string, ClientAgg>, row: SaleReportRow, revenue: number, purchase: number | null) {
+function bumpClientAgg(
+  map: Map<string, ClientAgg>,
+  row: SaleReportRow,
+  revenue: number,
+  purchase: number | null,
+  isMonetarySale: boolean,
+) {
   const key = clientGroupKey(row);
   const cur =
     map.get(key) ??
@@ -189,6 +198,7 @@ function bumpClientAgg(map: Map<string, ClientAgg>, row: SaleReportRow, revenue:
       revenue: 0,
       purchase: 0,
       purchaseRows: 0,
+      monetaryCount: 0,
       pendingMountCount: 0,
       completedCount: 0,
       cancelledCount: 0,
@@ -199,10 +209,13 @@ function bumpClientAgg(map: Map<string, ClientAgg>, row: SaleReportRow, revenue:
     } satisfies ClientAgg);
 
   cur.count += 1;
-  cur.revenue += revenue;
-  if (purchase != null) {
-    cur.purchase += purchase;
-    cur.purchaseRows += 1;
+  if (isMonetarySale) {
+    cur.monetaryCount += 1;
+    cur.revenue += revenue;
+    if (purchase != null) {
+      cur.purchase += purchase;
+      cur.purchaseRows += 1;
+    }
   }
 
   const rowName = row.customer_name?.trim();
@@ -254,6 +267,7 @@ export function computeSalesHistoryReport(
   let totalRevenue = 0;
   let totalPurchase = 0;
   let purchaseRows = 0;
+  let monetarySaleCount = 0;
   let cancelledCount = 0;
   let pendingMountCount = 0;
   let completedMountCount = 0;
@@ -279,16 +293,23 @@ export function computeSalesHistoryReport(
   ];
 
   for (const row of rows) {
-    const revenue = Number(row.total_amount ?? 0);
-    const purchase = row.purchase_price != null && Number.isFinite(Number(row.purchase_price)) ? Number(row.purchase_price) : null;
+    const isCancelled = row.status === "cancelled";
+    const revenue = isCancelled ? 0 : Number(row.total_amount ?? 0);
+    const purchase =
+      !isCancelled && row.purchase_price != null && Number.isFinite(Number(row.purchase_price))
+        ? Number(row.purchase_price)
+        : null;
 
-    totalRevenue += revenue;
-    if (purchase != null) {
-      totalPurchase += purchase;
-      purchaseRows += 1;
+    if (!isCancelled) {
+      monetarySaleCount += 1;
+      totalRevenue += revenue;
+      if (purchase != null) {
+        totalPurchase += purchase;
+        purchaseRows += 1;
+      }
     }
 
-    if (row.status === "cancelled") cancelledCount += 1;
+    if (isCancelled) cancelledCount += 1;
     const mp = mountPhaseKey(row);
     bumpMap(mountMap, mp);
     if (mp === "pending_mount") pendingMountCount += 1;
@@ -298,9 +319,9 @@ export function computeSalesHistoryReport(
 
     const custKey = clientGroupKey(row);
     if (!custKey.startsWith("u:")) customerKeys.add(custKey);
-    bumpClientAgg(clientMap, row, revenue, purchase);
+    bumpClientAgg(clientMap, row, revenue, purchase, !isCancelled);
 
-    if (Number.isFinite(revenue)) {
+    if (!isCancelled && Number.isFinite(revenue)) {
       minSale = minSale == null ? revenue : Math.min(minSale, revenue);
       maxSale = maxSale == null ? revenue : Math.max(maxSale, revenue);
       for (const b of BUCKETS) {
@@ -333,7 +354,9 @@ export function computeSalesHistoryReport(
   const saleCount = rows.length;
   const totalMargin = totalPurchase > 0 || purchaseRows > 0 ? totalRevenue - totalPurchase : 0;
   const marginPercent =
-    purchaseRows > 0 && totalPurchase > 0 ? Math.round((totalMargin / totalRevenue) * 1000) / 10 : null;
+    purchaseRows > 0 && totalPurchase > 0 && totalRevenue > 0
+      ? Math.round((totalMargin / totalRevenue) * 1000) / 10
+      : null;
 
   const byMonth = [...monthMap.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
@@ -365,7 +388,7 @@ export function computeSalesHistoryReport(
         revenue: roundMoney(c.revenue),
         purchase: roundMoney(c.purchase),
         margin: roundMoney(margin),
-        avgSale: c.count ? roundMoney(c.revenue / c.count) : 0,
+        avgSale: c.monetaryCount ? roundMoney(c.revenue / c.monetaryCount) : 0,
         revenueSharePercent: totalRevenue > 0 ? roundMoney((c.revenue / totalRevenue) * 1000) / 10 : 0,
         marginPercent:
           c.purchaseRows > 0 && c.revenue > 0 ? roundMoney((margin / c.revenue) * 1000) / 10 : null,
@@ -393,7 +416,7 @@ export function computeSalesHistoryReport(
       totalPurchase: Math.round(totalPurchase * 100) / 100,
       totalMargin: Math.round(totalMargin * 100) / 100,
       marginPercent,
-      avgSale: saleCount ? Math.round((totalRevenue / saleCount) * 100) / 100 : 0,
+      avgSale: monetarySaleCount ? Math.round((totalRevenue / monetarySaleCount) * 100) / 100 : 0,
       avgPurchase: purchaseRows ? Math.round((totalPurchase / purchaseRows) * 100) / 100 : null,
       avgMargin: purchaseRows ? Math.round((totalMargin / purchaseRows) * 100) / 100 : null,
       cancelledCount,

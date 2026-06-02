@@ -4,6 +4,7 @@ import { buildAdminSearchOrFilter } from "@/lib/admin/phoneSearchPattern";
 import { parseMountPhaseCsv, parseProductConditionCsv } from "@/lib/admin/salesHistoryQueryFilters";
 import { supplierFilterOrClause, normalizeSupplierKey } from "@/lib/admin/supplierNameNormalize";
 import { computeSalesHistoryReport, type SaleReportRow, type SalesHistoryReport } from "@/lib/admin/computeSalesHistoryReport";
+import { amountAsEur } from "@/lib/admin/normalizeLegacyEurAmount";
 
 export const SalesReportQuerySchema = z.object({
   q: z.string().optional(),
@@ -63,6 +64,8 @@ export async function fetchSalesHistoryReport(
     "customer_phone",
     "due_date",
     "completed_at",
+    "created_at",
+    "amounts_converted_from_bgn_at",
     productEmbed,
   ].join(",");
 
@@ -135,7 +138,7 @@ export async function fetchSalesHistoryReport(
     const { data, error, count } = await dbQuery.range(offset, offset + limit - 1);
     if (error) throw new Error(error.message);
     if (offset === 0) total = count ?? 0;
-    const batch = (data ?? []) as unknown as SaleReportRow[];
+    const batch = ((data ?? []) as unknown as SaleReportRow[]).map(normalizeLegacySaleReportRow);
     allRows.push(...batch);
     if (batch.length < limit) break;
     offset += limit;
@@ -150,4 +153,14 @@ export async function fetchSalesHistoryReport(
   const report = computeSalesHistoryReport(allRows, total);
   report.summary.withInvoiceData = withInvoice;
   return report;
+}
+
+function normalizeLegacySaleReportRow(row: SaleReportRow): SaleReportRow {
+  const legacyDate = row.due_date ?? row.completed_at ?? row.created_at ?? null;
+  const convertedAt = row.amounts_converted_from_bgn_at ?? null;
+  return {
+    ...row,
+    total_amount: amountAsEur(row.total_amount, { convertedAt, legacyDate }),
+    purchase_price: amountAsEur(row.purchase_price, { convertedAt, legacyDate }),
+  };
 }

@@ -106,8 +106,15 @@ export async function applySalesBgnToEur(
     if (row.total_amount != null) patch.total_amount = roundEur(Number(row.total_amount) / BGN_PER_EUR);
     if (row.purchase_price != null) patch.purchase_price = roundEur(Number(row.purchase_price) / BGN_PER_EUR);
 
-    const { error: upErr } = await supabase.from("work_items").update(patch).eq("id", row.id);
+    const { data: updated, error: upErr } = await supabase
+      .from("work_items")
+      .update(patch)
+      .eq("id", row.id)
+      .is("amounts_converted_from_bgn_at", null)
+      .select("id")
+      .maybeSingle();
     if (upErr) throw upErr;
+    if (!updated) continue;
     workItemsUpdated += 1;
     if (row.product_id) productIds.add(row.product_id);
   }
@@ -133,8 +140,15 @@ export async function applySalesBgnToEur(
       pPatch.purchase_price = roundEur(Number(prod.purchase_price) / BGN_PER_EUR);
     }
 
-    const { error: puErr } = await supabase.from("products").update(pPatch).eq("id", productId);
+    const { data: updatedProduct, error: puErr } = await supabase
+      .from("products")
+      .update(pPatch)
+      .eq("id", productId)
+      .is("amounts_converted_from_bgn_at", null)
+      .select("id")
+      .maybeSingle();
     if (puErr) throw puErr;
+    if (!updatedProduct) continue;
     productsUpdated += 1;
   }
 

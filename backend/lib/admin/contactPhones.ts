@@ -87,6 +87,14 @@ export async function replaceContactPhones(
   additionalPhones: ContactPhoneInput[] | undefined | null,
 ): Promise<{ error: string | null }> {
   const { phones } = normalizePhonesInput(primaryPhone, additionalPhones);
+  const { data: existingRows, error: loadErr } = await supabase
+    .from("contact_phones")
+    .select("contact_id,phone,label,is_primary,sort_order")
+    .eq("contact_id", contactId);
+  if (loadErr) {
+    if (isMissingTable(loadErr.message)) return { error: null };
+    return { error: loadErr.message };
+  }
 
   const { error: delErr } = await supabase
     .from("contact_phones")
@@ -110,6 +118,12 @@ export async function replaceContactPhones(
   const { error: insErr } = await supabase.from("contact_phones").insert(rows);
   if (insErr) {
     if (isMissingTable(insErr.message)) return { error: null };
+    if (existingRows && existingRows.length > 0) {
+      const { error: restoreErr } = await supabase.from("contact_phones").insert(existingRows);
+      if (restoreErr && !isMissingTable(restoreErr.message)) {
+        return { error: `${insErr.message}; rollback failed: ${restoreErr.message}` };
+      }
+    }
     return { error: insErr.message };
   }
 
