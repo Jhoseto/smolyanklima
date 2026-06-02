@@ -183,7 +183,7 @@ test("contact phone replacement restores previous rows after insert failure", as
   } as unknown as SupabaseClient;
 
   const result = await replaceContactPhones(supabase, "contact-id", "+359 888 333 444", [
-    { phone: "+359 888 555 666" },
+    { phone: "+359 888 555 666", isPrimary: false },
   ]);
 
   assert.match(result.error ?? "", /constraint failed/);
