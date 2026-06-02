@@ -34,7 +34,7 @@ test("sales report excludes cancelled sales from monetary totals", () => {
   assert.equal(report.summary.totalRevenue, 1200);
   assert.equal(report.summary.totalPurchase, 700);
   assert.equal(report.summary.avgSale, 1200);
-  assert.deepEqual(report.priceBuckets, [{ label: "€1200–2000", count: 1 }]);
+  assert.deepEqual(report.priceBuckets, [{ label: "€800–1200", count: 1 }]);
   assert.equal(report.topClients[0]?.revenue, 1200);
   assert.equal(report.topClients[0]?.avgSale, 1200);
 });
