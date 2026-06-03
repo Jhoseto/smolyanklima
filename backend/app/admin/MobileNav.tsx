@@ -10,6 +10,7 @@ import {
   LayoutDashboard, Package, Users, MoreHorizontal, X,
   FileText, Star, Activity, Settings, LogOut, Headphones,
   ShieldCheck, FolderOpen, MessageSquare, Receipt, Truck, Bot,
+  UserCircle,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/admin/db";
 import type { LucideIcon } from "lucide-react";
@@ -33,18 +34,35 @@ export function MobileNav({
   avatarUrl: string | null;
 }) {
   const initial = (userName || "?").trim().charAt(0).toUpperCase() || "?";
+  const profileTab = {
+    href: "/admin/profile",
+    label: "Профил",
+    icon: UserCircle,
+    exact: false,
+  } as const;
+  const profileInBottomBar = role === "service_staff" || role === "office_staff";
+
   const primaryLinks = role === "service_staff"
     ? [
         { href: "/admin", label: "Табло", icon: LayoutDashboard, exact: true },
         { href: "/admin/products", label: "Продукти", icon: Package, exact: false },
         { href: "/admin/service/documents", label: "Документи", icon: FolderOpen, exact: false },
+        profileTab,
       ]
-    : [
-        { href: "/admin", label: "Табло", icon: LayoutDashboard, exact: true },
-        { href: "/admin/contacts", label: "Контакти", icon: Users, exact: false },
-        { href: "/admin/chat", label: "Чат", icon: Headphones, exact: false },
-        { href: "/admin/inquiries", label: "Запитвания", icon: MessageSquare, exact: false },
-      ];
+    : role === "office_staff"
+      ? [
+          { href: "/admin", label: "Табло", icon: LayoutDashboard, exact: true },
+          { href: "/admin/contacts", label: "Контакти", icon: Users, exact: false },
+          { href: "/admin/chat", label: "Чат", icon: Headphones, exact: false },
+          { href: "/admin/inquiries", label: "Запитвания", icon: MessageSquare, exact: false },
+          profileTab,
+        ]
+      : [
+          { href: "/admin", label: "Табло", icon: LayoutDashboard, exact: true },
+          { href: "/admin/contacts", label: "Контакти", icon: Users, exact: false },
+          { href: "/admin/chat", label: "Чат", icon: Headphones, exact: false },
+          { href: "/admin/inquiries", label: "Запитвания", icon: MessageSquare, exact: false },
+        ];
 
   const drawerSections: DrawerSection[] = role === "service_staff"
     ? []
@@ -129,9 +147,10 @@ export function MobileNav({
   }
 
   const allDrawerLinks = drawerSections.flatMap((s) => s.links);
+  const onProfile =
+    pathname === "/admin/profile" || pathname.startsWith("/admin/profile/");
   const anyMoreActive =
-    pathname === "/admin/profile" ||
-    pathname.startsWith("/admin/profile/") ||
+    (!profileInBottomBar && onProfile) ||
     allDrawerLinks.some((l) => isActive(l.href));
   const hasDrawer = drawerSections.length > 0;
 
@@ -166,28 +185,30 @@ export function MobileNav({
           </button>
         </div>
 
-        <Link
-          href="/admin/profile"
-          onClick={() => setDrawerOpen(false)}
-          className={`mx-4 mb-3 flex items-center gap-3 rounded-2xl border px-3 py-2.5 no-underline transition-colors active:scale-[0.99] ${
-            isActive("/admin/profile")
-              ? "border-brand-orange-200 bg-brand-orange-50"
-              : "border-slate-200 bg-slate-50 hover:bg-white"
-          }`}
-        >
-          <div className="w-11 h-11 rounded-full bg-brand-blue-100 text-brand-blue-700 flex items-center justify-center font-extrabold text-base shrink-0 overflow-hidden ring-1 ring-slate-200/80">
-            {avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
-            ) : (
-              initial
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-bold text-slate-900 truncate">{userName || "—"}</div>
-            <div className="text-[11px] font-semibold text-brand-orange-600">Моят профил</div>
-          </div>
-        </Link>
+        {!profileInBottomBar && (
+          <Link
+            href="/admin/profile"
+            onClick={() => setDrawerOpen(false)}
+            className={`mx-4 mb-3 flex items-center gap-3 rounded-2xl border px-3 py-2.5 no-underline transition-colors active:scale-[0.99] ${
+              isActive("/admin/profile")
+                ? "border-brand-orange-200 bg-brand-orange-50"
+                : "border-slate-200 bg-slate-50 hover:bg-white"
+            }`}
+          >
+            <div className="w-11 h-11 rounded-full bg-brand-blue-100 text-brand-blue-700 flex items-center justify-center font-extrabold text-base shrink-0 overflow-hidden ring-1 ring-slate-200/80">
+              {avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                initial
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-bold text-slate-900 truncate">{userName || "—"}</div>
+              <div className="text-[11px] font-semibold text-brand-orange-600">Моят профил</div>
+            </div>
+          </Link>
+        )}
 
         <div className="px-4 pb-2 space-y-3 max-h-[55vh] overflow-y-auto">
           {drawerSections.map((section) => (
