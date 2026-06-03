@@ -1,4 +1,29 @@
-import type { Product } from '../types';
+import type { IntentType, Product } from '../types';
+
+/** Client asked for models / comparison / sizing — not general chat. */
+export function shouldSuggestProductsForTurn(intent: IntentType | undefined, userQuery: string): boolean {
+  const q = userQuery.trim().toLowerCase();
+  if (!q) return false;
+
+  const explicitAsk =
+    /препоръч|предложи|кой\s+модел|кои\s+модел|сравни|сравнение|колко\s+струва|цена\s+на|търся|имам\s+нужда|за\s+стая|кв\.?\s*м|m²|m2|квадрат|btu|бюджет|искам\s+климатик|избери|вариант|подходящ\s+климатик|модел\s+за/i.test(
+      q,
+    );
+
+  if (intent === 'product_search' || intent === 'product_comparison' || intent === 'compare') {
+    return true;
+  }
+  if (intent === 'price_inquiry' || intent === 'quote_request') {
+    return explicitAsk;
+  }
+  return explicitAsk;
+}
+
+export function responseOffersProducts(text: string): boolean {
+  return /препоръч|подходящ|вариант|топ\s*\d|избрах|предлагам|модел[аи]?(?:\s|:|,|\.|$)|климатик[аи]?(?:\s|:|,|\.|$)/i.test(
+    text,
+  );
+}
 
 const MAX_SECTION_CHARS = 21_000;
 const MAX_DETAILED = 12;
@@ -129,7 +154,7 @@ function formatProductCompact(product: Product): string {
 
 export function buildCatalogContext(
   products: Product[],
-  options: { userQuery?: string; history?: string[]; loadedAt?: number } = {},
+  options: { userQuery?: string; history?: string[]; loadedAt?: number; intent?: IntentType } = {},
 ): string {
   if (!products.length) {
     return [
@@ -177,13 +202,27 @@ export function buildCatalogContext(
     parts.push(`(+ още ${remaining} модела в каталога — при нужда попитай за мощност/бюджет/марка)`);
   }
 
-  parts.push(
-    '\nПРАВИЛА ЗА ПРЕПОРЪКА:',
-    '- Избирай по: площ (m²), kW/BTU, шум (dB), SEER/SCOP, бюджет, марка, WiFi, тип (стенен/мульти/касетен).',
-    '- Сравнявай само модели от този списък с реални числа от данните.',
-    '- Ако няма точно съвпадение — предложи най-близките 2–3 от TOP/индекса и обясни защо.',
-    '- Цена с монтаж: ползвай priceWithMount от детайлните блокове или кажи „ще изготвим оферта“.',
+  const suggestTurn = shouldSuggestProductsForTurn(
+    options.intent,
+    options.userQuery ?? '',
   );
+
+  if (suggestTurn) {
+    parts.push(
+      '\nПРАВИЛА ЗА ПРЕПОРЪКА (само в този ход — клиентът пита за модели):',
+      '- Избирай по: площ (m²), kW/BTU, шум (dB), SEER/SCOP, бюджет, марка, WiFi, тип.',
+      '- Сравнявай само модели от списъка с реални числа.',
+      '- Ако няма точно съвпадение — до 2–3 най-близки от TOP и кратко защо.',
+      '- Цена с монтаж: priceWithMount или „ще изготвим оферта“.',
+    );
+  } else {
+    parts.push(
+      '\nРЕЖИМ БЕЗ ПРЕПОРЪКА:',
+      '- Клиентът НЕ е поискал конкретни модели/сравнение/оферта с артикули.',
+      '- НЕ изброй климатици и НЕ предлагай „топ 3“.',
+      '- Отговори кратко на въпроса; при нужда задай 1 уточняващ въпрос (площ, бюджет, стая).',
+    );
+  }
 
   return parts.join('\n');
 }

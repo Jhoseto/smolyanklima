@@ -221,7 +221,6 @@ export default async function AdminDashboardPage() {
         <SupplierOrdersPanel
           initialRows={supplierOrderRows}
           readOnly={readOnlyDashboard}
-          frontendOrigin={(process.env.FRONTEND_ORIGIN ?? "http://localhost:3000").replace(/\/$/, "")}
         />
       </div>
 

@@ -166,7 +166,7 @@ export const HeroSection = ({ onFreeConsultationClick }: HeroSectionProps) => {
               <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-20 bg-[#1a1a1a]/75 px-8 py-6 border-t border-white/10">
                 <div className="grid grid-cols-3 divide-x divide-white/20">
                   <div className="text-center">
-                    <div className="text-white text-2xl font-black mb-1">3000+</div>
+                    <div className="text-white text-2xl font-black mb-1">10000+</div>
                     <div className="text-white/80 text-[11px] font-medium uppercase tracking-wider">Монтирани климатика</div>
                   </div>
                   <div className="text-center">

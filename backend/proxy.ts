@@ -1,8 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseMiddlewareClient } from "@/lib/supabase/middleware";
 import { isSeoBot } from "@/lib/seo/botDetect";
+import {
+  isAggressiveSeoCrawler,
+  isExploitProbe,
+  isLegacySlugPath,
+  isSecurityScanner,
+  shouldRedirectAggressiveBotQuery,
+} from "@/lib/seo/trafficGuards";
 
 const STATIC_SEO = new Set(["/robots.txt", "/sitemap.xml", "/rss.xml", "/llms.txt"]);
+
+function applyPublicTrafficGuards(req: NextRequest): NextResponse | null {
+  const { pathname } = req.nextUrl;
+  const ua = req.headers.get("user-agent");
+
+  if (isExploitProbe(pathname)) {
+    return new NextResponse(null, { status: 404 });
+  }
+
+  if (isSecurityScanner(ua)) {
+    return new NextResponse(null, { status: 403 });
+  }
+
+  if (isAggressiveSeoCrawler(ua)) {
+    if (isLegacySlugPath(pathname)) {
+      const url = req.nextUrl.clone();
+      url.pathname = "/catalog";
+      url.search = "";
+      return NextResponse.redirect(url, 301);
+    }
+    if (shouldRedirectAggressiveBotQuery(pathname, req.nextUrl.search.length > 0)) {
+      const url = req.nextUrl.clone();
+      url.search = "";
+      return NextResponse.redirect(url, 301);
+    }
+  }
+
+  return null;
+}
 
 function isAdminArea(pathname: string): boolean {
   return (
@@ -15,6 +51,11 @@ function isAdminArea(pathname: string): boolean {
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  if (!isAdminArea(pathname) && !pathname.startsWith("/api/") && !STATIC_SEO.has(pathname)) {
+    const guarded = applyPublicTrafficGuards(req);
+    if (guarded) return guarded;
+  }
 
   if (
     !isAdminArea(pathname)

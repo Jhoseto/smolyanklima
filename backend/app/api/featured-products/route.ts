@@ -3,6 +3,7 @@ import { corsPreflight, withCors } from "@/lib/http/cors";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { withCloudinaryWebOptimization } from "@/lib/services/cloudinaryService";
 import { isPostgrestMissingColumn } from "@/lib/admin/pgMissingColumn";
+import { loadCatalogMountDefaults, resolvePublicPriceWithMount } from "@/lib/catalog/catalogMountPrice";
 import { applyPublicCatalogFilter } from "@/lib/catalog/publicProductVisibility";
 
 // Публичен endpoint за секцията „Топ продукти“ на главната страница.
@@ -10,7 +11,8 @@ import { applyPublicCatalogFilter } from "@/lib/catalog/publicProductVisibility"
 // данните, които очаква фронтенд компонентът ProductsSection.
 
 const SELECT_WITH_FEATURED =
-  "id,slug,name,price,price_with_mount,is_featured,featured_position,featured_badge,rating,reviews_count,brand_id,type_id";
+  "id,slug,name,price,price_with_mount,product_condition,is_featured,featured_position,featured_badge,rating,reviews_count,brand_id,type_id";
+const SELECT_WITH_FEATURED_NO_CONDITION = SELECT_WITH_FEATURED.replace(",product_condition", "");
 
 const SPECS_SELECT =
   "product_id,cooling_power_kw,heating_power_kw,energy_class_cool,refrigerant,wifi,noise_db";
@@ -25,13 +27,19 @@ export async function GET(req: NextRequest) {
 
   // 1) Извличаме всички продукти с присвоена featured_position.
   //    Ако миграция 0035 още не е приложена, връщаме празен масив.
-  let { data: featuredRows, error } = await applyPublicCatalogFilter(
-    supabase
-      .from("products")
-      .select(SELECT_WITH_FEATURED)
-      .not("featured_position", "is", null)
-      .eq("is_active", true),
-  ).order("featured_position", { ascending: true });
+  const loadFeatured = (selectCols: string) =>
+    applyPublicCatalogFilter(
+      supabase
+        .from("products")
+        .select(selectCols)
+        .not("featured_position", "is", null)
+        .eq("is_active", true),
+    ).order("featured_position", { ascending: true });
+
+  let { data: featuredRows, error } = await loadFeatured(SELECT_WITH_FEATURED);
+  if (error && isPostgrestMissingColumn(error, "product_condition")) {
+    ({ data: featuredRows, error } = await loadFeatured(SELECT_WITH_FEATURED_NO_CONDITION));
+  }
 
   // Fallback: ако миграция 0035 не е приложена (липсва featured_position
   // или featured_badge), просто връщаме празен масив. Това НЕ е грешка —
@@ -133,6 +141,8 @@ export async function GET(req: NextRequest) {
     specsByProduct.set((sr as any).product_id as string, sr);
   }
 
+  const mountDefaults = await loadCatalogMountDefaults(supabase);
+
   const data = rows.map((r) => {
     const spec = specsByProduct.get(r.id as string) ?? {};
     const cooling = Number(spec.cooling_power_kw ?? 0);
@@ -143,7 +153,12 @@ export async function GET(req: NextRequest) {
       slug: r.slug,
       name: r.name,
       price: r.price,
-      priceWithMount: r.price_with_mount ?? null,
+      priceWithMount: resolvePublicPriceWithMount({
+        price: r.price,
+        productCondition: r.product_condition,
+        storedPriceWithMount: r.price_with_mount,
+        mountDefaults,
+      }),
       position: r.featured_position,
       badge: r.featured_badge,
       rating: r.rating ?? null,

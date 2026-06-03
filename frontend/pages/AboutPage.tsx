@@ -126,8 +126,8 @@ export default function AboutPage() {
                   </span>
                 </h1>
                 <p className="text-lg text-[#374151] leading-relaxed font-medium max-w-xl">
-                  Аз съм <strong className="text-gray-900">Костадин Георгиев</strong> — основател и
-                  собственик на Смолян Клима. От десетилетия изграждам бизнес, основан на думата, майсторството и
+                  Аз съм <strong className="text-gray-900">Костадин Георгиев</strong> — основател
+                  на Смолян Клима. От десетилетия изграждам бизнес, основан на думата, майсторството и
                   уважението към всеки клиент в Смолян и региона.
                 </p>
               </motion.div>

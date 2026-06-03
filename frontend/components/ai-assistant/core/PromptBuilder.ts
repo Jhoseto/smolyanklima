@@ -3,7 +3,7 @@
  * Layered prompt system for world-class AI responses
  */
 
-import type { Conversation, UserContext, Product, EmotionType } from '../types';
+import type { Conversation, UserContext, Product, EmotionType, IntentType } from '../types';
 import { buildCatalogContext } from '../data/catalogContextBuilder';
 
 interface PromptContext {
@@ -12,7 +12,7 @@ interface PromptContext {
   relevantProducts?: Product[];
   userQuery?: string;
   catalogLoadedAt?: number;
-  userIntent?: string;
+  userIntent?: IntentType;
   emotion?: EmotionType;
 }
 
@@ -193,6 +193,7 @@ class PromptBuilder {
       userQuery: context.userQuery,
       history,
       loadedAt: context.catalogLoadedAt,
+      intent: context.userIntent,
     });
   }
 
@@ -277,13 +278,11 @@ class PromptBuilder {
    ✓ Помагащ, но не натрапчив
    ✓ Ентусиазиран, но не преигравай
 
-6. ПРИЗИВ ЗА ДЕЙСТВИЕ:
-   ВСЯКО съобщение трябва да завършва с:
-   - Конкретен въпрос, или
-   - Предложение за следваща стъпка, или
-   - Призив за действие
-
-Пример завършек: "Искате ли да Ви покажа топ 3 модела за Вашите нужди?"
+6. ПРИЗИВ ЗА ДЕЙСТВИЕ (умерен):
+   - При общ въпрос (работно време, гаранция, монтаж): завърши с кратък въпрос или „обадете се на 0888 58 58 16“ — БЕЗ списък модели.
+   - Модели/цени/сравнение: САМО ако клиентът ги поиска или даде площ/бюджет/стая.
+   - НЕ предлагай „топ 3“ или списък климатици на всяко съобщение.
+   - НЕ повтаряй препоръки, ако клиентът не пита отново за избор.
     `.trim();
   }
 

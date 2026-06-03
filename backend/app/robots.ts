@@ -8,32 +8,36 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: '*',
         allow: '/',
-        disallow: ['/admin/', '/api/', '/login'],
+        disallow: ['/admin/', '/api/', '/login', '/*?*'],
+      },
+      {
+        userAgent: 'SerpstatBot',
+        disallow: ['/'],
       },
       {
         userAgent: 'GPTBot',
         allow: ['/', '/blog/', '/catalog', '/product/', '/llms.txt'],
-        disallow: ['/admin/', '/api/'],
+        disallow: ['/admin/', '/api/', '/*?*'],
       },
       {
         userAgent: 'ChatGPT-User',
         allow: ['/', '/blog/', '/catalog', '/product/', '/llms.txt'],
-        disallow: ['/admin/', '/api/'],
+        disallow: ['/admin/', '/api/', '/*?*'],
       },
       {
         userAgent: 'Google-Extended',
         allow: '/',
-        disallow: ['/admin/', '/api/'],
+        disallow: ['/admin/', '/api/', '/*?*'],
       },
       {
         userAgent: 'ClaudeBot',
         allow: ['/', '/blog/', '/catalog', '/product/', '/llms.txt'],
-        disallow: ['/admin/', '/api/'],
+        disallow: ['/admin/', '/api/', '/*?*'],
       },
       {
         userAgent: 'PerplexityBot',
         allow: ['/', '/blog/', '/catalog', '/product/', '/llms.txt'],
-        disallow: ['/admin/', '/api/'],
+        disallow: ['/admin/', '/api/', '/*?*'],
       },
     ],
     sitemap: `${SITE}/sitemap.xml`,

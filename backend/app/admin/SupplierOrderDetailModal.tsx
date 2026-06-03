@@ -33,6 +33,7 @@ import {
   parseDecimalInput,
 } from "@/lib/admin/agreedPriceDiscount";
 import type { NormalizedSupplierOrderRow } from "@/lib/admin/supplierOrderRow";
+import { publicProductOrCatalogUrl } from "@/lib/publicCatalogUrl";
 
 function formatBgDate(value: string | null | undefined) {
   if (!value) return "—";
@@ -74,14 +75,6 @@ function pickMainImage(
   const main = images.find((i) => i.is_main);
   if (main) return main.url;
   return [...images].sort((a, b) => a.sort_order - b.sort_order)[0]?.url ?? null;
-}
-
-function publicProductUrl(frontendOrigin: string, prod: NormalizedSupplierOrderRow["products"]) {
-  const base = frontendOrigin.replace(/\/$/, "");
-  if (!prod) return `${base}/catalog`;
-  if (prod.slug?.trim()) return `${base}/product/${encodeURIComponent(prod.slug.trim())}`;
-  if (prod.id) return `${base}/product/${encodeURIComponent(prod.id)}`;
-  return `${base}/catalog`;
 }
 
 type SerialMatch = { id: string; name: string; slug: string | null; field: "indoor" | "outdoor" | "both" };
@@ -155,7 +148,6 @@ export function SupplierOrderDetailModal({
   onUpdated,
   onFulfilled,
   onRequestSale,
-  frontendOrigin = "http://localhost:3000",
 }: {
   orderId: string;
   onClose: () => void;
@@ -164,7 +156,6 @@ export function SupplierOrderDetailModal({
   /** След доставка — остава в панела вместо redirect към продукт. */
   onFulfilled?: (productInstanceId: string) => void;
   onRequestSale?: (order: NormalizedSupplierOrderRow) => void;
-  frontendOrigin?: string;
 }) {
   const router = useRouter();
   const [order, setOrder] = useState<NormalizedSupplierOrderRow | null>(null);
@@ -286,7 +277,7 @@ export function SupplierOrderDetailModal({
   const prod = order?.products;
   const specs = prod?.product_specs;
   const mainImage = imgError ? null : pickMainImage(prod?.product_images);
-  const catalogUrl = publicProductUrl(frontendOrigin, prod ?? null);
+  const catalogUrl = publicProductOrCatalogUrl(prod ?? null);
   const supplierUrl = prod?.source_url?.trim() || null;
   const specBadges: { icon: string; text: string }[] = [];
   if (specs?.cooling_power_kw != null) specBadges.push({ icon: "❄️", text: `${specs.cooling_power_kw} kW студ` });
@@ -433,7 +424,7 @@ export function SupplierOrderDetailModal({
       onClick={onClose}
     >
       <div
-        className="flex w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl md:rounded-3xl border border-white/70 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)] max-h-[92dvh] md:max-h-[calc(100vh-2rem)] pb-safe md:pb-0"
+        className="flex w-full max-w-2xl flex-col overflow-y-auto overscroll-contain rounded-t-3xl md:rounded-3xl border border-white/70 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)] max-h-[92dvh] md:max-h-[calc(100vh-2rem)] pb-safe md:pb-0"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-center pt-3 pb-1 md:hidden shrink-0">
@@ -462,8 +453,8 @@ export function SupplierOrderDetailModal({
           </button>
         </div>
 
-        {/* Body */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+        {/* Съдържание — един общ скрол за целия модал (горе → долу) */}
+        <div className="px-5 py-4">
           {loading ? (
             <div className="flex flex-col items-center justify-center gap-3 py-16 text-slate-500">
               <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
@@ -756,143 +747,151 @@ export function SupplierOrderDetailModal({
                   {actionError}
                 </p>
               )}
+
+              <div className="space-y-3 border-t border-slate-100 pt-4">
+                {isArchived && delivered && onRequestSale && canRecordProductSale(delivered.stock_status) && (
+                  <Button
+                    variant="primary"
+                    size="md"
+                    className="w-full gap-1.5"
+                    onClick={() => onRequestSale(order)}
+                  >
+                    <Receipt className="h-4 w-4" />
+                    Запиши продажба
+                  </Button>
+                )}
+                {isArchived && (
+                  <Button variant="secondary" size="md" className="w-full" onClick={onClose}>
+                    Затвори
+                  </Button>
+                )}
+                {!isArchived && (
+                  <div className="rounded-2xl border border-violet-200 bg-white px-3 py-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-violet-700">
+                      Данни при получаване (задължителни)
+                    </p>
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Без серийни номера, дата, доставна цена и фактура не се създава нова складова бройка — избягва се
+                      дублиране на модела.
+                    </p>
+                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <div>
+                        <FieldLabel label="Сериен № вътрешно" className="text-slate-500" />
+                        <Input
+                          value={indoorSerial}
+                          onChange={(e) => setIndoorSerial(e.target.value)}
+                          placeholder="от табелката"
+                          className={
+                            indoorDup.length > 0
+                              ? "border-amber-400"
+                              : deliveryIncomplete && !indoorSerial.trim()
+                                ? "border-red-400"
+                                : ""
+                          }
+                        />
+                        <SerialDupNotice matches={indoorDup} />
+                      </div>
+                      <div>
+                        <FieldLabel label="Сериен № външно" className="text-slate-500" />
+                        <Input
+                          value={outdoorSerial}
+                          onChange={(e) => setOutdoorSerial(e.target.value)}
+                          placeholder="от табелката"
+                          className={
+                            outdoorDup.length > 0
+                              ? "border-amber-400"
+                              : deliveryIncomplete && !outdoorSerial.trim()
+                                ? "border-red-400"
+                                : ""
+                          }
+                        />
+                        <SerialDupNotice matches={outdoorDup} />
+                      </div>
+                      <div>
+                        <FieldLabel label="Дата на доставка" className="text-slate-500" />
+                        <Input
+                          type="date"
+                          value={purchasedAt}
+                          onChange={(e) => setPurchasedAt(e.target.value)}
+                          className={deliveryIncomplete && !purchasedAt.trim() ? "border-red-400" : ""}
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel label="Фактура доставчик" className="text-slate-500" />
+                        <Input
+                          value={invoiceNumber}
+                          onChange={(e) => setInvoiceNumber(e.target.value)}
+                          placeholder="напр. 0000123456"
+                          className={deliveryIncomplete && !invoiceNumber.trim() ? "border-red-400" : ""}
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel label="Доставна цена (€)" className="text-slate-500" />
+                        <Input
+                          type="text"
+                          inputMode="decimal"
+                          value={purchasePriceDraft}
+                          onChange={(e) => setPurchasePriceDraft(e.target.value)}
+                          placeholder="0"
+                          className={
+                            deliveryIncomplete &&
+                            (!purchasePriceDraft.trim() ||
+                              !Number.isFinite(parseDecimalInput(purchasePriceDraft)) ||
+                              parseDecimalInput(purchasePriceDraft) < 0)
+                              ? "border-red-400"
+                              : ""
+                          }
+                        />
+                        {catalogPurchasePrice != null && (
+                          <p className="mt-1 text-[10px] text-slate-500">
+                            От каталога: {fmtMoney(catalogPurchasePrice)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    {deliveryHint && (
+                      <p className="mt-2 text-[11px] font-semibold text-amber-800">{deliveryHint}</p>
+                    )}
+                  </div>
+                )}
+                {!isArchived && cancelStep === "confirm" && (
+                  <p className="text-center text-xs font-semibold text-red-700">
+                    Сигурни ли сте? Поръчката ще бъде отказана.
+                  </p>
+                )}
+                {!isArchived && (
+                  <div className="flex flex-wrap gap-2 pb-1">
+                    <Button
+                      variant="danger"
+                      size="md"
+                      className="flex-1 min-w-[140px]"
+                      onClick={() => void handleCancel()}
+                      disabled={cancelling || delivering}
+                    >
+                      {cancelling ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
+                      {cancelStep === "confirm" ? "Потвърди отказ" : "Откажи поръчката"}
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="md"
+                      className="flex-1 min-w-[160px] gap-1.5 bg-violet-600 hover:bg-violet-700 focus:ring-violet-500"
+                      onClick={() => void handleDelivered()}
+                      disabled={delivering || cancelling || !canMarkDelivered}
+                      title={!canMarkDelivered ? (deliveryHint ?? undefined) : undefined}
+                    >
+                      {delivering ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <PackageCheck className="h-4 w-4" />
+                      )}
+                      Продуктът е доставен
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
-
-        {/* Footer — действия само за активни поръчки */}
-        {!loading && !loadError && order && (
-          <div className="shrink-0 space-y-3 border-t border-slate-100 bg-slate-50/50 px-5 py-4">
-            {isArchived && delivered && onRequestSale && canRecordProductSale(delivered.stock_status) && (
-              <Button
-                variant="primary"
-                size="md"
-                className="w-full gap-1.5"
-                onClick={() => onRequestSale(order)}
-              >
-                <Receipt className="h-4 w-4" />
-                Запиши продажба
-              </Button>
-            )}
-            {isArchived && (
-              <Button variant="secondary" size="md" className="w-full" onClick={onClose}>
-                Затвори
-              </Button>
-            )}
-            {!isArchived && (
-            <div className="rounded-2xl border border-violet-200 bg-white px-3 py-3">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-violet-700">
-                Данни при получаване (задължителни)
-              </p>
-              <p className="mt-1 text-[11px] text-slate-500">
-                Без серийни номера, дата, доставна цена и фактура не се създава нова складова бройка — избягва се дублиране на модела.
-              </p>
-              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <div>
-                  <FieldLabel label="Сериен № вътрешно" className="text-slate-500" />
-                  <Input
-                    value={indoorSerial}
-                    onChange={(e) => setIndoorSerial(e.target.value)}
-                    placeholder="от табелката"
-                    className={indoorDup.length > 0 ? "border-amber-400" : deliveryIncomplete && !indoorSerial.trim() ? "border-red-400" : ""}
-                  />
-                  <SerialDupNotice matches={indoorDup} />
-                </div>
-                <div>
-                  <FieldLabel label="Сериен № външно" className="text-slate-500" />
-                  <Input
-                    value={outdoorSerial}
-                    onChange={(e) => setOutdoorSerial(e.target.value)}
-                    placeholder="от табелката"
-                    className={outdoorDup.length > 0 ? "border-amber-400" : deliveryIncomplete && !outdoorSerial.trim() ? "border-red-400" : ""}
-                  />
-                  <SerialDupNotice matches={outdoorDup} />
-                </div>
-                <div>
-                  <FieldLabel label="Дата на доставка" className="text-slate-500" />
-                  <Input
-                    type="date"
-                    value={purchasedAt}
-                    onChange={(e) => setPurchasedAt(e.target.value)}
-                    className={deliveryIncomplete && !purchasedAt.trim() ? "border-red-400" : ""}
-                  />
-                </div>
-                <div>
-                  <FieldLabel label="Фактура доставчик" className="text-slate-500" />
-                  <Input
-                    value={invoiceNumber}
-                    onChange={(e) => setInvoiceNumber(e.target.value)}
-                    placeholder="напр. 0000123456"
-                    className={deliveryIncomplete && !invoiceNumber.trim() ? "border-red-400" : ""}
-                  />
-                </div>
-                <div>
-                  <FieldLabel label="Доставна цена (€)" className="text-slate-500" />
-                  <Input
-                    type="text"
-                    inputMode="decimal"
-                    value={purchasePriceDraft}
-                    onChange={(e) => setPurchasePriceDraft(e.target.value)}
-                    placeholder="0"
-                    className={
-                      deliveryIncomplete &&
-                      (!purchasePriceDraft.trim() ||
-                        !Number.isFinite(parseDecimalInput(purchasePriceDraft)) ||
-                        parseDecimalInput(purchasePriceDraft) < 0)
-                        ? "border-red-400"
-                        : ""
-                    }
-                  />
-                  {catalogPurchasePrice != null && (
-                    <p className="mt-1 text-[10px] text-slate-500">
-                      От каталога: {fmtMoney(catalogPurchasePrice)}
-                    </p>
-                  )}
-                </div>
-              </div>
-              {deliveryHint && (
-                <p className="mt-2 text-[11px] font-semibold text-amber-800">{deliveryHint}</p>
-              )}
-            </div>
-            )}
-            {!isArchived && cancelStep === "confirm" && (
-              <p className="text-center text-xs font-semibold text-red-700">
-                Сигурни ли сте? Поръчката ще бъде отказана.
-              </p>
-            )}
-            {!isArchived && (
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="danger"
-                size="md"
-                className="flex-1 min-w-[140px]"
-                onClick={() => void handleCancel()}
-                disabled={cancelling || delivering}
-              >
-                {cancelling ? (
-                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                ) : null}
-                {cancelStep === "confirm" ? "Потвърди отказ" : "Откажи поръчката"}
-              </Button>
-              <Button
-                variant="primary"
-                size="md"
-                className="flex-1 min-w-[160px] gap-1.5 bg-violet-600 hover:bg-violet-700 focus:ring-violet-500"
-                onClick={() => void handleDelivered()}
-                disabled={delivering || cancelling || !canMarkDelivered}
-                title={!canMarkDelivered ? (deliveryHint ?? undefined) : undefined}
-              >
-                {delivering ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <PackageCheck className="h-4 w-4" />
-                )}
-                Продуктът е доставен
-              </Button>
-            </div>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );

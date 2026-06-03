@@ -11,7 +11,11 @@ import { emotionalIntelligence } from '../core/EmotionalIntelligence';
 import { createHallucinationGuard } from '../security/HallucinationGuard';
 import { getAllProducts } from '../../../data/productService';
 import { catalogProductsToAI } from '../data/catalogToAIProducts';
-import { rankProductsForQuery } from '../data/catalogContextBuilder';
+import {
+  rankProductsForQuery,
+  responseOffersProducts,
+  shouldSuggestProductsForTurn,
+} from '../data/catalogContextBuilder';
 import type {
   Message,
   Conversation,
@@ -19,6 +23,7 @@ import type {
   Product,
   AIAction,
   UserIntent,
+  IntentType,
   ChatRemotePayload,
 } from '../types';
 import {
@@ -384,7 +389,7 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
         relevantProducts: catalogProducts,
         userQuery: trimmed,
         catalogLoadedAt: catalogLoadedAtRef.current,
-        userIntent: intent.type,
+        userIntent: intent.type as IntentType,
         emotion: emotionDetection.confidence > 0.3 ? emotionDetection.emotion : undefined,
       });
 
@@ -437,8 +442,16 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
       };
 
       // Extract suggested products from response (prefer query-ranked matches)
-      const ranked = rankProductsForQuery(catalogProducts, trimmed, historyQueries, 8);
-      const extractedProducts = extractProductsFromResponse(finalContent, catalogProducts, ranked);
+      const wantsProducts = shouldSuggestProductsForTurn(intent.type, trimmed);
+      const ranked = wantsProducts
+        ? rankProductsForQuery(catalogProducts, trimmed, historyQueries, 8)
+        : [];
+      const extractedProducts = extractProductsFromResponse(
+        finalContent,
+        catalogProducts,
+        ranked,
+        wantsProducts && responseOffersProducts(finalContent),
+      );
       if (extractedProducts.length > 0) {
         setSuggestedProducts(extractedProducts);
       }
@@ -564,6 +577,7 @@ function extractProductsFromResponse(
   response: string,
   products: Product[],
   rankedHint: Product[] = [],
+  allowRankedFallback = false,
 ): Product[] {
   const mentionedProducts: Product[] = [];
   const responseLower = response.toLowerCase();
@@ -594,7 +608,7 @@ function extractProductsFromResponse(
     }
   }
 
-  if (mentionedProducts.length === 0 && rankedHint.length > 0) {
+  if (mentionedProducts.length === 0 && allowRankedFallback && rankedHint.length > 0) {
     for (const p of rankedHint.slice(0, 3)) tryAdd(p);
   }
 

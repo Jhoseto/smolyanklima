@@ -45,7 +45,7 @@ const WhyUsBanner = () => (
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {[
           { value: '25+', label: 'год. опит' },
-          { value: '3000+', label: 'монтажа' },
+          { value: '10000+', label: 'монтажа' },
           { value: '4.8/ 5 ★', label: 'оценка' },
           { value: 'ОТОРИЗИРАН', label: 'сервиз' },
           { value: '3г.', label: 'гаранция' },

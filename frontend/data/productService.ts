@@ -93,18 +93,6 @@ function fakeRating(seed: string): { rating: number; reviews: number } {
   return { rating, reviews };
 }
 
-// ──────────────────────────────────────
-// PRICE WITH MOUNT
-// ──────────────────────────────────────
-
-function resolveInstallPrice(product: { type?: string; price: number }): number {
-  const type = product.type ?? '';
-  if (type.includes('Мулти')) return product.price + 250;
-  if (type.includes('Касетъ')) return product.price + 350;
-  if (type.includes('Подов')) return product.price + 200;
-  return product.price + 150; // стенен / default
-}
-
 /** Публично описание без вътрешни „Източник:“ редове от импорт. */
 export function publicProductDescription(description: string | undefined | null): string | undefined {
   if (!description?.trim()) return undefined;
@@ -283,7 +271,7 @@ function mapApiToCatalogProduct(raw: ApiProduct): CatalogProduct {
     priceWithMount:
       raw.price_with_mount != null && Number.isFinite(Number(raw.price_with_mount))
         ? Number(raw.price_with_mount)
-        : resolveInstallPrice({ type, price: Number(raw.price) }),
+        : undefined,
 
     rating,
     reviews,

@@ -128,7 +128,7 @@ export const LANDING_PAGE_SEO: Record<string, LandingSeoConfig> = {
       ogImage: DEFAULT_OG_IMAGE,
     },
     h1: 'Климатици Смолян — продажба, монтаж и сервиз',
-    lead: 'Официален магазин в кв. Райково с над 25 години опит и 3000+ монтажа в региона.',
+    lead: 'Официален магазин в кв. Райково с над 25 години опит и 10000+ монтажа в региона.',
     cityName: 'Смолян',
     sections: [
       {

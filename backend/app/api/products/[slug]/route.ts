@@ -3,6 +3,7 @@ import { corsPreflight, withCors } from "@/lib/http/cors";
 import { optimizeImageRowUrls } from "@/lib/services/cloudinaryService";
 import { stripImportSourceFromDescription } from "@/lib/import/stripImportSourceFromDescription";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
+import { loadCatalogMountDefaults, resolvePublicPriceWithMount } from "@/lib/catalog/catalogMountPrice";
 import { applyPublicCatalogFilter } from "@/lib/catalog/publicProductVisibility";
 
 export async function OPTIONS(req: NextRequest) {
@@ -89,13 +90,20 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
   if ((featRes as any).error) return withCors(req, NextResponse.json({ error: (featRes as any).error.message }, { status: 500 }));
   const featById = new Map(((featRes as any).data ?? []).map((f: any) => [f.id, f]));
 
+  const mountDefaults = await loadCatalogMountDefaults(supabase);
+
   const data = {
     id: p.id,
     slug: p.slug,
     name: p.name,
     description: stripImportSourceFromDescription(p.description as string | null),
     price: p.price,
-    price_with_mount: p.price_with_mount,
+    price_with_mount: resolvePublicPriceWithMount({
+      price: p.price,
+      productCondition: (p as any).product_condition,
+      storedPriceWithMount: p.price_with_mount,
+      mountDefaults,
+    }),
     product_condition: (p as any).product_condition ?? "new",
     is_featured: p.is_featured,
     rating: p.rating,

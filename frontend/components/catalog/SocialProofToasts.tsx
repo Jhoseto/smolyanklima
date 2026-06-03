@@ -14,7 +14,7 @@ const ALL_MESSAGES = [
   { text: "Топ оценка: 4.9★ от 127 клиента", icon: Star, type: 'rating' },
   { text: "Нов клиент от Девин направи заявка за климатик с монтаж преди 30 минути", icon: ShoppingCart, type: 'purchase' },
   { text: "Гаранция от 3 години на всички модели", icon: CheckCircle2, type: 'service' },
-  { text: "3000+ успешни монтажа в региона", icon: TrendingUp, type: 'social' },
+  { text: "10000+ успешни монтажа в региона", icon: TrendingUp, type: 'social' },
   { text: "25+ години опит в климатичната техника", icon: Star, type: 'social' },
   { text: "Работим с всички марки: Daikin, Mitsubishi, Toshiba, Fujitsu", icon: Package, type: 'brands' },
 ];

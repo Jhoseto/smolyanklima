@@ -53,7 +53,19 @@ const nextConfig = {
         ? [{ key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" }]
         : [];
 
+    const immutableCache = [
+      { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+    ];
+
     return [
+      {
+        source: "/assets/:path*",
+        headers: [...immutableCache, ...baseSecurity],
+      },
+      {
+        source: "/_next/static/:path*",
+        headers: [...immutableCache, ...baseSecurity],
+      },
       {
         source: "/admin",
         headers: [

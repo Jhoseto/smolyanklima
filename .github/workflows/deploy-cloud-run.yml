@@ -75,6 +75,11 @@ jobs:
             --platform managed \
             --allow-unauthenticated \
             --port 8080 \
+            --cpu 1 \
+            --memory 512Mi \
+            --min-instances 0 \
+            --max-instances 2 \
+            --concurrency 80 \
             --set-env-vars "$ENV_VARS" \
             --set-secrets "SUPABASE_URL=${{ secrets.SECRET_SUPABASE_URL }}:latest" \
             --set-secrets "SUPABASE_ANON_KEY=${{ secrets.SECRET_SUPABASE_ANON_KEY }}:latest" \

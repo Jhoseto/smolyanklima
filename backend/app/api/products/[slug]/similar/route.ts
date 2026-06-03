@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
+import { loadCatalogMountDefaults, resolvePublicPriceWithMount } from "@/lib/catalog/catalogMountPrice";
 import { applyPublicCatalogFilter } from "@/lib/catalog/publicProductVisibility";
 import {
   dedupeProductRowsByModel,
@@ -185,6 +186,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
     featsByProduct.set(pid, arr);
   }
 
+  const mountDefaults = await loadCatalogMountDefaults(supabase);
+
   const pickedById = new Map(picked.map((p) => [p.id, p]));
   const stitched = pickedIds
     .map((pid) => {
@@ -192,6 +195,12 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
       if (!r) return null;
       return {
         ...r,
+        price_with_mount: resolvePublicPriceWithMount({
+          price: r.price,
+          productCondition: (r as { product_condition?: string }).product_condition,
+          storedPriceWithMount: r.price_with_mount,
+          mountDefaults,
+        }),
         description: stripImportSourceFromDescription((r as any).description),
         brands: brandById.get(r.brand_id as string) ?? null,
         product_types: typeById.get(r.type_id as string) ?? null,

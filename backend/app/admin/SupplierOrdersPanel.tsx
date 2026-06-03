@@ -34,11 +34,9 @@ function formatBgDateTime(value: string | null | undefined) {
 export function SupplierOrdersPanel({
   initialRows,
   readOnly,
-  frontendOrigin = "http://localhost:3000",
 }: {
   initialRows: NormalizedSupplierOrderRow[];
   readOnly: boolean;
-  frontendOrigin?: string;
 }) {
   const [rows, setRows] = useState<NormalizedSupplierOrderRow[]>(initialRows);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -152,7 +150,6 @@ export function SupplierOrdersPanel({
             void refresh();
             notifyAdminCalendarReload();
           }}
-          frontendOrigin={frontendOrigin}
         />
       )}
     </>

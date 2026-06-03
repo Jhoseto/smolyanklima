@@ -28,7 +28,7 @@ options:
   logging: CLOUD_LOGGING_ONLY
   env:
     - "DOCKER_BUILDKIT=1"
-  machineType: E2_HIGHCPU_8
+  machineType: E2_MEDIUM
 
 timeout: 2400s
 
@@ -68,6 +68,11 @@ steps:
       - --platform=managed
       - --allow-unauthenticated
       - --port=8080
+      - --cpu=1
+      - --memory=512Mi
+      - --min-instances=0
+      - --max-instances=2
+      - --concurrency=80
       - --quiet
       - --set-env-vars=NODE_ENV=production,FRONTEND_ORIGIN=$_PUBLIC_URL,APP_URL=$_PUBLIC_URL,NEXT_PUBLIC_SITE_ORIGIN=$_PUBLIC_URL,GOOGLE_SITE_VERIFICATION=$_GOOGLE_SITE_VERIFICATION
       - --set-secrets=SUPABASE_URL=SUPABASE_URL:latest,SUPABASE_ANON_KEY=SUPABASE_ANON_KEY:latest,SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest,GEMINI_API_KEY=GEMINI_API_KEY:latest,CLOUDINARY_URL=CLOUDINARY_URL:latest

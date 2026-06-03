@@ -6,6 +6,14 @@ import type { CatalogProduct } from '../../data/types/product';
 import { postPublicInquiry } from '../../data/postInquiry';
 import { PrivacyCheckbox } from '../consent/PrivacyCheckbox';
 import { trackGenerateLead } from '../../lib/analytics/events';
+import {
+  contactNameErrorMessage,
+  contactPhoneErrorMessage,
+  isValidContactName,
+  isValidContactPhone,
+  sanitizeContactName,
+  sanitizePhoneInput,
+} from '../../lib/contactFormValidation';
 
 const SUCCESS_MESSAGE =
   'Запитването е подадено успешно! В най-скоро с вас ще се свърже представител на Смолян Клима.';
@@ -46,6 +54,14 @@ export function ProductInquiryModal({ product, onClose, onSuccess, onError }: Pr
     setPrivacyAccepted(false);
   }, [product?.id]);
 
+  const nameErr = name.trim() ? contactNameErrorMessage(name) : null;
+  const phoneErr = phone ? contactPhoneErrorMessage(phone) : null;
+  const contactOk = isValidContactName(name) && isValidContactPhone(phone);
+  const canSubmit = contactOk && mountChoice !== null && privacyAccepted && !busy;
+
+  const displayMountError = contactOk && !mountChoice;
+  const displayPrivacyError = contactOk && mountChoice !== null && !privacyAccepted;
+
   useEffect(() => {
     if (!product) return;
     const onKey = (e: KeyboardEvent) => {
@@ -64,21 +80,14 @@ export function ProductInquiryModal({ product, onClose, onSuccess, onError }: Pr
       onClose();
       return;
     }
-    if (!mountChoice) {
-      setMountError(true);
-      return;
-    }
-    if (!privacyAccepted) {
-      onError?.('Моля, приемете Политиката за поверителност.');
-      return;
-    }
+    if (!canSubmit) return;
     setMountError(false);
     setBusy(true);
     const includeInstallation = mountChoice === 'with';
     const r = await postPublicInquiry({
       source: 'product',
-      customerName: name.trim(),
-      customerPhone: phone.trim(),
+      customerName: name.trim().replace(/\s+/g, ' '),
+      customerPhone: phone,
       productSlug: product.id,
       productName: product.name,
       includeInstallation,
@@ -86,7 +95,7 @@ export function ProductInquiryModal({ product, onClose, onSuccess, onError }: Pr
       website: '',
     });
     setBusy(false);
-    if (!r.ok) {
+    if (r.ok === false) {
       onError?.(r.status === 429 ? 'Твърде много заявки. Опитайте по-късно.' : r.error);
       return;
     }
@@ -198,23 +207,40 @@ export function ProductInquiryModal({ product, onClose, onSuccess, onError }: Pr
                     <span className="mb-1.5 block text-xs font-bold text-slate-600">Вашето име</span>
                     <input
                       type="text"
-                      required
+                      autoComplete="name"
                       value={name}
-                      onChange={(e) => setName(e.target.value)}
+                      onChange={(e) => setName(sanitizeContactName(e.target.value))}
                       placeholder="Иван Иванов"
-                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#00B4D8] focus:ring-2 focus:ring-[#00B4D8]/20"
+                      aria-invalid={Boolean(nameErr)}
+                      className={`w-full rounded-xl border bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:ring-2 ${
+                        nameErr
+                          ? 'border-red-500 ring-2 ring-red-500/25 focus:border-red-500'
+                          : 'border-slate-200 focus:border-[#00B4D8] focus:ring-[#00B4D8]/20'
+                      }`}
                     />
+                    {nameErr && (
+                      <p className="mt-1.5 text-xs font-semibold text-red-600">{nameErr}</p>
+                    )}
                   </label>
                   <label className="block">
                     <span className="mb-1.5 block text-xs font-bold text-slate-600">Телефон</span>
                     <input
                       type="tel"
-                      required
+                      inputMode="numeric"
+                      autoComplete="tel"
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="0888 58 58 16"
-                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#00B4D8] focus:ring-2 focus:ring-[#00B4D8]/20"
+                      onChange={(e) => setPhone(sanitizePhoneInput(e.target.value))}
+                      placeholder="0888585816 или +359888585816"
+                      aria-invalid={Boolean(phoneErr)}
+                      className={`w-full rounded-xl border bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:ring-2 ${
+                        phoneErr
+                          ? 'border-red-500 ring-2 ring-red-500/25 focus:border-red-500'
+                          : 'border-slate-200 focus:border-[#00B4D8] focus:ring-[#00B4D8]/20'
+                      }`}
                     />
+                    {phoneErr && (
+                      <p className="mt-1.5 text-xs font-semibold text-red-600">{phoneErr}</p>
+                    )}
                   </label>
                 </div>
 
@@ -265,7 +291,7 @@ export function ProductInquiryModal({ product, onClose, onSuccess, onError }: Pr
                         : ''}
                     </span>
                   </label>
-                  {mountError && (
+                  {(mountError || displayMountError) && (
                     <p className="text-xs font-semibold text-red-600">Моля, изберете една от опциите.</p>
                   )}
                 </fieldset>
@@ -273,6 +299,7 @@ export function ProductInquiryModal({ product, onClose, onSuccess, onError }: Pr
                 <PrivacyCheckbox
                   id="product-inquiry-privacy"
                   checked={privacyAccepted}
+                  showError={displayPrivacyError}
                   onChange={setPrivacyAccepted}
                 />
 
@@ -281,8 +308,13 @@ export function ProductInquiryModal({ product, onClose, onSuccess, onError }: Pr
                 </p>
                 <button
                   type="submit"
-                  disabled={busy}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#FF4D00] to-[#FF2A4D] py-3.5 text-sm font-bold text-white shadow-lg shadow-orange-500/25 transition hover:scale-[1.02] hover:shadow-orange-500/35 disabled:opacity-60"
+                  disabled={!canSubmit}
+                  className={`flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold text-white shadow-lg transition ${
+                    canSubmit
+                      ? 'bg-gradient-to-r from-[#FF4D00] to-[#FF2A4D] shadow-orange-500/25 hover:scale-[1.02] hover:shadow-orange-500/35'
+                      : 'cursor-not-allowed bg-gradient-to-r from-slate-300 to-slate-400 shadow-none opacity-70'
+                  }`}
+                  aria-disabled={!canSubmit}
                 >
                   <Send className="h-4 w-4" />
                   {busy ? 'Изпращане…' : 'Пусни запитване'}

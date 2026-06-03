@@ -15,6 +15,7 @@ import {
   sortRepresentatives,
   type CatalogRepresentativeRow,
 } from "@/lib/catalog/catalogProductSort";
+import { loadCatalogMountDefaults, resolvePublicPriceWithMount } from "@/lib/catalog/catalogMountPrice";
 
 const QuerySchema = z.object({
   q: z.string().optional(),
@@ -539,8 +540,16 @@ export async function GET(req: NextRequest) {
     featsByProduct.set(pid, arr);
   }
 
+  const mountDefaults = await loadCatalogMountDefaults(supabase);
+
   const stitched = rows.map((r) => ({
     ...r,
+    price_with_mount: resolvePublicPriceWithMount({
+      price: r.price,
+      productCondition: (r as { product_condition?: string }).product_condition,
+      storedPriceWithMount: r.price_with_mount,
+      mountDefaults,
+    }),
     description: stripImportSourceFromDescription(r.description as string | null | undefined),
     brands: brandById.get(r.brand_id as string) ?? null,
     product_types: typeById.get(r.type_id as string) ?? null,
