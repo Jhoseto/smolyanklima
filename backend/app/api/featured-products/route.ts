@@ -17,6 +17,22 @@ const SELECT_WITH_FEATURED_NO_CONDITION = SELECT_WITH_FEATURED.replace(",product
 const SPECS_SELECT =
   "product_id,cooling_power_kw,heating_power_kw,energy_class_cool,refrigerant,wifi,noise_db";
 
+type FeaturedProductRow = {
+  id: string;
+  slug: string;
+  name: string;
+  price: number | null;
+  price_with_mount: number | null;
+  product_condition?: string | null;
+  is_featured?: boolean | null;
+  featured_position: number;
+  featured_badge: string | null;
+  rating: number | null;
+  reviews_count: number | null;
+  brand_id: string | null;
+  type_id: string | null;
+};
+
 export async function OPTIONS(req: NextRequest) {
   return corsPreflight(req);
 }
@@ -75,7 +91,7 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const rows = (featuredRows ?? []) as Array<Record<string, unknown>>;
+  const rows = (featuredRows ?? []) as unknown as FeaturedProductRow[];
   if (rows.length === 0) {
     return withCors(
       req,
@@ -85,7 +101,7 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const ids = rows.map((r) => r.id as string);
+  const ids = rows.map((r) => r.id);
   const brandIds = Array.from(new Set(rows.map((r) => r.brand_id).filter(Boolean))) as string[];
   const typeIds = Array.from(new Set(rows.map((r) => r.type_id).filter(Boolean))) as string[];
 
@@ -144,7 +160,7 @@ export async function GET(req: NextRequest) {
   const mountDefaults = await loadCatalogMountDefaults(supabase);
 
   const data = rows.map((r) => {
-    const spec = specsByProduct.get(r.id as string) ?? {};
+    const spec = specsByProduct.get(r.id) ?? {};
     const cooling = Number(spec.cooling_power_kw ?? 0);
     const heating = Number(spec.heating_power_kw ?? 0);
     const power = cooling || heating || 0;
@@ -163,9 +179,9 @@ export async function GET(req: NextRequest) {
       badge: r.featured_badge,
       rating: r.rating ?? null,
       reviewCount: r.reviews_count ?? 0,
-      brand: brandById.get(r.brand_id as string) ?? null,
-      type: typeById.get(r.type_id as string) ?? null,
-      image: mainImageByProduct.get(r.id as string) ?? "",
+      brand: r.brand_id ? brandById.get(r.brand_id) ?? null : null,
+      type: r.type_id ? typeById.get(r.type_id) ?? null : null,
+      image: mainImageByProduct.get(r.id) ?? "",
       specs: {
         coolingKw: cooling || null,
         heatingKw: heating || null,

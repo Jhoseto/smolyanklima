@@ -17,6 +17,7 @@ export type SimilarProductRow = {
   type_id?: string | null;
   model_code?: string | null;
   price?: number | null;
+  price_with_mount?: number | null;
   product_condition?: string | null;
   stock_status?: string | null;
   brands?: { name?: string } | null;
