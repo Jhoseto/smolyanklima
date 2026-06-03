@@ -114,9 +114,6 @@ export async function GET(req: NextRequest) {
       .order("created_at", { ascending: false })
       .range(offset, offset + perPage - 1);
 
-    if (session.role === "service_staff") {
-      listQuery = listQuery.eq("created_by", session.userId);
-    }
     if (status) listQuery = listQuery.eq("status", status);
     if (q?.trim()) {
       const term = q.trim();

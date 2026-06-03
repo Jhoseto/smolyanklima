@@ -132,34 +132,49 @@ export function DocumentsClient({ role }: Props) {
 
   const load = useCallback(async (p = 1, q = "", status: StatusFilter = "", sortBy: SortOption = "created-desc") => {
     setLoading(true);
+    setErrorMsg(null);
     try {
-      // Винаги опитваме API; ако сме офлайн, тръгваме на cache fallback.
-      const isOnline = typeof navigator === "undefined" ? true : navigator.onLine;
-      if (isOnline) {
-        const params = new URLSearchParams({
-          page: String(p),
-          perPage: String(perPage),
-          sort: sortBy,
-        });
-        if (q) params.set("q", q);
-        if (status) params.set("status", status);
+      const params = new URLSearchParams({
+        page: String(p),
+        perPage: String(perPage),
+        sort: sortBy,
+      });
+      if (q) params.set("q", q);
+      if (status) params.set("status", status);
+
+      try {
         const res = await fetch(`/api/admin/service/protocols?${params}`, { credentials: "include" });
         if (res.ok) {
           const json = await res.json();
           const rows: Protocol[] = json.data ?? [];
-          setProtocols(prev => (p === 1 ? rows : [...prev, ...rows]));
+          setProtocols((prev) => (p === 1 ? rows : [...prev, ...rows]));
           setTotal(json.meta?.total ?? 0);
+        } else if (p === 1) {
+          const json = await res.json().catch(() => ({}));
+          setProtocols([]);
+          setTotal(0);
+          setErrorMsg(
+            (json as { error?: string }).error ||
+              `Грешка при зареждане (${res.status}). Опитайте отново.`,
+          );
         }
-      } else if (p === 1) {
-        // Офлайн: показваме само това, което е в cache (offlineRows ще съдържат всичко).
-        setProtocols([]);
-        setTotal(0);
+      } catch {
+        if (p === 1) {
+          setProtocols([]);
+          setTotal(0);
+          if (!navigator.onLine) {
+            setErrorMsg("Няма връзка. Показваме само чернови от устройството, ако има такива.");
+          } else {
+            setErrorMsg("Грешка при зареждане на протоколите. Проверете връзката и опитайте отново.");
+          }
+        }
       }
+
       await loadOfflineRows();
     } finally {
       setLoading(false);
     }
-  }, [loadOfflineRows]);
+  }, [loadOfflineRows, perPage]);
 
   useEffect(() => { load(1, search, statusFilter, sort); }, [load, search, statusFilter, sort]);
 
@@ -194,10 +209,20 @@ export function DocumentsClient({ role }: Props) {
 
   useEffect(() => {
     const editFromUrl = searchParams.get("edit")?.trim();
-    if (!editFromUrl) return;
+    if (!editFromUrl || loading) return;
     openEdit(editFromUrl);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  }, [searchParams, loading]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void load(1, search, statusFilter, sort);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [load, search, statusFilter, sort]);
 
   const handleSaved = (id: string) => {
     setEditId(id);
@@ -362,6 +387,7 @@ export function DocumentsClient({ role }: Props) {
           <div className="flex items-center gap-2 min-w-0">
             <Link
               href="/admin/service/documents"
+              prefetch={false}
               className="shrink-0 p-2 -ml-2 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 active:bg-slate-200"
               title="Назад към документи"
             >

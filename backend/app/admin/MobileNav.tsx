@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import { useAdminBackHandler } from "@/lib/admin/useAdminBackHandler";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { adminNavSectionForPath } from "@/lib/admin/adminNavSectionForPath";
 import { logoutAction } from "@/app/login/actions";
 import {
   LayoutDashboard, Package, Users, MoreHorizontal, X,
@@ -101,10 +102,26 @@ export function MobileNav({
       })();
 
   const pathname = usePathname();
+  const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
   useAdminBackHandler(drawerOpen, () => setDrawerOpen(false), "mobile-nav-drawer");
   const inquiriesNewCount = useInquiriesNewCount();
-  const { open, toggle } = useAdminNavSections();
+  const { open, toggle, expand } = useAdminNavSections();
+
+  useEffect(() => {
+    const active = adminNavSectionForPath(pathname, role);
+    if (active) expand(active);
+  }, [pathname, role, expand]);
+
+  const documentsHubHref = "/admin/service/documents";
+
+  function navigateDocuments(e: MouseEvent) {
+    if (pathname === documentsHubHref) return;
+    if (pathname.startsWith(`${documentsHubHref}/`)) {
+      e.preventDefault();
+      router.push(documentsHubHref);
+    }
+  }
 
   function isActive(href: string, exact = false) {
     if (exact) return pathname === href;
@@ -189,7 +206,10 @@ export function MobileNav({
                   <Link
                     key={link.href}
                     href={link.href}
-                    onClick={() => setDrawerOpen(false)}
+                    onClick={(e) => {
+                      if (link.href === documentsHubHref) navigateDocuments(e);
+                      setDrawerOpen(false);
+                    }}
                     className={`flex flex-col items-center gap-2 p-4 rounded-2xl text-center transition-colors active:scale-95 ${
                       active
                         ? "bg-brand-orange-50 text-brand-orange-600"
@@ -234,6 +254,7 @@ export function MobileNav({
               <Link
                 key={link.href}
                 href={link.href}
+                onClick={link.href === documentsHubHref ? navigateDocuments : undefined}
                 className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl transition-all duration-150 min-w-0 flex-1 min-h-[44px] justify-center ${
                   active ? "text-brand-orange-600" : "text-slate-500"
                 }`}

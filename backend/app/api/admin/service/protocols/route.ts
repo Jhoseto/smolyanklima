@@ -101,10 +101,6 @@ export async function GET(req: NextRequest) {
 
   query = query.range(offset, offset + perPage - 1);
 
-  // service_staff вижда своите + автоматично създадени от продажби (с work_item_id)
-  if (session.role === "service_staff") {
-    query = query.or(`created_by.eq.${session.userId},work_item_id.not.is.null`);
-  }
   if (status) query = query.eq("status", status);
   if (q?.trim()) {
     const orFilter = buildAdminSearchOrFilter(q, {

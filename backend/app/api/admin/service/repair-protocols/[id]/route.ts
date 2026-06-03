@@ -84,16 +84,11 @@ export async function GET(
   catch { return withCors(req, NextResponse.json({ error: "Забранен достъп" }, { status: 403 })); }
 
   const { id } = await params;
-  let query = session.db
+  const { data, error } = await session.db
     .from("service_repair_protocols")
     .select("*")
-    .eq("id", id);
-
-  if (session.role === "service_staff") {
-    query = query.eq("created_by", session.userId);
-  }
-
-  const { data, error } = await query.maybeSingle();
+    .eq("id", id)
+    .maybeSingle();
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   if (!data)  return withCors(req, NextResponse.json({ error: "Не е намерен" }, { status: 404 }));
   return withCors(req, NextResponse.json({ data }));
@@ -111,18 +106,6 @@ export async function PUT(
   catch { return withCors(req, NextResponse.json({ error: "Забранен достъп" }, { status: 403 })); }
 
   const { id } = await params;
-
-  // service_staff редактира само своите. Останалите роли — всички.
-  if (session.role === "service_staff") {
-    const { data: existing } = await session.db
-      .from("service_repair_protocols")
-      .select("created_by")
-      .eq("id", id)
-      .maybeSingle();
-    if (!existing || existing.created_by !== session.userId) {
-      return withCors(req, NextResponse.json({ error: "Забранен достъп" }, { status: 403 }));
-    }
-  }
 
   const json = await req.json().catch(() => null);
   const parsed = UpdateSchema.safeParse(json);

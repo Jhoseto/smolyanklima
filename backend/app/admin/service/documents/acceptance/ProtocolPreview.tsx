@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { X, Pencil, Download, Loader2, Mail } from "lucide-react";
+import { X, Pencil, Download, Loader2, Mail, PlayCircle } from "lucide-react";
 import { Logo } from "@/app/admin/ui/Logo";
 import type { AdminRole } from "@/lib/admin/db";
 import {
@@ -84,7 +84,13 @@ export function ProtocolPreview({
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailFeedback, setEmailFeedback] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const canEditProtocol = role === "master_admin" || role === "office_staff";
+  const status = row?.status as "prepared" | "in_progress" | "signed" | undefined;
+  const isFinished = status === "signed";
+  const canContinue =
+    !isFinished &&
+    !!status &&
+    (role === "master_admin" || role === "office_staff" || role === "service_staff");
+  const canEditFinished = isFinished && (role === "master_admin" || role === "office_staff");
 
   const pdfUrl = `/api/admin/service/protocols/${protocolId}/pdf`;
 
@@ -192,24 +198,36 @@ export function ProtocolPreview({
                 {clientLabel || "—"} · {dateLabel}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => window.open(pdfUrl, "_blank")}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900 shrink-0"
-            >
-              <Download className="w-4 h-4" />
-              PDF
-            </button>
-            {canEditProtocol ? (
+            {isFinished && (
+              <button
+                type="button"
+                onClick={() => window.open(pdfUrl, "_blank")}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900 shrink-0"
+              >
+                <Download className="w-4 h-4" />
+                PDF
+              </button>
+            )}
+            {canContinue && (
               <button
                 type="button"
                 onClick={onEdit}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shrink-0"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shrink-0 shadow-sm"
+              >
+                <PlayCircle className="w-4 h-4" />
+                Довърши
+              </button>
+            )}
+            {canEditFinished && (
+              <button
+                type="button"
+                onClick={onEdit}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 text-slate-800 text-sm font-semibold hover:bg-slate-200 shrink-0"
               >
                 <Pencil className="w-4 h-4" />
                 Редактирай
               </button>
-            ) : null}
+            )}
           </div>
           {!loading && !loadErr && row ? (
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 px-3 pb-3 sm:px-4 sm:pb-3 pt-0 border-t border-slate-100">

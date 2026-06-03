@@ -22,16 +22,11 @@ export async function GET(
 
   const { id } = await params;
 
-  let query = session.db
+  const { data, error } = await session.db
     .from("service_protocols")
     .select("*")
-    .eq("id", id);
-
-  if (session.role === "service_staff") {
-    query = query.or(`created_by.eq.${session.userId},work_item_id.not.is.null`);
-  }
-
-  const { data, error } = await query.maybeSingle();
+    .eq("id", id)
+    .maybeSingle();
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   if (!data)  return withCors(req, NextResponse.json({ error: "Не е намерен" }, { status: 404 }));
 

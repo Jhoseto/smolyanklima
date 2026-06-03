@@ -56,6 +56,7 @@ export function ServiceDocumentsClient({ role }: Props) {
 
   const load = useCallback(async (p = 1, q = "") => {
     setLoading(true);
+    setErrorMsg(null);
     try {
       const params = new URLSearchParams({ page: String(p), perPage: String(perPage) });
       if (q) params.set("q", q);
@@ -63,11 +64,22 @@ export function ServiceDocumentsClient({ role }: Props) {
       if (res.ok) {
         const json = await res.json();
         const rows: RepairProtocol[] = json.data ?? [];
-        setProtocols(prev => (p === 1 ? rows : [...prev, ...rows]));
+        setProtocols((prev) => (p === 1 ? rows : [...prev, ...rows]));
         setTotal(json.meta?.total ?? 0);
-      } else {
+      } else if (p === 1) {
+        const json = await res.json().catch(() => ({}));
         setProtocols([]);
         setTotal(0);
+        setErrorMsg(
+          (json as { error?: string }).error ||
+            `Грешка при зареждане (${res.status}). Опитайте отново.`,
+        );
+      }
+    } catch {
+      if (p === 1) {
+        setProtocols([]);
+        setTotal(0);
+        setErrorMsg("Грешка при зареждане на протоколите. Проверете връзката.");
       }
     } finally {
       setLoading(false);

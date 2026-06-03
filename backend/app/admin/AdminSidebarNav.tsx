@@ -21,7 +21,8 @@ import type { AdminRole } from "@/lib/admin/db";
 import { ChatNavBadge } from "./chat/ChatNavBadge";
 import { InquiriesNavBadge } from "./inquiries/InquiriesNavBadge";
 import { AdminNavCollapsibleSection } from "./AdminNavCollapsibleSection";
-import { useAdminNavSections, type AdminNavSectionId } from "@/lib/admin/useAdminNavSections";
+import { useAdminNavSections } from "@/lib/admin/useAdminNavSections";
+import { adminNavSectionForPath } from "@/lib/admin/adminNavSectionForPath";
 
 function NavLink({ href, label, icon }: { href: string; label: string; icon: React.ReactNode }) {
   return (
@@ -33,52 +34,6 @@ function NavLink({ href, label, icon }: { href: string; label: string; icon: Rea
       <span>{label}</span>
     </Link>
   );
-}
-
-function sectionForPath(pathname: string, role: AdminRole): AdminNavSectionId | null {
-  if (
-    pathname === "/admin/contacts" ||
-    pathname.startsWith("/admin/contacts/") ||
-    pathname === "/admin/chat" ||
-    pathname.startsWith("/admin/chat/") ||
-    pathname === "/admin/inquiries" ||
-    pathname.startsWith("/admin/inquiries/") ||
-    pathname === "/admin/articles" ||
-    pathname.startsWith("/admin/articles/") ||
-    pathname === "/admin/history" ||
-    pathname.startsWith("/admin/history/") ||
-    pathname === "/admin/supplier-orders" ||
-    pathname.startsWith("/admin/supplier-orders/")
-  ) {
-    return "office";
-  }
-  if (role === "service_staff" && (pathname === "/admin/products" || pathname.startsWith("/admin/products/"))) {
-    return "catalog";
-  }
-  if (role !== "service_staff" && (pathname === "/admin/products" || pathname.startsWith("/admin/products/"))) {
-    return "office";
-  }
-  if (pathname === "/admin/service" || pathname.startsWith("/admin/service/")) return "service";
-  if (
-    pathname === "/admin/ratings" ||
-    pathname.startsWith("/admin/ratings/") ||
-    pathname === "/admin/activity" ||
-    pathname.startsWith("/admin/activity/")
-  ) {
-    return "reports";
-  }
-  if (
-    pathname === "/admin/staff" ||
-    pathname.startsWith("/admin/staff/") ||
-    pathname === "/admin/settings" ||
-    pathname.startsWith("/admin/settings/")
-  ) {
-    return "admin";
-  }
-  if (pathname === "/admin/ai-agent" || pathname.startsWith("/admin/ai-agent/")) {
-    return role === "office_staff" ? "office" : "admin";
-  }
-  return null;
 }
 
 export function AdminSidebarNav({ role }: { role: AdminRole }) {
@@ -93,7 +48,7 @@ export function AdminSidebarNav({ role }: { role: AdminRole }) {
   const showSales = role === "master_admin" || role === "office_staff";
 
   useEffect(() => {
-    const active = sectionForPath(pathname, role);
+    const active = adminNavSectionForPath(pathname, role);
     if (active) expand(active);
   }, [pathname, role, expand]);
 

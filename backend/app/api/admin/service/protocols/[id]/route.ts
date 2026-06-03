@@ -54,16 +54,11 @@ export async function GET(
   catch { return withCors(req, NextResponse.json({ error: "Забранен достъп" }, { status: 403 })); }
 
   const { id } = await params;
-  let query = session.db
+  const { data, error } = await session.db
     .from("service_protocols")
     .select("*")
-    .eq("id", id);
-
-  if (session.role === "service_staff") {
-    query = query.or(`created_by.eq.${session.userId},work_item_id.not.is.null`);
-  }
-
-  const { data, error } = await query.maybeSingle();
+    .eq("id", id)
+    .maybeSingle();
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   if (!data)  return withCors(req, NextResponse.json({ error: "Не е намерен" }, { status: 404 }));
   return withCors(req, NextResponse.json({ data }));
@@ -81,22 +76,6 @@ export async function PUT(
   catch { return withCors(req, NextResponse.json({ error: "Забранен достъп" }, { status: 403 })); }
 
   const { id } = await params;
-
-  // Сервизни служители записват само протоколи, създадени от тях (магьосникът ползва PUT при автозапазване).
-  // Редакция „от списъка“ за чужди протоколи им е недостъпна от UI (няма бутон „Редактирай“ в прегледа).
-  if (session.role === "service_staff") {
-    const { data: existing } = await session.db
-      .from("service_protocols")
-      .select("created_by,work_item_id")
-      .eq("id", id)
-      .maybeSingle();
-    const allowed =
-      existing &&
-      (existing.created_by === session.userId || Boolean(existing.work_item_id));
-    if (!allowed) {
-      return withCors(req, NextResponse.json({ error: "Забранен достъп" }, { status: 403 }));
-    }
-  }
 
   const json = await req.json().catch(() => null);
   const parsed = UpdateSchema.safeParse(json);
