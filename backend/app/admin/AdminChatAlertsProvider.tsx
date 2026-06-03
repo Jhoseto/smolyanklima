@@ -28,7 +28,7 @@ type AdminChatAlertsContextValue = {
 
 const AdminChatAlertsContext = createContext<AdminChatAlertsContextValue | null>(null);
 
-const ALERTS_DEBOUNCE_MS = 12_000;
+const ALERTS_POLL_MS = 3_000;
 const STREAM_RECONNECT_MS = 8_000;
 
 export function useAdminChatAlerts(): AdminChatAlertsContextValue {
@@ -65,8 +65,8 @@ export function AdminChatAlertsProvider({
   const lastUserMsgIdRef = useRef<Map<string, string>>(new Map());
   const seededRef = useRef(false);
   const inboxListenersRef = useRef(new Set<() => void>());
-  const lastAlertsFetchAtRef = useRef(0);
   const alertsInFlightRef = useRef(false);
+  const pendingAlertsFetchNotifyRef = useRef<boolean | null>(null);
 
   const setViewingChatId = useCallback((chatId: string | null) => {
     viewingChatIdRef.current = chatId;
@@ -136,22 +136,25 @@ export function AdminChatAlertsProvider({
   }, []);
 
   const fetchAlerts = useCallback(
-    async (notify: boolean, opts?: { force?: boolean }) => {
-      const now = Date.now();
-      if (!opts?.force && now - lastAlertsFetchAtRef.current < ALERTS_DEBOUNCE_MS) return;
-      if (alertsInFlightRef.current) return;
+    async (notify: boolean) => {
+      if (alertsInFlightRef.current) {
+        pendingAlertsFetchNotifyRef.current = pendingAlertsFetchNotifyRef.current === true || notify;
+        return;
+      }
 
       alertsInFlightRef.current = true;
       try {
         const res = await fetch("/api/admin/chat/alerts", { credentials: "include" });
         if (!res.ok) return;
         const snapshot = (await res.json()) as ChatAlertSnapshot;
-        lastAlertsFetchAtRef.current = Date.now();
         processSnapshot(snapshot, notify);
       } catch {
         /* ignore */
       } finally {
         alertsInFlightRef.current = false;
+        const pendingNotify = pendingAlertsFetchNotifyRef.current;
+        pendingAlertsFetchNotifyRef.current = null;
+        if (pendingNotify !== null) void fetchAlerts(pendingNotify);
       }
     },
     [processSnapshot],
@@ -166,7 +169,7 @@ export function AdminChatAlertsProvider({
       Notification.requestPermission();
     }
 
-    void fetchAlerts(false, { force: true });
+    void fetchAlerts(false);
 
     let aborted = false;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -185,6 +188,13 @@ export function AdminChatAlertsProvider({
         if (!aborted) void connectStream();
       }, STREAM_RECONNECT_MS);
     };
+
+    const pollAlerts = () => {
+      if (aborted || (typeof document !== "undefined" && document.hidden)) return;
+      void fetchAlerts(true);
+    };
+
+    const pollTimer = setInterval(pollAlerts, ALERTS_POLL_MS);
 
     const connectStream = async () => {
       if (aborted || connecting) return;
@@ -213,6 +223,9 @@ export function AdminChatAlertsProvider({
           const parts = buf.split("\n\n");
           buf = parts.pop() ?? "";
           for (const part of parts) {
+            if (part.includes("event: ready")) {
+              void fetchAlerts(true);
+            }
             if (part.includes("event: changed")) {
               void fetchAlerts(true);
               notifyInboxListeners();
@@ -241,6 +254,7 @@ export function AdminChatAlertsProvider({
       aborted = true;
       activeCtrl?.abort();
       if (reconnectTimer) clearTimeout(reconnectTimer);
+      clearInterval(pollTimer);
       document.removeEventListener("visibilitychange", onVisibility);
       setStreamState(false);
       removeUnlock();
