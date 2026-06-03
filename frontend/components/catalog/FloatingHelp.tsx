@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Phone, MessageCircle, X } from 'lucide-react';
+import { COMPANY_TEL_HREF } from '../../data/legal/company';
 
 export const FloatingHelp = () => {
   const [open, setOpen] = useState(false);
@@ -21,7 +22,7 @@ export const FloatingHelp = () => {
               Нашите специалисти са на ваше разположение за безплатна консултация.
             </p>
             <a
-              href="tel:+359888585816"
+              href={COMPANY_TEL_HREF}
               className="flex items-center gap-3 w-full py-3 px-4 bg-gradient-to-r from-[#FF4D00] to-[#FF2A4D] text-white rounded-xl font-bold text-sm hover:shadow-lg hover:shadow-orange-500/30 transition-all mb-2"
             >
               <Phone className="w-4 h-4" />

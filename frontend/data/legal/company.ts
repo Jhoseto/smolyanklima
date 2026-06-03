@@ -38,6 +38,9 @@ export const LEGAL_COMPANY = {
   version: '1.0',
 } as const;
 
+/** `tel:` линк за набиране на фирмения телефон от мобилно устройство. */
+export const COMPANY_TEL_HREF = `tel:${LEGAL_COMPANY.phoneE164}`;
+
 export const LEGAL_AUTHORITY = {
   name: 'Комисия за защита на личните данни (КЗЛД)',
   address: 'гр. София 1592, ул. „Проф. Цветан Лазаров" № 2',

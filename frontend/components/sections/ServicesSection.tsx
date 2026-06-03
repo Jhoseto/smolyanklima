@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Zap, Wrench, Clock, Thermometer, ArrowRight, Check, Phone, ChevronDown, ShieldCheck, BadgeCheck } from 'lucide-react';
 import { useServiceRequestModal } from '../../context/ServiceRequestModalContext';
 import type { ServiceType } from './ServiceRequestContent';
+import { COMPANY_TEL_HREF, LEGAL_COMPANY } from '../../data/legal/company';
 
 const SERVICE_TO_FORM: Record<string, ServiceType> = {
   sales: 'consultation',
@@ -110,7 +111,7 @@ export const ServicesSection = () => {
           </div>
 
           <motion.a
-            href="tel:+359888585816"
+            href={COMPANY_TEL_HREF}
             initial={{ opacity: 0, x: 20 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
@@ -121,7 +122,7 @@ export const ServicesSection = () => {
             </div>
             <div className="flex-1">
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Безплатна консултация</p>
-              <h4 className="text-gray-900 font-bold text-lg leading-tight tracking-tight">0888 58 58 16</h4>
+              <h4 className="text-gray-900 font-bold text-lg leading-tight tracking-tight">{LEGAL_COMPANY.phone}</h4>
             </div>
             <div className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center group-hover:bg-[#FF4D00] group-hover:border-[#FF4D00] transition-all duration-500">
               <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" />

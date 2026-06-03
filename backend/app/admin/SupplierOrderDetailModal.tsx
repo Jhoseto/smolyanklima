@@ -23,7 +23,8 @@ import {
   Mail,
 } from "lucide-react";
 import { canRecordProductSale } from "@/lib/admin/recordProductSale";
-import { Button, Input } from "./ui";
+import { Button, Input, AdminPhoneLink } from "./ui";
+import { useAdminBackHandler } from "@/lib/admin/useAdminBackHandler";
 import { CatalogProductImage } from "@/app/admin/components/CatalogProductImage";
 import { ProductQuickViewButton } from "./ProductQuickView";
 import {
@@ -158,6 +159,7 @@ export function SupplierOrderDetailModal({
   onRequestSale?: (order: NormalizedSupplierOrderRow) => void;
 }) {
   const router = useRouter();
+  useAdminBackHandler(true, onClose, `supplier-order-${orderId}`);
   const [order, setOrder] = useState<NormalizedSupplierOrderRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -421,7 +423,8 @@ export function SupplierOrderDetailModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/60 p-0 md:p-3 backdrop-blur-md"
-      onClick={onClose}
+      data-admin-overlay="true"
+      onClick={() => !delivering && !cancelling && onClose()}
     >
       <div
         className="flex w-full max-w-2xl flex-col overflow-y-auto overscroll-contain rounded-t-3xl md:rounded-3xl border border-white/70 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)] max-h-[92dvh] md:max-h-[calc(100vh-2rem)] pb-safe md:pb-0"
@@ -680,13 +683,7 @@ export function SupplierOrderDetailModal({
                 <FieldLabel label="Клиент" icon={<User className="h-3 w-3" />} />
                 <p className="text-sm font-semibold text-slate-900">{customerName ?? "—"}</p>
                 {customerPhone ? (
-                  <a
-                    href={`tel:${customerPhone.replace(/\s/g, "")}`}
-                    className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#0077B6] hover:underline"
-                  >
-                    <Phone className="h-3.5 w-3.5" />
-                    {customerPhone}
-                  </a>
+                  <AdminPhoneLink phone={customerPhone} className="text-sm text-[#0077B6]" />
                 ) : (
                   <p className="text-sm text-slate-400">—</p>
                 )}

@@ -1,9 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Button, Input, Textarea, Select, ADMIN_MODAL_BACKDROP, ADMIN_MODAL_PANEL, AdminModalDragHandle } from "../ui";
+import { useCallback, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
+import {
+  Button,
+  Input,
+  Textarea,
+  Select,
+  ADMIN_MODAL_PANEL,
+  AdminModalBackdrop,
+  AdminModalDragHandle,
+  AdminContactSuggestRow,
+} from "../ui";
 import { assertNoContactPrimaryPhoneDuplicate } from "@/lib/admin/contactPhoneConflictClient";
 import { canRecordProductSale } from "@/lib/admin/recordProductSale";
+import { notifyAdminCalendarReload } from "@/lib/admin/calendarReload";
 import { groupSupplierNames, mergeSupplierGroups, normalizeSupplierKey, type GroupedSupplier } from "@/lib/admin/supplierNameNormalize";
 
 type ContactChoice = {
@@ -66,7 +76,50 @@ function salePriceWithMount(
   return Math.round((basePrice + addon) * 100) / 100;
 }
 
-function emptyForm(section: SaleSection) {
+type ManualSaleForm = {
+  productId: string;
+  productName: string;
+  brandId: string;
+  brandName: string;
+  modelCode: string;
+  indoorSerial: string;
+  outdoorSerial: string;
+  saleProductCondition: SaleSection;
+  contactId: string;
+  customerName: string;
+  customerPhone: string;
+  customerAddress: string;
+  customerEmail: string;
+  notes: string;
+  saleDate: string;
+  baseSalePrice: string;
+  salePrice: string;
+  purchasePrice: string;
+  supplierKey: string;
+  supplierInvoiceNumber: string;
+  includeMount: boolean;
+  mountDate: string;
+  mountTimeFrom: string;
+  mountTimeTo: string;
+  mountNotes: string;
+  updateStock: boolean;
+};
+
+type ManualSaleDraft = {
+  form: ManualSaleForm;
+  brandQuery: string;
+  modelQuery: string;
+  nameQuery: string;
+  indoorQuery: string;
+  outdoorQuery: string;
+  contactQuery: string;
+  selectedProduct: ProductChoice | null;
+  salePriceManual: boolean;
+};
+
+const DRAFT_STORAGE_PREFIX = "smolyanklima:manual-sale-draft:";
+
+function emptyForm(section: SaleSection): ManualSaleForm {
   const today = new Date().toISOString().slice(0, 10);
   return {
     productId: "",
@@ -93,8 +146,114 @@ function emptyForm(section: SaleSection) {
     mountDate: defaultNextMountDate(),
     mountTimeFrom: "09:00",
     mountTimeTo: "13:00",
+    mountNotes: "",
     updateStock: true,
   };
+}
+
+function draftStorageKey(section: SaleSection): string {
+  return `${DRAFT_STORAGE_PREFIX}${section}`;
+}
+
+function hasMeaningfulDraft(draft: ManualSaleDraft): boolean {
+  const f = draft.form;
+  return Boolean(
+    f.productName.trim() ||
+      f.productId ||
+      f.brandName.trim() ||
+      f.modelCode.trim() ||
+      f.indoorSerial.trim() ||
+      f.outdoorSerial.trim() ||
+      f.contactId ||
+      f.customerName.trim() ||
+      f.customerPhone.trim() ||
+      f.customerAddress.trim() ||
+      f.customerEmail.trim() ||
+      f.notes.trim() ||
+      f.baseSalePrice.trim() ||
+      f.salePrice.trim() ||
+      f.purchasePrice.trim() ||
+      f.supplierKey.trim() ||
+      f.supplierInvoiceNumber.trim() ||
+      f.includeMount ||
+      f.mountNotes.trim(),
+  );
+}
+
+function readDraft(section: SaleSection): ManualSaleDraft | null {
+  if (typeof sessionStorage === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(draftStorageKey(section));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<ManualSaleDraft>;
+    if (!parsed?.form) return null;
+    const base = emptyForm(section);
+    return {
+      form: {
+        ...base,
+        ...parsed.form,
+        saleProductCondition:
+          parsed.form.saleProductCondition === "used" || parsed.form.saleProductCondition === "new"
+            ? parsed.form.saleProductCondition
+            : base.saleProductCondition,
+        includeMount: Boolean(parsed.form.includeMount),
+        updateStock: parsed.form.updateStock !== false,
+      },
+      brandQuery: parsed.brandQuery ?? "",
+      modelQuery: parsed.modelQuery ?? "",
+      nameQuery: parsed.nameQuery ?? "",
+      indoorQuery: parsed.indoorQuery ?? "",
+      outdoorQuery: parsed.outdoorQuery ?? "",
+      contactQuery: parsed.contactQuery ?? "",
+      selectedProduct: parsed.selectedProduct ?? null,
+      salePriceManual: Boolean(parsed.salePriceManual),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeDraft(section: SaleSection, draft: ManualSaleDraft): void {
+  if (typeof sessionStorage === "undefined") return;
+  try {
+    if (!hasMeaningfulDraft(draft)) {
+      sessionStorage.removeItem(draftStorageKey(section));
+      return;
+    }
+    sessionStorage.setItem(draftStorageKey(section), JSON.stringify(draft));
+  } catch {
+    /* quota / private mode */
+  }
+}
+
+function removeDraft(section: SaleSection): void {
+  if (typeof sessionStorage === "undefined") return;
+  sessionStorage.removeItem(draftStorageKey(section));
+}
+
+function applyDraftToState(
+  draft: ManualSaleDraft,
+  setters: {
+    setForm: (v: ManualSaleForm) => void;
+    setBrandQuery: (v: string) => void;
+    setModelQuery: (v: string) => void;
+    setNameQuery: (v: string) => void;
+    setIndoorQuery: (v: string) => void;
+    setOutdoorQuery: (v: string) => void;
+    setContactQuery: (v: string) => void;
+    setSelectedProduct: (v: ProductChoice | null) => void;
+    salePriceManualRef: MutableRefObject<boolean>;
+  },
+) {
+  setters.setForm(draft.form);
+  setters.setBrandQuery(draft.brandQuery);
+  setters.setModelQuery(draft.modelQuery);
+  setters.setNameQuery(draft.nameQuery);
+  setters.setIndoorQuery(draft.indoorQuery);
+  setters.setOutdoorQuery(draft.outdoorQuery);
+  setters.setContactQuery(draft.contactQuery);
+  setters.setSelectedProduct(draft.selectedProduct);
+  setters.salePriceManualRef.current = draft.salePriceManual;
 }
 
 function productLabel(p: ProductChoice): string {
@@ -222,19 +381,24 @@ function ProductSuggestButton({ p, onPick }: { p: ProductChoice; onPick: (p: Pro
 }
 
 export function ManualSaleModal({
+  open,
   section,
   onClose,
   onSuccess,
 }: {
+  open: boolean;
   section: SaleSection;
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  const [form, setForm] = useState(() => emptyForm(section));
-  const [selectedProduct, setSelectedProduct] = useState<ProductChoice | null>(null);
+  const initialDraft = readDraft(section);
+  const [form, setForm] = useState<ManualSaleForm>(() => initialDraft?.form ?? emptyForm(section));
+  const [selectedProduct, setSelectedProduct] = useState<ProductChoice | null>(
+    () => initialDraft?.selectedProduct ?? null,
+  );
   const [supplierOptions, setSupplierOptions] = useState<GroupedSupplier[]>([]);
   const [mountDefaults, setMountDefaults] = useState<MountDefaults | null>(null);
-  const [contactQuery, setContactQuery] = useState("");
+  const [contactQuery, setContactQuery] = useState(() => initialDraft?.contactQuery ?? "");
   const [contactLoading, setContactLoading] = useState(false);
   const [contactResults, setContactResults] = useState<ContactChoice[]>([]);
   const [busy, setBusy] = useState(false);
@@ -245,16 +409,17 @@ export function ManualSaleModal({
   const [modelsLoading, setModelsLoading] = useState(false);
   const [brandMenuOpen, setBrandMenuOpen] = useState(false);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
-  const [brandQuery, setBrandQuery] = useState("");
-  const [modelQuery, setModelQuery] = useState("");
-  const [nameQuery, setNameQuery] = useState("");
-  const [indoorQuery, setIndoorQuery] = useState("");
-  const [outdoorQuery, setOutdoorQuery] = useState("");
+  const [brandQuery, setBrandQuery] = useState(() => initialDraft?.brandQuery ?? "");
+  const [modelQuery, setModelQuery] = useState(() => initialDraft?.modelQuery ?? "");
+  const [nameQuery, setNameQuery] = useState(() => initialDraft?.nameQuery ?? "");
+  const [indoorQuery, setIndoorQuery] = useState(() => initialDraft?.indoorQuery ?? "");
+  const [outdoorQuery, setOutdoorQuery] = useState(() => initialDraft?.outdoorQuery ?? "");
   const [productLoading, setProductLoading] = useState(false);
   const [productResults, setProductResults] = useState<ProductChoice[]>([]);
   const [activeSuggest, setActiveSuggest] = useState<"name" | "indoor" | "outdoor" | null>(null);
 
-  const salePriceManualRef = useRef(false);
+  const salePriceManualRef = useRef(initialDraft?.salePriceManual ?? false);
+  const wasOpenRef = useRef(false);
 
   const fetchProducts = useCallback(
     async (q: string, brandId?: string) => {
@@ -308,6 +473,53 @@ export function ManualSaleModal({
         setSupplierOptions([]);
       });
   }, []);
+
+  useEffect(() => {
+    if (open && !wasOpenRef.current) {
+      const draft = readDraft(section);
+      if (draft && hasMeaningfulDraft(draft)) {
+        applyDraftToState(draft, {
+          setForm,
+          setBrandQuery,
+          setModelQuery,
+          setNameQuery,
+          setIndoorQuery,
+          setOutdoorQuery,
+          setContactQuery,
+          setSelectedProduct,
+          salePriceManualRef,
+        });
+        setError(null);
+      }
+    }
+    wasOpenRef.current = open;
+  }, [open, section]);
+
+  useEffect(() => {
+    if (!open) return;
+    writeDraft(section, {
+      form,
+      brandQuery,
+      modelQuery,
+      nameQuery,
+      indoorQuery,
+      outdoorQuery,
+      contactQuery,
+      selectedProduct,
+      salePriceManual: salePriceManualRef.current,
+    });
+  }, [
+    open,
+    section,
+    form,
+    brandQuery,
+    modelQuery,
+    nameQuery,
+    indoorQuery,
+    outdoorQuery,
+    contactQuery,
+    selectedProduct,
+  ]);
 
   useEffect(() => {
     const brandId = form.brandId.trim();
@@ -618,13 +830,14 @@ export function ManualSaleModal({
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+          body: JSON.stringify({
           manualHistorySale: true,
           type: "sale",
           eventCode: "sale",
           title: `Продажба: ${productName}`,
           status: form.includeMount ? "planned" : "done",
-          dueDate: form.includeMount ? form.mountDate : form.saleDate,
+          dueDate: form.saleDate,
+          saleDate: form.saleDate,
           saleInstallState: form.includeMount ? "pending_mount" : "completed",
           productId: form.productId || null,
           productName,
@@ -644,6 +857,7 @@ export function ManualSaleModal({
           mountDate: form.includeMount ? form.mountDate : null,
           mountTimeFrom: form.includeMount ? form.mountTimeFrom : null,
           mountTimeTo: form.includeMount ? form.mountTimeTo : null,
+          mountNotes: form.includeMount ? form.mountNotes.trim() || null : null,
           updateStock: form.updateStock && Boolean(form.productId),
         }),
       });
@@ -652,6 +866,8 @@ export function ManualSaleModal({
       if (json.protocol_warning) {
         console.warn("[ManualSaleModal] protocol warning:", json.protocol_warning);
       }
+      removeDraft(section);
+      notifyAdminCalendarReload();
       onSuccess();
       onClose();
     } catch (e: unknown) {
@@ -666,15 +882,17 @@ export function ManualSaleModal({
       ? `+ €${mountAddon(mountDefaults, form.saleProductCondition).toLocaleString()} стандартен монтаж`
       : null;
 
+  if (!open) return null;
+
   return (
-    <div className={ADMIN_MODAL_BACKDROP} onClick={() => !busy && onClose()}>
+    <AdminModalBackdrop open onClose={onClose} busy={busy} layerId="manual-sale">
       <div className={`${ADMIN_MODAL_PANEL} max-w-3xl`} onClick={(e) => e.stopPropagation()}>
         <AdminModalDragHandle />
         <div className="border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#e6f9fd_0,#ffffff_42%,#fff3ed_100%)] px-4 py-4 md:px-6 md:py-5 shrink-0">
           <div className="text-xs font-bold uppercase tracking-[0.24em] text-brand-blue-700">Ръчна продажба</div>
           <div className="mt-1 text-lg md:text-2xl font-black leading-tight text-slate-950">Запис в историята на продажбите</div>
           <div className="mt-1 text-sm font-medium text-slate-500 hidden sm:block">
-            Полетата предлагат стойности от каталога. Може да свържете продукт или да въведете данни ръчно.
+            С монтаж: продажбата е „чака монтаж“, в календара се създава насрочен монтаж. Без монтаж: продажбата е завършена веднага.
           </div>
         </div>
 
@@ -931,10 +1149,12 @@ export function ManualSaleModal({
                   <div className="p-3 text-center text-sm text-slate-500">Търсене...</div>
                 ) : (
                   contactResults.map((c) => (
-                    <button
+                    <AdminContactSuggestRow
                       key={c.id}
-                      type="button"
-                      onClick={() => {
+                      name={c.full_name}
+                      phone={c.phone}
+                      email={c.email}
+                      onSelect={() => {
                         setForm((s) => ({
                           ...s,
                           contactId: c.id,
@@ -946,11 +1166,7 @@ export function ManualSaleModal({
                         setContactQuery(`${c.full_name} (${c.phone})`);
                         setContactResults([]);
                       }}
-                      className="block w-full rounded-lg p-2 text-left transition-colors hover:bg-slate-50"
-                    >
-                      <div className="text-sm font-bold text-slate-900">{c.full_name}</div>
-                      <div className="mt-0.5 text-xs text-slate-500">{c.phone}</div>
-                    </button>
+                    />
                   ))
                 )}
               </div>
@@ -997,18 +1213,34 @@ export function ManualSaleModal({
               </span>
             </label>
             {form.includeMount ? (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="space-y-3 rounded-xl border border-brand-blue-100 bg-brand-blue-50/30 p-3">
+                <div className="text-xs font-black uppercase tracking-wide text-brand-blue-700">Монтаж в календара</div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <label className="grid gap-1.5">
+                    <span className="text-xs font-bold text-slate-600">Дата на монтаж *</span>
+                    <Input type="date" value={form.mountDate} onChange={(e) => setForm((s) => ({ ...s, mountDate: e.target.value }))} />
+                  </label>
+                  <label className="grid gap-1.5">
+                    <span className="text-xs font-bold text-slate-600">Час от</span>
+                    <Input type="time" value={form.mountTimeFrom} onChange={(e) => setForm((s) => ({ ...s, mountTimeFrom: e.target.value }))} />
+                  </label>
+                  <label className="grid gap-1.5">
+                    <span className="text-xs font-bold text-slate-600">Час до</span>
+                    <Input type="time" value={form.mountTimeTo} onChange={(e) => setForm((s) => ({ ...s, mountTimeTo: e.target.value }))} />
+                  </label>
+                </div>
                 <label className="grid gap-1.5">
-                  <span className="text-xs font-bold text-slate-600">Дата монтаж *</span>
-                  <Input type="date" value={form.mountDate} onChange={(e) => setForm((s) => ({ ...s, mountDate: e.target.value }))} />
-                </label>
-                <label className="grid gap-1.5">
-                  <span className="text-xs font-bold text-slate-600">Час от</span>
-                  <Input type="time" value={form.mountTimeFrom} onChange={(e) => setForm((s) => ({ ...s, mountTimeFrom: e.target.value }))} />
-                </label>
-                <label className="grid gap-1.5">
-                  <span className="text-xs font-bold text-slate-600">Час до</span>
-                  <Input type="time" value={form.mountTimeTo} onChange={(e) => setForm((s) => ({ ...s, mountTimeTo: e.target.value }))} />
+                  <span className="text-xs font-bold text-slate-600">Информация / бележка към монтажа</span>
+                  <Textarea
+                    value={form.mountNotes}
+                    onChange={(e) => setForm((s) => ({ ...s, mountNotes: e.target.value }))}
+                    placeholder="напр. 4-ти етаж, паркомясто, достъп през двора…"
+                    rows={2}
+                    className="min-h-[2.75rem]"
+                  />
+                  <span className="text-[11px] text-slate-500">
+                    Показва се в задачата „Монтаж“ в таблото и календара, не в бележките към продажбата.
+                  </span>
                 </label>
               </div>
             ) : (
@@ -1037,6 +1269,6 @@ export function ManualSaleModal({
           </Button>
         </div>
       </div>
-    </div>
+    </AdminModalBackdrop>
   );
 }

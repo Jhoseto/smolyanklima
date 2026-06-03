@@ -3,7 +3,15 @@
 import Link from "next/link";
 import { useState } from "react";
 import { CheckCircle2, ChevronRight, X } from "lucide-react";
-import { Card, Button, HoverTip, ADMIN_MODAL_BACKDROP, ADMIN_MODAL_PANEL, AdminModalDragHandle } from "./ui";
+import {
+  Card,
+  Button,
+  HoverTip,
+  ADMIN_MODAL_BACKDROP,
+  ADMIN_MODAL_PANEL,
+  AdminModalDragHandle,
+  AdminFieldValue,
+} from "./ui";
 import { ProductQuickViewButton } from "./ProductQuickView";
 
 type DashboardDetail = {
@@ -319,7 +327,7 @@ export function DashboardPanel({
                   <div key={field.label} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
                     <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{field.label}</div>
                     <div className="mt-1 whitespace-pre-wrap text-sm font-semibold leading-6 text-slate-900">
-                      {field.value}
+                      <AdminFieldValue label={field.label} value={String(field.value)} />
                     </div>
                   </div>
                 ))}

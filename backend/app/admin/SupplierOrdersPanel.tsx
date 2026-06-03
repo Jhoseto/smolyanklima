@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ChevronRight, Truck } from "lucide-react";
-import { Card } from "./ui";
+import { Card, AdminContactMetaLine } from "./ui";
 import { SupplierOrderDetailModal } from "./SupplierOrderDetailModal";
 import { notifyAdminCalendarReload } from "@/lib/admin/calendarReload";
 import type { NormalizedSupplierOrderRow } from "@/lib/admin/supplierOrderRow";
@@ -104,11 +104,11 @@ export function SupplierOrdersPanel({
                   <p className="text-sm font-semibold leading-snug text-slate-900 line-clamp-2">
                     {displayName(row)}
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {[row.customer_name ?? row.contacts?.full_name, row.customer_phone ?? row.contacts?.phone]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
+                  <AdminContactMetaLine
+                    name={row.customer_name ?? row.contacts?.full_name}
+                    phone={row.customer_phone ?? row.contacts?.phone}
+                    className="mt-1 block text-xs text-slate-500"
+                  />
                   <p className="mt-0.5 text-[11px] text-slate-400">
                     {row.due_date
                       ? `Поръчано: ${formatBgDate(row.due_date)}`

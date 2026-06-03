@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, X, Phone } from 'lucide-react';
 import { Button } from '../ui/Button';
+import { COMPANY_TEL_HREF, LEGAL_COMPANY } from '../../data/legal/company';
 import { Logo } from '../ui/Logo';
 import { useServiceRequestModal } from '../../context/ServiceRequestModalContext';
 import { scrollToHomeSection, scrollToPageTop } from '../../lib/navigation/homeSections';
@@ -195,11 +196,11 @@ export const Navbar = () => {
           {/* Desktop Actions — крайно вдясно */}
           <div className="hidden md:flex justify-self-end items-center gap-4 md:col-start-3 md:row-start-1 shrink-0">
             <a
-              href="tel:+359888585816"
+              href={COMPANY_TEL_HREF}
               className="hidden lg:flex items-center gap-2 text-gray-700 font-bold text-sm hover:text-[#FF4D00] transition-colors whitespace-nowrap"
             >
               <Phone className="w-4 h-4 text-[#FF4D00]" />
-              0888 58 58 16
+              {LEGAL_COMPANY.phone}
             </a>
             <Button size="sm" className="hidden lg:flex shrink-0" onClick={handleServiceRequestClick}>
               Заяви услуга
@@ -273,11 +274,11 @@ export const Navbar = () => {
               })}
               <div className="pt-4 border-t border-gray-100 space-y-4">
                 <a
-                  href="tel:+359888585816"
+                  href={COMPANY_TEL_HREF}
                   className="flex items-center gap-2 text-gray-900 font-bold text-lg hover:text-[#FF4D00] transition-colors active:scale-95"
                 >
                   <Phone className="w-5 h-5 text-[#FF4D00]" />
-                  0888 58 58 16
+                  {LEGAL_COMPANY.phone}
                 </a>
                 <Button className="w-full" onClick={handleServiceRequestClick}>
                   Заяви услуга

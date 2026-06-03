@@ -1,5 +1,6 @@
 import type { ReactNode, ComponentProps } from "react";
 import { Info } from "lucide-react";
+import { useAdminBackHandler } from "@/lib/admin/useAdminBackHandler";
 
 /** Кратко обяснение при hover/focus върху иконки и компактни бутони. */
 export function HoverTip({
@@ -48,6 +49,37 @@ export function AdminModalDragHandle() {
   return (
     <div className="flex justify-center pt-3 pb-1 md:hidden shrink-0">
       <div className="w-10 h-1 rounded-full bg-slate-200" />
+    </div>
+  );
+}
+
+/** Modal backdrop с Android back → onClose (не излиза от PWA). */
+export { useAdminBackHandler } from "@/lib/admin/useAdminBackHandler";
+
+export function AdminModalBackdrop({
+  open,
+  onClose,
+  busy = false,
+  children,
+  className = "",
+  layerId,
+}: {
+  open: boolean;
+  onClose: () => void;
+  busy?: boolean;
+  children: ReactNode;
+  className?: string;
+  layerId?: string;
+}) {
+  useAdminBackHandler(open, onClose, layerId);
+  if (!open) return null;
+  return (
+    <div
+      className={`${ADMIN_MODAL_BACKDROP} ${className}`.trim()}
+      data-admin-overlay="true"
+      onClick={() => !busy && onClose()}
+    >
+      {children}
     </div>
   );
 }
@@ -213,3 +245,11 @@ export function Td({ className = "", ...props }: ComponentProps<"td">) {
     />
   );
 }
+
+export {
+  AdminPhoneLink,
+  AdminFieldValue,
+  AdminContactMetaLine,
+  AdminLabeledBox,
+  AdminContactSuggestRow,
+} from "./components/AdminContactLinks";

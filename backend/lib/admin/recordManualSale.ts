@@ -20,9 +20,24 @@ export type ManualSaleInput = {
   mountDate?: string | null;
   mountTimeFrom?: string | null;
   mountTimeTo?: string | null;
+  /** Бележка само за задачата „Монтаж“ в календара (не в продажбата). */
+  mountNotes?: string | null;
   updateStock?: boolean;
   createdBy: string;
 };
+
+function buildInstallationNotes(
+  saleId: string,
+  mountNotes: string | null | undefined,
+  saleNotes: string | null | undefined,
+): string | null {
+  const parts = [
+    mountNotes?.trim() ? `Бележка към монтажа: ${mountNotes.trim()}` : null,
+    saleNotes?.trim() || null,
+    `Връзка продажба: ${saleId}`,
+  ].filter(Boolean) as string[];
+  return parts.length ? parts.join("\n\n") : null;
+}
 
 type ProductRow = {
   id: string;
@@ -106,7 +121,8 @@ export async function recordManualSale(
   const productName = (product?.name ?? input.productName).trim();
   const saleDate = input.saleDate.trim();
   const withInstallation = input.withInstallation === true && input.saleInstallState === "pending_mount";
-  const mountDate = (withInstallation ? input.mountDate : saleDate)?.trim() ?? saleDate;
+  const mountDate = withInstallation ? (input.mountDate?.trim() ?? "") : "";
+  if (withInstallation && !mountDate) throw new Error("Посочете дата за монтаж.");
   const unitPrice = input.salePrice;
   const purchasePrice =
     input.purchasePrice != null && Number.isFinite(input.purchasePrice) && input.purchasePrice >= 0
@@ -134,7 +150,7 @@ export async function recordManualSale(
     title: `Продажба: ${productName}`,
     status: saleStatus,
     priority: "medium",
-    due_date: withInstallation ? mountDate : saleDate,
+    due_date: saleDate,
     completed_at: completedAt,
     sale_install_state: input.saleInstallState,
     product_id: product?.id ?? null,
@@ -188,7 +204,7 @@ export async function recordManualSale(
         customer_name: input.customerName?.trim() || null,
         customer_phone: input.customerPhone?.trim() || null,
         customer_address: input.customerAddress?.trim() || null,
-        notes: [`Връзка продажба: ${saleId}`, input.notes?.trim() || null].filter(Boolean).join("\n\n") || null,
+        notes: buildInstallationNotes(saleId, input.mountNotes, input.notes),
         sale_work_item_id: saleId,
         quantity: 1,
         created_by: input.createdBy,

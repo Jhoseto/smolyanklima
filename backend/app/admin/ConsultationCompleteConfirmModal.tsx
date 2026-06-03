@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { Button } from "./ui";
+import { Button, AdminPhoneLink } from "./ui";
 
 export type ConsultationCompletePreview = {
   title: string;
@@ -92,7 +92,12 @@ export function ConsultationCompleteConfirmModal({
             <div>
               <span className="font-semibold text-slate-500">Клиент: </span>
               <span className="font-semibold text-slate-900">{who}</span>
-              {phone ? <span className="text-slate-600"> · {phone}</span> : null}
+              {phone ? (
+                <>
+                  <span className="text-slate-400"> · </span>
+                  <AdminPhoneLink phone={phone} showIcon={false} className="text-slate-600 text-sm" />
+                </>
+              ) : null}
             </div>
           ) : null}
           <div>

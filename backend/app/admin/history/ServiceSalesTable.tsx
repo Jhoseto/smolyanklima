@@ -2,7 +2,7 @@
 
 import type { ReactElement, ReactNode } from "react";
 import { Eye } from "lucide-react";
-import { Button, Table, Th, Td } from "../ui";
+import { Button, Table, Th, Td, AdminPhoneLink } from "../ui";
 
 type ServiceRow = {
   id: string;
@@ -126,7 +126,9 @@ export function ServiceSalesTable({
                     <span className={statusPillClass(row.status)}>{STATUS_TEXT[row.status]}</span>
                   </Td>
                   <Td className="font-medium text-slate-700">{row.customer_name || "—"}</Td>
-                  <Td className="text-slate-600">{row.customer_phone || "—"}</Td>
+                  <Td className="text-slate-600">
+                    <AdminPhoneLink phone={row.customer_phone} showIcon={false} className="font-medium text-slate-600" />
+                  </Td>
                   <Td className="text-slate-600 max-w-[180px] truncate" title={row.customer_address ?? ""}>
                     {row.customer_address || "—"}
                   </Td>
@@ -167,9 +169,11 @@ export function ServiceSalesTable({
                   <div className="font-bold text-slate-900 text-sm truncate">{row.title}</div>
                   <div className="font-semibold text-slate-700 text-sm mt-1">{row.customer_name || "—"}</div>
                   {row.customer_phone && (
-                    <a href={`tel:${row.customer_phone}`} className="text-xs text-brand-blue-500 font-medium mt-0.5 block">
-                      {row.customer_phone}
-                    </a>
+                    <AdminPhoneLink
+                      phone={row.customer_phone}
+                      className="text-xs font-medium mt-0.5 block"
+                      showIcon={false}
+                    />
                   )}
                   {row.customer_address && <div className="text-xs text-slate-500 mt-0.5">{row.customer_address}</div>}
                 </div>

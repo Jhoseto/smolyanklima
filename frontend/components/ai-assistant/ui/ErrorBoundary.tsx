@@ -6,7 +6,7 @@
 import React, { ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw, MessageCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { LEGAL_COMPANY } from '../../../data/legal/company';
+import { CompanyPhoneLink } from '../../ui/PhoneLink';
 
 interface Props {
   children: ReactNode;
@@ -223,7 +223,10 @@ const ErrorFallback: React.FC<ErrorFallbackProps> = ({
           marginBottom: 0,
         }}
       >
-        Телефон: {LEGAL_COMPANY.phone}
+        Телефон:{' '}
+        <CompanyPhoneLink
+          style={{ color: primaryColor, fontWeight: 600, textDecoration: 'underline' }}
+        />
       </p>
     </motion.div>
   );

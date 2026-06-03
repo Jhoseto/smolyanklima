@@ -10,6 +10,7 @@ import { OfflineBootstrap } from "./OfflineBootstrap";
 import { OfflineExplainerCard } from "./OfflineExplainerCard";
 import { AdminLogo } from "./AdminLogo";
 import { AdminChatAlertsShell } from "./AdminChatAlertsShell";
+import { AdminBackNavigation } from "./AdminBackNavigation";
 import { LogOut } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +40,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <>
+      <AdminBackNavigation />
       <SplashScreen />
       <div className="h-screen flex flex-col overflow-hidden bg-slate-50 text-slate-900 font-sans text-sm md:grid md:grid-cols-[240px_minmax(0,1fr)]">
 

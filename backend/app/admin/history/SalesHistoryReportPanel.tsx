@@ -24,7 +24,7 @@ import {
   RefreshCw,
   FileDown,
 } from "lucide-react";
-import { Button } from "../ui";
+import { Button, AdminPhoneLink } from "../ui";
 import type { SalesHistoryReport, SalesReportClientRow } from "@/lib/admin/computeSalesHistoryReport";
 import {
   loadSalesReportAnalysisCache,
@@ -431,7 +431,9 @@ function TopClientsTable({ clients }: { clients: SalesReportClientRow[] }) {
               <td className="px-2.5 py-2 font-bold text-slate-900 whitespace-normal break-words min-w-[140px]">
                 {c.name}
               </td>
-              <td className="px-2.5 py-2 text-slate-600 whitespace-nowrap">{c.phone ?? "—"}</td>
+              <td className="px-2.5 py-2 text-slate-600 whitespace-nowrap">
+                <AdminPhoneLink phone={c.phone} showIcon={false} className="font-medium text-slate-600" />
+              </td>
               <td className="px-2.5 py-2 text-right font-bold text-slate-800 tabular-nums">{fmtNum(c.count)}</td>
               <td className="px-2.5 py-2 text-right font-black text-[#0077B6] tabular-nums">{fmtEuro(c.revenue)}</td>
               <td className="px-2.5 py-2 text-right tabular-nums">

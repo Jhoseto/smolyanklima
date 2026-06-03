@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
-import { Card, Input, Select, Textarea, Button, Table, Th, Td } from "../ui";
+import { Card, Input, Select, Textarea, Button, Table, Th, Td, AdminContactSuggestRow } from "../ui";
 import { ChevronDown, ChevronUp, UserPlus, Users, Activity, FileText, Phone, Mail, MapPin, X, Truck, Plus, Trash2, Save, Pencil, Package } from "lucide-react";
 import { ProductQuickViewButton } from "../ProductQuickView";
 import { useDebounce } from "@/lib/hooks/useDebounce";
@@ -1187,19 +1187,17 @@ function AdminContactsPageInner() {
                     {mergeResults.length > 0 && (
                       <div className="absolute left-0 right-0 bottom-[calc(100%+4px)] z-50 border border-slate-200 rounded-xl bg-white shadow-lg max-h-48 overflow-y-auto p-1">
                         {mergeResults.map((r) => (
-                          <button
+                          <AdminContactSuggestRow
                             key={r.id}
-                            type="button"
-                            onClick={() => {
+                            name={r.full_name}
+                            phone={r.phone}
+                            email={r.email}
+                            onSelect={() => {
                               setMergeSourceId(r.id);
                               setMergeQuery(`${r.full_name} (${r.phone})`);
                               setMergeResults([]);
                             }}
-                            className="block w-full text-left p-2 hover:bg-slate-50 rounded-lg transition-colors"
-                          >
-                            <div className="text-sm font-bold text-slate-900">{r.full_name}</div>
-                            <div className="text-xs text-slate-500 mt-0.5">{r.phone}{r.email ? ` / ${r.email}` : ""}</div>
-                          </button>
+                          />
                         ))}
                       </div>
                     )}

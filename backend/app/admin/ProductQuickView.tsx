@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Check, ExternalLink, Ruler, ShieldCheck, Star, Volume2, Weight, Wifi, Wind, X, Zap } from "lucide-react";
 import { publicProductPageUrl } from "@/lib/publicCatalogUrl";
+import { useAdminBackHandler } from "@/lib/admin/useAdminBackHandler";
 import { CatalogProductImage } from "@/app/admin/components/CatalogProductImage";
 
 type ProductQuickViewData = {
@@ -134,6 +135,7 @@ function accessoryKindLabel(kind: string | null | undefined): string {
 }
 
 export function AccessoryQuickViewModal({ accessoryId, onClose }: { accessoryId: string; onClose: () => void }) {
+  useAdminBackHandler(true, onClose, `accessory-quick-view-${accessoryId}`);
   const [accessory, setAccessory] = useState<AccessoryQuickViewData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -280,6 +282,7 @@ export function AccessoryQuickViewModal({ accessoryId, onClose }: { accessoryId:
 type CatalogMountDefaults = { newEur: number; usedEur: number };
 
 export function ProductQuickViewModal({ productId, onClose }: { productId: string; onClose: () => void }) {
+  useAdminBackHandler(true, onClose, `product-quick-view-${productId}`);
   const [product, setProduct] = useState<ProductQuickViewData | null>(null);
   const [mountDefaults, setMountDefaults] = useState<CatalogMountDefaults | null>(null);
   const [loading, setLoading] = useState(true);

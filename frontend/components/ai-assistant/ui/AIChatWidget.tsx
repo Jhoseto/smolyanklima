@@ -13,6 +13,7 @@ import { ChatMessage } from './ChatMessage';
 import { QuickReplyButtons } from './QuickReplyButtons';
 import { TypingIndicator as TypingIndicatorComponent } from './TypingIndicator';
 import { ProductCard } from './ProductCard';
+import { CompanyPhoneLink } from '../../ui/PhoneLink';
 import { PrivacyConsent } from './PrivacyConsent';
 import { useConsent } from '../../../lib/consent/ConsentProvider';
 
@@ -614,7 +615,13 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
                   borderTop: '1px solid #fecaca',
                 }}
               >
-                {error}
+                <p style={{ margin: 0 }}>{error}</p>
+                <p style={{ margin: '8px 0 0', fontSize: 12 }}>
+                  <CompanyPhoneLink
+                    className="font-semibold text-[#0077B6] underline underline-offset-2"
+                    showIcon
+                  />
+                </p>
               </motion.div>
             )}
 

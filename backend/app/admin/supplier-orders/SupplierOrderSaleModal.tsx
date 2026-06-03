@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, Input, Textarea, ADMIN_MODAL_BACKDROP, ADMIN_MODAL_PANEL, AdminModalDragHandle } from "../ui";
+import {
+  Button,
+  Input,
+  Textarea,
+  ADMIN_MODAL_PANEL,
+  AdminModalBackdrop,
+  AdminModalDragHandle,
+  AdminContactSuggestRow,
+} from "../ui";
 import { assertNoContactPrimaryPhoneDuplicate } from "@/lib/admin/contactPhoneConflictClient";
 import { canRecordProductSale, recordProductSale } from "@/lib/admin/recordProductSale";
 import type { NormalizedSupplierOrderRow } from "@/lib/admin/supplierOrderRow";
@@ -155,10 +163,7 @@ export function SupplierOrderSaleModal({
   }
 
   return (
-    <div
-      className={ADMIN_MODAL_BACKDROP}
-      onClick={() => !busy && onClose()}
-    >
+    <AdminModalBackdrop open onClose={onClose} busy={busy} layerId="supplier-order-sale">
       <div
         className={`${ADMIN_MODAL_PANEL} max-w-3xl`}
         onClick={(e) => e.stopPropagation()}
@@ -188,10 +193,12 @@ export function SupplierOrderSaleModal({
                   <div className="p-3 text-center text-sm text-slate-500">Търсене...</div>
                 ) : (
                   contactResults.map((c) => (
-                    <button
+                    <AdminContactSuggestRow
                       key={c.id}
-                      type="button"
-                      onClick={() => {
+                      name={c.full_name}
+                      phone={c.phone}
+                      email={c.email}
+                      onSelect={() => {
                         setForm((s) => ({
                           ...s,
                           contactId: c.id,
@@ -203,11 +210,7 @@ export function SupplierOrderSaleModal({
                         setContactQuery(`${c.full_name} (${c.phone})`);
                         setContactResults([]);
                       }}
-                      className="block w-full rounded-lg p-2 text-left transition-colors hover:bg-slate-50"
-                    >
-                      <div className="text-sm font-bold text-slate-900">{c.full_name}</div>
-                      <div className="mt-0.5 text-xs text-slate-500">{c.phone}</div>
-                    </button>
+                    />
                   ))
                 )}
               </div>
@@ -306,6 +309,6 @@ export function SupplierOrderSaleModal({
           </div>
         </div>
       </div>
-    </div>
+    </AdminModalBackdrop>
   );
 }

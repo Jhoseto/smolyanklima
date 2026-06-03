@@ -1,7 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Button, Input, Textarea, Select, ADMIN_MODAL_BACKDROP, ADMIN_MODAL_PANEL, AdminModalDragHandle } from "../ui";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  Button,
+  Input,
+  Textarea,
+  Select,
+  ADMIN_MODAL_PANEL,
+  AdminModalBackdrop,
+  AdminModalDragHandle,
+  AdminContactSuggestRow,
+} from "../ui";
 import { assertNoContactPrimaryPhoneDuplicate } from "@/lib/admin/contactPhoneConflictClient";
 import { groupSupplierNames, mergeSupplierGroups, normalizeSupplierKey, type GroupedSupplier } from "@/lib/admin/supplierNameNormalize";
 import { notifyAdminCalendarReload } from "@/lib/admin/calendarReload";
@@ -36,7 +45,38 @@ type BrandOption = { id: string; name: string };
 type ModelOption = { modelCode: string; product: ProductChoice };
 type OrderSection = "new" | "used";
 
-function emptyForm(section: OrderSection) {
+type ManualOrderForm = {
+  productId: string;
+  productName: string;
+  brandId: string;
+  brandName: string;
+  modelCode: string;
+  productCondition: OrderSection;
+  productRegion: ProductRegion;
+  contactId: string;
+  customerName: string;
+  customerPhone: string;
+  customerAddress: string;
+  customerEmail: string;
+  notes: string;
+  orderDate: string;
+  purchasePrice: string;
+  agreedPrice: string;
+  supplierKey: string;
+};
+
+type ManualDeliveryDraft = {
+  form: ManualOrderForm;
+  brandQuery: string;
+  modelQuery: string;
+  nameQuery: string;
+  contactQuery: string;
+  selectedProduct: ProductChoice | null;
+};
+
+const DRAFT_STORAGE_PREFIX = "smolyanklima:manual-delivery-draft:";
+
+function emptyForm(section: OrderSection): ManualOrderForm {
   const today = new Date().toISOString().slice(0, 10);
   return {
     productId: "",
@@ -45,7 +85,7 @@ function emptyForm(section: OrderSection) {
     brandName: "",
     modelCode: "",
     productCondition: section,
-    productRegion: "europe" as ProductRegion,
+    productRegion: "europe",
     contactId: "",
     customerName: "",
     customerPhone: "",
@@ -57,6 +97,95 @@ function emptyForm(section: OrderSection) {
     agreedPrice: "",
     supplierKey: "",
   };
+}
+
+function draftStorageKey(section: OrderSection): string {
+  return `${DRAFT_STORAGE_PREFIX}${section}`;
+}
+
+function hasMeaningfulDraft(draft: ManualDeliveryDraft): boolean {
+  const f = draft.form;
+  return Boolean(
+    f.productName.trim() ||
+      f.productId ||
+      f.brandName.trim() ||
+      f.modelCode.trim() ||
+      f.contactId ||
+      f.customerName.trim() ||
+      f.customerPhone.trim() ||
+      f.customerAddress.trim() ||
+      f.customerEmail.trim() ||
+      f.notes.trim() ||
+      f.purchasePrice.trim() ||
+      f.agreedPrice.trim() ||
+      f.supplierKey.trim(),
+  );
+}
+
+function readDraft(section: OrderSection): ManualDeliveryDraft | null {
+  if (typeof sessionStorage === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(draftStorageKey(section));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<ManualDeliveryDraft>;
+    if (!parsed?.form) return null;
+    const base = emptyForm(section);
+    return {
+      form: {
+        ...base,
+        ...parsed.form,
+        productCondition:
+          parsed.form.productCondition === "used" || parsed.form.productCondition === "new"
+            ? parsed.form.productCondition
+            : base.productCondition,
+        productRegion: parsed.form.productRegion === "japan" ? "japan" : "europe",
+      },
+      brandQuery: parsed.brandQuery ?? "",
+      modelQuery: parsed.modelQuery ?? "",
+      nameQuery: parsed.nameQuery ?? "",
+      contactQuery: parsed.contactQuery ?? "",
+      selectedProduct: parsed.selectedProduct ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeDraft(section: OrderSection, draft: ManualDeliveryDraft): void {
+  if (typeof sessionStorage === "undefined") return;
+  try {
+    if (!hasMeaningfulDraft(draft)) {
+      sessionStorage.removeItem(draftStorageKey(section));
+      return;
+    }
+    sessionStorage.setItem(draftStorageKey(section), JSON.stringify(draft));
+  } catch {
+    /* quota / private mode */
+  }
+}
+
+function removeDraft(section: OrderSection): void {
+  if (typeof sessionStorage === "undefined") return;
+  sessionStorage.removeItem(draftStorageKey(section));
+}
+
+function applyDraftToState(
+  draft: ManualDeliveryDraft,
+  setters: {
+    setForm: (v: ManualOrderForm) => void;
+    setBrandQuery: (v: string) => void;
+    setModelQuery: (v: string) => void;
+    setNameQuery: (v: string) => void;
+    setContactQuery: (v: string) => void;
+    setSelectedProduct: (v: ProductChoice | null) => void;
+  },
+) {
+  setters.setForm(draft.form);
+  setters.setBrandQuery(draft.brandQuery);
+  setters.setModelQuery(draft.modelQuery);
+  setters.setNameQuery(draft.nameQuery);
+  setters.setContactQuery(draft.contactQuery);
+  setters.setSelectedProduct(draft.selectedProduct);
 }
 
 function productLabel(p: ProductChoice): string {
@@ -184,18 +313,23 @@ function ProductSuggestButton({ p, onPick }: { p: ProductChoice; onPick: (p: Pro
 }
 
 export function ManualDeliveryModal({
+  open,
   section,
   onClose,
   onSuccess,
 }: {
+  open: boolean;
   section: OrderSection;
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  const [form, setForm] = useState(() => emptyForm(section));
-  const [selectedProduct, setSelectedProduct] = useState<ProductChoice | null>(null);
+  const initialDraft = readDraft(section);
+  const [form, setForm] = useState<ManualOrderForm>(() => initialDraft?.form ?? emptyForm(section));
+  const [selectedProduct, setSelectedProduct] = useState<ProductChoice | null>(
+    () => initialDraft?.selectedProduct ?? null,
+  );
   const [supplierOptions, setSupplierOptions] = useState<GroupedSupplier[]>([]);
-  const [contactQuery, setContactQuery] = useState("");
+  const [contactQuery, setContactQuery] = useState(() => initialDraft?.contactQuery ?? "");
   const [contactLoading, setContactLoading] = useState(false);
   const [contactResults, setContactResults] = useState<ContactChoice[]>([]);
   const [busy, setBusy] = useState(false);
@@ -206,9 +340,10 @@ export function ManualDeliveryModal({
   const [modelsLoading, setModelsLoading] = useState(false);
   const [brandMenuOpen, setBrandMenuOpen] = useState(false);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
-  const [brandQuery, setBrandQuery] = useState("");
-  const [modelQuery, setModelQuery] = useState("");
-  const [nameQuery, setNameQuery] = useState("");
+  const [brandQuery, setBrandQuery] = useState(() => initialDraft?.brandQuery ?? "");
+  const [modelQuery, setModelQuery] = useState(() => initialDraft?.modelQuery ?? "");
+  const [nameQuery, setNameQuery] = useState(() => initialDraft?.nameQuery ?? "");
+  const wasOpenRef = useRef(false);
   const [productLoading, setProductLoading] = useState(false);
   const [productResults, setProductResults] = useState<ProductChoice[]>([]);
   const [nameSuggestOpen, setNameSuggestOpen] = useState(false);
@@ -253,6 +388,36 @@ export function ManualDeliveryModal({
         setSupplierOptions([]);
       });
   }, []);
+
+  useEffect(() => {
+    if (open && !wasOpenRef.current) {
+      const draft = readDraft(section);
+      if (draft && hasMeaningfulDraft(draft)) {
+        applyDraftToState(draft, {
+          setForm,
+          setBrandQuery,
+          setModelQuery,
+          setNameQuery,
+          setContactQuery,
+          setSelectedProduct,
+        });
+        setError(null);
+      }
+    }
+    wasOpenRef.current = open;
+  }, [open, section]);
+
+  useEffect(() => {
+    if (!open) return;
+    writeDraft(section, {
+      form,
+      brandQuery,
+      modelQuery,
+      nameQuery,
+      contactQuery,
+      selectedProduct,
+    });
+  }, [open, section, form, brandQuery, modelQuery, nameQuery, contactQuery, selectedProduct]);
 
   useEffect(() => {
     const brandId = form.brandId.trim();
@@ -505,6 +670,7 @@ export function ManualDeliveryModal({
       const json = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) throw new Error(json.error || "Грешка при запис на доставката");
       notifyAdminCalendarReload();
+      removeDraft(section);
       onSuccess();
       onClose();
     } catch (e: unknown) {
@@ -514,8 +680,10 @@ export function ManualDeliveryModal({
     }
   }
 
+  if (!open) return null;
+
   return (
-    <div className={ADMIN_MODAL_BACKDROP} onClick={() => !busy && onClose()}>
+    <AdminModalBackdrop open onClose={onClose} busy={busy} layerId="manual-delivery">
       <div className={`${ADMIN_MODAL_PANEL} max-w-3xl`} onClick={(e) => e.stopPropagation()}>
         <AdminModalDragHandle />
         <div className="border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#ede9fe_0,#ffffff_42%,#e6f9fd_100%)] px-4 py-4 md:px-6 md:py-5 shrink-0">
@@ -699,10 +867,12 @@ export function ManualDeliveryModal({
                   <div className="p-3 text-center text-sm text-slate-500">Търсене...</div>
                 ) : (
                   contactResults.map((c) => (
-                    <button
+                    <AdminContactSuggestRow
                       key={c.id}
-                      type="button"
-                      onClick={() => {
+                      name={c.full_name}
+                      phone={c.phone}
+                      email={c.email}
+                      onSelect={() => {
                         setForm((s) => ({
                           ...s,
                           contactId: c.id,
@@ -714,11 +884,7 @@ export function ManualDeliveryModal({
                         setContactQuery(`${c.full_name} (${c.phone})`);
                         setContactResults([]);
                       }}
-                      className="block w-full rounded-lg p-2 text-left transition-colors hover:bg-slate-50"
-                    >
-                      <div className="text-sm font-bold text-slate-900">{c.full_name}</div>
-                      <div className="mt-0.5 text-xs text-slate-500">{c.phone}</div>
-                    </button>
+                    />
                   ))
                 )}
               </div>
@@ -768,6 +934,6 @@ export function ManualDeliveryModal({
           </Button>
         </div>
       </div>
-    </div>
+    </AdminModalBackdrop>
   );
 }

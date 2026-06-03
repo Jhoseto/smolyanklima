@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Phone, Mail, MapPin, Clock, Navigation, Map } from 'lucide-react';
 import { useConsent } from '../../lib/consent/ConsentProvider';
-import { LEGAL_COMPANY } from '../../data/legal/company';
+import { COMPANY_TEL_HREF, LEGAL_COMPANY } from '../../data/legal/company';
 
 const MAP_EMBED_SRC =
   'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d10000.564603335378!2d24.73404725883082!3d41.56851624537425!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x14ac50b6e42fae4f%3A0xdb4fcdc658cc6bda!2z0KHQvNC-0LvRj9C9INCa0LvQuNC80LAg0JXQntCe0JQ!5e0!3m2!1sen!2sbg!4v1777175712092!5m2!1sen!2sbg';
@@ -129,7 +129,7 @@ export const ContactInfoSection = () => {
       title: "Телефон",
       content: LEGAL_COMPANY.phone,
       subtext: "Понеделник - Събота",
-      href: `tel:${LEGAL_COMPANY.phoneE164}`,
+      href: COMPANY_TEL_HREF,
       color: "from-[#FF4D00] to-[#FF2A4D]",
       shadow: "shadow-[#FF4D00]/20"
     },

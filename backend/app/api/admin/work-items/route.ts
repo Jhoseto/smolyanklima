@@ -103,6 +103,9 @@ const BodySchema = z.object({
   mountDate: z.string().optional().nullable(),
   mountTimeFrom: z.string().optional().nullable(),
   mountTimeTo: z.string().optional().nullable(),
+  mountNotes: z.string().max(4000).optional().nullable(),
+  /** Дата на продажбата (отделно от дата на монтаж). */
+  saleDate: z.string().optional().nullable(),
   updateStock: z.boolean().optional(),
 });
 
@@ -377,7 +380,10 @@ export async function POST(req: NextRequest) {
           customerPhone: parsed.data.customerPhone ?? null,
           customerAddress: parsed.data.customerAddress ?? null,
           notes: parsed.data.notes ?? null,
-          saleDate: parsed.data.dueDate?.trim() || new Date().toISOString().slice(0, 10),
+          saleDate:
+            parsed.data.saleDate?.trim() ||
+            parsed.data.dueDate?.trim() ||
+            new Date().toISOString().slice(0, 10),
           salePrice,
           purchasePrice: parsed.data.purchasePrice ?? null,
           supplierName: parsed.data.supplierName ?? null,
@@ -387,6 +393,7 @@ export async function POST(req: NextRequest) {
           mountDate: parsed.data.mountDate ?? null,
           mountTimeFrom: parsed.data.mountTimeFrom ?? null,
           mountTimeTo: parsed.data.mountTimeTo ?? null,
+          mountNotes: parsed.data.mountNotes ?? null,
           updateStock: parsed.data.updateStock,
           createdBy: session.userId,
         });

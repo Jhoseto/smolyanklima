@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button } from "../ui";
+import { useAdminBackHandler } from "@/lib/admin/useAdminBackHandler";
+import { Button, AdminFieldValue } from "../ui";
 import { PAID_SERVICE_EVENT_LABELS, type PaidServiceEventCode } from "@/lib/admin/serviceEventCodes";
 
 type ServiceRow = {
@@ -39,7 +40,9 @@ function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="mt-0.5 text-sm font-semibold text-slate-900 break-words">{value || "—"}</div>
+      <div className="mt-0.5 text-sm font-semibold text-slate-900 break-words">
+        <AdminFieldValue label={label} value={value || "—"} />
+      </div>
     </div>
   );
 }
@@ -54,6 +57,8 @@ export function ServiceDetailModal({
   const [row, setRow] = useState<ServiceRow | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useAdminBackHandler(Boolean(serviceId), onClose, serviceId ? `service-detail-${serviceId}` : undefined);
 
   useEffect(() => {
     if (!serviceId) {

@@ -2,7 +2,23 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { HelpRow, InfoDot, SectionTitle, HelpCard, Card, Input, Select, Button, Table, Th, Td, Textarea, HoverTip } from "../ui";
+import {
+  HelpRow,
+  InfoDot,
+  SectionTitle,
+  HelpCard,
+  Card,
+  Input,
+  Select,
+  Button,
+  Table,
+  Th,
+  Td,
+  Textarea,
+  HoverTip,
+  AdminPhoneLink,
+  AdminLabeledBox,
+} from "../ui";
 import { RefreshCw, MessageSquare, PlayCircle, CheckCircle, ShieldAlert, StickyNote, Sparkles, X, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
 import { useDebounce } from "@/lib/hooks/useDebounce";
 import { assertNoContactPrimaryPhoneDuplicate } from "@/lib/admin/contactPhoneConflictClient";
@@ -429,7 +445,7 @@ export function InquiriesClient() {
                         <button type="button" onClick={() => void openInquiryDetail(i)} title={INQUIRY_TIPS.details} className="rounded text-left font-bold text-slate-900 underline-offset-4 transition-colors hover:text-brand-blue-700 hover:underline">{i.customer_name}</button>
                       </Td>
                       <Td>
-                        <div className="font-medium text-slate-700">{i.customer_phone}</div>
+                        <AdminPhoneLink phone={i.customer_phone} className="font-medium text-slate-700" showIcon={false} />
                         {i.customer_email && <div className="text-xs text-slate-500 mt-0.5">{i.customer_email}</div>}
                       </Td>
                       <Td className="text-xs font-semibold text-slate-700 whitespace-nowrap">
@@ -492,7 +508,12 @@ export function InquiriesClient() {
                     <div className="flex items-start justify-between gap-3 mb-2">
                       <div className="min-w-0">
                         <div className="font-bold text-slate-900 text-sm leading-snug">{i.customer_name}</div>
-                        <a href={`tel:${i.customer_phone}`} className="text-xs text-brand-blue-500 font-medium mt-0.5 block" onClick={e => e.stopPropagation()}>{i.customer_phone}</a>
+                        <AdminPhoneLink
+                          phone={i.customer_phone}
+                          className="text-xs font-medium mt-0.5 block"
+                          showIcon={false}
+                          stopPropagation
+                        />
                       </div>
                       <div className="text-right shrink-0">
                         <Badge label={s.label} colorClass={s.colorClass} />
@@ -569,7 +590,11 @@ export function InquiriesClient() {
                     {selectedInquiry.source === "wizard" ? "Анкетно запитване" : "Клиентско запитване"}
                   </div>
                   <div className="mt-1 text-2xl font-black leading-tight text-slate-950">{selectedInquiry.customer_name}</div>
-                  <div className="mt-1 text-sm font-medium text-slate-500">{selectedInquiry.customer_phone} · {new Date(selectedInquiry.created_at).toLocaleString("bg-BG")}</div>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-1.5 text-sm font-medium text-slate-500">
+                    <AdminPhoneLink phone={selectedInquiry.customer_phone} showIcon={false} className="text-sm text-slate-600" />
+                    <span aria-hidden>·</span>
+                    <span>{new Date(selectedInquiry.created_at).toLocaleString("bg-BG")}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -711,12 +736,7 @@ function mountPreferenceLabel(
 }
 
 function InfoBox({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-      <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="mt-1 text-sm font-semibold text-slate-900">{value}</div>
-    </div>
-  );
+  return <AdminLabeledBox label={label} value={value} />;
 }
 
 

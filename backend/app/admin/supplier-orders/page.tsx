@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { SectionTitle, Card, Input, Select, Button, Table, Th, Td } from "../ui";
+import { SectionTitle, Card, Input, Select, Button, Table, Th, Td, AdminPhoneLink, AdminContactMetaLine } from "../ui";
 import { RefreshCw, Eye, Receipt, ArrowUpDown, ArrowUp, ArrowDown, Sparkles, Recycle, FilterX, Plus } from "lucide-react";
 import { SupplierOrderDetailModal } from "../SupplierOrderDetailModal";
 import { SupplierOrderSaleModal } from "./SupplierOrderSaleModal";
@@ -703,7 +703,13 @@ export default function SupplierOrdersHistoryPage() {
                   <span className={statusPillClass(row.status)}>{STATUS_TEXT[row.status] ?? row.status}</span>
                 </Td>
                 <Td className="font-medium text-slate-700">{row.customer_name ?? row.contacts?.full_name ?? "—"}</Td>
-                <Td className="text-slate-600">{row.customer_phone ?? row.contacts?.phone ?? "—"}</Td>
+                <Td className="text-slate-600">
+                  <AdminPhoneLink
+                    phone={row.customer_phone ?? row.contacts?.phone}
+                    showIcon={false}
+                    className="font-medium text-slate-600"
+                  />
+                </Td>
                 <Td className="max-w-[180px] truncate text-slate-600" title={row.customer_address ?? ""}>
                   {row.customer_address ?? row.contacts?.address ?? "—"}
                 </Td>
@@ -758,10 +764,11 @@ export default function SupplierOrdersHistoryPage() {
             <div className="mb-2 flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <OrderProductTitle row={row} className="line-clamp-2 text-sm font-bold text-slate-900" />
-                <div className="mt-1 text-xs text-slate-500">
-                  {row.customer_name ?? row.contacts?.full_name ?? "—"}
-                  {(row.customer_phone ?? row.contacts?.phone) && ` · ${row.customer_phone ?? row.contacts?.phone}`}
-                </div>
+                <AdminContactMetaLine
+                  name={row.customer_name ?? row.contacts?.full_name}
+                  phone={row.customer_phone ?? row.contacts?.phone}
+                  className="mt-1 block text-xs text-slate-500"
+                />
                 {(row.customer_address ?? row.contacts?.address) && (
                   <div className="mt-0.5 text-xs text-slate-500">{row.customer_address ?? row.contacts?.address}</div>
                 )}
@@ -859,13 +866,12 @@ export default function SupplierOrdersHistoryPage() {
         />
       )}
 
-      {manualDeliveryOpen && (
-        <ManualDeliveryModal
-          section={section}
-          onClose={() => setManualDeliveryOpen(false)}
-          onSuccess={() => void load()}
-        />
-      )}
+      <ManualDeliveryModal
+        open={manualDeliveryOpen}
+        section={section}
+        onClose={() => setManualDeliveryOpen(false)}
+        onSuccess={() => void load()}
+      />
     </div>
   );
 }

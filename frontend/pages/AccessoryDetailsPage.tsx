@@ -10,6 +10,7 @@ import { CatalogProductImage } from '../components/catalog/CatalogProductImage';
 import { SiteSeo } from '../components/seo/SiteSeo';
 import { productSeo } from '../lib/seo/config';
 import { breadcrumbSchema, localBusinessSchema, productSchema } from '../lib/seo/jsonLd';
+import { COMPANY_TEL_HREF } from '../data/legal/company';
 
 export default function AccessoryDetailsPage() {
   const { id } = useParams<{ id: string }>();
@@ -139,7 +140,7 @@ export default function AccessoryDetailsPage() {
                   Поискайте оферта →
                 </a>
                 <a
-                  href="tel:+359888585816"
+                  href={COMPANY_TEL_HREF}
                   className="flex-1 bg-white border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all text-gray-800 font-bold py-3.5 px-6 rounded-xl flex justify-center items-center gap-2"
                 >
                   <Phone className="w-4 h-4 text-[#00B4D8]" /> Обадете се

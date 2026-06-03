@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { SectionTitle, Card, Input, Select, Button, Table, Th, Td } from "../ui";
+import { SectionTitle, Card, Input, Select, Button, Table, Th, Td, AdminPhoneLink } from "../ui";
 import { RefreshCw, CheckCircle2, Ban, Eye, ArrowUpDown, ArrowUp, ArrowDown, Sparkles, Recycle, FilterX, Plus, BarChart3 } from "lucide-react";
 import { ProductQuickViewButton } from "../ProductQuickView";
 import { SaleDetailModal } from "./SaleDetailModal";
@@ -994,7 +994,9 @@ export default function AdminHistoryPage() {
                     <span className={statusPillClass(row.status)}>{STATUS_TEXT[row.status]}</span>
                   </Td>
                   <Td className="font-medium text-slate-700">{row.customer_name || "—"}</Td>
-                  <Td className="text-slate-600">{row.customer_phone || "—"}</Td>
+                  <Td className="text-slate-600">
+                    <AdminPhoneLink phone={row.customer_phone} showIcon={false} className="font-medium text-slate-600" />
+                  </Td>
                   <Td className="text-slate-600 max-w-[180px] truncate" title={row.customer_address ?? ""}>
                     {row.customer_address || "—"}
                   </Td>
@@ -1091,9 +1093,11 @@ export default function AdminHistoryPage() {
                   />
                   <div className="font-bold text-slate-900 text-sm">{row.customer_name || "Неизвестен клиент"}</div>
                   {row.customer_phone && (
-                    <a href={`tel:${row.customer_phone}`} className="text-xs text-brand-blue-500 font-medium mt-0.5 block">
-                      {row.customer_phone}
-                    </a>
+                    <AdminPhoneLink
+                      phone={row.customer_phone}
+                      className="text-xs font-medium mt-0.5 block"
+                      showIcon={false}
+                    />
                   )}
                   {row.customer_address && <div className="text-xs text-slate-500 mt-0.5">{row.customer_address}</div>}
                   {cancelLabel && <div className="text-[11px] text-red-700 font-semibold mt-1">{cancelLabel}</div>}
@@ -1188,13 +1192,12 @@ export default function AdminHistoryPage() {
       <SaleDetailModal saleId={detailSaleId} onClose={() => setDetailSaleId(null)} onChanged={() => void load()} />
       <ServiceDetailModal serviceId={detailServiceId} onClose={() => setDetailServiceId(null)} />
 
-      {manualSaleOpen && (
-        <ManualSaleModal
-          section={manualSaleSection}
-          onClose={() => setManualSaleOpen(false)}
-          onSuccess={() => void load()}
-        />
-      )}
+      <ManualSaleModal
+        open={manualSaleOpen}
+        section={manualSaleSection}
+        onClose={() => setManualSaleOpen(false)}
+        onSuccess={() => void load()}
+      />
 
       {confirm && (
         <div

@@ -2,7 +2,7 @@ import React from 'react';
 import { Lock, Mail, MapPin, Phone } from 'lucide-react';
 import { Logo } from '../ui/Logo';
 import { FacebookBrandIcon, InstagramBrandIcon } from '../ui/SocialBrandIcons';
-import { LEGAL_COMPANY } from '../../data/legal/company';
+import { COMPANY_TEL_HREF, LEGAL_COMPANY } from '../../data/legal/company';
 
 function adminLoginHref(): string {
   const fromEnv = import.meta.env.VITE_ADMIN_ORIGIN?.trim().replace(/\/$/, '');
@@ -109,7 +109,7 @@ export const Footer = () => {
               </li>
               <li className="flex gap-3 text-gray-400">
                 <Phone className="w-5 h-5 text-[#FF4D00] shrink-0 mt-0.5" />
-                <a href={`tel:${c.phoneE164}`} className="text-sm hover:text-white transition-colors">
+                <a href={COMPANY_TEL_HREF} className="text-sm hover:text-white transition-colors">
                   {c.phone}
                 </a>
               </li>

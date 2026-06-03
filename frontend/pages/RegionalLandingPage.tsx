@@ -5,7 +5,7 @@ import { Phone, MapPin, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { SiteSeo } from '../components/seo/SiteSeo';
 import { LANDING_PAGE_SEO } from '../lib/seo/config';
 import { breadcrumbSchema, localBusinessSchema, serviceSchema } from '../lib/seo/jsonLd';
-import { LEGAL_COMPANY } from '../data/legal/company';
+import { COMPANY_TEL_HREF, LEGAL_COMPANY } from '../data/legal/company';
 
 type Props = { slug: keyof typeof LANDING_PAGE_SEO };
 
@@ -61,7 +61,7 @@ export default function RegionalLandingPage({ slug }: Props) {
               Каталог климатици <ArrowRight className="w-4 h-4" />
             </Link>
             <a
-              href={`tel:${LEGAL_COMPANY.phoneE164}`}
+              href={COMPANY_TEL_HREF}
               className="inline-flex items-center gap-2 px-8 py-3.5 rounded-full border-2 border-gray-200 bg-white text-gray-800 font-bold text-sm"
             >
               <Phone className="w-4 h-4 text-[#00B4D8]" /> {LEGAL_COMPANY.phone}

@@ -3,7 +3,18 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { CATALOG_BTU_OPTIONS } from "@/lib/catalog/productBtu";
-import { SectionTitle, Card, Button, Input, Select, Table, Th, Td, Textarea } from "../ui";
+import {
+  SectionTitle,
+  Card,
+  Button,
+  Input,
+  Select,
+  Table,
+  Th,
+  Td,
+  Textarea,
+  AdminContactSuggestRow,
+} from "../ui";
 import { ActiveFilterChipsBar, type ActiveFilterChip } from "./ActiveFilterChipsBar";
 import {
   Plus,
@@ -28,6 +39,7 @@ import {
   Truck,
 } from "lucide-react";
 import { ShareToChatModal } from "../chat/ShareToChatModal";
+import { useAdminBackHandler } from "@/lib/admin/useAdminBackHandler";
 import { CatalogItemQuickViewButton } from "../ProductQuickView";
 import { FeaturedSlotModal } from "./FeaturedSlotModal";
 import { ProductCatalogSettingsModal } from "./ProductCatalogSettingsModal";
@@ -585,6 +597,7 @@ export default function AdminProductsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saleFor, setSaleFor] = useState<ProductRow | null>(null);
+  useAdminBackHandler(Boolean(saleFor), () => setSaleFor(null), "catalog-product-sale");
   const [saleBusy, setSaleBusy] = useState(false);
   const [saleForm, setSaleForm] = useState(emptySaleModalForm);
   const [contactQuery, setContactQuery] = useState("");
@@ -2502,10 +2515,12 @@ export default function AdminProductsPage() {
                       <div className="p-3 text-sm text-slate-500 text-center">Търсене...</div>
                     ) : (
                       contactResults.map((c) => (
-                        <button
+                        <AdminContactSuggestRow
                           key={c.id}
-                          type="button"
-                          onClick={() => {
+                          name={c.full_name}
+                          phone={c.phone}
+                          email={c.email}
+                          onSelect={() => {
                             setSaleForm((s) => ({
                               ...s,
                               contactId: c.id,
@@ -2517,11 +2532,7 @@ export default function AdminProductsPage() {
                             setContactQuery(`${c.full_name} (${c.phone})`);
                             setContactResults([]);
                           }}
-                          className="block w-full text-left p-2 hover:bg-slate-50 rounded-lg transition-colors"
-                        >
-                          <div className="font-bold text-slate-900 text-sm">{c.full_name}</div>
-                          <div className="text-xs text-slate-500 mt-0.5">{c.phone}{c.email ? ` / ${c.email}` : ""}</div>
-                        </button>
+                        />
                       ))
                     )}
                   </div>

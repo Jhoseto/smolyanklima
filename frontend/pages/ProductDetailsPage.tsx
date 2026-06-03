@@ -11,6 +11,7 @@ import { ProductInquiryModal } from '../components/catalog/ProductInquiryModal';
 import { SiteSeo } from '../components/seo/SiteSeo';
 import { productSeo } from '../lib/seo/config';
 import { breadcrumbSchema, localBusinessSchema, productSchema } from '../lib/seo/jsonLd';
+import { COMPANY_TEL_HREF } from '../data/legal/company';
 
 export default function ProductDetailsPage() {
   const { id } = useParams<{ id: string }>();
@@ -286,7 +287,7 @@ export default function ProductDetailsPage() {
                   Пусни запитване
                 </button>
                 <a
-                  href="tel:+359888888888"
+                  href={COMPANY_TEL_HREF}
                   className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#00B4D8]/25 bg-white py-3.5 px-6 font-bold text-[#0077B6] shadow-sm transition hover:border-[#00B4D8] hover:bg-[#F0F9FF] hover:shadow-md"
                 >
                   <Phone className="h-4 w-4 text-[#00B4D8]" /> Обадете се

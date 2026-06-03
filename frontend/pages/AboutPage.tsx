@@ -18,6 +18,7 @@ import { AboutCertificatesSection } from '../components/sections/AboutCertificat
 import { SiteSeo } from '../components/seo/SiteSeo';
 import { PAGE_SEO } from '../lib/seo/config';
 import { breadcrumbSchema, localBusinessSchema } from '../lib/seo/jsonLd';
+import { COMPANY_TEL_HREF, LEGAL_COMPANY } from '../data/legal/company';
 
 const ABOUT_HERO_IMAGE = '/images/about-hero.png';
 
@@ -288,11 +289,11 @@ export default function AboutPage() {
             </span>
             <span className="hidden sm:block text-gray-300">|</span>
             <a
-              href="tel:+359888585816"
+              href={COMPANY_TEL_HREF}
               className="inline-flex items-center gap-2 font-bold hover:text-[#FF4D00] transition-colors"
             >
               <Phone className="w-5 h-5 text-[#00B4D8]" />
-              0888 58 58 16
+              {LEGAL_COMPANY.phone}
             </a>
           </div>
           <Link

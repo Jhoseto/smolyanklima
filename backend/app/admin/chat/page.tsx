@@ -7,7 +7,8 @@ import {
   CheckCheck, Archive, Wifi, WifiOff, Info, StickyNote,
   ChevronRight, Headphones, Globe, Zap, ExternalLink, Trash2,
 } from "lucide-react";
-import { SectionTitle } from "../ui";
+import { SectionTitle, AdminPhoneLink } from "../ui";
+import { toTelHref } from "@/lib/admin/telLink";
 import { CatalogProductImage } from "@/app/admin/components/CatalogProductImage";
 import { useAdminChatAlerts } from "../AdminChatAlertsProvider";
 import { viberChatUrl } from "@/lib/admin/viberLink";
@@ -444,7 +445,7 @@ function AdminChatClient() {
                       </a>
                     ) : (
                       <a
-                        href={`tel:${detail.chat.visitor_phone}`}
+                        href={toTelHref(detail.chat.visitor_phone) ?? "#"}
                         className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-50 border border-slate-200 text-slate-600 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700 transition-colors"
                       >
                         <Phone className="w-3.5 h-3.5" /> Обади се
@@ -457,7 +458,9 @@ function AdminChatClient() {
               {/* Visitor info strip */}
               <div className="shrink-0 flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 bg-slate-50 border-b border-slate-100 text-xs text-slate-500">
                 {detail.chat.visitor_email && <span className="flex items-center gap-1"><Mail className="w-3 h-3" />{detail.chat.visitor_email}</span>}
-                {detail.chat.visitor_phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{detail.chat.visitor_phone}</span>}
+                {detail.chat.visitor_phone && (
+                  <AdminPhoneLink phone={detail.chat.visitor_phone} showIcon className="text-xs font-medium text-slate-600" />
+                )}
                 {detail.chat.visitor_page_url && (
                   <a href={detail.chat.visitor_page_url} target="_blank" rel="noopener noreferrer"
                     className="flex items-center gap-1 text-brand-blue-500 hover:underline truncate max-w-[200px]">

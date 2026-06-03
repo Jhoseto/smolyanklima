@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useAdminBackHandler } from "@/lib/admin/useAdminBackHandler";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logoutAction } from "@/app/login/actions";
@@ -101,6 +102,7 @@ export function MobileNav({
 
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  useAdminBackHandler(drawerOpen, () => setDrawerOpen(false), "mobile-nav-drawer");
   const inquiriesNewCount = useInquiriesNewCount();
   const { open, toggle } = useAdminNavSections();
 

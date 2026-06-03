@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Button, Card, ADMIN_MODAL_BACKDROP, ADMIN_MODAL_PANEL, AdminModalDragHandle } from "./ui";
+import { Button, Card, ADMIN_MODAL_PANEL, AdminModalBackdrop, AdminModalDragHandle, AdminPhoneLink } from "./ui";
 import { X, Loader2, Package, CheckCircle2, ExternalLink, FileText } from "lucide-react";
 import Link from "next/link";
 
@@ -157,10 +157,7 @@ export function InstallationMountDetailModal({ workItemId, readOnly = false, onC
   const canCompleteSale = !readOnly && linkedSale?.sale_install_state === "pending_mount" && linkedSale.event_code === "sale";
 
   return (
-    <div
-      className={ADMIN_MODAL_BACKDROP}
-      onClick={() => !completeBusy && onClose()}
-    >
+    <AdminModalBackdrop open onClose={onClose} busy={completeBusy} layerId={`mount-detail-${workItemId ?? "new"}`}>
       <div
         className={`${ADMIN_MODAL_PANEL} max-w-2xl`}
         onClick={(e) => e.stopPropagation()}
@@ -202,7 +199,9 @@ export function InstallationMountDetailModal({ workItemId, readOnly = false, onC
                   </div>
                   <div>
                     <div className="text-[10px] font-bold text-slate-500 uppercase">Телефон</div>
-                    <div className="font-semibold text-slate-900">{row.customer_phone || "—"}</div>
+                    <div className="font-semibold text-slate-900">
+                      <AdminPhoneLink phone={row.customer_phone} />
+                    </div>
                   </div>
                   <div className="sm:col-span-2">
                     <div className="text-[10px] font-bold text-slate-500 uppercase">Адрес монтаж</div>
@@ -340,6 +339,6 @@ export function InstallationMountDetailModal({ workItemId, readOnly = false, onC
           )}
         </div>
       </div>
-    </div>
+    </AdminModalBackdrop>
   );
 }

@@ -2,6 +2,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { Phone, ArrowRight, Zap, ShieldCheck, BadgeCheck, Smartphone, Download, X } from 'lucide-react';
+import { COMPANY_TEL_HREF } from '../../data/legal/company';
 import { BrandsSection } from './BrandsSection';
 import { usePWAInstall } from '../../lib/usePWAInstall';
 import { HeroImageRotator } from './HeroImageRotator';
@@ -135,7 +136,7 @@ export const HeroSection = ({ onFreeConsultationClick }: HeroSectionProps) => {
                 </button>
               ) : (
                 <a
-                  href="tel:+359888585816"
+                  href={COMPANY_TEL_HREF}
                   className="h-14 px-8 rounded-full bg-transparent border border-gray-200 text-[#111827] font-bold text-lg flex items-center gap-2 hover:bg-gray-50 active:scale-95 transition-all"
                 >
                   <Phone className="w-5 h-5 text-[#00B4D8]" />

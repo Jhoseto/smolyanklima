@@ -8,6 +8,7 @@ import { RecommendationCard } from './RecommendationCard';
 import { postPublicInquiry } from '../../../data/postInquiry';
 import { formatWizardMessage, LABEL_MAP, formatBudgetAnswer } from './wizard-utils';
 import type { ResultTier, WizardAnswers } from './types';
+import { PhoneLink } from '../../ui/PhoneLink';
 
 interface ResultsScreenProps {
   tiers: ResultTier[] | null;
@@ -159,7 +160,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({ tiers, answers, on
               </h3>
               <p className="text-sm text-gray-600 font-medium mb-2">
                 Ще се свържем с <strong>{answers.name}</strong> на{' '}
-                <a href={`tel:${answers.phone}`} className="text-[#0077B6] font-bold">{answers.phone}</a>
+                <PhoneLink phone={answers.phone} className="text-[#0077B6] font-bold" />
               </p>
               <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-white border border-emerald-200 rounded-full px-3 py-1 w-fit">
                 <Clock className="w-3.5 h-3.5" strokeWidth={2} />

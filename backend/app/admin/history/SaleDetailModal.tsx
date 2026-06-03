@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { X, Loader2, FileText, ExternalLink, Package, Pencil, Trash2 } from "lucide-react";
-import { Button, Card, Input, Textarea } from "../ui";
+import { Button, Card, Input, Textarea, AdminFieldValue } from "../ui";
 import { ProductQuickViewButton } from "../ProductQuickView";
 import { CatalogProductImage } from "../components/CatalogProductImage";
 import { saleCancelReasonLabel } from "@/lib/admin/saleCancelReason";
 import { saleSupplierInvoice, saleSupplierName } from "@/lib/admin/saleWorkItemMeta";
+import { useAdminBackHandler } from "@/lib/admin/useAdminBackHandler";
 
 type ProductEmbed = {
   id: string;
@@ -129,7 +130,9 @@ function InfoRow({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div>
       <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="text-sm font-medium text-slate-900 mt-0.5">{value}</div>
+      <div className="text-sm font-medium text-slate-900 mt-0.5">
+        {typeof value === "string" ? <AdminFieldValue label={label} value={value} /> : value}
+      </div>
     </div>
   );
 }
@@ -194,6 +197,9 @@ export function SaleDetailModal({ saleId, onClose, onChanged }: Props) {
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  useAdminBackHandler(Boolean(saleId), onClose, saleId ? `sale-detail-${saleId}` : undefined);
+  useAdminBackHandler(Boolean(saleId && confirmDelete), () => setConfirmDelete(false), saleId ? `sale-delete-${saleId}` : undefined);
 
   const load = useCallback(async () => {
     if (!saleId) {
@@ -359,6 +365,7 @@ export function SaleDetailModal({ saleId, onClose, onChanged }: Props) {
   return (
     <div
       className="fixed inset-0 z-[60] flex items-end md:items-center justify-center bg-slate-950/55 p-0 md:p-4 backdrop-blur-md"
+      data-admin-overlay="true"
       onClick={onClose}
     >
       <div
@@ -541,7 +548,9 @@ export function SaleDetailModal({ saleId, onClose, onChanged }: Props) {
                       {supplierInvoice && <InfoRow label="Фактура" value={supplierInvoice} />}
                       <InfoRow label="Количество" value={sale.quantity ?? 1} />
                       <InfoRow label="Записана на" value={fmtBgDateTime(sale.created_at)} />
-                      {installation && <InfoRow label="Планиран монтаж" value={fmtBgDate(sale.due_date)} />}
+                      {installation && (
+                        <InfoRow label="Планиран монтаж" value={fmtBgDate(installation.due_date)} />
+                      )}
                       {sale.status === "cancelled" && cancelLabel && (
                         <InfoRow label="Причина за отказ" value={cancelLabel} />
                       )}

@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Card, Button, Select, Input, Textarea } from "./ui";
+import { Card, Button, Select, Input, Textarea, AdminContactMetaLine, AdminPhoneLink, AdminFieldValue } from "./ui";
 import { ContactPersonPicker } from "./ContactPersonPicker";
 import { InstallationMountDetailModal } from "./InstallationMountDetailModal";
 import { SupplierOrderDetailModal } from "./SupplierOrderDetailModal";
 import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, List } from "lucide-react";
 import { notifyFollowUpCallsChanged } from "@/lib/admin/follow-up-calls-events";
 import { isPaidServiceEventCode } from "@/lib/admin/serviceEventCodes";
+import { useAdminBackHandler } from "@/lib/admin/useAdminBackHandler";
 
 type EventCode =
   | "item_added"
@@ -200,7 +201,9 @@ function ReadonlyMini({
   return (
     <div className={className}>
       <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="mt-0.5 break-words text-sm font-semibold text-slate-900">{text}</div>
+      <div className="mt-0.5 break-words text-sm font-semibold text-slate-900">
+        <AdminFieldValue label={label} value={text} />
+      </div>
     </div>
   );
 }
@@ -315,6 +318,16 @@ export function WorkItemsPlanner({
   const [weekAnchor, setWeekAnchor] = useState(() => new Date());
   const [mountDetailId, setMountDetailId] = useState<string | null>(null);
   const [supplierOrderDetailId, setSupplierOrderDetailId] = useState<string | null>(null);
+
+  useAdminBackHandler(Boolean(selectedDate), () => setSelectedDate(null), selectedDate ? `planner-day-${selectedDate}` : undefined);
+  useAdminBackHandler(Boolean(confirmCompleteItem), () => setConfirmCompleteItem(null), "planner-complete");
+  useAdminBackHandler(Boolean(confirmDeleteId), () => setConfirmDeleteId(null), "planner-delete");
+  useAdminBackHandler(Boolean(mountDetailId), () => setMountDetailId(null), mountDetailId ? `planner-mount-${mountDetailId}` : undefined);
+  useAdminBackHandler(
+    Boolean(supplierOrderDetailId),
+    () => setSupplierOrderDetailId(null),
+    supplierOrderDetailId ? `planner-supplier-${supplierOrderDetailId}` : undefined,
+  );
 
   // Precomputed once per render cycle — avoids calling formatDateKey(new Date()) inside every calendar cell
   const todayKey = useMemo(() => formatDateKey(new Date()), []);
@@ -1121,7 +1134,21 @@ export function WorkItemsPlanner({
                         </div>
                       </div>
                       <div className="mt-3 text-sm text-slate-600">
-                        {[item.customer_name, item.customer_phone, item.customer_address].filter(Boolean).join(" · ") || "Без контакт"}
+                        {item.customer_name || item.customer_phone || item.customer_address ? (
+                          <>
+                            <AdminContactMetaLine name={item.customer_name} phone={item.customer_phone} />
+                            {item.customer_address ? (
+                              <>
+                                {(item.customer_name || item.customer_phone) && (
+                                  <span className="text-slate-400"> · </span>
+                                )}
+                                <span>{item.customer_address}</span>
+                              </>
+                            ) : null}
+                          </>
+                        ) : (
+                          "Без контакт"
+                        )}
                       </div>
                       {isPaidServiceEventCode(item.event_code) && item.total_amount != null && (
                         <div className="mt-2 text-sm font-bold text-slate-900">
@@ -1312,9 +1339,11 @@ function MobilePlannerEventCard({
               <span className={workItemStatusPillClass(item)}>{statusLabel(item.status, item.event_code)}</span>
             </div>
             {(item.customer_name || item.customer_phone) && (
-              <div className="mt-2 text-xs leading-relaxed text-slate-600">
-                {[item.customer_name, item.customer_phone].filter(Boolean).join(" · ")}
-              </div>
+              <AdminContactMetaLine
+                name={item.customer_name}
+                phone={item.customer_phone}
+                className="mt-2 block text-xs leading-relaxed text-slate-600"
+              />
             )}
             {item.customer_address && (
               <div className="mt-1 text-xs leading-relaxed text-slate-500">{item.customer_address}</div>
@@ -1666,7 +1695,12 @@ function WorkItemCompleteConfirmModal({
             <div>
               <span className="font-semibold text-slate-500">Клиент: </span>
               <span className="font-semibold text-slate-900">{who}</span>
-              {phone ? <span className="text-slate-600"> · {phone}</span> : null}
+              {phone ? (
+                <>
+                  <span className="text-slate-400"> · </span>
+                  <AdminPhoneLink phone={phone} showIcon={false} className="text-slate-600 text-sm" />
+                </>
+              ) : null}
             </div>
           )}
           <div>
