@@ -173,6 +173,12 @@ async function testChatAlertSnapshotUsesPerChatLatestMessages() {
   ]);
 }
 
-await testChatAlertSnapshotUsesPerChatLatestMessages();
+async function main() {
+  await testChatAlertSnapshotUsesPerChatLatestMessages();
+  console.log("critical bug regressions passed");
+}
 
-console.log("critical bug regressions passed");
+void main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
