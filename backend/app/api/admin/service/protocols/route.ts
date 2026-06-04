@@ -10,6 +10,7 @@ import {
   optionalUnitSerial,
 } from "@/lib/protocol-contact-fields";
 import { buildAdminSearchOrFilter } from "@/lib/admin/phoneSearchPattern";
+import { scopeAcceptanceProtocolQueryForSession } from "@/lib/admin/serviceProtocolAccess";
 
 const QuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional().default(1),
@@ -100,6 +101,7 @@ export async function GET(req: NextRequest) {
   }
 
   query = query.range(offset, offset + perPage - 1);
+  query = scopeAcceptanceProtocolQueryForSession(query, session);
 
   if (status) query = query.eq("status", status);
   if (q?.trim()) {

@@ -8,6 +8,7 @@ import { logAdminActivity } from "@/lib/admin/audit";
 import { ProtocolPDF } from "@/lib/protocol-pdf";
 import { sendResendEmail } from "@/lib/email/resend";
 import { EMAIL_BRAND_LOGO_SVG } from "@/lib/brand-email";
+import { scopeAcceptanceProtocolQueryForSession } from "@/lib/admin/serviceProtocolAccess";
 
 function escHtml(s: string) {
   return s
@@ -44,11 +45,13 @@ export async function POST(
 
   const { id } = await params;
 
-  const { data, error } = await session.db
+  let query = session.db
     .from("service_protocols")
     .select("*")
-    .eq("id", id)
-    .maybeSingle();
+    .eq("id", id);
+  query = scopeAcceptanceProtocolQueryForSession(query, session);
+
+  const { data, error } = await query.maybeSingle();
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   if (!data)  return withCors(req, NextResponse.json({ error: "Не е намерен" }, { status: 404 }));
 

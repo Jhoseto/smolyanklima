@@ -11,6 +11,7 @@
     "import:climacom": "tsx scripts/sync-climacom-catalog.ts",
     "import:condex": "tsx scripts/sync-condex-catalog.ts",
     "reclassify:accessories": "tsx scripts/reclassify-bulclima-accessories.ts",
+    "test:critical-bugs": "tsx scripts/test-critical-bugs.ts",
     "catalog:images": "node scripts/sync-ddg-images.mjs",
     "catalog:images:stale": "node scripts/sync-ddg-images.mjs --only-stale",
     "icons:generate": "tsx scripts/generate-public-icons.ts"

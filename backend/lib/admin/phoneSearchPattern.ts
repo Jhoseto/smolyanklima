@@ -63,8 +63,8 @@ export function bgPhoneSearchDigitVariants(raw: string): string[] {
   return [...out].filter((v) => v.length >= 3);
 }
 
-function digitsToFlexiblePattern(digits: string): string {
-  return `*${digits.split("").join("*")}*`;
+function digitsToFlexibleSqlPattern(digits: string): string {
+  return `%${digits.split("").join("%")}%`;
 }
 
 /** SQL ILIKE (%…) → PostgREST filter (*…). */
@@ -81,7 +81,7 @@ export function formatPostgrestIlikeValue(pattern: string): string {
 }
 
 function containsIlikePattern(term: string): string {
-  return formatPostgrestIlikeValue(`*${term}*`);
+  return formatPostgrestIlikeValue(`%${term}%`);
 }
 
 /** Компактен сериен № — само букви/цифри, без телефонни flexible шаблони. */
@@ -98,13 +98,13 @@ export function queryLooksLikePhone(raw: string): boolean {
   return phoneDigitsOnly(trimmed).length >= 6;
 }
 
-/** ILIKE шаблон: същите цифри подред, с произволни интервали/тирета/+359/0. */
+/** SQL ILIKE шаблон: същите цифри подред, с произволни интервали/тирета/+359/0. */
 export function phoneFlexibleIlikePattern(raw: string): string | null {
   const patterns = phoneFlexibleIlikePatterns(raw);
   return patterns[0] ?? null;
 }
 
-/** Всички ILIKE варианти (0… и 359…) — за OR търсене. */
+/** Всички SQL ILIKE варианти (0… и 359…) — за директни Supabase `.ilike()` заявки. */
 export function phoneFlexibleIlikePatterns(raw: string): string[] {
   const variants = bgPhoneSearchDigitVariants(raw);
   if (!variants.length) return [];
@@ -119,7 +119,7 @@ export function phoneFlexibleIlikePatterns(raw: string): string[] {
   const seen = new Set<string>();
   const patterns: string[] = [];
   for (const v of ordered) {
-    const p = digitsToFlexiblePattern(v);
+    const p = digitsToFlexibleSqlPattern(v);
     if (!seen.has(p)) {
       seen.add(p);
       patterns.push(p);
