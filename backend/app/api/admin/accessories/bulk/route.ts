@@ -3,8 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
+import { ADMIN_CATALOG_BULK_IDS_MAX } from "@/lib/admin/catalogBulkLimits";
 
-const IdsSchema = z.array(z.string().uuid()).min(1).max(200);
+const IdsSchema = z.array(z.string().uuid()).min(1).max(ADMIN_CATALOG_BULK_IDS_MAX);
 
 const BodySchema = z.discriminatedUnion("action", [
   z.object({
@@ -25,7 +26,20 @@ export async function OPTIONS(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const json = await req.json().catch(() => null);
   const parsed = BodySchema.safeParse(json);
-  if (!parsed.success) return withCors(req, NextResponse.json({ error: "Невалидни данни" }, { status: 400 }));
+  if (!parsed.success) {
+    const tooMany = parsed.error.issues.some((i) => i.code === "too_big" && i.path[0] === "ids");
+    return withCors(
+      req,
+      NextResponse.json(
+        {
+          error: tooMany
+            ? `Максимум ${ADMIN_CATALOG_BULK_IDS_MAX} аксесоара на една заявка.`
+            : "Невалидни данни за масова операция.",
+        },
+        { status: 400 },
+      ),
+    );
+  }
 
   const session = await adminSession();
   try {

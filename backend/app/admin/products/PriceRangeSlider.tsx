@@ -11,7 +11,10 @@ export function isAdminPriceFilterActive(range: [number, number]) {
   return range[0] > ADMIN_PRICE_FILTER_MIN || range[1] < ADMIN_PRICE_FILTER_MAX;
 }
 
-export function formatAdminPriceEuro(n: number) {
+export function formatAdminPriceEuro(n: number, opts?: { decimals?: boolean }) {
+  if (opts?.decimals) {
+    return n.toLocaleString("bg-BG", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
   return n.toLocaleString("bg-BG");
 }
 

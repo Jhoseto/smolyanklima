@@ -50,6 +50,7 @@ import {
   isAdminPriceFilterActive,
   formatAdminPriceEuro,
 } from "./PriceRangeSlider";
+import { postAdminCatalogBulkInChunks } from "@/lib/admin/catalogBulkFetch";
 import { useDebounce } from "@/lib/hooks/useDebounce";
 import { assertNoContactPrimaryPhoneDuplicate } from "@/lib/admin/contactPhoneConflictClient";
 import {
@@ -280,7 +281,7 @@ function saleModalFormForProduct(p: ProductRow) {
 
 function fmtEuro(n: number | null | undefined) {
   if (n == null || !Number.isFinite(Number(n))) return "—";
-  return `€${Number(n).toLocaleString()}`;
+  return `€${formatAdminPriceEuro(Number(n))}`;
 }
 
 // Дата на закупуване от доставчик: в БД е `date` (без час). Показваме я в
@@ -938,24 +939,10 @@ export default function AdminProductsPage() {
     const { productIds, accessoryIds } = partitionSelectedIds(items, selected);
     try {
       if (productIds.length > 0) {
-        const res = await fetch("/api/admin/products/bulk", {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "delete", ids: productIds }),
-        });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error((json as { error?: string }).error || "Грешка при изтриване на климатици");
+        await postAdminCatalogBulkInChunks("/api/admin/products/bulk", productIds, { action: "delete" });
       }
       if (accessoryIds.length > 0) {
-        const res = await fetch("/api/admin/accessories/bulk", {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "delete", ids: accessoryIds }),
-        });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error((json as { error?: string }).error || "Грешка при изтриване на аксесоари");
+        await postAdminCatalogBulkInChunks("/api/admin/accessories/bulk", accessoryIds, { action: "delete" });
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
@@ -971,24 +958,16 @@ export default function AdminProductsPage() {
     const { productIds, accessoryIds } = partitionSelectedIds(items, selected);
     try {
       if (productIds.length > 0) {
-        const res = await fetch("/api/admin/products/bulk", {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "set_public_catalog", ids: productIds, visible }),
+        await postAdminCatalogBulkInChunks("/api/admin/products/bulk", productIds, {
+          action: "set_public_catalog",
+          visible,
         });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error((json as { error?: string }).error || "Грешка при видимост на климатици");
       }
       if (accessoryIds.length > 0) {
-        const res = await fetch("/api/admin/accessories/bulk", {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "set_active", ids: accessoryIds, active: visible }),
+        await postAdminCatalogBulkInChunks("/api/admin/accessories/bulk", accessoryIds, {
+          action: "set_active",
+          active: visible,
         });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error((json as { error?: string }).error || "Грешка при видимост на аксесоари");
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
@@ -2550,7 +2529,7 @@ export default function AdminProductsPage() {
                   <p className="mb-2 text-xs text-slate-500">
                     Каталог:{" "}
                     <span className="font-bold text-slate-800">
-                      €{Number(saleFor.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      €{formatAdminPriceEuro(Number(saleFor.price), { decimals: true })}
                     </span>
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2666,7 +2645,7 @@ export default function AdminProductsPage() {
               <span className="text-sm font-black text-slate-900">
                 {isBackOrder
                   ? <span className="text-violet-700">По поръчка — монтажът се насрочва при доставка</span>
-                  : `Сума: €${Number(saleFor.price).toLocaleString()}`}
+                  : `Сума: €${formatAdminPriceEuro(Number(saleFor.price))}`}
               </span>
               <div className="flex gap-2">
                 <Button
@@ -2802,7 +2781,7 @@ export default function AdminProductsPage() {
             <div className="grid gap-3 p-4 md:p-6 overflow-y-auto flex-1 min-h-0">
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Договорена цена</div>
-                <div className="mt-1 text-2xl font-black text-slate-900">€{saleSuccess.amount.toLocaleString()}</div>
+                <div className="mt-1 text-2xl font-black text-slate-900">€{formatAdminPriceEuro(saleSuccess.amount)}</div>
               </div>
               {saleSuccess.isBackOrder ? (
                 <div className="rounded-2xl border border-violet-100 bg-violet-50 p-4 text-sm font-semibold leading-6 text-violet-900">
