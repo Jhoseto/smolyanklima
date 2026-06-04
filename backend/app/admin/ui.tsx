@@ -206,10 +206,12 @@ export function Textarea({ className = "", ...props }: ComponentProps<"textarea"
 export function Table({
   children,
   className = "",
+  tableClassName = "",
   stickyHeader = false,
 }: {
   children: ReactNode;
   className?: string;
+  tableClassName?: string;
   /** Залепен ред с заглавия при вертикален скрол (border-separate за съвместимост с position: sticky). */
   stickyHeader?: boolean;
 }) {
@@ -220,7 +222,7 @@ export function Table({
       } bg-white border border-slate-200 rounded-lg shadow-sm ${className}`}
     >
       <table
-        className={`w-full text-left ${stickyHeader ? "border-separate border-spacing-0" : "border-collapse"}`}
+        className={`w-full text-left ${stickyHeader ? "border-separate border-spacing-0" : "border-collapse"} ${tableClassName}`}
       >
         {children}
       </table>

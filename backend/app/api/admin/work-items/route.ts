@@ -151,7 +151,7 @@ export async function GET(req: NextRequest) {
   const mountPhases = parseMountPhaseCsv(mountPhase);
   const needsProductInner = Boolean(brandId || productRegion);
   const productFields =
-    "id,slug,name,model_code,price,product_condition,product_region,supplier_invoice_number,brands:brand_id(name)";
+    "id,slug,name,model_code,price,product_condition,product_region,supplier_invoice_number,indoor_unit_serial,outdoor_unit_serial,brands:brand_id(name)";
   const productEmbed = needsProductInner
     ? `products:product_id!inner(${productFields})`
     : `products:product_id(${productFields})`;
