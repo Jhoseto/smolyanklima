@@ -182,20 +182,24 @@ type SortField =
   | "total_amount"
   | "sale_date";
 
+/** Продажби + услуги (адрес само при сервизни табове). */
+type HistorySortField = SortField | ServiceSortField;
+
 type SortDir = "asc" | "desc";
 
-const DATE_DESC_FIELDS: SortField[] = ["sale_date", "purchase_price", "total_amount"];
-const TEXT_ASC_FIELDS: SortField[] = [
+const DATE_DESC_FIELDS: HistorySortField[] = ["sale_date", "purchase_price", "total_amount"];
+const TEXT_ASC_FIELDS: HistorySortField[] = [
   "product",
   "customer_name",
   "customer_phone",
+  "customer_address",
   "supplier",
   "supplier_invoice",
   "sale_install_state",
   "status",
 ];
 
-function defaultSortDir(field: SortField): SortDir {
+function defaultSortDir(field: HistorySortField): SortDir {
   if (DATE_DESC_FIELDS.includes(field)) return "desc";
   if (TEXT_ASC_FIELDS.includes(field)) return "asc";
   return "asc";
@@ -381,11 +385,10 @@ export default function AdminHistoryPage() {
   const [reportGenerateToken, setReportGenerateToken] = useState(0);
   const [isMasterAdmin, setIsMasterAdmin] = useState(false);
   const [detailServiceId, setDetailServiceId] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<SortField>("sale_date");
+  const [sortBy, setSortBy] = useState<HistorySortField>("sale_date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const isProductSales = salesTab === "products";
-  const serviceSortBy = sortBy as ServiceSortField;
 
   useEffect(() => {
     let cancelled = false;
@@ -1024,18 +1027,18 @@ export default function AdminHistoryPage() {
           </colgroup>
           <thead>
             <tr>
-              <SortableTh label="Продукт" field="product" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className={SALE_TABLE_TH} />
-              <SortableTh label="Монтаж" field="sale_install_state" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className={SALE_TABLE_TH} />
-              <SortableTh label="Статус" field="status" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className={SALE_TABLE_TH} />
-              <SortableTh label="Контакт" field="customer_name" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className={SALE_TABLE_TH} />
-              <SortableTh label="Тел." field="customer_phone" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className={SALE_TABLE_TH} />
+              <SortableTh label="Продукт" field="product" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={SALE_TABLE_TH} />
+              <SortableTh label="Монтаж" field="sale_install_state" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={SALE_TABLE_TH} />
+              <SortableTh label="Статус" field="status" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={SALE_TABLE_TH} />
+              <SortableTh label="Контакт" field="customer_name" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={SALE_TABLE_TH} />
+              <SortableTh label="Тел." field="customer_phone" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={SALE_TABLE_TH} />
               <Th className={`${SALE_TABLE_TH} !text-[8px]`}>Вътр.</Th>
               <Th className={`${SALE_TABLE_TH} !text-[8px]`}>Външ.</Th>
-              <SortableTh label="Дост." field="supplier" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className={SALE_TABLE_TH} />
-              <SortableTh label="Факт." field="supplier_invoice" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className={SALE_TABLE_TH} />
-              <SortableTh label="Дост.€" field="purchase_price" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className={SALE_PRICE_TH} />
-              <SortableTh label="Прод.€" field="total_amount" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className={SALE_PRICE_TH} />
-              <SortableTh label="Дата" field="sale_date" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className={SALE_TABLE_TH} />
+              <SortableTh label="Дост." field="supplier" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={SALE_TABLE_TH} />
+              <SortableTh label="Факт." field="supplier_invoice" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={SALE_TABLE_TH} />
+              <SortableTh label="Дост.€" field="purchase_price" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={SALE_PRICE_TH} />
+              <SortableTh label="Прод.€" field="total_amount" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={SALE_PRICE_TH} />
+              <SortableTh label="Дата" field="sale_date" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={SALE_TABLE_TH} />
               <Th className={SALE_STICKY_ACTIONS_HEAD} aria-label="Действия" />
             </tr>
           </thead>
@@ -1253,7 +1256,7 @@ export default function AdminHistoryPage() {
       ) : (
         <ServiceSalesTable
           items={items}
-          sortBy={serviceSortBy}
+          sortBy={sortBy as ServiceSortField}
           sortDir={sortDir}
           onSort={handleServiceSort}
           onDetail={setDetailServiceId}
