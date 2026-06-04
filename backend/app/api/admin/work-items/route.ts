@@ -5,7 +5,10 @@ import { adminDb, adminSession, requireRole } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
 import { ensureAcceptanceProtocolForInstallation } from "@/lib/admin/acceptanceProtocolFromInstall";
 import { syncConsultationContactFollowUp } from "@/lib/work-items/consultation-contact";
-import { buildAdminSearchOrFilter } from "@/lib/admin/phoneSearchPattern";
+import {
+  buildAdminSearchOrFilter,
+  buildSaleWorkItemSearchOrFilter,
+} from "@/lib/admin/phoneSearchPattern";
 import { parseMountPhaseCsv, parseProductConditionCsv } from "@/lib/admin/salesHistoryQueryFilters";
 import { recordManualSale } from "@/lib/admin/recordManualSale";
 import { supplierFilterOrClause, normalizeSupplierKey } from "@/lib/admin/supplierNameNormalize";
@@ -242,7 +245,8 @@ export async function GET(req: NextRequest) {
   }
 
   if (q?.trim()) {
-    const orFilter = buildAdminSearchOrFilter(q, {
+    const isSalePanel = eventCode === "sale" || type === "sale";
+    const searchFields = {
       textFields: [
         "title",
         "notes",
@@ -253,7 +257,10 @@ export async function GET(req: NextRequest) {
         "supplier_invoice_number",
       ],
       phoneFields: ["customer_phone"],
-    });
+    };
+    const orFilter = isSalePanel
+      ? await buildSaleWorkItemSearchOrFilter(supabase, q, searchFields)
+      : buildAdminSearchOrFilter(q, searchFields);
     if (orFilter) query = query.or(orFilter);
   }
   if (eventCode) query = query.eq("event_code", eventCode);

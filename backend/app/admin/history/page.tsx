@@ -700,7 +700,7 @@ export default function AdminHistoryPage() {
             }}
             placeholder={
               isProductSales
-                ? "Клиент, телефон, продукт, бележка, доставчик, фактура…"
+                ? "Клиент, телефон, продукт, сериен №, бележка, доставчик…"
                 : "Клиент, телефон, заглавие, бележка…"
             }
             className="flex-1 text-sm"

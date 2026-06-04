@@ -84,6 +84,8 @@ BRAND_RULES: list[tuple[list[str], str]] = [
     (["WILLIAMS"], "Williams"),
     (["TCL"], "TCL"),
     (["ТРЕО", "TREO"], "Treo"),
+    (["АЛПИН", "ALPIN"], "Alpin"),
+    (["ИНВЕНТОР"], "Inventor"),
 ]
 
 

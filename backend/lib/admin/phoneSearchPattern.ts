@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { sanitizeIlikeTerm } from "@/lib/security/sanitizeSearchTerm";
 
 export function phoneDigitsOnly(raw: string): string {
@@ -63,14 +64,38 @@ export function bgPhoneSearchDigitVariants(raw: string): string[] {
 }
 
 function digitsToFlexiblePattern(digits: string): string {
-  return `%${digits.split("").join("%")}%`;
+  return `*${digits.split("").join("*")}*`;
 }
 
-/** PostgREST стойност за ilike — кавички при интервали/запетаи, за да не се чупи `.or()`. */
+/** SQL ILIKE (%…) → PostgREST filter (*…). */
+function sqlIlikeToPostgrest(pattern: string): string {
+  return pattern.replace(/%/g, "*");
+}
+
+/** PostgREST стойност за ilike — * вместо %; кавички при reserved chars. */
 export function formatPostgrestIlikeValue(pattern: string): string {
-  const needsQuotes = /[\s,()]/.test(pattern);
-  if (!needsQuotes) return pattern;
-  return `"${pattern.replace(/"/g, '""')}"`;
+  const postgrest = sqlIlikeToPostgrest(pattern);
+  const needsQuotes = /[*",()\s]/.test(postgrest);
+  if (!needsQuotes) return postgrest;
+  return `"${postgrest.replace(/"/g, '""')}"`;
+}
+
+function containsIlikePattern(term: string): string {
+  return formatPostgrestIlikeValue(`*${term}*`);
+}
+
+/** Компактен сериен № — само букви/цифри, без телефонни flexible шаблони. */
+export function serialCompactIlikePatterns(raw: string): string[] {
+  const compact = raw.replace(/[^a-zA-Z0-9]/g, "");
+  if (compact.length < 3) return [];
+  return [containsIlikePattern(compact)];
+}
+
+/** Търсене прилича на телефон (само цифри/+, интервали), не сериен № с букви. */
+export function queryLooksLikePhone(raw: string): boolean {
+  const trimmed = raw.trim();
+  if (!trimmed || /[a-zA-Z]/.test(trimmed)) return false;
+  return phoneDigitsOnly(trimmed).length >= 6;
 }
 
 /** ILIKE шаблон: същите цифри подред, с произволни интервали/тирета/+359/0. */
@@ -108,21 +133,20 @@ export type AdminSearchFields = {
   phoneFields?: string[];
 };
 
-/** PostgREST `.or(...)` — текст + гъвкаво търсене по телефон (0 / +359, без значение на интервалите). */
-export function buildAdminSearchOrFilter(rawQ: string, fields: AdminSearchFields): string | null {
+/** PostgREST `.or(...)` части — текст + гъвкаво търсене по телефон (0 / +359). */
+export function buildAdminSearchOrParts(rawQ: string, fields: AdminSearchFields): string[] {
   const term = sanitizeIlikeTerm(rawQ);
   const parts: string[] = [];
   const phoneFieldSet = new Set(fields.phoneFields ?? []);
 
   if (term) {
     for (const field of fields.textFields) {
-      // Телефоните се търсят само с гъвкав ILIKE (%цифра%цифра%), не буквално с интервали.
       if (phoneFieldSet.has(field)) continue;
-      parts.push(`${field}.ilike.${formatPostgrestIlikeValue(`%${term}%`)}`);
+      parts.push(`${field}.ilike.${containsIlikePattern(term)}`);
     }
   }
 
-  const phonePatterns = phoneFlexibleIlikePatterns(rawQ);
+  const phonePatterns = queryLooksLikePhone(rawQ) ? phoneFlexibleIlikePatterns(rawQ) : [];
   if (phonePatterns.length && fields.phoneFields?.length) {
     for (const field of fields.phoneFields) {
       for (const pattern of phonePatterns) {
@@ -131,5 +155,48 @@ export function buildAdminSearchOrFilter(rawQ: string, fields: AdminSearchFields
     }
   }
 
+  return parts;
+}
+
+/** PostgREST `.or(...)` — текст + гъвкаво търсене по телефон (0 / +359, без значение на интервалите). */
+export function buildAdminSearchOrFilter(rawQ: string, fields: AdminSearchFields): string | null {
+  const parts = buildAdminSearchOrParts(rawQ, fields);
+  return parts.length ? parts.join(",") : null;
+}
+
+/** Продукти по име/модел/серийни № — отделна заявка (не в `.or()` на work_items). */
+export async function findProductIdsForSaleSearch(
+  supabase: SupabaseClient,
+  rawQ: string,
+): Promise<string[]> {
+  const term = sanitizeIlikeTerm(rawQ);
+  const parts: string[] = [];
+
+  if (term) {
+    parts.push(`name.ilike.${containsIlikePattern(term)}`);
+    parts.push(`model_code.ilike.${containsIlikePattern(term)}`);
+  }
+  for (const pattern of serialCompactIlikePatterns(rawQ)) {
+    parts.push(`indoor_unit_serial.ilike.${pattern}`);
+    parts.push(`outdoor_unit_serial.ilike.${pattern}`);
+  }
+  if (!parts.length) return [];
+
+  const { data, error } = await supabase.from("products").select("id").or(parts.join(",")).limit(300);
+  if (error) throw new Error(error.message);
+  return [...new Set((data ?? []).map((row) => String(row.id)))];
+}
+
+/** Продажби: work_items колони + product_id от съвпадащи продукти. */
+export async function buildSaleWorkItemSearchOrFilter(
+  supabase: SupabaseClient,
+  rawQ: string,
+  fields: AdminSearchFields,
+): Promise<string | null> {
+  const parts = buildAdminSearchOrParts(rawQ, fields);
+  const productIds = await findProductIdsForSaleSearch(supabase, rawQ);
+  if (productIds.length > 0) {
+    parts.push(`product_id.in.(${productIds.join(",")})`);
+  }
   return parts.length ? parts.join(",") : null;
 }

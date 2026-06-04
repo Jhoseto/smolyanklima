@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { buildAdminSearchOrFilter } from "@/lib/admin/phoneSearchPattern";
+import { buildSaleWorkItemSearchOrFilter } from "@/lib/admin/phoneSearchPattern";
 import { parseMountPhaseCsv, parseProductConditionCsv } from "@/lib/admin/salesHistoryQueryFilters";
 import { supplierFilterOrClause, normalizeSupplierKey } from "@/lib/admin/supplierNameNormalize";
 import { computeSalesHistoryReport, type SaleReportRow, type SalesHistoryReport } from "@/lib/admin/computeSalesHistoryReport";
@@ -49,8 +49,8 @@ export async function fetchSalesHistoryReport(
   const mountPhases = parseMountPhaseCsv(mountPhase);
   const needsProductInner = Boolean(brandId || productRegion);
   const productEmbed = needsProductInner
-    ? `products:product_id!inner(name, brands:brand_id(name))`
-    : `products:product_id(name, brands:brand_id(name))`;
+    ? `products:product_id!inner(name, model_code, indoor_unit_serial, outdoor_unit_serial, brands:brand_id(name))`
+    : `products:product_id(name, model_code, indoor_unit_serial, outdoor_unit_serial, brands:brand_id(name))`;
   const selectFields = [
     "id",
     "status",
@@ -73,7 +73,7 @@ export async function fetchSalesHistoryReport(
     .order("due_date", { ascending: true, nullsFirst: true });
 
   if (q?.trim()) {
-    const orFilter = buildAdminSearchOrFilter(q, {
+    const orFilter = await buildSaleWorkItemSearchOrFilter(supabase, q, {
       textFields: [
         "title",
         "notes",
