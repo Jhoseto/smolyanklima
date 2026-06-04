@@ -3,6 +3,7 @@ Allow: /
 Allow: /blog/
 Allow: /catalog/
 Allow: /services/
+Allow: /montaz/
 Allow: /contact/
 
 Disallow: /admin/

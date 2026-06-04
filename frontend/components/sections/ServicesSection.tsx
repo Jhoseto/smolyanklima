@@ -1,13 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Zap, Wrench, Clock, Thermometer, ArrowRight, Check, Phone, ChevronDown, ShieldCheck, BadgeCheck } from 'lucide-react';
+import { Zap, Sparkles, Clock, Thermometer, ArrowRight, Check, Phone, ChevronDown, ShieldCheck, BadgeCheck } from 'lucide-react';
 import { useServiceRequestModal } from '../../context/ServiceRequestModalContext';
 import type { ServiceType } from './ServiceRequestContent';
 import { COMPANY_TEL_HREF, LEGAL_COMPANY } from '../../data/legal/company';
 
 const SERVICE_TO_FORM: Record<string, ServiceType> = {
   sales: 'consultation',
-  install: 'installation',
+  maintenance: 'maintenance',
   service: 'maintenance',
   repair: 'repair',
 };
@@ -24,24 +24,27 @@ const services = [
     features: ["Оригинални продукти", "Официална гаранция", "Гъвкави лизингови схеми"]
   },
   {
-    id: 'install',
-    title: "Монтаж",
-    description: "Професионален монтаж от сертифицирани техници до 48 часа.",
-    extraInfo: "Стандартният монтаж включва до 3 метра тръбен път, вакуумиране на системата с професионални помпи и пускане в експлоатация. Използваме само висококачествени медни тръби с дебела изолация и професионални инструменти за минимално запрашаване.",
-    icon: <Wrench className="w-5 h-5 text-[#00B4D8]" />,
-    color: "from-[#00B4D8]/10 to-[#0077B6]/10",
-    accent: "#00B4D8",
-    features: ["Монтаж до 48 часа", "Сертифицирани техници", "Гаранция на монтажа"]
+    id: 'maintenance',
+    title: 'Профилактика',
+    description:
+      'Годишна профилактика и почистване — по-чист въздух, по-ниска консумация и по-дълъг живот на климатика.',
+    extraInfo:
+      'Пълната профилактика включва почистване на филтри и топлообменници, антибактериална обработка и проверка на налягането и работата на системата. Почистващата профилактика без демонтаж е за редовна поддръжка между сезоните.',
+    icon: <Sparkles className="w-5 h-5 text-[#00B4D8]" />,
+    color: 'from-[#00B4D8]/10 to-[#0077B6]/10',
+    accent: '#00B4D8',
+    features: ['Почистване на вътрешно тяло', 'Проверка на налягане', 'Условие за удължена гаранция'],
   },
   {
     id: 'service',
-    title: "Сервиз",
-    description: "Годишно обслужване и почистване за максимална ефективност.",
-    extraInfo: "Пълната профилактика включва разглобяване и почистване на вътрешното тяло, антибактериална обработка на топлообменника и проверка на налягането. Редовният сервиз намалява консумацията на ток с до 20% и удължава живота на уреда.",
+    title: 'Сервиз',
+    description: 'Диагностика, техническа поддръжка и сервизно обслужване на всички марки.',
+    extraInfo:
+      'Сервизният екип отстранява неизправности, проверява електрическите връзки и работата на компресора, консултира при необичайни шумове или спад на мощност. За планирано почистване и поддръжка изберете отделната услуга Профилактика.',
     icon: <Clock className="w-5 h-5 text-gray-600" />,
-    color: "from-gray-100 to-gray-200/50",
-    accent: "#4B5563",
-    features: ["Почистване на филтри", "Проверка на хладагент", "Пълна диагностика"]
+    color: 'from-gray-100 to-gray-200/50',
+    accent: '#4B5563',
+    features: ['Техническа диагностика', 'Сервиз на всички марки', 'Бърза реакция'],
   },
   {
     id: 'repair',
@@ -211,7 +214,7 @@ export const ServicesSection = () => {
                         }}
                         className="w-full py-4 bg-[#00B4D8] text-white rounded-2xl font-bold text-xs hover:bg-[#FF4D00] transition-all hover:shadow-lg hover:shadow-[#FF4D00]/20 active:scale-[0.98]"
                       >
-                        Заяви консултация
+                        {service.id === 'maintenance' ? 'Заяви профилактика' : 'Заяви консултация'}
                       </button>
                     </motion.div>
                   )}

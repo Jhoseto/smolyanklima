@@ -14,6 +14,7 @@ const STATIC_PAGES: Omit<SitemapEntry, 'lastmod'>[] = [
   { loc: `${SITE_ORIGIN}/`, changefreq: 'weekly', priority: '1.0' },
   { loc: `${SITE_ORIGIN}/catalog`, changefreq: 'daily', priority: '0.95' },
   { loc: `${SITE_ORIGIN}/services`, changefreq: 'monthly', priority: '0.85' },
+  { loc: `${SITE_ORIGIN}/montaz`, changefreq: 'monthly', priority: '0.88' },
   { loc: `${SITE_ORIGIN}/contact`, changefreq: 'monthly', priority: '0.85' },
   { loc: `${SITE_ORIGIN}/za-nas`, changefreq: 'monthly', priority: '0.8' },
   { loc: `${SITE_ORIGIN}/blog`, changefreq: 'daily', priority: '0.9' },

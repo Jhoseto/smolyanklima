@@ -107,8 +107,8 @@ export const Navbar = () => {
   const navLinks: NavLink[] = [
     { name: 'Начало', kind: 'route', href: '/', onClick: handleHomeClick },
     { name: 'Каталог', kind: 'route', href: '/catalog', onClick: handleCatalogClick },
+    { name: 'Монтаж', kind: 'route', href: '/montaz' },
     { name: 'Услуги', kind: 'route', href: isHome ? '#services' : '/services' },
-    { name: 'Проекти', kind: 'home-section', sectionId: 'projects' },
     { name: 'Блог', kind: 'route', href: '/blog' },
     { name: 'За нас', kind: 'route', href: '/za-nas' },
     { name: 'FAQ', kind: 'home-section', sectionId: 'faq' },

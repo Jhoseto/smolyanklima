@@ -36,6 +36,7 @@ const CatalogPage = lazy(() => import('./pages/CatalogPage'));
 const ProductDetailsPage = lazy(() => import('./pages/ProductDetailsPage'));
 const ContactPage = lazy(() => import('./pages/ContactPage'));
 const ServicesPage = lazy(() => import('./pages/ServicesPage'));
+const MountPage = lazy(() => import('./pages/MountPage'));
 const BlogHomePage = lazy(() => import('./pages/BlogHomePage'));
 const BlogArticlePage = lazy(() => import('./pages/BlogArticlePage'));
 const AboutPage = lazy(() => import('./pages/AboutPage'));
@@ -246,6 +247,7 @@ function App() {
           <Route path="/product/:id" element={<PageTransition><ProductDetailsPage /></PageTransition>} />
           <Route path="/contact" element={<PageTransition><ContactPage /></PageTransition>} />
           <Route path="/services" element={<PageTransition><ServicesPage /></PageTransition>} />
+          <Route path="/montaz" element={<PageTransition><MountPage /></PageTransition>} />
           <Route path="/za-nas" element={<PageTransition><AboutPage /></PageTransition>} />
           <Route path="/blog" element={<PageTransition><BlogHomePage /></PageTransition>} />
           <Route path="/blog/kategoria/:slug" element={<PageTransition><BlogHomePage /></PageTransition>} />

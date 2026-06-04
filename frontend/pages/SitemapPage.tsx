@@ -14,6 +14,7 @@ export default function SitemapPage() {
     { url: '/blog', priority: '0.9', changefreq: 'daily' },
     { url: '/catalog', priority: '0.8', changefreq: 'weekly' },
     { url: '/services', priority: '0.8', changefreq: 'monthly' },
+    { url: '/montaz', priority: '0.85', changefreq: 'monthly' },
     { url: '/contact', priority: '0.7', changefreq: 'monthly' },
   ];
 
@@ -66,6 +67,7 @@ export function generateSitemapXML(): string {
     { url: '/blog', priority: '0.9', changefreq: 'daily' },
     { url: '/catalog', priority: '0.8', changefreq: 'weekly' },
     { url: '/services', priority: '0.8', changefreq: 'monthly' },
+    { url: '/montaz', priority: '0.85', changefreq: 'monthly' },
     { url: '/contact', priority: '0.7', changefreq: 'monthly' },
   ];
 
