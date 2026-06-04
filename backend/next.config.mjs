@@ -53,9 +53,10 @@ const nextConfig = {
         ? [{ key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" }]
         : [];
 
-    const immutableCache = [
-      { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
-    ];
+    const isProd = process.env.NODE_ENV === "production";
+    const immutableCache = isProd
+      ? [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }]
+      : [];
 
     return [
       {

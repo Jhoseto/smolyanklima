@@ -94,10 +94,10 @@ export function InfoBadge({ text }: { text: string }) {
 
 export function SectionTitle({ title, hint }: { title: string; hint?: string }) {
   return (
-    <div className="inline-flex items-center gap-1.5 max-w-full min-w-0">
+    <span className="inline-flex items-center gap-1.5 max-w-full min-w-0">
       <span className="text-slate-900 font-bold text-sm md:text-base leading-snug">{title}</span>
-      {hint && <InfoDot text={hint} />}
-    </div>
+      {hint ? <InfoDot text={hint} /> : null}
+    </span>
   );
 }
 

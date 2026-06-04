@@ -43,12 +43,12 @@ import { useAdminBackHandler } from "@/lib/admin/useAdminBackHandler";
 import { CatalogItemQuickViewButton } from "../ProductQuickView";
 import { FeaturedSlotModal } from "./FeaturedSlotModal";
 import { ProductCatalogSettingsModal } from "./ProductCatalogSettingsModal";
+import { formatAdminPriceEuro, formatAdminDateOnly } from "@/lib/admin/formatEuro";
 import {
   PriceRangeSlider,
   ADMIN_PRICE_FILTER_MIN,
   ADMIN_PRICE_FILTER_MAX,
   isAdminPriceFilterActive,
-  formatAdminPriceEuro,
 } from "./PriceRangeSlider";
 import { postAdminCatalogBulkInChunks } from "@/lib/admin/catalogBulkFetch";
 import { useDebounce } from "@/lib/hooks/useDebounce";
@@ -284,16 +284,8 @@ function fmtEuro(n: number | null | undefined) {
   return `€${formatAdminPriceEuro(Number(n))}`;
 }
 
-// Дата на закупуване от доставчик: в БД е `date` (без час). Показваме я в
-// българския формат ДД.ММ.ГГГГ; при липсваща стойност — тире.
 function fmtPurchaseDate(value: string | null | undefined): string {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  return `${dd}.${mm}.${yyyy}`;
+  return formatAdminDateOnly(value);
 }
 
 function catalogStockBadgeText(status: string, compact = false) {
