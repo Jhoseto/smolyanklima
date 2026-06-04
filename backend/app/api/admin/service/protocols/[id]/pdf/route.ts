@@ -4,6 +4,7 @@ import React from "react";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
 import { ProtocolPDF } from "@/lib/protocol-pdf";
+import { scopeAcceptanceProtocolQueryForSession } from "@/lib/admin/serviceProtocolAccess";
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflight(req);
@@ -22,11 +23,13 @@ export async function GET(
 
   const { id } = await params;
 
-  const { data, error } = await session.db
+  let query = session.db
     .from("service_protocols")
     .select("*")
-    .eq("id", id)
-    .maybeSingle();
+    .eq("id", id);
+  query = scopeAcceptanceProtocolQueryForSession(query, session);
+
+  const { data, error } = await query.maybeSingle();
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   if (!data)  return withCors(req, NextResponse.json({ error: "Не е намерен" }, { status: 404 }));
 

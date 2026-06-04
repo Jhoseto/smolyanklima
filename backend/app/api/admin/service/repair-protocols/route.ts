@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
+import { scopeRepairProtocolQueryForSession } from "@/lib/admin/serviceProtocolAccess";
 
 const QuerySchema = z.object({
   page:    z.coerce.number().int().min(1).optional().default(1),
@@ -114,6 +115,7 @@ export async function GET(req: NextRequest) {
       .order("created_at", { ascending: false })
       .range(offset, offset + perPage - 1);
 
+    listQuery = scopeRepairProtocolQueryForSession(listQuery, session);
     if (status) listQuery = listQuery.eq("status", status);
     if (q?.trim()) {
       const term = q.trim();

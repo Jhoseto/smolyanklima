@@ -170,7 +170,7 @@ function saleDateDisplay(row: WorkRow): string {
 
 type ConfirmKind = "complete" | "cancel";
 
-type SortField =
+type ProductSortField =
   | "product"
   | "sale_install_state"
   | "status"
@@ -182,6 +182,7 @@ type SortField =
   | "total_amount"
   | "sale_date";
 
+type SortField = ProductSortField | ServiceSortField | "created_at";
 type SortDir = "asc" | "desc";
 
 const DATE_DESC_FIELDS: SortField[] = ["sale_date", "purchase_price", "total_amount"];
@@ -191,6 +192,7 @@ const TEXT_ASC_FIELDS: SortField[] = [
   "customer_phone",
   "supplier",
   "supplier_invoice",
+  "customer_address",
   "sale_install_state",
   "status",
 ];
@@ -201,7 +203,7 @@ function defaultSortDir(field: SortField): SortDir {
   return "asc";
 }
 
-function sortHint(field: SortField, sortBy: SortField, sortDir: SortDir, label: string): string {
+function sortHint(field: ProductSortField, sortBy: SortField, sortDir: SortDir, label: string): string {
   if (sortBy !== field) return `Сортирай по „${label}“`;
   if (field === "sale_date") {
     return sortDir === "desc" ? "Най-новите продажби отгоре" : "Най-старите продажби отгоре";
@@ -227,10 +229,10 @@ function SortableTh({
   className = "",
 }: {
   label: string;
-  field: SortField;
+  field: ProductSortField;
   sortBy: SortField;
   sortDir: SortDir;
-  onSort: (f: SortField) => void;
+  onSort: (f: ProductSortField) => void;
   className?: string;
 }) {
   const isActive = sortBy === field;
@@ -673,7 +675,7 @@ export default function AdminHistoryPage() {
     setCancelReason("");
   }
 
-  function handleSort(field: SortField) {
+  function handleSort(field: ProductSortField) {
     setPage(1);
     if (sortBy === field) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));

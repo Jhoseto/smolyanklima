@@ -4,6 +4,10 @@ import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
 import {
+  canServiceStaffAccessAcceptanceProtocol,
+  scopeAcceptanceProtocolQueryForSession,
+} from "@/lib/admin/serviceProtocolAccess";
+import {
   combineUnitSerials,
   optionalProtocolEmail,
   optionalProtocolPhone,
@@ -54,11 +58,13 @@ export async function GET(
   catch { return withCors(req, NextResponse.json({ error: "Забранен достъп" }, { status: 403 })); }
 
   const { id } = await params;
-  const { data, error } = await session.db
+  let query = session.db
     .from("service_protocols")
     .select("*")
-    .eq("id", id)
-    .maybeSingle();
+    .eq("id", id);
+  query = scopeAcceptanceProtocolQueryForSession(query, session);
+
+  const { data, error } = await query.maybeSingle();
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   if (!data)  return withCors(req, NextResponse.json({ error: "Не е намерен" }, { status: 404 }));
   return withCors(req, NextResponse.json({ data }));
@@ -76,6 +82,18 @@ export async function PUT(
   catch { return withCors(req, NextResponse.json({ error: "Забранен достъп" }, { status: 403 })); }
 
   const { id } = await params;
+
+  if (session.role === "service_staff") {
+    const { data: existing, error: existingError } = await session.db
+      .from("service_protocols")
+      .select("created_by,work_item_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (existingError) return withCors(req, NextResponse.json({ error: existingError.message }, { status: 500 }));
+    if (!canServiceStaffAccessAcceptanceProtocol(existing, session.userId)) {
+      return withCors(req, NextResponse.json({ error: "Забранен достъп" }, { status: 403 }));
+    }
+  }
 
   const json = await req.json().catch(() => null);
   const parsed = UpdateSchema.safeParse(json);
