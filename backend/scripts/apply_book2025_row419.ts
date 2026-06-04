@@ -1,6 +1,7 @@
 /** Еднократен импорт на ред 419 (Алпин колона, без сериен). */
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
+import { book2025ImportNote, canonicalBook2025Supplier } from "@/lib/admin/book2025Supplier";
 
 dotenv.config({ path: ".env.local", override: true });
 
@@ -10,7 +11,9 @@ async function main() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { persistSession: false } },
   );
-  const note = "Импорт Book2025, ред 419";
+  const note = book2025ImportNote(419);
+  const supplierName = canonicalBook2025Supplier("ДИМЕЛИ");
+  const purchaseInvoice = "4651";
   const { data: exists } = await sb
     .from("work_items")
     .select("id")
@@ -74,6 +77,7 @@ async function main() {
         price: 2710,
         purchase_price: 1876,
         purchased_at: saleDate,
+        supplier_invoice_number: purchaseInvoice,
         product_condition: "new",
         stock_status: "out_of_stock",
         stock_quantity: 0,
@@ -104,6 +108,8 @@ async function main() {
     unit_price: 2710,
     total_amount: 2710,
     purchase_price: 1876,
+    supplier_name: supplierName,
+    supplier_invoice_number: purchaseInvoice,
     sale_install_state: "completed",
     sale_product_condition: "new",
   });

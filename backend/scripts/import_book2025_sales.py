@@ -131,14 +131,16 @@ def write_preview_2026(rows: list[ParsedRow], brand_stats: Counter) -> None:
         w = csv.writer(f, delimiter="\t")
         w.writerow([
             "sheet_row", "brand_raw", "brand_db", "model", "indoor_serial", "outdoor_serial",
-            "purchase_date", "purchase_price", "sale_date", "sale_price",
+            "purchase_date", "supplier", "purchase_invoice", "purchase_price",
+            "sale_date", "sale_price",
             "client_name", "client_phone", "client_address", "warnings",
         ])
         for row in rows:
             w.writerow([
                 row.sheet_row, row.brand_raw, row.brand_db or "", row.model,
                 row.indoor_serial, row.outdoor_serial,
-                row.purchase_date or "", row.purchase_price if row.purchase_price is not None else "",
+                row.purchase_date or "", row.supplier or "", row.purchase_invoice or "",
+                row.purchase_price if row.purchase_price is not None else "",
                 row.sale_date or "", row.sale_price if row.sale_price is not None else "",
                 row.client_name, row.client_phone or "", row.client_address,
                 ";".join(row.warnings),

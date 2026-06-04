@@ -24,7 +24,7 @@ const ALL_CATALOG_SYNC_STEPS = [
 ] as const;
 
 /** Очакван брой Condex продукти (за crawl прогрес преди финален брой). */
-const CONDEX_ESTIMATED_PRODUCTS = 120;
+const CONDEX_ESTIMATED_PRODUCTS = 95;
 const CONDEX_CRAWL_PERCENT = 28;
 
 type CondexProgressView = {
@@ -1464,9 +1464,13 @@ export default function SettingsPageClient() {
             <div className="min-w-0 flex-1">
               <div className="text-sm font-black text-slate-900 tracking-tight">Каталог от Булклима</div>
               <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                Зарежда климатиците от bulclima.com в админ каталога със статус <strong>По поръчка</strong>. Внася до{" "}
-                <strong>4 големи снимки</strong> на продукт (оригинал от сайта, не миниатюри). По подразбиране не се
-                показват на публичния сайт — включвате ги ръчно (колона „око“ в списъка продукти).
+                Синхронизира <strong>стенни климатици</strong> и{" "}
+                <strong>мултисплит системи</strong> от{" "}
+                <a href="https://bulclima.com/products/klimatici/stenni-klimatici" className="underline" target="_blank" rel="noreferrer">
+                  bulclima.com
+                </a>{" "}
+                (всички страници + характеристики + до 16 снимки). Статус <strong>По поръчка</strong>; продуктите с
+                „ОЧАКВАЙТЕ“ влизат с цена 0 €. По подразбиране не са на публичния сайт — включвате ги ръчно (колона „око“).
               </p>
             </div>
           </div>
@@ -1616,8 +1620,11 @@ export default function SettingsPageClient() {
             <div className="min-w-0 flex-1">
               <div className="text-sm font-black text-slate-900 tracking-tight">Каталог от Кондекс (Condex)</div>
               <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                Mitsubishi Heavy Industries — RAC за дома и офиса + multi-split (SCM) от condex.bg. Доставчик КОНДЕКС,
-                статус по поръчка, технически таблици и снимки от сайта.
+                Mitsubishi Heavy Industries — шестте стенни RAC серии от{" "}
+                <a href="https://condex.bg/products/seria-diamond-zsx-zmx/" className="underline" target="_blank" rel="noreferrer">
+                  condex.bg
+                </a>{" "}
+                (Diamond ZSX/ZR, Premium PRO/ZS, Smart Plus, Standard ZSP): цени, пълни технически таблици и до 16 снимки.
               </p>
             </div>
           </div>

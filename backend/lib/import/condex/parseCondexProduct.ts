@@ -48,7 +48,8 @@ const FETCH_HEADERS = {
 
 const DEFAULT_MOUNT_EUR = 200;
 const IMAGE_EXT = /\.(jpg|jpeg|png|webp|avif)(\?|$)/i;
-const MAX_PRODUCT_IMAGES = 4;
+const MAX_PRODUCT_IMAGES = 16;
+const SPECS_APPENDIX_MARKER = "Технически данни (Condex):";
 
 export async function fetchCondexHtml(url: string): Promise<string> {
   const res = await fetch(url, { headers: FETCH_HEADERS, redirect: "follow" });
@@ -64,6 +65,15 @@ function decodeHtml(s: string): string {
     .replace(/&#39;/g, "'")
     .replace(/&#8211;/g, "–")
     .replace(/&#8212;/g, "—")
+    .replace(/&#8216;/g, "'")
+    .replace(/&#8217;/g, "'")
+    .replace(/&#8220;/g, '"')
+    .replace(/&#8221;/g, '"')
+    .replace(/&#038;/g, "&")
+    .replace(/&#(\d+);/g, (_, code) => {
+      const n = Number(code);
+      return Number.isFinite(n) ? String.fromCharCode(n) : _;
+    })
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/\s+/g, " ")
@@ -435,14 +445,42 @@ export function extractCondexProductImageUrls(html: string): string[] {
   const og = html.match(/property=["']og:image["'][^>]*content=["']([^"']+)["']/i);
   if (og?.[1]) push(og[1]);
 
-  const gallery = html.match(/class=["'][^"']*product_images[^"']*["'][\s\S]{0,12000}/i)?.[0] ?? html.slice(0, 80000);
-  const srcRe = /\b(?:src|data-src|data-large_image)=["']([^"']+)["']/gi;
-  let m: RegExpExecArray | null;
-  while ((m = srcRe.exec(gallery)) !== null) {
-    push(m[1]!);
+  const galleryBlocks = [
+    html.match(/class=["'][^"']*product_images[^"']*["'][\s\S]{0,40000}/i)?.[0],
+    html.match(/woocommerce-product-gallery[\s\S]{0,40000}/i)?.[0],
+    html.match(/single-product[\s\S]{0,60000}/i)?.[0],
+  ].filter(Boolean) as string[];
+
+  const srcRe = /\b(?:src|data-src|data-large_image|href)=["']([^"']+)["']/gi;
+  for (const gallery of galleryBlocks.length ? galleryBlocks : [html.slice(0, 100000)]) {
+    let m: RegExpExecArray | null;
+    while ((m = srcRe.exec(gallery)) !== null) {
+      push(m[1]!);
+      if (urls.length >= MAX_PRODUCT_IMAGES) break;
+    }
+    if (urls.length >= MAX_PRODUCT_IMAGES) break;
   }
 
   return urls.slice(0, MAX_PRODUCT_IMAGES);
+}
+
+function formatCondexSpecsAppendix(rows: Map<string, string>): string {
+  if (rows.size === 0) return "";
+  const lines: string[] = [`\n\n---\n${SPECS_APPENDIX_MARKER}\n`];
+  for (const [label, value] of rows) {
+    if (label && value) lines.push(`${label}: ${value}`);
+  }
+  return lines.join("\n");
+}
+
+function mergeDescriptionWithSpecsAppendix(description: string | null, appendix: string): string | null {
+  if (!appendix.trim()) return description?.trim() || null;
+  const base = (description ?? "").trim();
+  const markerIdx = base.indexOf(SPECS_APPENDIX_MARKER);
+  if (markerIdx >= 0) {
+    return `${base.slice(0, markerIdx).trimEnd()}${appendix}`;
+  }
+  return base ? `${base}${appendix}` : appendix.trim();
 }
 
 export function extractCondexCategoryPaths(html: string): string[] {
@@ -584,7 +622,12 @@ export function parseCondexProductPage(
     description = [h2 ? stripHtmlToText(h2) : "", bullets.join(" ")].filter(Boolean).join(". ").slice(0, 4000);
   }
   const generalBlock = generalSlice;
+  const tableRows = extractCondexSpecRows(html);
   const specs = extractCondexProductSpecs(html, { name, description });
+  description = mergeDescriptionWithSpecsAppendix(
+    description,
+    formatCondexSpecsAppendix(tableRows),
+  );
 
   if (/не включва панел|does not include panel|panel.*mandatory|задължителн/i.test(html)) {
     const note =

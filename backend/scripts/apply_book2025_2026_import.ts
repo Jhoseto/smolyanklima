@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { book2025ImportNote, canonicalBook2025Supplier } from "@/lib/admin/book2025Supplier";
 
 dotenv.config({ path: ".env.local", override: true });
 
@@ -48,8 +49,8 @@ function parseTsv(): Row[] {
       outdoor_serial: c[idx("outdoor_serial")] ?? "",
       purchase_date: c[idx("purchase_date")] ?? "",
       purchase_price: c[idx("purchase_price")] ?? "",
-      supplier: "",
-      purchase_invoice: "",
+      supplier: c[idx("supplier")] ?? "",
+      purchase_invoice: c[idx("purchase_invoice")] ?? "",
       sale_date: c[idx("sale_date")] ?? "",
       sale_price: c[idx("sale_price")] ?? "",
       client_name: c[idx("client_name")] ?? "",
@@ -133,7 +134,7 @@ async function findOrCreateContact(
 }
 
 async function saleExists(sb: SupabaseClient, row: Row): Promise<boolean> {
-  const note = `Импорт Book2025, ред ${row.sheet_row}`;
+  const note = book2025ImportNote(row.sheet_row);
   const { data: byNote } = await sb
     .from("work_items")
     .select("id")
@@ -206,6 +207,8 @@ async function main() {
     const name = `${row.brand_db} ${row.model || "климатик"}`.trim();
     const salePrice = parseFloat(row.sale_price) || 0;
     const purchasePrice = row.purchase_price ? parseFloat(row.purchase_price) : null;
+    const supplierName = canonicalBook2025Supplier(row.supplier);
+    const purchaseInvoice = row.purchase_invoice?.trim() || null;
 
     const { data: product, error: pErr } = await sb
       .from("products")
@@ -219,7 +222,7 @@ async function main() {
         purchase_price: purchasePrice,
         indoor_unit_serial: row.indoor_serial || null,
         outdoor_unit_serial: row.outdoor_serial || null,
-        supplier_invoice_number: row.purchase_invoice || null,
+        supplier_invoice_number: purchaseInvoice,
         purchased_at: row.purchase_date || null,
         product_condition: "new",
         stock_status: "out_of_stock",
@@ -243,7 +246,7 @@ async function main() {
       status: "done",
       priority: "medium",
       title: `Продажба: ${name}`,
-      notes: `Импорт Book2025, ред ${row.sheet_row}`,
+      notes: book2025ImportNote(row.sheet_row),
       due_date: saleDate,
       completed_at: completedAt,
       product_id: product.id,
@@ -255,8 +258,8 @@ async function main() {
       unit_price: salePrice,
       total_amount: salePrice,
       purchase_price: purchasePrice,
-      supplier_name: row.supplier || null,
-      supplier_invoice_number: row.purchase_invoice || null,
+      supplier_name: supplierName,
+      supplier_invoice_number: purchaseInvoice,
       sale_install_state: "completed",
       sale_product_condition: "new",
     });

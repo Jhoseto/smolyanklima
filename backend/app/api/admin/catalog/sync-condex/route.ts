@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
   if ("error" in auth && auth.error) return auth.error;
 
   const limitParam = req.nextUrl.searchParams.get("limit");
-  const limit = limitParam ? Math.min(500, Math.max(1, Number(limitParam) || 0)) : undefined;
+  const limit = limitParam ? Math.min(2000, Math.max(1, Number(limitParam) || 0)) : undefined;
   const stream = req.nextUrl.searchParams.get("stream") === "1";
 
   const supabase = createSupabaseAdminClient();

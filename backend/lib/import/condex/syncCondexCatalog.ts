@@ -8,7 +8,10 @@ import {
   type ImageInput,
   type SpecsInput,
 } from "@/lib/admin/syncProductChildren";
-import { collectCondexProductUrls } from "./collectCondexProducts";
+import {
+  collectCondexProductUrls,
+  CONDEX_DEFAULT_SYNC_LISTING_URLS,
+} from "./collectCondexProducts";
 import { classifyCondexCatalogItem } from "./classifyCondexItem";
 import { fetchCondexHtml, parseCondexProductPage, type CondexParsedProduct } from "./parseCondexProduct";
 import { applyCondexSupplierToProduct, backfillCondexSupplierOnProducts } from "./applyCondexSupplier";
@@ -256,7 +259,11 @@ async function upsertOne(
 
 export async function runCondexCatalogSync(
   supabase: SupabaseClient,
-  opts?: { limit?: number; onProgress?: CondexSyncProgressHandler },
+  opts?: {
+    limit?: number;
+    listingUrls?: readonly string[];
+    onProgress?: CondexSyncProgressHandler;
+  },
 ): Promise<CondexSyncSummary> {
   if (process.env.CONDEX_TLS_INSECURE === "1") {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -296,7 +303,7 @@ export async function runCondexCatalogSync(
 
   emitCondexProgress(onProgress, {
     phase: "crawl",
-    message: "Обхождане на „За дома и офиса“ (RAC)…",
+    message: "Обхождане на RAC сериите от condex.bg…",
     discovered: 0,
     current: 0,
     total: 0,
@@ -304,18 +311,24 @@ export async function runCondexCatalogSync(
     updated: 0,
     skipped: 0,
   });
-  const entries = await collectCondexProductUrls(opts?.limit, ({ message, discovered }) => {
-    emitCondexProgress(onProgress, {
-      phase: "crawl",
-      message,
-      discovered,
-      current: discovered,
-      total: 0,
-      created: summary.created,
-      updated: summary.updated,
-      skipped: summary.skipped,
-    });
-  });
+  const entries = await collectCondexProductUrls(
+    {
+      limit: opts?.limit,
+      listingUrls: opts?.listingUrls ?? CONDEX_DEFAULT_SYNC_LISTING_URLS,
+    },
+    ({ message, discovered }) => {
+      emitCondexProgress(onProgress, {
+        phase: "crawl",
+        message,
+        discovered,
+        current: discovered,
+        total: 0,
+        created: summary.created,
+        updated: summary.updated,
+        skipped: summary.skipped,
+      });
+    },
+  );
   summary.productUrls = entries.length;
   emitCondexProgress(onProgress, {
     phase: "import",

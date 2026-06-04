@@ -280,7 +280,11 @@ async function syncChildren(
 
 export async function runBulclimaCatalogSync(
   supabase: SupabaseClient,
-  opts?: { limit?: number; onProgress?: BulclimaSyncProgressHandler },
+  opts?: {
+    limit?: number;
+    listingUrls?: readonly string[];
+    onProgress?: BulclimaSyncProgressHandler;
+  },
 ): Promise<BulclimaSyncSummary> {
   if (process.env.BULCLIMA_TLS_INSECURE === "1") {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -322,9 +326,12 @@ export async function runBulclimaCatalogSync(
   }
 
   emitBulclimaProgress(onProgress, { phase: "crawl", message: "Обхождане на каталога bulclima.com…" });
-  const entries = await collectBulclimaProductUrls(opts?.limit, (message) => {
-    emitBulclimaProgress(onProgress, { phase: "crawl", message });
-  });
+  const entries = await collectBulclimaProductUrls(
+    { limit: opts?.limit, listingUrls: opts?.listingUrls },
+    (message) => {
+      emitBulclimaProgress(onProgress, { phase: "crawl", message });
+    },
+  );
   summary.productUrls = entries.length;
   emitBulclimaProgress(onProgress, {
     phase: "import",
@@ -350,7 +357,7 @@ export async function runBulclimaCatalogSync(
         summary.skipped++;
         emitBulclimaProgress(onProgress, {
           phase: "import",
-          message: `Пропуснат (няма цена/име): ${url}`,
+          message: `Пропуснат (няма име/непознат HTML): ${url}`,
           current,
           total: entries.length,
           url,

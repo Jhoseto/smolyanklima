@@ -2,6 +2,16 @@ import { fetchCondexHtml } from "./parseCondexProduct";
 
 export const CONDEX_RAC_HUB = "https://condex.bg/products/za-doma-i-ofisa/";
 
+/** Стенни RAC серии за синхронизация (по заявка). */
+export const CONDEX_DEFAULT_SYNC_LISTING_URLS = [
+  "https://condex.bg/products/seria-diamond-zsx-zmx/",
+  "https://condex.bg/products/seria-diamond-zr/",
+  "https://condex.bg/products/seria-premium-pro-bg/",
+  "https://condex.bg/products/seria-premium-zs/",
+  "https://condex.bg/products/smart-plus/",
+  "https://condex.bg/products/seria-standart-zsp/",
+] as const;
+
 /** Серии от RAC hub (за дома и офиса) + multi-split поддърво. */
 export const CONDEX_LISTING_ROOTS: readonly string[] = [
   "https://condex.bg/products/seria-standart-zsp/",
@@ -50,8 +60,25 @@ function normalizeProductUrl(href: string): string | null {
   }
 }
 
+/** URL от една product card (`product_item_holder`) — по-точен от глобален regex. */
+function extractProductUrlFromListingCard(block: string): string | null {
+  const detail =
+    block.match(/class=["'][^"']*\bdetails\b[^"']*["'][^>]*href=["']([^"']+)["']/i)?.[1] ??
+    block.match(/class=["']clean_heading["'][\s\S]*?href=["']([^"']+product-details\/[^"']+)["']/i)?.[1] ??
+    block.match(/class=["']imgeffect[^"']*["'][^>]*href=["']([^"']+product-details\/[^"']+)["']/i)?.[1];
+  return detail ? normalizeProductUrl(detail) : null;
+}
+
 export function extractProductUrlsFromListing(html: string): string[] {
   const out = new Set<string>();
+  const cardRe =
+    /class=["']col product_item_holder[\s\S]*?(?=class=["']col product_item_holder|<div class=["']row clearfix|<ul class=["']page-numbers)/gi;
+  let card: RegExpExecArray | null;
+  while ((card = cardRe.exec(html)) !== null) {
+    const norm = extractProductUrlFromListingCard(card[0]);
+    if (norm) out.add(norm);
+  }
+
   const re = /href=["']([^"']*\/product-details\/[^"'#?]+)["']/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(html)) !== null) {
@@ -122,6 +149,29 @@ export function extractPaginationUrls(html: string, listingRootUrl: string): str
   return pages;
 }
 
+/** Всички листинг URL-и (страница 1 + /page/N/) за дадена серия. */
+export function buildCondexListingPageUrls(listingRootUrl: string, firstPageHtml: string): string[] {
+  const root = new URL(listingRootUrl);
+  const listingRootPath = stripListingPaginationPath(root.pathname);
+  const origin = root.origin;
+  const pages = new Set<string>();
+  pages.add(listingPageUrl(origin, listingRootPath, 1));
+  for (const p of extractPaginationUrls(firstPageHtml, listingRootUrl)) {
+    pages.add(p);
+  }
+  return [...pages].sort((a, b) => {
+    const pa = isPaginationForListing(new URL(a), listingRootPath) ?? 1;
+    const pb = isPaginationForListing(new URL(b), listingRootPath) ?? 1;
+    return pa - pb;
+  });
+}
+
+export type CollectCondexUrlsOptions = {
+  limit?: number;
+  /** Листинг URL-и; по подразбиране шестте стенни RAC серии. */
+  listingUrls?: readonly string[];
+};
+
 /** Hub RAC е индекс — обхождаме само сериите от „За дома и офиса“, не hub/page/feed и не други раздели. */
 function isSeriesListingUrl(url: string): boolean {
   try {
@@ -179,63 +229,91 @@ async function discoverListingRootsFromHub(): Promise<string[]> {
   return [...roots];
 }
 
+async function crawlCondexListingSeries(
+  rootUrl: string,
+  productEntries: Map<string, CondexCatalogEntry>,
+  limit: number | undefined,
+  onProgress?: CondexCrawlProgressHandler,
+): Promise<boolean> {
+  const listingRootPath = stripListingPaginationPath(new URL(rootUrl).pathname);
+  const listingRootUrl = listingPageUrl(new URL(rootUrl).origin, listingRootPath, 1);
+  const listingPath = listingRootPath;
+
+  const seedHtml = await fetchCondexHtml(listingRootUrl);
+  const pageUrls = buildCondexListingPageUrls(listingRootUrl, seedHtml);
+  onProgress?.({
+    message: `Серия ${listingPath}: ${pageUrls.length} страници листинг`,
+    discovered: productEntries.size,
+  });
+
+  for (let i = 0; i < pageUrls.length; i++) {
+    const pageUrl = pageUrls[i]!;
+    try {
+      const html = i === 0 ? seedHtml : await fetchCondexHtml(pageUrl);
+      const before = productEntries.size;
+      for (const u of extractProductUrlsFromListing(html)) {
+        const prev = productEntries.get(u);
+        const spec = listingCategorySpecificity(listingPath);
+        const prevSpec = listingCategorySpecificity(prev?.listingCategoryPath ?? null);
+        if (!prev || spec > prevSpec) {
+          productEntries.set(u, { url: u, listingCategoryPath: listingPath });
+        }
+        if (limit && productEntries.size >= limit) {
+          onProgress?.({
+            message: `Намерени ${productEntries.size} продукта (лимит ${limit})`,
+            discovered: productEntries.size,
+          });
+          return true;
+        }
+      }
+      if (productEntries.size > before) {
+        onProgress?.({
+          message: `Листинг ${listingPath} (${i + 1}/${pageUrls.length}) — ${productEntries.size} продукта`,
+          discovered: productEntries.size,
+        });
+      }
+    } catch (e: unknown) {
+      onProgress?.({
+        message: `Пропуснат листинг ${pageUrl}: ${e instanceof Error ? e.message : String(e)}`,
+        discovered: productEntries.size,
+      });
+    }
+    await new Promise((r) => setTimeout(r, CRAWL_DELAY_MS));
+  }
+  return false;
+}
+
 export async function collectCondexProductUrls(
-  limit?: number,
+  limitOrOpts?: number | CollectCondexUrlsOptions,
   onProgress?: CondexCrawlProgressHandler,
 ): Promise<CondexCatalogEntry[]> {
-  onProgress?.({ message: "Зареждане на RAC серии от condex.bg…", discovered: 0 });
-  const listingRoots = await discoverListingRootsFromHub();
-  onProgress?.({
-    message: `Обхождане на ${listingRoots.length} листинга (RAC + multi-split)…`,
-    discovered: 0,
-  });
+  const opts: CollectCondexUrlsOptions =
+    typeof limitOrOpts === "number" || limitOrOpts === undefined
+      ? { limit: limitOrOpts }
+      : limitOrOpts;
+  const limit = opts.limit;
+
+  let listingRoots: string[];
+  if (opts.listingUrls?.length) {
+    listingRoots = opts.listingUrls.map((u) => (u.endsWith("/") ? u : `${u}/`));
+    onProgress?.({
+      message: `Обхождане на ${listingRoots.length} серии: ${listingRoots.map((u) => new URL(u).pathname).join(", ")}`,
+      discovered: 0,
+    });
+  } else {
+    onProgress?.({ message: "Зареждане на RAC серии от condex.bg…", discovered: 0 });
+    listingRoots = await discoverListingRootsFromHub();
+    onProgress?.({
+      message: `Обхождане на ${listingRoots.length} листинга (RAC + multi-split)…`,
+      discovered: 0,
+    });
+  }
 
   const productEntries = new Map<string, CondexCatalogEntry>();
 
   for (const rootUrl of listingRoots) {
-    const listingRootPath = stripListingPaginationPath(new URL(rootUrl).pathname);
-    const listingRootUrl = listingPageUrl(new URL(rootUrl).origin, listingRootPath, 1);
-    const visitedPages = new Set<string>();
-    const queue = [listingRootUrl];
-    const listingPath = listingRootPath;
-
-    while (queue.length > 0) {
-      const pageUrl = queue.shift()!;
-      if (visitedPages.has(pageUrl)) continue;
-      visitedPages.add(pageUrl);
-
-      try {
-        const html = await fetchCondexHtml(pageUrl);
-        for (const u of extractProductUrlsFromListing(html)) {
-          const prev = productEntries.get(u);
-          const spec = listingCategorySpecificity(listingPath);
-          const prevSpec = listingCategorySpecificity(prev?.listingCategoryPath ?? null);
-          if (!prev || spec > prevSpec) {
-            productEntries.set(u, { url: u, listingCategoryPath: listingPath });
-          }
-          if (limit && productEntries.size >= limit) {
-            onProgress?.({
-              message: `Намерени ${productEntries.size} продукта (лимит ${limit})`,
-              discovered: productEntries.size,
-            });
-            return [...productEntries.values()];
-          }
-        }
-        onProgress?.({
-          message: `Листинг: ${listingPath ?? pageUrl} — ${productEntries.size} продукта`,
-          discovered: productEntries.size,
-        });
-        for (const next of extractPaginationUrls(html, listingRootUrl)) {
-          if (!visitedPages.has(next)) queue.push(next);
-        }
-      } catch (e: unknown) {
-        onProgress?.({
-          message: `Пропуснат листинг ${pageUrl}: ${e instanceof Error ? e.message : String(e)}`,
-          discovered: productEntries.size,
-        });
-      }
-      await new Promise((r) => setTimeout(r, CRAWL_DELAY_MS));
-    }
+    const hitLimit = await crawlCondexListingSeries(rootUrl, productEntries, limit, onProgress);
+    if (hitLimit) return [...productEntries.values()];
   }
 
   onProgress?.({

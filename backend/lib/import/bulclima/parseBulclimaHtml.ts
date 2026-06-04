@@ -491,7 +491,10 @@ export function extractBulclimaProductSpecs(html: string, featureLabels: string[
 }
 
 const IMAGE_EXT = /\.(jpg|jpeg|png|webp|avif)(\?|$)/i;
-const MAX_PRODUCT_IMAGES = 4;
+/** Всички снимки от productgallery (не само 4). */
+const MAX_PRODUCT_IMAGES = 16;
+
+const SPECS_APPENDIX_MARKER = "Технически данни (Bulclima):";
 
 function toAbsoluteBulclimaUrl(src: string, base = "https://bulclima.com"): string {
   const trimmed = src.trim();
@@ -628,14 +631,52 @@ export function extractBulclimaProductImageUrls(html: string, base = "https://bu
     .slice(0, MAX_PRODUCT_IMAGES);
 }
 
+function normalizeBulclimaProductUrl(href: string, base = "https://bulclima.com"): string {
+  const trimmed = href.trim();
+  if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith("javascript:")) return "";
+  try {
+    const abs = new URL(trimmed, base);
+    if (!abs.hostname.includes("bulclima.com")) return "";
+    if (!abs.pathname.includes("/product/")) return "";
+    abs.hash = "";
+    abs.search = "";
+    const path = abs.pathname.replace(/\/+$/, "");
+    return `${base.replace(/\/$/, "")}${path}`;
+  } catch {
+    return "";
+  }
+}
+
 export function extractProductUrlsFromListing(html: string, base = "https://bulclima.com"): string[] {
   const urls = new Set<string>();
-  const re = /href=["'](?:https?:\/\/bulclima\.com)?(\/product\/[^"'#?]+)["']/gi;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(html)) !== null) {
-    urls.add(`${base.replace(/\/$/, "")}${m[1]}`);
+  const patterns = [
+    /href=["'](?:https?:\/\/bulclima\.com)?(\/product\/[^"'#?\s]+)\/?["']/gi,
+    /href=["'](https?:\/\/bulclima\.com\/product\/[^"'#?\s]+)\/?["']/gi,
+  ];
+  for (const re of patterns) {
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(html)) !== null) {
+      const raw = m[1]!.startsWith("http") ? m[1]! : `${base.replace(/\/$/, "")}${m[1]}`;
+      const norm = normalizeBulclimaProductUrl(raw, base);
+      if (norm) urls.add(norm);
+    }
   }
   return [...urls];
+}
+
+/** Брой продукти от листинга („139“) — за проверка на пагинацията. */
+export function extractListingProductCount(html: string): number | null {
+  const m = html.match(/>\s*(\d{1,4})\s*<[\s\S]{0,400}?productCategorySingle/i);
+  if (m?.[1]) {
+    const n = Number(m[1]);
+    return Number.isFinite(n) ? n : null;
+  }
+  const alt = html.match(/productCategorySingle[\s\S]{0,200}?>\s*(\d{1,4})\s*</i);
+  if (alt?.[1]) {
+    const n = Number(alt[1]);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
 }
 
 export function extractCategoryUrls(html: string, base = "https://bulclima.com"): string[] {
@@ -650,7 +691,51 @@ export function extractCategoryUrls(html: string, base = "https://bulclima.com")
   return [...urls];
 }
 
-export function extractPaginationUrls(html: string, currentUrl: string): string[] {
+/** Макс. страница от JS пагинация (data-page) + брой продукти / perPage. */
+export function extractBulclimaListingMaxPage(html: string): number {
+  let maxPage = 1;
+  for (const m of html.matchAll(/data-page=["'](\d+)["']/gi)) {
+    const n = Number(m[1]);
+    if (Number.isFinite(n) && n > maxPage) maxPage = n;
+  }
+  const perPageM = html.match(/"perPage":\s*(\d+)/);
+  const perPage = perPageM ? Number(perPageM[1]) : 18;
+  const total = extractListingProductCount(html);
+  if (total && perPage > 0) {
+    maxPage = Math.max(maxPage, Math.ceil(total / perPage));
+  }
+  return maxPage;
+}
+
+/** Всички URL на листинг страници (?page=N) — bulclima.com ползва JS, не href линкове. */
+export function buildBulclimaListingPageUrls(listingUrl: string, firstPageHtml: string): string[] {
+  const pages = new Set<string>();
+  const base = new URL(listingUrl);
+  base.hash = "";
+  base.searchParams.delete("page");
+  base.searchParams.delete("paged");
+  const cleanHref = base.href;
+
+  pages.add(cleanHref);
+  const maxPage = extractBulclimaListingMaxPage(firstPageHtml);
+  for (let p = 2; p <= maxPage; p++) {
+    const u = new URL(cleanHref);
+    u.searchParams.set("page", String(p));
+    pages.add(u.href);
+  }
+
+  for (const legacy of extractPaginationUrlsFromHrefs(firstPageHtml, listingUrl)) {
+    pages.add(legacy);
+  }
+
+  return [...pages].sort((a, b) => {
+    const pa = Number(new URL(a).searchParams.get("page") ?? "1");
+    const pb = Number(new URL(b).searchParams.get("page") ?? "1");
+    return pa - pb;
+  });
+}
+
+function extractPaginationUrlsFromHrefs(html: string, currentUrl: string): string[] {
   const pages = new Set<string>();
   const listingBase = new URL(currentUrl);
   listingBase.hash = "";
@@ -701,6 +786,11 @@ export function extractPaginationUrls(html: string, currentUrl: string): string[
   return [...pages];
 }
 
+/** @deprecated Използвайте buildBulclimaListingPageUrls */
+export function extractPaginationUrls(html: string, currentUrl: string): string[] {
+  return buildBulclimaListingPageUrls(currentUrl, html).slice(1);
+}
+
 /** Лого/марка от продуктовата страница на Bulclima (`single-product-brand-thumb`). */
 export function extractBulclimaBrandHint(html: string): string | null {
   const thumb = html.match(
@@ -716,10 +806,10 @@ export function extractBulclimaBrandHint(html: string): string | null {
 
 export function categorySlugFromKlimaticiPath(path: string): string | null {
   const p = path.toLowerCase();
+  if (p.includes("multi-split") || p.includes("multisplit") || p.includes("multi-split-sistemi")) return "multi";
   if (p.includes("podovi")) return "floor";
   if (p.includes("kasetuch") || p.includes("kasset") || p.includes("kaset")) return "cassette";
   if (p.includes("tavan")) return "ceiling";
-  if (p.includes("multi") || p.includes("multisplit")) return "multi";
   if (p.includes("stenni") || p.includes("stenen")) return "wall";
   return null;
 }
@@ -824,11 +914,41 @@ function listingCategorySpecificity(path: string | null): number {
     p.includes("stenni") ||
     p.includes("kaset") ||
     p.includes("tavan") ||
-    p.includes("multi")
+    p.includes("multi-split") ||
+    p.includes("multisplit")
   ) {
     return 3;
   }
   return 2;
+}
+
+function formatBulclimaSpecsAppendix(rows: Map<string, BulclimaTableRow>): string {
+  if (rows.size === 0) return "";
+  const lines: string[] = [`\n\n---\n${SPECS_APPENDIX_MARKER}\n`];
+  for (const [label, row] of rows) {
+    const labelText = row.label?.trim() || label;
+    const unit = row.unit?.trim();
+    const cool = row.cool?.trim();
+    const heat = row.heat?.trim();
+    if (cool && heat) {
+      lines.push(`${labelText}: ${cool}${unit ? ` ${unit}` : ""} / ${heat}${unit ? ` ${unit}` : ""}`);
+    } else if (cool) {
+      lines.push(`${labelText}: ${cool}${unit ? ` ${unit}` : ""}`);
+    } else if (heat) {
+      lines.push(`${labelText}: ${heat}${unit ? ` ${unit}` : ""}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+function mergeDescriptionWithSpecsAppendix(description: string | null, appendix: string): string | null {
+  if (!appendix.trim()) return description?.trim() || null;
+  const base = (description ?? "").trim();
+  const markerIdx = base.indexOf(SPECS_APPENDIX_MARKER);
+  if (markerIdx >= 0) {
+    return `${base.slice(0, markerIdx).trimEnd()}${appendix}`;
+  }
+  return base ? `${base}${appendix}` : appendix.trim();
 }
 
 export function parseBulclimaProductPage(
@@ -842,7 +962,7 @@ export function parseBulclimaProductPage(
   if (!name || name.length < 5) return null;
 
   const priceEur = parseEuroPrice(html);
-  if (priceEur == null) return null;
+  const effectivePriceEur = priceEur ?? 0;
 
   const mount = parseMountAddon(html);
   const modelCode = extractModelCode(name);
@@ -892,7 +1012,10 @@ export function parseBulclimaProductPage(
     }
   }
 
+  const tableRows = extractTechnicalSpecsTable(html);
   const specs = extractBulclimaProductSpecs(html, featureLabels);
+  const specsAppendix = formatBulclimaSpecsAppendix(tableRows);
+  description = mergeDescriptionWithSpecsAppendix(description, specsAppendix);
 
   const { categorySlug, typeHint } = resolveBulclimaProductClassification(
     html,
@@ -907,8 +1030,8 @@ export function parseBulclimaProductPage(
     name,
     modelCode,
     brandName,
-    priceEur,
-    priceWithMountEur: Math.round((priceEur + mount) * 100) / 100,
+    priceEur: effectivePriceEur,
+    priceWithMountEur: Math.round((effectivePriceEur + mount) * 100) / 100,
     description: description || null,
     imageUrls,
     categorySlug,
@@ -920,92 +1043,126 @@ export function parseBulclimaProductPage(
 
 export const BULCLIMA_KLIMA_ROOT = "https://bulclima.com/products/klimatici";
 
+/** Категории за синхронизация (по заявка: стенни + мултисплит). */
+export const BULCLIMA_DEFAULT_SYNC_LISTING_URLS = [
+  "https://bulclima.com/products/klimatici/stenni-klimatici",
+  "https://bulclima.com/products/klimatici/multi-split-sistemi",
+] as const;
+
 /**
- * Разрешени подкатегории на Bulclima:
- *   Климатици — стенни, подови, таванни, касетъчни.
- *   Аксесоари — wi-fi и аксесоари за климатици.
- * Изключват се: канални, колонни, мобилни, мултисплит.
+ * Разрешени подкатегории при обхождане от /products/klimatici (ако се подаде custom списък — не се ползва).
  */
 const ALLOWED_CATEGORY_PATTERNS = [
   /stenni/i,
+  /multi-split/i,
+  /multisplit/i,
   /podovi/i,
   /tavann/i,
   /kaset/i,
-  /wi-fi-i-aksesoari/i,
 ];
 
 export function isAllowedBulclimaCategoryPath(path: string): boolean {
   const p = path.toLowerCase();
-  // Reject known excluded slugs explicitly
-  if (/kanalni|kolonni|mobilni|multisplit/i.test(p)) return false;
-  // Accept only the allowed subcategories
+  if (/kanalni|kolonni|mobilni|wi-fi-i-aksesoari/i.test(p)) return false;
   return ALLOWED_CATEGORY_PATTERNS.some((re) => re.test(p));
 }
+
+export type CollectBulclimaUrlsOptions = {
+  limit?: number;
+  /** Листинг URL-и; по подразбиране stenni + multi-split. */
+  listingUrls?: readonly string[];
+};
 
 export type BulclimaCatalogEntry = {
   url: string;
   listingCategoryPath: string | null;
 };
 
+async function crawlBulclimaListingCategory(
+  catUrl: string,
+  productEntries: Map<string, BulclimaCatalogEntry>,
+  limit: number | undefined,
+  onStatus?: (message: string) => void,
+): Promise<boolean> {
+  const sizeBeforeCategory = productEntries.size;
+  const visitedPages = new Set<string>();
+  let expectedCount: number | null = null;
+  let queue: string[] = [];
+
+  const seedHtml = await fetchBulclimaHtml(catUrl);
+  expectedCount = extractListingProductCount(seedHtml);
+  queue = buildBulclimaListingPageUrls(catUrl, seedHtml);
+  if (expectedCount != null) {
+    onStatus?.(
+      `Категория ${new URL(catUrl).pathname}: ~${expectedCount} продукта, ${queue.length} страници листинг`,
+    );
+  } else {
+    onStatus?.(`Категория ${new URL(catUrl).pathname}: ${queue.length} страници листинг`);
+  }
+
+  while (queue.length > 0) {
+    const pageUrl = queue.shift()!;
+    if (visitedPages.has(pageUrl)) continue;
+    visitedPages.add(pageUrl);
+    try {
+      onStatus?.(`Листинг: ${pageUrl}`);
+      const html = pageUrl === catUrl && visitedPages.size === 1 ? seedHtml : await fetchBulclimaHtml(pageUrl);
+      const before = productEntries.size;
+      let listingPath: string | null = null;
+      try {
+        listingPath = new URL(pageUrl).pathname;
+      } catch {
+        listingPath = null;
+      }
+      for (const u of extractProductUrlsFromListing(html)) {
+        const prev = productEntries.get(u);
+        const spec = listingCategorySpecificity(listingPath);
+        const prevSpec = listingCategorySpecificity(prev?.listingCategoryPath ?? null);
+        if (!prev || spec > prevSpec) {
+          productEntries.set(u, { url: u, listingCategoryPath: listingPath });
+        }
+        if (limit && productEntries.size >= limit) {
+          onStatus?.(`Намерени ${productEntries.size} продукта (лимит ${limit})`);
+          return true;
+        }
+      }
+      if (productEntries.size > before) {
+        onStatus?.(`Открити ${productEntries.size} уникални продукта до момента…`);
+      }
+    } catch (e: unknown) {
+      onStatus?.(`Пропуснат листинг ${pageUrl}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+
+  if (expectedCount != null) {
+    const foundInCategory = productEntries.size - sizeBeforeCategory;
+    if (foundInCategory < expectedCount) {
+      onStatus?.(
+        `Внимание: „${new URL(catUrl).pathname}“ — на bulclima.com ${expectedCount} продукта, открити ${foundInCategory} URL (проверете пагинацията).`,
+      );
+    }
+  }
+  return false;
+}
+
 export async function collectBulclimaProductUrls(
-  limit?: number,
+  limitOrOpts?: number | CollectBulclimaUrlsOptions,
   onStatus?: (message: string) => void,
 ): Promise<BulclimaCatalogEntry[]> {
-  onStatus?.("Зареждане на главната категория klimatici…");
-  const rootHtml = await fetchBulclimaHtml(BULCLIMA_KLIMA_ROOT);
-  const allCategoryUrls = extractCategoryUrls(rootHtml);
-  const categoryUrls = allCategoryUrls.filter((u) => {
-    try {
-      return isAllowedBulclimaCategoryPath(new URL(u).pathname);
-    } catch {
-      return isAllowedBulclimaCategoryPath(u);
-    }
-  });
-  onStatus?.(
-    `Обхождане на ${categoryUrls.length} разрешени категории (${allCategoryUrls.length} общо)…`,
-  );
+  const opts: CollectBulclimaUrlsOptions =
+    typeof limitOrOpts === "number" || limitOrOpts === undefined
+      ? { limit: limitOrOpts }
+      : limitOrOpts;
+  const limit = opts.limit;
+  const categoryUrls = [...(opts.listingUrls ?? BULCLIMA_DEFAULT_SYNC_LISTING_URLS)];
+
+  onStatus?.(`Обхождане на ${categoryUrls.length} категории: ${categoryUrls.map((u) => new URL(u).pathname).join(", ")}`);
   const productEntries = new Map<string, BulclimaCatalogEntry>();
 
   for (const catUrl of categoryUrls) {
-    const visitedPages = new Set<string>();
-    const queue = [catUrl];
-    while (queue.length > 0) {
-      const pageUrl = queue.shift()!;
-      if (visitedPages.has(pageUrl)) continue;
-      visitedPages.add(pageUrl);
-      try {
-        onStatus?.(`Листинг: ${pageUrl}`);
-        const html = await fetchBulclimaHtml(pageUrl);
-        const before = productEntries.size;
-        let listingPath: string | null = null;
-        try {
-          listingPath = new URL(pageUrl).pathname;
-        } catch {
-          listingPath = null;
-        }
-        for (const u of extractProductUrlsFromListing(html)) {
-          const prev = productEntries.get(u);
-          const spec = listingCategorySpecificity(listingPath);
-          const prevSpec = listingCategorySpecificity(prev?.listingCategoryPath ?? null);
-          if (!prev || spec > prevSpec) {
-            productEntries.set(u, { url: u, listingCategoryPath: listingPath });
-          }
-          if (limit && productEntries.size >= limit) {
-            onStatus?.(`Намерени ${productEntries.size} продукта (лимит ${limit})`);
-            return [...productEntries.values()];
-          }
-        }
-        if (productEntries.size > before) {
-          onStatus?.(`Открити ${productEntries.size} уникални продукта до момента…`);
-        }
-        for (const next of extractPaginationUrls(html, pageUrl)) {
-          if (!visitedPages.has(next)) queue.push(next);
-        }
-      } catch (e: unknown) {
-        onStatus?.(`Пропуснат листинг ${pageUrl}: ${e instanceof Error ? e.message : String(e)}`);
-      }
-      await new Promise((r) => setTimeout(r, 800));
-    }
+    const hitLimit = await crawlBulclimaListingCategory(catUrl, productEntries, limit, onStatus);
+    if (hitLimit) return [...productEntries.values()];
   }
 
   onStatus?.(`Обходът приключи — ${productEntries.size} продукта`);
