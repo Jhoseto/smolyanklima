@@ -484,9 +484,29 @@ export async function fetchCatalogBtuOptions(
 }
 
 /** Брой уникални модели по категория (един API вместо 6× /api/products). */
-export async function fetchCategoryProductCounts(cond?: "new" | "used"): Promise<Record<string, number>> {
-  const sp = cond ? `?cond=${cond}` : "";
-  const res = await fetch(`/api/catalog/category-counts${sp}`);
+export async function fetchCategoryProductCounts(
+  opts?: {
+    cond?: "new" | "used";
+    q?: string;
+    brands?: string[];
+    btus?: number[];
+    energyClasses?: string[];
+    features?: string[];
+    min?: number;
+    max?: number;
+  },
+): Promise<Record<string, number>> {
+  const sp = new URLSearchParams();
+  if (opts?.cond) sp.set("cond", opts.cond);
+  if (opts?.q?.trim()) sp.set("q", opts.q.trim());
+  if (opts?.brands?.length) sp.set("b", opts.brands.join(","));
+  if (opts?.btus?.length) sp.set("btu", opts.btus.join(","));
+  if (opts?.energyClasses?.length) sp.set("e", opts.energyClasses.join(","));
+  if (opts?.features?.length) sp.set("f", opts.features.join(","));
+  if (typeof opts?.min === "number") sp.set("min", String(opts.min));
+  if (typeof opts?.max === "number") sp.set("max", String(opts.max));
+  const qs = sp.toString();
+  const res = await fetch(`/api/catalog/category-counts${qs ? `?${qs}` : ""}`);
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "Грешка при броене по категории");
   return (json.data ?? { all: 0 }) as Record<string, number>;

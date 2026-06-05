@@ -397,11 +397,14 @@ export function buildPostBody(form: AdminProductForm) {
   };
 }
 
-export function buildPutBody(form: AdminProductForm) {
+export function buildPutBody(
+  form: AdminProductForm,
+  opts?: { createInstanceFromOnOrder?: boolean; omitDeliveryFields?: boolean },
+) {
   const pwm = strNum(form.priceWithMount);
   const pp = strNum(form.purchasePrice);
   const slug = form.slug.trim();
-  return {
+  const body: Record<string, unknown> = {
     slug: slug.length >= 2 ? slug : null,
     name: form.name.trim(),
     modelCode: form.modelCode.trim() || null,
@@ -412,12 +415,6 @@ export function buildPutBody(form: AdminProductForm) {
     internalNote: form.internalNote.trim() || null,
     price: Number(form.price),
     priceWithMount: pwm,
-    indoorUnitSerial: form.indoorUnitSerial.trim() || null,
-    outdoorUnitSerial: form.outdoorUnitSerial.trim() || null,
-    supplierId: form.supplierId.trim() || null,
-    purchasedAt: form.purchasedAt.trim() || null,
-    supplierInvoiceNumber: form.supplierInvoiceNumber.trim() || null,
-    purchasePrice: pp,
     isFeatured: form.isFeatured,
     showInPublicCatalog: form.showInPublicCatalog,
     stockStatus: form.stockStatus,
@@ -434,6 +431,18 @@ export function buildPutBody(form: AdminProductForm) {
         is_main: i.is_main,
       })),
   };
+  if (!opts?.omitDeliveryFields) {
+    body.indoorUnitSerial = form.indoorUnitSerial.trim() || null;
+    body.outdoorUnitSerial = form.outdoorUnitSerial.trim() || null;
+    body.supplierId = form.supplierId.trim() || null;
+    body.purchasedAt = form.purchasedAt.trim() || null;
+    body.supplierInvoiceNumber = form.supplierInvoiceNumber.trim() || null;
+    body.purchasePrice = pp;
+  }
+  if (opts?.createInstanceFromOnOrder) {
+    body.createInstanceFromOnOrder = true;
+  }
+  return body;
 }
 
 export function mapLoadedProductToForm(p: {

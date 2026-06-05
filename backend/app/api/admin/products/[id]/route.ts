@@ -19,6 +19,14 @@ import {
   mergeDeliveryFields,
   validateDeliveryFieldsComplete,
 } from "@/lib/admin/productDeliveryValidation";
+import { isOnOrderCatalogTemplate } from "@/lib/admin/createProductInstanceFromTemplate";
+import {
+  copyProductChildrenToInstance,
+  createInstanceFromOnOrderTemplatePut,
+  shouldCreateInstanceFromOnOrderPut,
+  stripTemplateOnlyFieldsFromPatch,
+  validateOnOrderPartialDelivery,
+} from "@/lib/admin/productOnOrderInstancePut";
 import { enforceStockStatusAfterSale } from "@/lib/admin/productSaleStock";
 import { replaceProductImages, upsertProductSpecs, type ImageInput, type SpecsInput } from "@/lib/admin/syncProductChildren";
 
@@ -94,6 +102,8 @@ const UpdateSchema = z
   soldQuantity: z.number().int().nonnegative().optional(),
   specs: SpecsSchema.optional(),
   images: z.array(ImageSchema).max(MAX_IMAGES).optional(),
+  /** Шаблон „по поръчка“: създава нова in_stock инстанция (не променя шаблона със серийни №). */
+  createInstanceFromOnOrder: z.boolean().optional(),
 })
   .superRefine((data, ctx) => {
     if (data.slug === undefined || data.slug === null) return;
@@ -297,6 +307,11 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       }
     }
 
+    const partialDeliveryErr = validateOnOrderPartialDelivery(current, parsed.data);
+    if (partialDeliveryErr) {
+      return withCors(req, NextResponse.json({ error: partialDeliveryErr }, { status: 400 }));
+    }
+
     if (deliveryTouched) {
       try {
         const conflicts = await findSerialConflicts(supabase, {
@@ -313,6 +328,91 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       } catch (e) {
         return withCors(req, NextResponse.json({ error: String((e as Error).message) }, { status: 500 }));
       }
+    }
+
+    if (parsed.data.createInstanceFromOnOrder === true && isOnOrderCatalogTemplate(current)) {
+      const instanceDeliveryErr = validateDeliveryFieldsComplete(mergedDelivery);
+      if (instanceDeliveryErr) {
+        return withCors(req, NextResponse.json({ error: instanceDeliveryErr }, { status: 400 }));
+      }
+    }
+
+    if (shouldCreateInstanceFromOnOrderPut(current, parsed.data)) {
+      const { data: template, error: tplErr } = await supabase.from("products").select("*").eq("id", id).maybeSingle();
+      if (tplErr) return withCors(req, NextResponse.json({ error: tplErr.message }, { status: 500 }));
+      if (!template) return withCors(req, NextResponse.json({ error: "Not found" }, { status: 404 }));
+
+      stripTemplateOnlyFieldsFromPatch(patch);
+
+      try {
+        if (Object.keys(patch).length > 0) {
+          const { error: updErr } = await supabase.from("products").update(patch).eq("id", id);
+          if (updErr) {
+            const mapped = mapProductDbError(updErr.message);
+            if (mapped) return withCors(req, NextResponse.json({ error: mapped.error }, { status: mapped.status }));
+            return withCors(req, NextResponse.json({ error: updErr.message }, { status: 500 }));
+          }
+        }
+
+        if (parsed.data.specs) {
+          const { error: sErr } = await upsertProductSpecs(supabase, id, parsed.data.specs as SpecsInput);
+          if (sErr) return withCors(req, NextResponse.json({ error: sErr.message }, { status: 500 }));
+        }
+
+        if (parsed.data.images) {
+          const imgs: ImageInput[] = parsed.data.images.map((im) => ({
+            url: im.url,
+            sort_order: im.sort_order,
+            is_main: im.is_main,
+          }));
+          const { error: iErr } = await replaceProductImages(supabase, id, imgs);
+          if (iErr) return withCors(req, NextResponse.json({ error: iErr.message }, { status: 500 }));
+        }
+
+        const instance = await createInstanceFromOnOrderTemplatePut(
+          supabase,
+          template as Record<string, unknown>,
+          current,
+          parsed.data,
+        );
+
+        const childErr = await copyProductChildrenToInstance(
+          supabase,
+          instance.id,
+          parsed.data.specs as SpecsInput | undefined,
+          parsed.data.images,
+        );
+        if (childErr) {
+          await supabase.from("products").delete().eq("id", instance.id);
+          return withCors(req, NextResponse.json({ error: childErr }, { status: 500 }));
+        }
+
+        const { data: out } = await supabase.from("products").select("id,slug").eq("id", id).maybeSingle();
+        await logAdminActivity({
+          action: "product.instance.create",
+          entityType: "product",
+          entityId: instance.id,
+          details: {
+            templateProductId: id,
+            templateName: String((template as { name?: string }).name ?? ""),
+            instanceName: instance.name,
+          },
+        });
+
+        return withCors(
+          req,
+          NextResponse.json({
+            data: {
+              ...out,
+              createdInstanceId: instance.id,
+            },
+          }),
+        );
+      } catch (e) {
+        return withCors(req, NextResponse.json({ error: String((e as Error).message) }, { status: 500 }));
+      }
+    } else if (isOnOrderCatalogTemplate(current)) {
+      stripTemplateOnlyFieldsFromPatch(patch);
     }
   }
 

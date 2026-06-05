@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowUp, SlidersHorizontal, PackageX } from 'lucide-react';
 
@@ -22,6 +22,7 @@ import { useScroll, useSpring } from 'motion/react';
 import {
   fetchProductsCatalogPage,
   fetchCatalogMeta,
+  fetchCategoryProductCounts,
   getProductById,
 } from '../data/productService';
 import { getAllAccessories } from '../data/accessoryService';
@@ -117,6 +118,18 @@ const SkeletonCard = () => (
 // ─────────────────────────────────────────
 type CatalogTab = 'climate' | 'accessories';
 type ClimateCondition = 'new' | 'used';
+/** Публичен каталог: без `?cond=` в URL — само нови климатици. */
+const DEFAULT_CLIMATE_CONDITIONS: ClimateCondition[] = ['new'];
+
+function parseClimateConditionsFromUrl(cond: string | null): ClimateCondition[] {
+  if (cond === 'new' || cond === 'used') return [cond];
+  return [...DEFAULT_CLIMATE_CONDITIONS];
+}
+
+function isDefaultClimateConditionSelection(conditions: ClimateCondition[]): boolean {
+  return conditions.length === 1 && conditions[0] === 'new';
+}
+
 const PER_PAGE = 24;
 const ACCESSORY_CATEGORIES = [
   { id: 'all', label: 'Всички' },
@@ -133,10 +146,8 @@ const CatalogPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState<CatalogTab>(tabFromUrl === 'accessories' ? 'accessories' : 'climate');
-  const [selectedConditions, setSelectedConditions] = useState<ClimateCondition[]>(
-    searchParams.get('cond') === 'new' || searchParams.get('cond') === 'used'
-      ? [searchParams.get('cond') as ClimateCondition]
-      : [],
+  const [selectedConditions, setSelectedConditions] = useState<ClimateCondition[]>(() =>
+    parseClimateConditionsFromUrl(searchParams.get('cond')),
   );
   const [priceMin, setPriceMin] = useState(0);
   const [priceMax, setPriceMax] = useState(0);
@@ -248,13 +259,44 @@ const CatalogPage = () => {
   const effectiveCondition: ClimateCondition | undefined =
     selectedConditions.length === 1 ? selectedConditions[0] : undefined;
 
+  const priceFilterActive =
+    priceMax > priceMin &&
+    (debouncedPriceRange[0] > priceMin || debouncedPriceRange[1] < priceMax);
+
+  const hasFacetFiltersForCategoryCounts = useMemo(
+    () =>
+      activeTab === 'climate' &&
+      (Boolean(debouncedSearch.trim()) ||
+        brands.length > 0 ||
+        btus.length > 0 ||
+        energyClasses.length > 0 ||
+        features.length > 0 ||
+        !isDefaultClimateConditionSelection(selectedConditions) ||
+        priceFilterActive),
+    [
+      activeTab,
+      debouncedSearch,
+      brands,
+      btus,
+      energyClasses,
+      features,
+      selectedConditions,
+      priceFilterActive,
+    ],
+  );
+
+  const categoryCountMin =
+    priceFilterActive && priceMax > priceMin ? debouncedPriceRange[0] : undefined;
+  const categoryCountMax =
+    priceFilterActive && priceMax > priceMin ? debouncedPriceRange[1] : undefined;
+
   useEffect(() => {
     const fromUrl = searchParams.get('tab');
     const normalized: CatalogTab = fromUrl === 'accessories' ? 'accessories' : 'climate';
     const cond = searchParams.get('cond');
     setActiveTab((prev) => (prev === normalized ? prev : normalized));
     setSelectedConditions((prev) => {
-      const next: ClimateCondition[] = cond === 'new' || cond === 'used' ? [cond] : [];
+      const next = parseClimateConditionsFromUrl(cond);
       if (prev.length === next.length && prev.every((v, i) => v === next[i])) return prev;
       return next;
     });
@@ -281,7 +323,7 @@ const CatalogPage = () => {
         setPriceMin(minP);
         setPriceMax(maxP);
         setPriceRange([minP, maxP]);
-        setCategoryCounts(meta.categoryCounts);
+        if (!hasFacetFiltersForCategoryCounts) setCategoryCounts(meta.categoryCounts);
         setClimateBrandOptions(meta.brandOptions);
         setClimateBtuOptions(meta.btuOptions);
       } catch {
@@ -291,7 +333,44 @@ const CatalogPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [activeTab, effectiveCondition]);
+  }, [activeTab, effectiveCondition, hasFacetFiltersForCategoryCounts]);
+
+  // Броячи в category chips при активни филтри (без текущата категория)
+  useEffect(() => {
+    if (activeTab !== 'climate' || !hasFacetFiltersForCategoryCounts) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const counts = await fetchCategoryProductCounts({
+          cond: effectiveCondition,
+          q: debouncedSearch,
+          brands,
+          btus,
+          energyClasses,
+          features,
+          min: categoryCountMin,
+          max: categoryCountMax,
+        });
+        if (!cancelled) setCategoryCounts(counts);
+      } catch {
+        /* запазваме последните броячи */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeTab,
+    hasFacetFiltersForCategoryCounts,
+    effectiveCondition,
+    debouncedSearch,
+    brands,
+    btus,
+    energyClasses,
+    features,
+    categoryCountMin,
+    categoryCountMax,
+  ]);
 
   // ── Аксесоари: зареждаме веднъж при първо влизане в таба ──
   useEffect(() => {
@@ -477,7 +556,7 @@ const CatalogPage = () => {
   useEffect(() => {
     const params = new URLSearchParams();
     if (activeTab === 'accessories') params.set('tab', 'accessories');
-    if (activeTab === 'climate' && effectiveCondition) params.set('cond', effectiveCondition);
+    if (activeTab === 'climate' && effectiveCondition === 'used') params.set('cond', 'used');
     if (search) params.set('q', search);
     if (category !== 'all') params.set('cat', category);
     if (brands.length) params.set('b', brands.join(','));
@@ -554,7 +633,7 @@ const CatalogPage = () => {
 
   // ── Active filter count ──────────────────
   const activeFilterCount =
-    (showConditionFilters && effectiveCondition ? 1 : 0) +
+    (showConditionFilters && !isDefaultClimateConditionSelection(selectedConditions) ? 1 : 0) +
     brands.length +
     (showEnergyAndFeatureFilters ? btus.length : 0) +
     (showEnergyAndFeatureFilters ? energyClasses.length : 0) +
@@ -566,7 +645,7 @@ const CatalogPage = () => {
   const resetAllFilters = useCallback(() => {
     setSearch('');
     setCategory('all');
-    setSelectedConditions([]);
+    setSelectedConditions([...DEFAULT_CLIMATE_CONDITIONS]);
     setBrands([]);
     setBtus([]);
     setEnergyClasses([]);
@@ -581,7 +660,7 @@ const CatalogPage = () => {
     const nextMax = tab === 'climate' ? priceMax : accessoryPriceMax;
     setActiveTab(tab);
     setCategory('all');
-    setSelectedConditions([]);
+    setSelectedConditions(tab === 'climate' ? [...DEFAULT_CLIMATE_CONDITIONS] : []);
     setBrands([]);
     setBtus([]);
     setEnergyClasses([]);

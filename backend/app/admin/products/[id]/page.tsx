@@ -39,7 +39,6 @@ export default function EditProductPage() {
   const [pendingPhotos, setPendingPhotos] = useState(0);
   const [pendingPhotosConfirm, setPendingPhotosConfirm] = useState<null | { proceed: () => void }>(null);
   const [isDeliveredInstance, setIsDeliveredInstance] = useState(false);
-
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 2200);
@@ -109,42 +108,55 @@ export default function EditProductPage() {
     return Array.isArray(json.data) && json.data.length > 0;
   }
 
-  async function doSave() {
+  const isOnOrderTemplateLive = !isDeliveredInstance && form.stockStatus === "on_order";
+
+  async function validateDeliveryForSave(requirePurchasePrice: boolean): Promise<boolean> {
+    if (!form.indoorUnitSerial.trim()) {
+      setError("Въведете сериен номер на вътрешното тяло.");
+      setToast({ kind: "err", text: "Въведете сериен номер на вътрешното тяло." });
+      return false;
+    }
+    if (!form.outdoorUnitSerial.trim()) {
+      setError("Въведете сериен номер на външното тяло.");
+      setToast({ kind: "err", text: "Въведете сериен номер на външното тяло." });
+      return false;
+    }
+    if (!form.purchasedAt.trim()) {
+      setError("Въведете дата на доставка.");
+      setToast({ kind: "err", text: "Въведете дата на доставка." });
+      return false;
+    }
+    if (!form.supplierInvoiceNumber.trim()) {
+      setError("Въведете номер на фактура от доставчик.");
+      setToast({ kind: "err", text: "Въведете номер на фактура от доставчик." });
+      return false;
+    }
+    if (requirePurchasePrice) {
+      const pp = Number(form.purchasePrice);
+      if (!form.purchasePrice.trim() || !Number.isFinite(pp) || pp < 0) {
+        setError("Въведете закупна цена за новата бройка в наличност.");
+        setToast({ kind: "err", text: "Въведете закупна цена за новата бройка в наличност." });
+        return false;
+      }
+    }
+    const [indoorDup, outdoorDup] = await Promise.all([
+      checkSerialDup(form.indoorUnitSerial),
+      checkSerialDup(form.outdoorUnitSerial),
+    ]);
+    if (indoorDup || outdoorDup) {
+      const msg = "Сериен номерът вече е записан при друг продукт.";
+      setError(msg);
+      setToast({ kind: "err", text: msg });
+      return false;
+    }
+    return true;
+  }
+
+  async function doSaveChanges() {
     setError(null);
 
     const needsDelivery = isDeliveredInstance || highlightDelivery;
-    if (needsDelivery) {
-      if (!form.indoorUnitSerial.trim()) {
-        setError("Въведете сериен номер на вътрешното тяло.");
-        setToast({ kind: "err", text: "Въведете сериен номер на вътрешното тяло." });
-        return;
-      }
-      if (!form.outdoorUnitSerial.trim()) {
-        setError("Въведете сериен номер на външното тяло.");
-        setToast({ kind: "err", text: "Въведете сериен номер на външното тяло." });
-        return;
-      }
-      if (!form.purchasedAt.trim()) {
-        setError("Въведете дата на доставка.");
-        setToast({ kind: "err", text: "Въведете дата на доставка." });
-        return;
-      }
-      if (!form.supplierInvoiceNumber.trim()) {
-        setError("Въведете номер на фактура от доставчик.");
-        setToast({ kind: "err", text: "Въведете номер на фактура от доставчик." });
-        return;
-      }
-      const [indoorDup, outdoorDup] = await Promise.all([
-        checkSerialDup(form.indoorUnitSerial),
-        checkSerialDup(form.outdoorUnitSerial),
-      ]);
-      if (indoorDup || outdoorDup) {
-        const msg = "Сериен номерът вече е записан при друг продукт.";
-        setError(msg);
-        setToast({ kind: "err", text: msg });
-        return;
-      }
-    }
+    if (needsDelivery && !(await validateDeliveryForSave(false))) return;
 
     setSaving(true);
     try {
@@ -152,7 +164,9 @@ export default function EditProductPage() {
         method: "PUT",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildPutBody(form)),
+        body: JSON.stringify(
+          buildPutBody(form, { omitDeliveryFields: isOnOrderTemplateLive }),
+        ),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -161,6 +175,7 @@ export default function EditProductPage() {
         setToast({ kind: "err", text: msg });
         return json;
       }
+      setToast({ kind: "ok", text: "Промените са запазени." });
       router.push("/admin/products");
       return json;
     } finally {
@@ -168,13 +183,54 @@ export default function EditProductPage() {
     }
   }
 
-  // Wrapper за save бутона — ако има pending снимки, иска потвърждение.
-  function save() {
+  async function doSaveAsNewInstance() {
+    setError(null);
+    if (!isOnOrderTemplateLive) return;
+    if (!(await validateDeliveryForSave(true))) return;
+
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/products/${id}`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildPutBody(form, { createInstanceFromOnOrder: true })),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg = (json as any)?.error || "Грешка при запис";
+        setError(msg);
+        setToast({ kind: "err", text: msg });
+        return json;
+      }
+      const createdInstanceId = (json as { data?: { createdInstanceId?: string } })?.data?.createdInstanceId;
+      if (createdInstanceId) {
+        setToast({ kind: "ok", text: "Създадена нова бройка в наличност." });
+        router.push(`/admin/products/${createdInstanceId}`);
+        return json;
+      }
+      setToast({ kind: "ok", text: "Промените са запазени." });
+      router.push("/admin/products");
+      return json;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function saveChanges() {
     if (pendingPhotos > 0) {
-      setPendingPhotosConfirm({ proceed: () => void doSave() });
+      setPendingPhotosConfirm({ proceed: () => void doSaveChanges() });
       return;
     }
-    void doSave();
+    void doSaveChanges();
+  }
+
+  function saveAsNewInstance() {
+    if (pendingPhotos > 0) {
+      setPendingPhotosConfirm({ proceed: () => void doSaveAsNewInstance() });
+      return;
+    }
+    void doSaveAsNewInstance();
   }
 
   async function remove() {
@@ -237,6 +293,21 @@ export default function EditProductPage() {
         </div>
       )}
 
+      {isOnOrderTemplateLive && (
+        <div className="flex items-start gap-3 rounded-xl border-2 border-violet-300 bg-violet-50 p-4 shadow-sm">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white text-lg font-black">
+            +
+          </div>
+          <div>
+            <div className="text-sm font-bold text-violet-950">Шаблон „по поръчка“ — нова бройка в наличност</div>
+            <div className="mt-1 text-xs text-violet-900 leading-relaxed">
+              Попълнете в секцията <strong>„Серийни номера и доставчик"</strong> серийните номера, дата на доставка, номер на фактура и закупна цена.
+              <strong>Запази промените</strong> — обновява шаблона в каталога. <strong>Запази като нова бройка</strong> — създава складова единица в наличност; шаблонът остава „по поръчка“.
+            </div>
+          </div>
+        </div>
+      )}
+
       {(highlightDelivery || isDeliveredInstance) && (
         <div className="flex items-start gap-3 rounded-xl border-2 border-red-300 bg-red-50 p-4 shadow-sm">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-500 text-white">
@@ -273,14 +344,28 @@ export default function EditProductPage() {
       {!readOnly && (
         <>
           {/* Desktop action row */}
-          <div className="hidden md:flex justify-between items-center pt-2">
+          <div className="hidden md:flex justify-between items-center pt-2 gap-3">
             <Button variant="danger" onClick={remove} className="gap-2">
               <Trash2 className="w-4 h-4" /> Изтрий продукт
             </Button>
-            <Button variant="primary" size="lg" onClick={save} disabled={saving} className="gap-2 shadow-sm">
-              <Save className="w-5 h-5" />
-              {saving ? "Запазвам..." : "Запази промените"}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant={isOnOrderTemplateLive ? "secondary" : "primary"}
+                size="lg"
+                onClick={saveChanges}
+                disabled={saving}
+                className="gap-2 shadow-sm"
+              >
+                <Save className="w-5 h-5" />
+                {saving ? "Запазвам..." : "Запази промените"}
+              </Button>
+              {isOnOrderTemplateLive && (
+                <Button variant="primary" size="lg" onClick={saveAsNewInstance} disabled={saving} className="gap-2 shadow-sm">
+                  <Save className="w-5 h-5" />
+                  {saving ? "Запазвам..." : "Запази като нова бройка"}
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Mobile sticky save bar */}
@@ -289,10 +374,33 @@ export default function EditProductPage() {
               <Button variant="danger" onClick={remove} className="gap-1.5 shrink-0 !py-3 text-xs rounded-xl" title="Изтрий продукт">
                 <Trash2 className="w-4 h-4" />
               </Button>
-              <Button variant="primary" className="flex-1 justify-center gap-2 !py-3 text-sm font-bold rounded-xl" onClick={save} disabled={saving}>
-                <Save className="w-4 h-4" />
-                {saving ? "Запазвам..." : "Запази промените"}
-              </Button>
+              {isOnOrderTemplateLive ? (
+                <>
+                  <Button
+                    variant="secondary"
+                    className="flex-1 justify-center gap-1.5 !py-3 text-xs font-bold rounded-xl"
+                    onClick={saveChanges}
+                    disabled={saving}
+                  >
+                    <Save className="w-4 h-4" />
+                    {saving ? "…" : "Промените"}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    className="flex-1 justify-center gap-1.5 !py-3 text-xs font-bold rounded-xl"
+                    onClick={saveAsNewInstance}
+                    disabled={saving}
+                  >
+                    <Save className="w-4 h-4" />
+                    {saving ? "…" : "Нова бройка"}
+                  </Button>
+                </>
+              ) : (
+                <Button variant="primary" className="flex-1 justify-center gap-2 !py-3 text-sm font-bold rounded-xl" onClick={saveChanges} disabled={saving}>
+                  <Save className="w-4 h-4" />
+                  {saving ? "Запазвам..." : "Запази промените"}
+                </Button>
+              )}
             </div>
           </div>
         </>

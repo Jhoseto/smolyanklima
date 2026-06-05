@@ -2,10 +2,9 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
+import { createProductInstanceFromTemplate } from "@/lib/admin/createProductInstanceFromTemplate";
 import {
   findIncompleteDeliveredInstanceForModel,
-  findSerialConflicts,
-  formatSerialConflictError,
   trimDeliveryFields,
   validateDeliveryFieldsComplete,
 } from "@/lib/admin/productDeliveryValidation";
@@ -115,17 +114,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const modelCode = String(tpl.model_code ?? "").trim();
 
   try {
-    const serialConflicts = await findSerialConflicts(supabase, {
-      indoor: delivery.indoorUnitSerial,
-      outdoor: delivery.outdoorUnitSerial,
-    });
-    if (serialConflicts.length > 0) {
-      return withCors(
-        req,
-        NextResponse.json({ error: formatSerialConflictError(serialConflicts) }, { status: 409 }),
-      );
-    }
-
     if (brandId && modelCode) {
       const incomplete = await findIncompleteDeliveredInstanceForModel(supabase, {
         brandId,
@@ -153,40 +141,20 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       : null;
   const purchasePrice = parsedBody.data.purchasePrice;
 
-  const { data: newProduct, error: prodErr } = await supabase
-    .from("products")
-    .insert({
-      name: tpl.name,
-      slug: null,
-      description: tpl.description ?? null,
-      price: agreedFromOrder != null ? agreedFromOrder : Number(tpl.price ?? 0),
-      price_with_mount: tpl.price_with_mount ?? null,
-      purchase_price: purchasePrice,
-      brand_id: tpl.brand_id ?? null,
-      type_id: tpl.type_id ?? null,
-      product_condition: tpl.product_condition ?? "new",
-      stock_status: "in_stock",
-      stock_quantity: 1,
-      sold_quantity: 0,
-      show_in_public_catalog: false,
-      is_featured: false,
-      featured_position: null,
-      model_code: tpl.model_code ?? null,
-      supplier_id: tpl.supplier_id ?? null,
-      source_url: tpl.source_url ?? null,
-      product_region: tpl.product_region ?? null,
-      indoor_unit_serial: delivery.indoorUnitSerial,
-      outdoor_unit_serial: delivery.outdoorUnitSerial,
-      supplier_invoice_number: delivery.supplierInvoiceNumber,
-      purchased_at: delivery.purchasedAt,
-      supplier_order_work_item_id: id,
-    })
-    .select("id, name")
-    .single();
-
-  if (prodErr) return withCors(req, NextResponse.json({ error: prodErr.message }, { status: 500 }));
-
-  const newProductId = (newProduct as { id: string }).id;
+  let newProductId: string;
+  try {
+    const created = await createProductInstanceFromTemplate(supabase, tpl, {
+      delivery,
+      purchasePrice,
+      supplierOrderWorkItemId: id,
+      priceOverride: agreedFromOrder,
+    });
+    newProductId = created.id;
+  } catch (e) {
+    const message = String((e as Error).message);
+    const status = message.includes("Сериен номер") ? 409 : 400;
+    return withCors(req, NextResponse.json({ error: message }, { status }));
+  }
 
   const { error: updateErr } = await supabase
     .from("work_items")
