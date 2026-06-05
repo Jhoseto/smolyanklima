@@ -143,6 +143,7 @@ export async function recordManualSale(
 
   const saleStatus = withInstallation ? "planned" : "done";
   const completedAt = withInstallation ? null : completedAtFromSaleDate(saleDate);
+  const eurRecordedAt = new Date().toISOString();
 
   const salePayload: Record<string, unknown> = {
     type: "sale",
@@ -171,6 +172,7 @@ export async function recordManualSale(
     purchase_price: purchasePrice,
     supplier_name: supplierName,
     supplier_invoice_number: supplierInvoice,
+    amounts_converted_from_bgn_at: eurRecordedAt,
     created_by: input.createdBy,
   };
 

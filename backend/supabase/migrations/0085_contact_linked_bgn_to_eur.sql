@@ -71,7 +71,8 @@ set
   amounts_converted_from_bgn_at = now()
 from _contact_bgn_product_ids t
 where p.id = t.product_id
-  and p.amounts_converted_from_bgn_at is null;
+  and p.amounts_converted_from_bgn_at is null
+  and not (p.is_active = true and p.show_in_public_catalog = true);
 
 -- Аксесоари на доставчици.
 insert into _contact_bgn_accessory_ids (accessory_id)

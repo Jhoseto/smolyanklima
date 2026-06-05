@@ -12,6 +12,7 @@ import {
 import { parseMountPhaseCsv, parseProductConditionCsv } from "@/lib/admin/salesHistoryQueryFilters";
 import { recordManualSale } from "@/lib/admin/recordManualSale";
 import { supplierFilterOrClause, normalizeSupplierKey } from "@/lib/admin/supplierNameNormalize";
+import { amountAsEur } from "@/lib/admin/normalizeLegacyEurAmount";
 
 const WORK_ITEM_EVENT_CODES = [
   "item_added",
@@ -24,6 +25,27 @@ const WORK_ITEM_EVENT_CODES = [
   "consultation",
   "supplier_order",
 ] as const;
+
+type WorkItemMoneyRow = {
+  unit_price?: number | null;
+  total_amount?: number | null;
+  purchase_price?: number | null;
+  due_date?: string | null;
+  completed_at?: string | null;
+  created_at?: string | null;
+  amounts_converted_from_bgn_at?: string | null;
+};
+
+function normalizeLegacyWorkItemMoney<T extends WorkItemMoneyRow>(row: T): T {
+  const legacyDate = row.due_date ?? row.completed_at ?? row.created_at ?? null;
+  const convertedAt = row.amounts_converted_from_bgn_at ?? null;
+  return {
+    ...row,
+    unit_price: amountAsEur(row.unit_price, { convertedAt, legacyDate }),
+    total_amount: amountAsEur(row.total_amount, { convertedAt, legacyDate }),
+    purchase_price: amountAsEur(row.purchase_price, { convertedAt, legacyDate }),
+  };
+}
 
 const QuerySchema = z.object({
   from: z.string().optional(),
@@ -181,6 +203,7 @@ export async function GET(req: NextRequest) {
     "assigned_to",
     "completed_at",
     "created_at",
+    "amounts_converted_from_bgn_at",
     "cancel_reason",
     "sale_install_state",
     "sale_product_condition",
@@ -321,7 +344,13 @@ export async function GET(req: NextRequest) {
   const toRow = offset + perPage - 1;
   const { data, error, count } = await query.range(offset, toRow);
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
-  return withCors(req, NextResponse.json({ data: data ?? [], meta: { page, perPage, total: count ?? 0 } }));
+  return withCors(
+    req,
+    NextResponse.json({
+      data: (data ?? []).map((row) => normalizeLegacyWorkItemMoney(row as WorkItemMoneyRow)),
+      meta: { page, perPage, total: count ?? 0 },
+    }),
+  );
 }
 
 export async function POST(req: NextRequest) {

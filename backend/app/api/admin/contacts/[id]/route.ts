@@ -277,6 +277,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     );
     if (phonesRes.error) {
       console.warn("[contacts.update] failed to update contact_phones:", phonesRes.error);
+      return withCors(req, NextResponse.json({ error: phonesRes.error }, { status: 500 }));
     }
   } else if (parsed.data.phone !== undefined) {
     // Ако сменят основния телефон, синхронизираме primary записа в contact_phones,

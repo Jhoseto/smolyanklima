@@ -13,7 +13,8 @@
     "reclassify:accessories": "tsx scripts/reclassify-bulclima-accessories.ts",
     "catalog:images": "node scripts/sync-ddg-images.mjs",
     "catalog:images:stale": "node scripts/sync-ddg-images.mjs --only-stale",
-    "icons:generate": "tsx scripts/generate-public-icons.ts"
+    "icons:generate": "tsx scripts/generate-public-icons.ts",
+    "test:critical-bugs": "tsx --test lib/admin/critical-bug-fixes.test.ts"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.5.1",

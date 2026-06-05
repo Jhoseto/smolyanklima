@@ -593,12 +593,21 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
   const supabase = session.db;
   const { data: existing } = await supabase
     .from("work_items")
-    .select("event_code,title,customer_name,type,installation_work_item_id,product_id,contact_id")
+    .select("event_code,title,customer_name,type,installation_work_item_id,product_id,contact_id,status,sale_install_state")
     .eq("id", id)
     .maybeSingle();
 
   let cascadeMeta: { deletedSupplierOrderId?: string | null } = {};
   if (existing?.event_code === "sale") {
+    if (existing.product_id && canRestoreStockForPendingSale(existing)) {
+      return withCors(
+        req,
+        NextResponse.json(
+          { error: "Първо откажете продажбата, за да се възстанови складът, след това я изтрийте." },
+          { status: 400 },
+        ),
+      );
+    }
     const cascade = await cascadeDeleteBeforeSaleWorkItem(supabase, {
       id,
       installation_work_item_id: existing.installation_work_item_id,
