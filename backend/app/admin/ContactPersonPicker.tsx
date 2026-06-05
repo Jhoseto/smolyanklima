@@ -309,11 +309,11 @@ export function ContactPersonPicker({
           <span className="flex flex-wrap items-center gap-2">
             {planner ? "Контакт от CRM" : "Контактно лице"}
             {contactId ? (
-              <span className="rounded-full bg-brand-blue-100 text-brand-blue-700 border border-brand-blue-200 px-2 py-0.5 text-[10px] font-bold normal-case">
+              <span className="inline-flex items-center justify-center leading-none min-h-[20px] rounded-full bg-brand-blue-100 text-brand-blue-700 border border-brand-blue-200 px-2 py-0.5 text-[10px] font-bold normal-case">
                 избран
               </span>
             ) : planner ? (
-              <span className="rounded-full bg-red-100 text-red-800 border border-red-200 px-2 py-0.5 text-[10px] font-bold normal-case">
+              <span className="inline-flex items-center justify-center leading-none min-h-[20px] rounded-full bg-red-100 text-red-800 border border-red-200 px-2 py-0.5 text-[10px] font-bold normal-case">
                 задължително
               </span>
             ) : null}

@@ -13,15 +13,17 @@ import {
   UserCircle,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/admin/db";
+import type { AdminNavIconKey } from "@/lib/admin/adminNavIconStyles";
 import type { LucideIcon } from "lucide-react";
 import { useInquiriesNewCount } from "@/lib/admin/useInquiriesNewCount";
 import { AdminNavCollapsibleSection } from "./AdminNavCollapsibleSection";
+import { AdminNavIcon } from "./AdminNavIcon";
 import { useAdminNavSections, type AdminNavSectionId } from "@/lib/admin/useAdminNavSections";
 
 type DrawerSection = {
   id: AdminNavSectionId;
   title: string;
-  links: { href: string; label: string; icon: LucideIcon }[];
+  links: { href: string; label: string; icon: LucideIcon; iconKey: AdminNavIconKey }[];
 };
 
 export function MobileNav({
@@ -72,16 +74,16 @@ export function MobileNav({
             id: "office",
             title: "Офис",
             links: [
-              { href: "/admin/products", label: "Продукти", icon: Package },
+              { href: "/admin/products", label: "Продукти", icon: Package, iconKey: "products" },
               ...(role === "master_admin" || role === "office_staff"
                 ? [
-                    { href: "/admin/history", label: "Продажби", icon: Receipt },
-                    { href: "/admin/supplier-orders", label: "Поръчки", icon: Truck },
+                    { href: "/admin/history", label: "Продажби", icon: Receipt, iconKey: "sales" as const },
+                    { href: "/admin/supplier-orders", label: "Поръчки", icon: Truck, iconKey: "orders" as const },
                   ]
                 : []),
-              { href: "/admin/articles", label: "Статии", icon: FileText },
+              { href: "/admin/articles", label: "Статии", icon: FileText, iconKey: "articles" },
               ...(role === "office_staff"
-                ? [{ href: "/admin/ai-agent", label: "СК Help Agent", icon: Bot }]
+                ? [{ href: "/admin/ai-agent", label: "СК Help Agent", icon: Bot, iconKey: "ai-agent" as const }]
                 : []),
             ],
           },
@@ -89,7 +91,7 @@ export function MobileNav({
             id: "service",
             title: "Сервиз",
             links: [
-              { href: "/admin/service/documents", label: "Документи", icon: FolderOpen },
+              { href: "/admin/service/documents", label: "Документи", icon: FolderOpen, iconKey: "documents" },
             ],
           },
         ];
@@ -98,19 +100,19 @@ export function MobileNav({
             id: "reports",
             title: "Отчети",
             links: [
-              { href: "/admin/ratings", label: "Оценки", icon: Star },
-              { href: "/admin/activity", label: "Активност", icon: Activity },
+              { href: "/admin/ratings", label: "Оценки", icon: Star, iconKey: "ratings" },
+              { href: "/admin/activity", label: "Активност", icon: Activity, iconKey: "activity" },
             ],
           });
           sections.push({
             id: "admin",
             title: "Администрация",
             links: [
-              { href: "/admin/staff", label: "Персонал", icon: ShieldCheck },
+              { href: "/admin/staff", label: "Персонал", icon: ShieldCheck, iconKey: "staff" },
               ...(role === "master_admin"
                 ? [
-                    { href: "/admin/settings", label: "Настройки", icon: Settings },
-                    { href: "/admin/ai-agent", label: "СК Help Agent", icon: Bot },
+                    { href: "/admin/settings", label: "Настройки", icon: Settings, iconKey: "settings" as const },
+                    { href: "/admin/ai-agent", label: "СК Help Agent", icon: Bot, iconKey: "ai-agent" as const },
                   ]
                 : []),
             ],
@@ -237,9 +239,9 @@ export function MobileNav({
                         : "text-slate-600 hover:bg-slate-50 active:bg-slate-100"
                     }`}
                   >
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${active ? "bg-brand-orange-100 text-brand-orange-600" : "bg-slate-100"}`}>
+                    <AdminNavIcon navKey={link.iconKey} size="drawer">
                       <Icon className="w-5 h-5" />
-                    </div>
+                    </AdminNavIcon>
                     <span className="text-[11px] font-semibold leading-tight">{link.label}</span>
                   </Link>
                 );

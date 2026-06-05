@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { MessageSquare } from "lucide-react";
 import { useInquiriesNewCount } from "@/lib/admin/useInquiriesNewCount";
+import { AdminNavIcon } from "../AdminNavIcon";
 
 /**
  * Badge за нови запитвания — poll 25s извън страницата, моментално при събитие
@@ -25,9 +26,9 @@ export function InquiriesNavBadge() {
       }`}
     >
       <span className="flex items-center gap-2">
-        <span className={active ? "text-brand-blue-500" : "text-slate-400"}>
+        <AdminNavIcon navKey="inquiries">
           <MessageSquare className="w-4 h-4" />
-        </span>
+        </AdminNavIcon>
         Запитвания
       </span>
       {count > 0 && (

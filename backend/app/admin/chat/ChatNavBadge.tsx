@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Headphones } from "lucide-react";
+import { AdminNavIcon } from "../AdminNavIcon";
 import { useAdminChatAlerts } from "../AdminChatAlertsProvider";
 
 /** Брояч за чакащи чатове — данните идват от AdminChatAlertsProvider (SSE + fallback poll). */
@@ -22,9 +23,9 @@ export function ChatNavBadge() {
       }`}
     >
       <span className="flex items-center gap-2">
-        <span className={active ? "text-brand-blue-500" : "text-slate-400"}>
+        <AdminNavIcon navKey="chat">
           <Headphones className="w-4 h-4" />
-        </span>
+        </AdminNavIcon>
         Чат на живо
       </span>
       {count > 0 && (

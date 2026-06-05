@@ -1747,7 +1747,7 @@ function WorkItemCompleteControl({
 
   if (done) {
     const badgeClass =
-      "inline-flex shrink-0 items-center gap-1 rounded-lg border border-green-400 bg-green-100 px-2.5 py-1.5 text-[10px] font-bold text-green-900";
+      "inline-flex shrink-0 items-center justify-center gap-1 leading-none min-h-[22px] rounded-full border border-green-400 bg-green-100 px-2.5 py-1 text-[10px] font-bold text-green-900";
     return (
       <span className={badgeClass} title={label}>
         <CheckCircle2 className="h-3.5 w-3.5" />
@@ -1802,8 +1802,11 @@ function WorkItemCompleteControl({
   );
 }
 
+const WORK_ITEM_STATUS_PILL_BASE =
+  "inline-flex w-fit items-center justify-center leading-none min-h-[22px] rounded-full px-2.5 py-1 text-xs font-bold whitespace-nowrap border";
+
 function workItemStatusPillClass(item: WorkItem): string {
-  const base = "rounded-full px-2 py-0.5 text-xs font-bold whitespace-nowrap border";
+  const base = WORK_ITEM_STATUS_PILL_BASE;
   if (item.status === "done") {
     return `${base} bg-green-200 border-green-400 text-green-900`;
   }
@@ -1814,7 +1817,8 @@ function workItemStatusPillClass(item: WorkItem): string {
 }
 
 function statusPillClass(status: WorkItem["status"]): string {
-  const base = "rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap border";
+  const base =
+    "inline-flex w-fit items-center justify-center leading-none min-h-[22px] rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap border";
   if (status === "done") return `${base} bg-green-100 border-green-200 text-green-800`;
   if (status === "in_progress") return `${base} bg-brand-blue-100 border-brand-blue-200 text-brand-blue-700`;
   if (status === "cancelled") return `${base} bg-red-100 border-red-200 text-red-800`;
