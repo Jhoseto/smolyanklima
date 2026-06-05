@@ -110,6 +110,10 @@ export default function EditProductPage() {
 
   const isOnOrderTemplateLive = !isDeliveredInstance && form.stockStatus === "on_order";
 
+  function returnToProductsTable(productId: string) {
+    router.replace(`/admin/products?focusProductId=${encodeURIComponent(productId)}`);
+  }
+
   async function validateDeliveryForSave(requirePurchasePrice: boolean): Promise<boolean> {
     if (!form.indoorUnitSerial.trim()) {
       setError("Въведете сериен номер на вътрешното тяло.");
@@ -176,7 +180,7 @@ export default function EditProductPage() {
         return json;
       }
       setToast({ kind: "ok", text: "Промените са запазени." });
-      router.push("/admin/products");
+      returnToProductsTable(id);
       return json;
     } finally {
       setSaving(false);
@@ -206,11 +210,11 @@ export default function EditProductPage() {
       const createdInstanceId = (json as { data?: { createdInstanceId?: string } })?.data?.createdInstanceId;
       if (createdInstanceId) {
         setToast({ kind: "ok", text: "Създадена нова бройка в наличност." });
-        router.push(`/admin/products/${createdInstanceId}`);
+        returnToProductsTable(createdInstanceId);
         return json;
       }
       setToast({ kind: "ok", text: "Промените са запазени." });
-      router.push("/admin/products");
+      returnToProductsTable(id);
       return json;
     } finally {
       setSaving(false);

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { CATALOG_BTU_OPTIONS } from "@/lib/catalog/productBtu";
 import {
@@ -557,6 +558,9 @@ function truncCell(s: string | null | undefined, max = 16) {
 }
 
 export default function AdminProductsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const focusProductHandledRef = useRef(false);
   const [items, setItems] = useState<ProductRow[]>([]);
   const [brands, setBrands] = useState<OptionRow[]>([]);
   const [types, setTypes] = useState<OptionRow[]>([]);
@@ -847,6 +851,21 @@ export default function AdminProductsPage() {
     setListFiltersReady(true);
     void loadMeta();
   }, []);
+
+  /** След запис от редакция — маха филтри, които крият новата/запазената бройка. */
+  useEffect(() => {
+    if (!listFiltersReady || focusProductHandledRef.current) return;
+    const focusId = searchParams.get("focusProductId");
+    if (!focusId) return;
+    focusProductHandledRef.current = true;
+    setPublicCatalogFlags([]);
+    setStockStatuses([]);
+    setBtuFilters([]);
+    setHasSerial("");
+    setHasPurchasePrice("");
+    setPage(1);
+    router.replace("/admin/products");
+  }, [listFiltersReady, searchParams, router]);
 
   useEffect(() => {
     if (!listFiltersReady) return;

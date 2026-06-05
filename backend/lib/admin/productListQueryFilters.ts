@@ -48,6 +48,8 @@ function effectiveEnumFilter<T extends string>(selected: readonly T[], all: read
 type FilterQuery = {
   eq: (column: string, value: unknown) => FilterQuery;
   in: (column: string, values: readonly unknown[]) => FilterQuery;
+  or: (expression: string) => FilterQuery;
+  is: (column: string, value: null) => FilterQuery;
 };
 
 function applyEnumInFilter(
@@ -76,6 +78,27 @@ function applyBooleanPairFilter(
   return query;
 }
 
+/**
+ * Админ каталог: филтър „публичен каталог“ важи за шаблони, не за складови бройки.
+ * Инстанциите със серийни № винаги се виждат при „В публичен каталог“.
+ */
+function applyAdminPublicCatalogFilter(query: FilterQuery, flags: readonly string[]): FilterQuery {
+  const hasVisible = flags.includes("visible");
+  const hasHidden = flags.includes("hidden");
+  if (hasVisible && !hasHidden) {
+    return query.or(
+      "show_in_public_catalog.eq.true,indoor_unit_serial.not.is.null,outdoor_unit_serial.not.is.null",
+    );
+  }
+  if (hasHidden && !hasVisible) {
+    return query
+      .eq("show_in_public_catalog", false)
+      .is("indoor_unit_serial", null)
+      .is("outdoor_unit_serial", null);
+  }
+  return query;
+}
+
 export function parseProductListChipFilters(params: {
   condition?: string;
   stockStatus?: string;
@@ -95,5 +118,14 @@ export function applyProductListChipFilters(query: unknown, filters: ProductList
   next = applyEnumInFilter(next, "stock_status", filters.stockStatuses, ALL_STOCK_STATUSES);
   next = applyBooleanPairFilter(next, "is_featured", filters.featuredFlags, "featured", "regular");
   next = applyBooleanPairFilter(next, "show_in_public_catalog", filters.publicCatalogFlags, "visible", "hidden");
+  return next;
+}
+
+/** Админ списък продукти — складовите бройки не се скриват от филтъра „В публичен каталог“. */
+export function applyAdminProductListChipFilters(query: unknown, filters: ProductListChipFilters): unknown {
+  let next = applyEnumInFilter(query as FilterQuery, "product_condition", filters.conditions, ALL_CONDITIONS);
+  next = applyEnumInFilter(next, "stock_status", filters.stockStatuses, ALL_STOCK_STATUSES);
+  next = applyBooleanPairFilter(next, "is_featured", filters.featuredFlags, "featured", "regular");
+  next = applyAdminPublicCatalogFilter(next, filters.publicCatalogFlags);
   return next;
 }

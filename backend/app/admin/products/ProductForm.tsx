@@ -16,6 +16,7 @@ import {
 import { ImageLightbox } from "./ImageLightbox";
 import { BrandCombobox } from "./BrandCombobox";
 import { enhancePhotoViaAI, fetchImageAsBlob } from "@/lib/photos/enhancePhoto";
+import { CATALOG_BTU_OPTIONS, inferBtuFromCoolingKw } from "@/lib/catalog/productBtu";
 
 type SerialMatch = {
   id: string;
@@ -25,6 +26,8 @@ type SerialMatch = {
 };
 
 export type SpecsForm = {
+  /** Номинал BTU (хиляди): 12 = 12 000 BTU — за филтри в каталога. */
+  btu: string;
   coverage_m2: string;
   noise_db: string;
   cooling_power_kw: string;
@@ -82,6 +85,7 @@ export type AdminProductForm = {
 
 export function emptySpecsForm(): SpecsForm {
   return {
+    btu: "",
     coverage_m2: "",
     noise_db: "",
     cooling_power_kw: "",
@@ -334,8 +338,24 @@ function strInt(s: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function resolveBtuForPayload(specs: SpecsForm): number | null {
+  const explicit = strInt(specs.btu);
+  if (
+    explicit != null &&
+    (CATALOG_BTU_OPTIONS as readonly number[]).includes(explicit)
+  ) {
+    return explicit;
+  }
+  const kw = strNum(specs.cooling_power_kw);
+  if (kw != null && kw > 0) {
+    return inferBtuFromCoolingKw(kw);
+  }
+  return null;
+}
+
 function specsPayload(specs: SpecsForm) {
   return {
+    btu: resolveBtuForPayload(specs),
     coverage_m2: strNum(specs.coverage_m2),
     noise_db: strNum(specs.noise_db),
     cooling_power_kw: strNum(specs.cooling_power_kw),
@@ -504,6 +524,15 @@ export function mapLoadedProductToForm(p: {
     productRegion: normalizeProductRegion(p.product_region),
     stockQuantity: Number(p.stock_quantity ?? 0),
     specs: {
+      btu:
+        sp?.btu != null && sp.btu !== ""
+          ? String(sp.btu)
+          : (() => {
+              const inferred = inferBtuFromCoolingKw(
+                sp?.cooling_power_kw != null ? Number(sp.cooling_power_kw) : null,
+              );
+              return inferred != null ? String(inferred) : "";
+            })(),
       coverage_m2: n(sp?.coverage_m2),
       noise_db: n(sp?.noise_db),
       cooling_power_kw: n(sp?.cooling_power_kw),
@@ -1204,9 +1233,13 @@ export function ProductFormFields({
     // махаме „AI“ маркировката, за да не подвежда.
     clearAiFlag(`specs.${k}`);
     setForm((f) => {
-      const next: AdminProductForm = { ...f, specs: { ...f.specs, [k]: v } };
-      // Когато потребителят промени охладителната мощност и името още е
-      // auto-генериран draft, обновяваме и него.
+      let next: AdminProductForm = { ...f, specs: { ...f.specs, [k]: v } };
+      if (k === "cooling_power_kw" && typeof v === "string" && !next.specs.btu.trim()) {
+        const inferred = inferBtuFromCoolingKw(strNum(v));
+        if (inferred != null) {
+          next = { ...next, specs: { ...next.specs, btu: String(inferred) } };
+        }
+      }
       if (k === "cooling_power_kw" && !nameDirty) {
         return syncAutoName(next);
       }
@@ -1940,6 +1973,23 @@ export function ProductFormFields({
           <label className="block">
             <FieldTitle label="Шум (dB)" info="Ниво на шум (вътрешно тяло). По-ниско = по-тих." ai={isAiField("specs.noise_db")} />
             <Input value={form.specs.noise_db} onChange={(e) => setSpec("noise_db", e.target.value)} list="noise-db-options" placeholder="19" className={aiHl("specs.noise_db")} />
+          </label>
+          <label className="block">
+            <FieldTitle
+              label="Мощност (BTU)"
+              info="Номинал за филтри в каталога (12 = 12 000 BTU). При празно поле се изчислява от kW при запис."
+            />
+            <Select
+              value={form.specs.btu}
+              onChange={(e) => setSpec("btu", e.target.value)}
+            >
+              <option value="">— избери —</option>
+              {CATALOG_BTU_OPTIONS.map((b) => (
+                <option key={b} value={String(b)}>
+                  {b} 000 BTU
+                </option>
+              ))}
+            </Select>
           </label>
           <label className="block">
             <FieldTitle label="Охлаждане (kW)" info="Номинална охладителна мощност." ai={isAiField("specs.cooling_power_kw")} />

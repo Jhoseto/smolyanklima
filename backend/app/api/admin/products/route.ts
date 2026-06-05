@@ -12,11 +12,12 @@ import { insertProductCatalogStockCalendarEvent } from "@/lib/admin/productCatal
 import { replaceProductImages, upsertProductSpecs, type ImageInput, type SpecsInput } from "@/lib/admin/syncProductChildren";
 import * as catalogBtu from "@/lib/catalog/productBtu";
 import { listAdminAccessories, listAdminCatalogMerged } from "@/lib/admin/adminCatalogList";
-import { applyProductListChipFilters, parseProductListChipFilters } from "@/lib/admin/productListQueryFilters";
+import { applyAdminProductListChipFilters, parseProductListChipFilters } from "@/lib/admin/productListQueryFilters";
 import { CATALOG_VISIBLE_PRODUCTS_OR_FILTER } from "@/lib/admin/productCatalogDisplay";
 import { applyAdminProductSearchFilter } from "@/lib/admin/productSearchFilter";
 
 const SpecsSchema = z.object({
+  btu: z.number().int().positive().nullable().optional(),
   coverage_m2: z.number().nonnegative().nullable().optional(),
   noise_db: z.number().nonnegative().nullable().optional(),
   cooling_power_kw: z.number().nonnegative().nullable().optional(),
@@ -240,7 +241,7 @@ export async function GET(req: NextRequest) {
     if (q?.trim()) {
       query = applyAdminProductSearchFilter(query, q, applySupplyFields);
     }
-    query = applyProductListChipFilters(query, chipFilters) as typeof query;
+    query = applyAdminProductListChipFilters(query, chipFilters) as typeof query;
     query = query.or(CATALOG_VISIBLE_PRODUCTS_OR_FILTER);
     if (applyStockLocationFilter && stockLocation) query = query.eq("stock_location", stockLocation);
     if (applyRegionFilter && regionFilter) query = query.eq("product_region", regionFilter);
@@ -282,7 +283,7 @@ export async function GET(req: NextRequest) {
       if (q?.trim()) {
         stubQuery = applyAdminProductSearchFilter(stubQuery, q, true);
       }
-      stubQuery = applyProductListChipFilters(stubQuery, chipFilters) as typeof stubQuery;
+      stubQuery = applyAdminProductListChipFilters(stubQuery, chipFilters) as typeof stubQuery;
       stubQuery = stubQuery.or(CATALOG_VISIBLE_PRODUCTS_OR_FILTER);
       if (stockLocation) stubQuery = stubQuery.eq("stock_location", stockLocation);
       if (regionFilter) stubQuery = stubQuery.eq("product_region", regionFilter);

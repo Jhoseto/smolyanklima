@@ -31,6 +31,7 @@ import { enforceStockStatusAfterSale } from "@/lib/admin/productSaleStock";
 import { replaceProductImages, upsertProductSpecs, type ImageInput, type SpecsInput } from "@/lib/admin/syncProductChildren";
 
 const SpecsSchema = z.object({
+  btu: z.number().int().positive().nullable().optional(),
   coverage_m2: z.number().nonnegative().nullable().optional(),
   noise_db: z.number().nonnegative().nullable().optional(),
   cooling_power_kw: z.number().nonnegative().nullable().optional(),

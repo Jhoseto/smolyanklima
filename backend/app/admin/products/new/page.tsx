@@ -94,8 +94,13 @@ export default function NewProductPage() {
         setToast({ kind: "err", text: msg });
         return;
       }
+      const newId = String((json as { data?: { id?: string } })?.data?.id ?? "");
       setToast({ kind: "ok", text: "Създадено" });
-      router.push(`/admin/products/${(json as any).data.id}`);
+      if (newId) {
+        router.replace(`/admin/products?focusProductId=${encodeURIComponent(newId)}`);
+      } else {
+        router.replace("/admin/products");
+      }
     } finally {
       setSubmitting(false);
     }
