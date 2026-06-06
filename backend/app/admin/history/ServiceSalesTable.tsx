@@ -3,11 +3,17 @@
 import type { ReactElement, ReactNode } from "react";
 import { Eye } from "lucide-react";
 import { Button, Table, Th, Td, AdminPhoneLink } from "../ui";
+import { ContactNameButton, type ContactHistoryTarget } from "../contacts/ContactHistoryModal";
 
 type ServiceRow = {
   id: string;
   status: "planned" | "in_progress" | "done" | "cancelled";
   title: string;
+  contact_id?: string | null;
+  contacts?:
+    | { id: string; full_name?: string | null; phone?: string | null }
+    | Array<{ id: string; full_name?: string | null; phone?: string | null }>
+    | null;
   customer_name?: string | null;
   customer_phone?: string | null;
   customer_address?: string | null;
@@ -16,6 +22,15 @@ type ServiceRow = {
   due_date?: string | null;
   completed_at?: string | null;
 };
+
+function contactTargetFromRow(row: ServiceRow): ContactHistoryTarget {
+  const embedded = Array.isArray(row.contacts) ? row.contacts[0] : row.contacts;
+  return {
+    contactId: embedded?.id ?? row.contact_id ?? null,
+    customerName: row.customer_name,
+    customerPhone: row.customer_phone ?? embedded?.phone ?? null,
+  };
+}
 
 export type ServiceSortField =
   | "status"
@@ -89,6 +104,7 @@ export function ServiceSalesTable({
   sortDir,
   onSort,
   onDetail,
+  onContactOpen,
   emptyMessage,
 }: {
   items: ServiceRow[];
@@ -96,6 +112,7 @@ export function ServiceSalesTable({
   sortDir: SortDir;
   onSort: (f: ServiceSortField) => void;
   onDetail: (id: string) => void;
+  onContactOpen?: (target: ContactHistoryTarget) => void;
   emptyMessage: string;
 }) {
   return (
@@ -125,7 +142,19 @@ export function ServiceSalesTable({
                   <Td>
                     <span className={statusPillClass(row.status)}>{STATUS_TEXT[row.status]}</span>
                   </Td>
-                  <Td className="font-medium text-slate-700">{row.customer_name || "—"}</Td>
+                  <Td>
+                    {onContactOpen ? (
+                      <ContactNameButton
+                        name={row.customer_name}
+                        contactId={contactTargetFromRow(row).contactId}
+                        customerPhone={row.customer_phone}
+                        onOpen={onContactOpen}
+                        className="text-sm text-slate-700"
+                      />
+                    ) : (
+                      <span className="font-medium text-slate-700">{row.customer_name || "—"}</span>
+                    )}
+                  </Td>
                   <Td className="text-slate-600">
                     <AdminPhoneLink phone={row.customer_phone} showIcon={false} className="font-medium text-slate-600" />
                   </Td>
@@ -167,7 +196,19 @@ export function ServiceSalesTable({
               <div className="flex items-start justify-between gap-3 mb-2">
                 <div className="min-w-0">
                   <div className="font-bold text-slate-900 text-sm truncate">{row.title}</div>
-                  <div className="font-semibold text-slate-700 text-sm mt-1">{row.customer_name || "—"}</div>
+                  <div className="mt-1">
+                    {onContactOpen ? (
+                      <ContactNameButton
+                        name={row.customer_name}
+                        contactId={contactTargetFromRow(row).contactId}
+                        customerPhone={row.customer_phone}
+                        onOpen={onContactOpen}
+                        className="font-semibold text-slate-700 text-sm"
+                      />
+                    ) : (
+                      <div className="font-semibold text-slate-700 text-sm">{row.customer_name || "—"}</div>
+                    )}
+                  </div>
                   {row.customer_phone && (
                     <AdminPhoneLink
                       phone={row.customer_phone}

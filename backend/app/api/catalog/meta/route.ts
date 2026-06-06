@@ -6,6 +6,7 @@ import { applyPublicCatalogFilter } from "@/lib/catalog/publicProductVisibility"
 import { CATALOG_BTU_OPTIONS, inferBtuFromCoolingKw } from "@/lib/catalog/productBtu";
 import {
   countRepresentativesByCategory,
+  fetchPublicCatalogBrandOptions,
   fetchPublicCatalogRepresentatives,
   resolveCategoryTypeIds,
 } from "@/lib/catalog/publicCatalogDedup";
@@ -48,21 +49,6 @@ async function fetchPriceBounds(supabase: ReturnType<typeof createSupabaseServic
   return { min, max: max || min };
 }
 
-function brandOptionsFromRepresentatives(
-  brands: Array<{ id: string; name: string }>,
-  reps: Awaited<ReturnType<typeof fetchPublicCatalogRepresentatives>>,
-) {
-  const counts = new Map<string, number>();
-  for (const r of reps) {
-    if (!r.brandId) continue;
-    counts.set(r.brandId, (counts.get(r.brandId) ?? 0) + 1);
-  }
-  return brands
-    .map((b) => ({ name: b.name, productCount: counts.get(b.id) ?? 0 }))
-    .filter((b) => b.productCount > 0)
-    .sort((a, b) => a.name.localeCompare(b.name, "bg"));
-}
-
 async function fetchBtuOptions(supabase: ReturnType<typeof createSupabaseServiceRoleClient>, cond?: "new" | "used") {
   const { data, error } = await supabase.rpc("catalog_btu_option_counts", { p_cond: cond ?? null });
   const counts = new Map<number, number>();
@@ -93,21 +79,15 @@ export async function GET(req: NextRequest) {
   const supabase = createSupabaseServiceRoleClient();
 
   try {
-    const [priceBounds, btuOptions, reps, typeIdsByCategory, brandRows] = await Promise.all([
+    const [priceBounds, btuOptions, reps, typeIdsByCategory, brandOptions] = await Promise.all([
       fetchPriceBounds(supabase, cond),
       fetchBtuOptions(supabase, cond),
       fetchPublicCatalogRepresentatives(supabase, { cond }),
       resolveCategoryTypeIds(supabase),
-      supabase.from("brands").select("id,name,is_active").eq("is_active", true).order("name", { ascending: true }),
+      fetchPublicCatalogBrandOptions(supabase, { cond, onlyWithProducts: true }),
     ]);
 
-    if (brandRows.error) throw new Error(brandRows.error.message);
-
     const categoryCounts = countRepresentativesByCategory(reps, typeIdsByCategory);
-    const brandOptions = brandOptionsFromRepresentatives(
-      (brandRows.data ?? []) as Array<{ id: string; name: string }>,
-      reps,
-    );
 
     const res = withCors(
       req,

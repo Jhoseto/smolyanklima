@@ -21,6 +21,27 @@ import { useRef, useState, type ReactNode } from "react";
 import { Camera, Loader2, CheckCircle2, AlertTriangle, Sparkles, ImagePlus } from "lucide-react";
 import { compressImage } from "@/lib/photos/compressImage";
 
+export type ModelSpecs = {
+  coverage_m2?: number | null;
+  noise_db?: number | null;
+  cooling_power_kw?: number | null;
+  heating_power_kw?: number | null;
+  energy_class_cool?: string | null;
+  energy_class_heat?: string | null;
+  seer?: number | null;
+  scop?: number | null;
+  warranty_months?: number | null;
+  wifi?: boolean | null;
+  weight_indoor_kg?: number | null;
+  weight_outdoor_kg?: number | null;
+  dim_indoor_length_mm?: number | null;
+  dim_indoor_width_mm?: number | null;
+  dim_indoor_height_mm?: number | null;
+  dim_outdoor_length_mm?: number | null;
+  dim_outdoor_width_mm?: number | null;
+  dim_outdoor_height_mm?: number | null;
+};
+
 export type LabelExtractResult = {
   from_label: {
     brand_hint?: string | null;
@@ -33,26 +54,7 @@ export type LabelExtractResult = {
     voltage?: string | null;
     manufacture_year?: number | null;
   };
-  model_specs: {
-    coverage_m2?: number | null;
-    noise_db?: number | null;
-    cooling_power_kw?: number | null;
-    heating_power_kw?: number | null;
-    energy_class_cool?: string | null;
-    energy_class_heat?: string | null;
-    seer?: number | null;
-    scop?: number | null;
-    warranty_months?: number | null;
-    wifi?: boolean | null;
-    weight_indoor_kg?: number | null;
-    weight_outdoor_kg?: number | null;
-    dim_indoor_length_mm?: number | null;
-    dim_indoor_width_mm?: number | null;
-    dim_indoor_height_mm?: number | null;
-    dim_outdoor_length_mm?: number | null;
-    dim_outdoor_width_mm?: number | null;
-    dim_outdoor_height_mm?: number | null;
-  };
+  model_specs: ModelSpecs;
   confidence_label: "high" | "medium" | "low" | "none";
   confidence_specs: "high" | "medium" | "low" | "none";
   source?: string | null;

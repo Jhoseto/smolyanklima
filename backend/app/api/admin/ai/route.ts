@@ -46,21 +46,34 @@ const RequestSchema = z.discriminatedUnion("task", [
   // (3) confidence-маркер за всяко поле.
   z.object({
     task: z.literal("product_label_extract"),
-    input: z.object({
-      /** base64 без data: префикса. Максимум ~3 MB (валидно за inline_data). */
-      imageBase64: z.string().min(64).max(5_000_000),
-      /** image/jpeg или image/png; webp също се поддържа от Gemini. */
-      imageMimeType: z.enum(["image/jpeg", "image/png", "image/webp"]).default("image/jpeg"),
-      /** Кое тяло се снима — определя коя серия да се попълни. */
-      whichUnit: z.enum(["indoor", "outdoor"]),
-      /** Hint от вече попълнени полета (модел/марка) — повишава точността при втора снимка. */
-      knownBrand: z.string().max(120).optional().nullable(),
-      knownModel: z.string().max(120).optional().nullable(),
-      /** Списъкът на марките, които вече съществуват в нашата база.
-       *  AI ще се опита да върне brand_hint с ТОЧНОТО име оттук, за да
-       *  улесни match-а в UI-та (вместо „Mitsubishi“ → „Mitsubishi Electric“). */
-      availableBrands: z.array(z.string().max(80)).max(50).optional().nullable(),
-    }),
+    input: z
+      .object({
+        /** base64 без data: префикса. Липсва при text-only lookup по марка+модел. */
+        imageBase64: z.string().min(64).max(5_000_000).optional(),
+        /** image/jpeg или image/png; webp също се поддържа от Gemini. */
+        imageMimeType: z.enum(["image/jpeg", "image/png", "image/webp"]).default("image/jpeg"),
+        /** Кое тяло се снима — определя коя серия да се попълни. */
+        whichUnit: z.enum(["indoor", "outdoor"]).default("indoor"),
+        /** Hint от вече попълнени полета (модел/марка) — повишава точността при втора снимка. */
+        knownBrand: z.string().max(120).optional().nullable(),
+        knownModel: z.string().max(120).optional().nullable(),
+        /** Списъкът на марките, които вече съществуват в нашата база.
+         *  AI ще се опита да върне brand_hint с ТОЧНОТО име оттук, за да
+         *  улесни match-а в UI-та (вместо „Mitsubishi“ → „Mitsubishi Electric“). */
+        availableBrands: z.array(z.string().max(80)).max(50).optional().nullable(),
+      })
+      .superRefine((val, ctx) => {
+        const hasImage = Boolean(val.imageBase64 && val.imageBase64.length >= 64);
+        const brand = String(val.knownBrand ?? "").trim();
+        const model = String(val.knownModel ?? "").trim();
+        const hasTextLookup = brand.length >= 2 && model.length >= 2;
+        if (!hasImage && !hasTextLookup) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Подай снимка на етикет ИЛИ марка + модел (поне 2 знака всеки).",
+          });
+        }
+      }),
   }),
   // AI „professional catalog“ enhancement на снимка на климатик:
   //   - бял фон (background removal/replacement)
@@ -201,10 +214,12 @@ export async function POST(req: NextRequest) {
   // Останалите task-ове — JSON output mode.
   const prompt = buildPrompt(parsed.data);
   const imagePart =
-    parsed.data.task === "product_label_extract"
+    parsed.data.task === "product_label_extract" && parsed.data.input.imageBase64
       ? { mimeType: parsed.data.input.imageMimeType, base64: parsed.data.input.imageBase64 }
       : undefined;
-  const result = await callGemini(env, prompt, imagePart);
+  const largeOutput = parsed.data.task === "product_label_extract";
+
+  const result = await callGemini(env, prompt, imagePart, { largeOutput });
 
   await logAdminActivity({
     action: `ai.${parsed.data.task}`,
@@ -986,7 +1001,8 @@ function buildPrompt(payload: z.infer<typeof RequestSchema>) {
   }
 
   if (payload.task === "product_label_extract") {
-    const { whichUnit, knownBrand, knownModel, availableBrands } = payload.input;
+    const { whichUnit, knownBrand, knownModel, availableBrands, imageBase64 } = payload.input;
+    const hasImage = Boolean(imageBase64 && imageBase64.length >= 64);
     const unitLabel = whichUnit === "indoor" ? "ВЪТРЕШНОТО тяло" : "ВЪНШНОТО тяло";
     const serialField = whichUnit === "indoor" ? "indoor_unit_serial" : "outdoor_unit_serial";
     const otherSerialField = whichUnit === "indoor" ? "outdoor_unit_serial" : "indoor_unit_serial";
@@ -994,6 +1010,105 @@ function buildPrompt(payload: z.infer<typeof RequestSchema>) {
     if (knownBrand) hints.push(`Вече известна марка: ${knownBrand}`);
     if (knownModel) hints.push(`Вече известен модел: ${knownModel}`);
     const brandsList = (availableBrands ?? []).filter(Boolean);
+
+    const labelExtractJsonSchema = `{
+  "from_label": {
+    "brand_hint": "<string или null>",
+    "model_code": "<string или null>",
+    "alt_model_codes": ["..."] ,
+    "${serialField}": "<string или null>",
+    "refrigerant": "<string или null>",
+    "refrigerant_amount_g": <number или null>,
+    "voltage": "<string или null>",
+    "manufacture_year": <number или null>
+  },
+  "model_specs": {
+    "coverage_m2": <number или null>,
+    "noise_db": <number или null>,
+    "cooling_power_kw": <number или null>,
+    "heating_power_kw": <number или null>,
+    "energy_class_cool": "<string или null>",
+    "energy_class_heat": "<string или null>",
+    "seer": <number или null>,
+    "scop": <number или null>,
+    "warranty_months": <int или null>,
+    "wifi": <boolean или null>,
+    "weight_indoor_kg": <number или null>,
+    "weight_outdoor_kg": <number или null>,
+    "dim_indoor_length_mm": <int или null>,
+    "dim_indoor_width_mm": <int или null>,
+    "dim_indoor_height_mm": <int или null>,
+    "dim_outdoor_length_mm": <int или null>,
+    "dim_outdoor_width_mm": <int или null>,
+    "dim_outdoor_height_mm": <int или null>
+  },
+  "confidence_label": "high"|"medium"|"low"|"none",
+  "confidence_specs": "high"|"medium"|"low"|"none",
+  "source": "<кратка бележка до 120 знака>",
+  "warnings": ["..."]
+}`;
+
+    const brandPrefixRules = [
+      "🔥 КРИТИЧНО ВАЖНО ЗА МАРКАТА (brand_hint):",
+      "  • Марката Е ЗАДЪЛЖИТЕЛНА — върни brand_hint от входа или по model code.",
+      "  • Ако марката не е ясна, ИЗПОЛЗВАЙ MODEL CODE за разпознаване:",
+      "      — FTXA*, FTXM*, FTKM*, ATXA*, ATXM*, RXM*, RXA*, ARXM*, 2MXM*, 3MXM* → Daikin",
+      "      — MSZ-*, MUZ-*, MFZ-*, MUFZ-*, PKA-*, PUMY-*, SLZ-*, MSY-* → Mitsubishi Electric",
+      "      — SRK-*, SRC-*, SCM-*, FDC-*, FDT-*, SRR-* → Mitsubishi Heavy",
+      "      — ASYG*, AOYG*, ASYA*, AOYA* → Fujitsu",
+      "      — RAS-*, RAV-*, MMK-*, MMY-* → Toshiba",
+      "      — CS-*, CU-*, KIT-* → Panasonic (ако на етикета пише National/Nacional и в системата има „Nacional“ — върни точно „Nacional“)",
+      "      — SAC-*, AS*, AC*, MS*, MU* (LG style) → LG",
+      "      — AR*-* (AR09/AR12 и т.н.) → Samsung",
+      "      — GWH*-* → Gree",
+      "      — MSAG*, MSAFA*, MSAB* → Midea",
+      "      — AS-*, AUS-* → Hisense",
+      "      — 1U/2U/4U/AS35/AS25-NRJ* → Haier",
+    ];
+
+    const part2Rules = [
+      "ЧАСТ 2 — ПЪЛНА СПЕЦИФИКАЦИЯ ПО МОДЕЛА (от знанията ти, не от снимката):",
+      "  Имайки марката + модела, върни ТОЧНИ стойности от каталога/брошурата на производителя:",
+      "  • Cooling/Heating power (kW), енергиен клас (cool/heat), SEER, SCOP, гаранция (месеци).",
+      "  • Размери (mm) и тегло (kg) — ОТДЕЛНО за вътрешен и външен блок.",
+      "  • WiFi (вграден модул) — true/false.",
+      "  • Препоръчителна площ (m²), ниво на шум (dB).",
+      "5. confidence_specs = доколко си сигурен в спецификациите от знанията си („high“ = известен модел в каталога; „medium“ = от родов модел/семейство; „low“ = предположение; „none“ = неизвестен).",
+      "6. source = откъде си взел спецификациите — кратко (до 120 знака), напр. „Daikin Stylish R32 каталог 2023“.",
+    ];
+
+    if (!hasImage) {
+      return [
+        "Ти си експерт по техническите спецификации на климатици.",
+        "НЯМА снимка на етикет. Операторът е подал марка и модел — върни същия JSON формат като при сканиране на етикет.",
+        "",
+        "ЧАСТ 1 — ОТ ВХОДА (не от снимка):",
+        `  • brand_hint = подадената марка${knownBrand ? `: „${knownBrand}"` : ""}`,
+        `  • model_code = подаденият модел${knownModel ? `: „${knownModel}"` : ""}`,
+        "  • indoor_unit_serial и outdoor_unit_serial = null (няма снимка).",
+        "  • refrigerant — от каталога на модела, ако го знаеш; иначе null.",
+        "  • confidence_label = \"none\" (няма снимка).",
+        "",
+        ...part2Rules,
+        "",
+        "ВАЖНИ ПРАВИЛА:",
+        "1. Ако не си сигурен в дадена стойност — върни null (НЕ нула, НЕ празен string).",
+        "2. Не измисляй серийни номера.",
+        ...brandPrefixRules,
+        ...(brandsList.length > 0
+          ? [
+              "",
+              `📋 МАРКИ В СИСТЕМАТА: [${brandsList.join(", ")}]`,
+              "  ⚠ Върни brand_hint с ТОЧНОТО име от този списък ако марката съответства (case-sensitive).",
+            ]
+          : []),
+        "",
+        ...(hints.length > 0 ? [`HINT: ${hints.join("; ")}`, ""] : []),
+        "Върни САМО валиден JSON без markdown, със следната структура:",
+        labelExtractJsonSchema,
+      ].join("\n");
+    }
+
     return [
       "Ти си експерт по техническите спецификации на климатици.",
       `Анализираш снимка на ОРИГИНАЛЕН ЕТИКЕТ от ${unitLabel} на климатик (от завода/производителя).`,
@@ -1053,42 +1168,7 @@ function buildPrompt(payload: z.infer<typeof RequestSchema>) {
       "",
       ...(hints.length > 0 ? [`HINT: ${hints.join("; ")}`, ""] : []),
       "Върни САМО валиден JSON без markdown, със следната структура:",
-      `{
-  "from_label": {
-    "brand_hint": "<string или null>",
-    "model_code": "<string или null>",
-    "alt_model_codes": ["..."] ,
-    "${serialField}": "<string или null>",
-    "refrigerant": "<string или null>",
-    "refrigerant_amount_g": <number или null>,
-    "voltage": "<string или null>",
-    "manufacture_year": <number или null>
-  },
-  "model_specs": {
-    "coverage_m2": <number или null>,
-    "noise_db": <number или null>,
-    "cooling_power_kw": <number или null>,
-    "heating_power_kw": <number или null>,
-    "energy_class_cool": "<string или null>",
-    "energy_class_heat": "<string или null>",
-    "seer": <number или null>,
-    "scop": <number или null>,
-    "warranty_months": <int или null>,
-    "wifi": <boolean или null>,
-    "weight_indoor_kg": <number или null>,
-    "weight_outdoor_kg": <number или null>,
-    "dim_indoor_length_mm": <int или null>,
-    "dim_indoor_width_mm": <int или null>,
-    "dim_indoor_height_mm": <int или null>,
-    "dim_outdoor_length_mm": <int или null>,
-    "dim_outdoor_width_mm": <int или null>,
-    "dim_outdoor_height_mm": <int или null>
-  },
-  "confidence_label": "high"|"medium"|"low"|"none",
-  "confidence_specs": "high"|"medium"|"low"|"none",
-  "source": "<кратка бележка до 120 знака>",
-  "warnings": ["..."]
-}`,
+      labelExtractJsonSchema,
     ].join("\n");
   }
 
@@ -1111,10 +1191,20 @@ function buildPrompt(payload: z.infer<typeof RequestSchema>) {
   ].join("\n");
 }
 
+function resolveMaxOutputTokens(env: ReturnType<typeof getEnv>, wantsLarge: boolean): number {
+  const cap = wantsLarge ? 4096 : 2200;
+  const floor = wantsLarge ? 3200 : 1600;
+  const configured = env.AI_MAX_OUTPUT_TOKENS;
+  if (configured == null) return cap;
+  if (wantsLarge) return Math.min(Math.max(configured, floor), 8192);
+  return Math.min(configured, cap);
+}
+
 async function callGemini(
   env: ReturnType<typeof getEnv>,
   prompt: string,
   image?: { mimeType: string; base64: string },
+  options?: { largeOutput?: boolean },
 ) {
   const model = env.GEMINI_MODEL ?? "gemini-2.5-flash";
   const url = `${GEMINI_API_BASE}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(env.GEMINI_API_KEY!)}`;
@@ -1123,16 +1213,16 @@ async function callGemini(
   if (image) {
     parts.push({ inlineData: { mimeType: image.mimeType, data: image.base64 } });
   }
-  // По-висок tokens budget при image задачи — комбинираният JSON е по-голям.
-  const baseTokens = image ? 3200 : 1600;
+  // По-висок tokens budget при image / пълни specs задачи — JSON-ът е по-голям.
+  const wantsLarge = Boolean(image || options?.largeOutput);
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{ role: "user", parts }],
       generationConfig: {
-        temperature: image ? 0.15 : 0.25,
-        maxOutputTokens: Math.min(env.AI_MAX_OUTPUT_TOKENS ?? baseTokens, image ? 4096 : 2200),
+        temperature: image ? 0.15 : wantsLarge ? 0.15 : 0.25,
+        maxOutputTokens: resolveMaxOutputTokens(env, wantsLarge),
         responseMimeType: "application/json",
       },
     }),

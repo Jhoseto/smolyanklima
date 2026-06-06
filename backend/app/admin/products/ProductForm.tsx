@@ -7,7 +7,8 @@ import { AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, Sparkles, Wand2,
 import { useDebounce } from "@/lib/hooks/useDebounce";
 import { normalizeProductStockLocation, type ProductStockLocation } from "@/lib/admin/productStockLocation";
 import { normalizeProductRegion, type ProductRegion } from "@/lib/admin/productRegion";
-import { LabelScanButton, type LabelExtractResult } from "./LabelScanButton";
+import { LabelScanButton, type LabelExtractResult, type ModelSpecs } from "./LabelScanButton";
+import { ModelSpecsLookupButton } from "./ModelSpecsLookupButton";
 import {
   ProductPhotoUploader,
   MAX_PRODUCT_IMAGES as MAX_PHOTO_LIMIT,
@@ -82,6 +83,69 @@ export type AdminProductForm = {
   specs: SpecsForm;
   images: ImageRow[];
 };
+
+function applyModelSpecsToForm(
+  next: AdminProductForm,
+  specs: ModelSpecs,
+  refrigerant: string | null | undefined,
+  filled: Set<string>,
+): AdminProductForm {
+  const tryFillNum = (specKey: keyof SpecsForm, value: number | null | undefined, decimal: boolean) => {
+    if (value == null || !Number.isFinite(value)) return;
+    if (next.specs[specKey] && String(next.specs[specKey]).trim() !== "") return;
+    const out = decimal
+      ? String(Math.round(Number(value) * 10) / 10)
+      : String(Math.round(Number(value)));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (next.specs as any)[specKey] = out;
+    filled.add(`specs.${specKey}`);
+  };
+  const tryFillStr = (specKey: keyof SpecsForm, value: string | null | undefined) => {
+    if (!value || String(value).trim() === "") return;
+    if (next.specs[specKey] && String(next.specs[specKey]).trim() !== "") return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (next.specs as any)[specKey] = String(value).trim();
+    filled.add(`specs.${specKey}`);
+  };
+
+  if (!next.specs.refrigerant.trim() && refrigerant) {
+    next.specs.refrigerant = String(refrigerant).trim();
+    filled.add("specs.refrigerant");
+  }
+
+  tryFillNum("coverage_m2", specs.coverage_m2, false);
+  tryFillNum("noise_db", specs.noise_db, false);
+  tryFillNum("cooling_power_kw", specs.cooling_power_kw, true);
+  tryFillNum("heating_power_kw", specs.heating_power_kw, true);
+  tryFillStr("energy_class_cool", specs.energy_class_cool);
+  tryFillStr("energy_class_heat", specs.energy_class_heat);
+  tryFillNum("seer", specs.seer, true);
+  tryFillNum("scop", specs.scop, true);
+  tryFillNum("warranty_months", specs.warranty_months, false);
+  tryFillNum("weight_indoor_kg", specs.weight_indoor_kg, true);
+  tryFillNum("weight_outdoor_kg", specs.weight_outdoor_kg, true);
+  tryFillNum("dim_indoor_length_mm", specs.dim_indoor_length_mm, false);
+  tryFillNum("dim_indoor_width_mm", specs.dim_indoor_width_mm, false);
+  tryFillNum("dim_indoor_height_mm", specs.dim_indoor_height_mm, false);
+  tryFillNum("dim_outdoor_length_mm", specs.dim_outdoor_length_mm, false);
+  tryFillNum("dim_outdoor_width_mm", specs.dim_outdoor_width_mm, false);
+  tryFillNum("dim_outdoor_height_mm", specs.dim_outdoor_height_mm, false);
+
+  if (specs.wifi === true && !next.specs.wifi) {
+    next.specs.wifi = true;
+    filled.add("specs.wifi");
+  }
+
+  if (!next.specs.btu.trim() && next.specs.cooling_power_kw.trim()) {
+    const inferred = inferBtuFromCoolingKw(strNum(next.specs.cooling_power_kw));
+    if (inferred != null) {
+      next.specs.btu = String(inferred);
+      filled.add("specs.btu");
+    }
+  }
+
+  return next;
+}
 
 export function emptySpecsForm(): SpecsForm {
   return {
@@ -1008,59 +1072,8 @@ export function ProductFormFields({
         }
       }
 
-      // 4) Хладилен агент — само ако празен.
-      if (!next.specs.refrigerant.trim() && lbl.refrigerant) {
-        next.specs.refrigerant = String(lbl.refrigerant).trim();
-        filled.add("specs.refrigerant");
-      }
-
-      // 5) Дата на производство → purchasedAt НЕ се попълва от тук (това е
-      //    дата на покупка от доставчик, не на производство). Само като
-      //    info в логовете.
-
-      // 6) Spec lookup полета — попълваме само ПРАЗНИ.
-      const specs = extract.model_specs ?? {};
-      const tryFillNum = (specKey: keyof SpecsForm, value: number | null | undefined, decimal: boolean) => {
-        if (value == null || !Number.isFinite(value)) return;
-        if (next.specs[specKey] && String(next.specs[specKey]).trim() !== "") return;
-        const out = decimal
-          ? String(Math.round(Number(value) * 10) / 10)
-          : String(Math.round(Number(value)));
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (next.specs as any)[specKey] = out;
-        filled.add(`specs.${specKey}`);
-      };
-      const tryFillStr = (specKey: keyof SpecsForm, value: string | null | undefined) => {
-        if (!value || String(value).trim() === "") return;
-        if (next.specs[specKey] && String(next.specs[specKey]).trim() !== "") return;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (next.specs as any)[specKey] = String(value).trim();
-        filled.add(`specs.${specKey}`);
-      };
-
-      tryFillNum("coverage_m2", specs.coverage_m2, false);
-      tryFillNum("noise_db", specs.noise_db, false);
-      tryFillNum("cooling_power_kw", specs.cooling_power_kw, true);
-      tryFillNum("heating_power_kw", specs.heating_power_kw, true);
-      tryFillStr("energy_class_cool", specs.energy_class_cool);
-      tryFillStr("energy_class_heat", specs.energy_class_heat);
-      tryFillNum("seer", specs.seer, true);
-      tryFillNum("scop", specs.scop, true);
-      tryFillNum("warranty_months", specs.warranty_months, false);
-      tryFillNum("weight_indoor_kg", specs.weight_indoor_kg, true);
-      tryFillNum("weight_outdoor_kg", specs.weight_outdoor_kg, true);
-      tryFillNum("dim_indoor_length_mm", specs.dim_indoor_length_mm, false);
-      tryFillNum("dim_indoor_width_mm", specs.dim_indoor_width_mm, false);
-      tryFillNum("dim_indoor_height_mm", specs.dim_indoor_height_mm, false);
-      tryFillNum("dim_outdoor_length_mm", specs.dim_outdoor_length_mm, false);
-      tryFillNum("dim_outdoor_width_mm", specs.dim_outdoor_width_mm, false);
-      tryFillNum("dim_outdoor_height_mm", specs.dim_outdoor_height_mm, false);
-
-      // WiFi — само ако specs.wifi не е true вече (false = default „празно“).
-      if (specs.wifi === true && !next.specs.wifi) {
-        next.specs.wifi = true;
-        filled.add("specs.wifi");
-      }
+      // 4–6) Spec lookup полета — попълваме само ПРАЗНИ.
+      applyModelSpecsToForm(next, extract.model_specs ?? {}, lbl.refrigerant, filled);
 
       // 7) Името в каталога — auto-обнови, ако още е „чисто“.
       return syncAutoName(next);
@@ -1076,10 +1089,9 @@ export function ProductFormFields({
     }
 
     const lowConf =
-      confidence === "low" ||
-      confidence === "none" ||
       specsConfidence === "low" ||
-      specsConfidence === "none";
+      specsConfidence === "none" ||
+      confidence === "low";
 
     // Изграждаме компактен човекочетим списък на ключовите попълнени
     // полета — за бърза визуална потвърждение („какво стана преди миг“).
@@ -1111,8 +1123,14 @@ export function ProductFormFields({
       text: lowConf
         ? `Попълнени са ${newlyFilled.size} нови полета, но точността е ниска. Прегледай ВНИМАТЕЛНО.`
         : newlyFilled.size === 0
-          ? `Не успях да попълня нови полета. Опитай с по-ясна снимка на етикета.`
-          : `Попълнени са ${newlyFilled.size} нови полета автоматично. Общо AI-попълнени: ${filled.size}.`,
+          ? extract.source?.startsWith("Копирано от")
+            ? "Всички полета вече са попълнени (данните са в каталога)."
+            : confidence === "none"
+              ? "Не успях да попълня нови полета. Провери марката и модела."
+              : "Не успях да попълня нови полета. Опитай с по-ясна снимка на етикета."
+          : extract.source?.startsWith("Копирано от")
+            ? `Попълнени са ${newlyFilled.size} нови полета от каталога. Общо AI-попълнени: ${filled.size}.`
+            : `Попълнени са ${newlyFilled.size} нови полета автоматично. Общо AI-попълнени: ${filled.size}.`,
       details: highlights.length > 0 ? highlights : null,
     });
     // Toast-ът ОСТАВА на екрана докато не го затвори потребителят (или
@@ -1434,14 +1452,14 @@ export function ProductFormFields({
                 <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </div>
               <h2 className="text-xs sm:text-base font-bold text-slate-900 leading-tight">
-                Бърз старт от снимка{" "}
+                Бърз старт{" "}
                 <span className="text-[10px] text-slate-500 font-normal hidden sm:inline">
-                  (камера или галерия → AI auto-попълване)
+                  (снимка или марка + модел → AI auto-попълване)
                 </span>
               </h2>
             </div>
             <p className="text-[10px] sm:text-xs text-slate-600 mt-0.5 sm:mt-1 ml-7 sm:ml-9 leading-snug">
-              Снимай или избери готова снимка на етикета — AI чете серийния номер, разпознава модела и попълва пълните технически данни. Може да повториш многократно за различни тела или ъгли.
+              Снимай етикет или попълни марка + модел по-долу — AI попълва пълните технически данни. При повторно ползване допълва само празните полета.
             </p>
           </div>
         </div>
@@ -1459,6 +1477,17 @@ export function ProductFormFields({
             knownModel={form.modelCode}
             availableBrands={brands.map((b) => b.name)}
             onExtracted={(r) => mergeLabelExtract(r, "outdoor")}
+          />
+        </div>
+        <div className="mt-2 sm:mt-3">
+          <ModelSpecsLookupButton
+            brandId={form.brandId}
+            brandName={brands.find((b) => b.id === form.brandId)?.name ?? ""}
+            modelCode={form.modelCode}
+            availableBrands={brands.map((b) => b.name)}
+            excludeProductId={currentProductId}
+            onExtracted={(r) => mergeLabelExtract(r, "indoor")}
+            disabled={ro}
           />
         </div>
         <p className="mt-2 text-[10px] sm:text-[11px] text-slate-500 leading-snug text-center">

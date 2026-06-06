@@ -6,6 +6,11 @@ import { RefreshCw, CheckCircle2, Ban, Eye, ArrowUpDown, ArrowUp, ArrowDown, Spa
 import { ProductQuickViewButton } from "../ProductQuickView";
 import { SaleDetailModal } from "./SaleDetailModal";
 import { ManualSaleModal } from "./ManualSaleModal";
+import {
+  ContactHistoryModal,
+  ContactNameButton,
+  type ContactHistoryTarget,
+} from "../contacts/ContactHistoryModal";
 import { SalesHistoryReportPanel } from "./SalesHistoryReportPanel";
 import { ServiceSalesTable, ServiceStatusChips, type ServiceSortField } from "./ServiceSalesTable";
 import { ServiceDetailModal } from "./ServiceDetailModal";
@@ -65,6 +70,11 @@ type WorkRow = {
   notes?: string | null;
   sale_install_state?: "pending_mount" | "completed" | null;
   cancel_reason?: string | null;
+  contact_id?: string | null;
+  contacts?:
+    | { id: string; full_name?: string | null; phone?: string | null }
+    | Array<{ id: string; full_name?: string | null; phone?: string | null }>
+    | null;
   products?: {
     id?: string;
     name?: string;
@@ -76,6 +86,15 @@ type WorkRow = {
     outdoor_unit_serial?: string | null;
   } | null;
 };
+
+function contactTargetFromRow(row: WorkRow): ContactHistoryTarget {
+  const embedded = Array.isArray(row.contacts) ? row.contacts[0] : row.contacts;
+  return {
+    contactId: embedded?.id ?? row.contact_id ?? null,
+    customerName: row.customer_name,
+    customerPhone: row.customer_phone ?? embedded?.phone ?? null,
+  };
+}
 
 type SaleSection = "new" | "used";
 
@@ -385,6 +404,7 @@ export default function AdminHistoryPage() {
   const [reportGenerateToken, setReportGenerateToken] = useState(0);
   const [isMasterAdmin, setIsMasterAdmin] = useState(false);
   const [detailServiceId, setDetailServiceId] = useState<string | null>(null);
+  const [contactHistoryTarget, setContactHistoryTarget] = useState<ContactHistoryTarget | null>(null);
   const [sortBy, setSortBy] = useState<HistorySortField>("sale_date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
@@ -1067,8 +1087,14 @@ export default function AdminHistoryPage() {
                   <Td className="text-center">
                     <span className={tableStatusPillClass(row.status)}>{TABLE_STATUS_TEXT[row.status]}</span>
                   </Td>
-                  <Td className="font-medium text-slate-700 max-w-0 truncate" title={row.customer_name ?? ""}>
-                    {row.customer_name || "—"}
+                  <Td className="max-w-0 truncate">
+                    <ContactNameButton
+                      name={row.customer_name}
+                      contactId={contactTargetFromRow(row).contactId}
+                      customerPhone={row.customer_phone}
+                      onOpen={setContactHistoryTarget}
+                      className="text-[11px] text-slate-700"
+                    />
                   </Td>
                   <Td className="text-slate-600 max-w-0 truncate whitespace-nowrap">
                     <AdminPhoneLink phone={row.customer_phone} showIcon={false} className="font-medium text-slate-600 !text-[10px]" />
@@ -1170,7 +1196,13 @@ export default function AdminHistoryPage() {
                     productName={productName}
                     className="block truncate text-[11px] font-bold uppercase text-slate-500"
                   />
-                  <div className="font-bold text-slate-900 text-sm">{row.customer_name || "Неизвестен клиент"}</div>
+                  <ContactNameButton
+                    name={row.customer_name || "Неизвестен клиент"}
+                    contactId={contactTargetFromRow(row).contactId}
+                    customerPhone={row.customer_phone}
+                    onOpen={setContactHistoryTarget}
+                    className="font-bold text-slate-900 text-sm block"
+                  />
                   {row.customer_phone && (
                     <AdminPhoneLink
                       phone={row.customer_phone}
@@ -1260,6 +1292,7 @@ export default function AdminHistoryPage() {
           sortDir={sortDir}
           onSort={handleServiceSort}
           onDetail={setDetailServiceId}
+          onContactOpen={setContactHistoryTarget}
           emptyMessage={emptyServiceMessage(salesTab)}
         />
       )}
@@ -1283,6 +1316,7 @@ export default function AdminHistoryPage() {
 
       <SaleDetailModal saleId={detailSaleId} onClose={() => setDetailSaleId(null)} onChanged={() => void load()} />
       <ServiceDetailModal serviceId={detailServiceId} onClose={() => setDetailServiceId(null)} />
+      <ContactHistoryModal target={contactHistoryTarget} onClose={() => setContactHistoryTarget(null)} />
 
       <ManualSaleModal
         open={manualSaleOpen}
