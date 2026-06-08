@@ -91,7 +91,7 @@ function parseConditionArray(raw: unknown): ProductConditionFilter[] {
 
 function parseStockStatusArray(raw: unknown): StockStatusFilter[] {
   return parseStringArray(raw).filter(
-    (x): x is StockStatusFilter => x === "in_stock" || x === "out_of_stock" || x === "on_order",
+    (x): x is StockStatusFilter => x === "in_stock" || x === "on_order",
   );
 }
 
@@ -158,7 +158,7 @@ export function loadAdminProductsListFilters(): AdminProductsListFiltersSnapshot
     const stockStatuses =
       parsed.version === 3 && Array.isArray(parsed.stockStatuses)
         ? parseStockStatusArray(parsed.stockStatuses)
-        : migrateSingleToArray(parsed.stockStatus, ["in_stock", "out_of_stock", "on_order"] as const);
+        : migrateSingleToArray(parsed.stockStatus, ["in_stock", "on_order"] as const);
     const featuredFlags =
       parsed.version === 3 && Array.isArray(parsed.featuredFlags)
         ? parseFeaturedArray(parsed.featuredFlags)

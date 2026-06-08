@@ -28,20 +28,25 @@ function isExhaustedProduct(p: ProductCatalogListRow): boolean {
   return !isAccessoryRow(p) && p.stock_status === "out_of_stock";
 }
 
-/** Sold used units stay in sales history but are hidden from the products catalog. */
+/** Продадени климатици (изчерпани) — само в Продажби, не в таблицата Продукти. */
+export function isHiddenSoldProductFromAdminList(p: ProductCatalogListRow): boolean {
+  return isExhaustedProduct(p);
+}
+
+/** @deprecated Използвай isHiddenSoldProductFromAdminList. */
 export function isHiddenExhaustedUsedProduct(p: ProductCatalogListRow): boolean {
-  return !isAccessoryRow(p) && p.product_condition === "used" && p.stock_status === "out_of_stock";
+  return isHiddenSoldProductFromAdminList(p);
 }
 
 /**
- * PostgREST filter for products list: show new (any status) + used only when in_stock/on_order.
- * Sold used units (out_of_stock) stay in DB and in Продажби, not in this catalog.
+ * PostgREST filter за админ таблица Продукти: само налични и по поръчка.
+ * Изчерпаните (продадени) записи са само в Продажби.
  */
 export const CATALOG_VISIBLE_PRODUCTS_OR_FILTER =
-  "product_condition.eq.new,stock_status.eq.in_stock,stock_status.eq.on_order";
+  "stock_status.eq.in_stock,stock_status.eq.on_order";
 
 export function filterProductsCatalogItems<T extends ProductCatalogListRow>(items: T[]): T[] {
-  return items.filter((row) => !isHiddenExhaustedUsedProduct(row));
+  return items.filter((row) => !isHiddenSoldProductFromAdminList(row));
 }
 
 /** Group key: brand + model (or name fallback) + condition. */

@@ -189,6 +189,7 @@ export async function GET(req: NextRequest) {
     featured,
     publicCatalog,
   });
+  chipFilters.stockStatuses = chipFilters.stockStatuses.filter((s) => s !== "out_of_stock");
   const btuFilters = catalogBtu.parseBtuCsvParam(btuRaw);
   const supabase = await adminDb();
 

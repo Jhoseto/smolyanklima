@@ -27,7 +27,6 @@ import {
   ChevronDown,
   MessageCircle,
   PackageCheck,
-  PackageX,
   Clock4,
   Star,
   ArrowUp,
@@ -44,6 +43,7 @@ import { useAdminBackHandler } from "@/lib/admin/useAdminBackHandler";
 import { CatalogItemQuickViewButton } from "../ProductQuickView";
 import { FeaturedSlotModal } from "./FeaturedSlotModal";
 import { ProductCatalogSettingsModal } from "./ProductCatalogSettingsModal";
+import { ProductSupplierOrderModal } from "./ProductSupplierOrderModal";
 import { formatAdminPriceEuro, formatAdminDateOnly } from "@/lib/admin/formatEuro";
 import {
   PriceRangeSlider,
@@ -595,6 +595,8 @@ export default function AdminProductsPage() {
   const [error, setError] = useState<string | null>(null);
   const [saleFor, setSaleFor] = useState<ProductRow | null>(null);
   useAdminBackHandler(Boolean(saleFor), () => setSaleFor(null), "catalog-product-sale");
+  const [orderFor, setOrderFor] = useState<ProductRow | null>(null);
+  useAdminBackHandler(Boolean(orderFor), () => setOrderFor(null), "catalog-product-order");
   const [saleBusy, setSaleBusy] = useState(false);
   const [saleForm, setSaleForm] = useState(emptySaleModalForm);
   const [contactQuery, setContactQuery] = useState("");
@@ -606,7 +608,7 @@ export default function AdminProductsPage() {
   const [editingPurchaseId, setEditingPurchaseId] = useState<string | null>(null);
   const [purchaseDraft, setPurchaseDraft] = useState("");
   const [purchaseBusy, setPurchaseBusy] = useState(false);
-  const [saleSuccess, setSaleSuccess] = useState<{ productName: string; customerName: string; amount: number; isBackOrder?: boolean } | null>(null);
+  const [saleSuccess, setSaleSuccess] = useState<{ productName: string; customerName: string; amount: number; isBackOrder?: boolean; quantity?: number } | null>(null);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [listFiltersReady, setListFiltersReady] = useState(false);
@@ -1138,42 +1140,6 @@ export default function AdminProductsPage() {
     }
   }
 
-  async function createSupplierOrder(
-    prod: ProductRow,
-    customer: { id?: string; name: string; phone: string; address: string; email?: string; notes: string; agreedPrice?: string },
-  ) {
-    const agreedPriceNum = customer.agreedPrice?.trim()
-      ? Number(String(customer.agreedPrice).replace(",", "."))
-      : null;
-
-    try {
-      const res = await fetch("/api/admin/supplier-orders", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          productId: prod.id,
-          contactId: customer.id || null,
-          customerName: customer.name || null,
-          customerPhone: customer.phone || null,
-          customerAddress: customer.address || null,
-          customerEmail: customer.email || null,
-          notes: customer.notes || null,
-          agreedPrice: agreedPriceNum != null && Number.isFinite(agreedPriceNum) ? agreedPriceNum : null,
-        }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error((json as { error?: string }).error || "Грешка при запис на поръчка");
-      }
-      notifyAdminCalendarReload();
-      return true;
-    } catch (e: unknown) {
-      setError(String(e instanceof Error ? e.message : e));
-      return false;
-    }
-  }
-
   function startPriceEdit(p: ProductRow) {
     if (!canEditMasterPricesInline) return;
     setEditingPriceId(p.id);
@@ -1282,7 +1248,7 @@ export default function AdminProductsPage() {
   const catalogEmptyMessage =
     items.length === 0
       ? usedOnlyFilter
-        ? "Няма налични или по поръчка климатици втора употреба. Продадените (изчерпани) са само в Продажби."
+        ? "Няма налични или по поръчка климатици втора употреба. Продадените единици са в Продажби."
         : "Няма намерени артикули."
       : "Няма видими артикули в този изглед.";
   const catalogEmptyMessageMobile =
@@ -1342,12 +1308,7 @@ export default function AdminProductsPage() {
     });
   }
   for (const status of stockStatuses) {
-    const label =
-      status === "in_stock"
-        ? "В наличност"
-        : status === "on_order"
-          ? "По поръчка"
-          : "Изчерпан";
+    const label = status === "in_stock" ? "В наличност" : "По поръчка";
     activeFilters.push({
       key: `stockStatus-${status}`,
       label: `Наличност: ${label}`,
@@ -1568,13 +1529,6 @@ export default function AdminProductsPage() {
                 onClick={() => { setStockStatuses((prev) => toggleChipFilter(prev, "on_order")); }}
               >
                 <Clock4 className="w-3 h-3" /> По поръчка
-              </ChipToggle>
-              <ChipToggle
-                active={stockStatuses.includes("out_of_stock")}
-                tone="danger"
-                onClick={() => { setStockStatuses((prev) => toggleChipFilter(prev, "out_of_stock")); }}
-              >
-                <PackageX className="w-3 h-3" /> Изчерпан
               </ChipToggle>
               <span className="hidden md:inline-block h-5 w-px bg-slate-200 mx-0.5" aria-hidden />
               <ChipToggle
@@ -2079,7 +2033,16 @@ export default function AdminProductsPage() {
                     <Button
                       variant="secondary"
                       size="sm"
-                      onClick={() => { setSaleFor(p); setSaleForm(saleModalFormForProduct(p)); setContactQuery(""); setContactResults([]); }}
+                      onClick={() => {
+                        if (p.stock_status === "on_order") {
+                          setOrderFor(p);
+                          return;
+                        }
+                        setSaleFor(p);
+                        setSaleForm(saleModalFormForProduct(p));
+                        setContactQuery("");
+                        setContactResults([]);
+                      }}
                       disabled={!canRecordSale(p)}
                       className={`!p-1 shrink-0 ${p.stock_status === "on_order" ? "!text-violet-700 !border-violet-300 !bg-violet-50 hover:!bg-violet-100" : ""}`}
                       title={p.stock_status === "on_order" ? "Поръчай от доставчик" : saleButtonTitle(p)}
@@ -2365,6 +2328,10 @@ export default function AdminProductsPage() {
                 <button
                   type="button"
                   onClick={() => {
+                    if (p.stock_status === "on_order") {
+                      setOrderFor(p);
+                      return;
+                    }
                     setSaleFor(p);
                     setSaleForm(saleModalFormForProduct(p));
                     setContactQuery("");
@@ -2462,7 +2429,6 @@ export default function AdminProductsPage() {
       </div>
 
       {saleFor && (() => {
-        const isBackOrder = saleFor.stock_status === "on_order";
         const isClimateProduct = !isAccessoryRow(saleFor);
         const withInstallation = isClimateProduct && saleForm.includeMount;
         return (
@@ -2477,15 +2443,13 @@ export default function AdminProductsPage() {
             <div className="flex justify-center pt-3 pb-1 md:hidden shrink-0">
               <div className="w-10 h-1 rounded-full bg-slate-200" />
             </div>
-            <div className={`border-b border-slate-100 px-4 py-4 md:px-6 md:py-5 shrink-0 ${isBackOrder ? "bg-[radial-gradient(circle_at_top_left,#ede9fe_0,#ffffff_42%,#f8fafc_100%)]" : "bg-[radial-gradient(circle_at_top_left,#e6f9fd_0,#ffffff_42%,#fff3ed_100%)]"}`}>
-              <div className={`text-xs font-bold uppercase tracking-[0.24em] ${isBackOrder ? "text-violet-700" : "text-brand-blue-700"}`}>{isBackOrder ? "Поръчка от доставчик" : "Запис на продажба"}</div>
+            <div className="border-b border-slate-100 px-4 py-4 md:px-6 md:py-5 shrink-0 bg-[radial-gradient(circle_at_top_left,#e6f9fd_0,#ffffff_42%,#fff3ed_100%)]">
+              <div className="text-xs font-bold uppercase tracking-[0.24em] text-brand-blue-700">Запис на продажба</div>
               <div className="mt-1 text-lg md:text-2xl font-black leading-tight text-slate-950">{saleFor.name}</div>
               <div className="mt-1 text-sm font-medium text-slate-500 hidden sm:block">
-                {isBackOrder
-                  ? "Поръчка към доставчик — клиентът не е задължителен. Попълни договорена цена; данните за клиент са по желание."
-                  : withInstallation
-                    ? "Контакт за сделката, дата и час за монтаж. Създава се продажба (чака монтаж) и събитие „Монтаж“ в календара."
-                    : "Продажба без монтаж — записът в „Продажби“ се маркира директно като завършен, без дата в календара."}
+                {withInstallation
+                  ? "Контакт за сделката, дата и час за монтаж. Създава се продажба (чака монтаж) и събитие „Монтаж“ в календара."
+                  : "Продажба без монтаж — записът в „Продажби“ се маркира директно като завършен, без дата в календара."}
               </div>
             </div>
 
@@ -2497,7 +2461,7 @@ export default function AdminProductsPage() {
                     setContactQuery(e.target.value);
                     setSaleForm((s) => ({ ...s, contactId: "" }));
                   }}
-                  placeholder={isBackOrder ? "Търси контакт (по желание)..." : "Търси контакт (име/телефон) ..."}
+                  placeholder="Търси контакт (име/телефон) ..."
                 />
                 {(contactLoading || contactResults.length > 0) && (
                   <div className="absolute left-0 right-0 top-[calc(100%+4px)] border border-slate-200 rounded-lg bg-white shadow-lg z-10 max-h-32 overflow-y-auto p-1">
@@ -2528,135 +2492,70 @@ export default function AdminProductsPage() {
                   </div>
                 )}
               </div>
-              <Input value={saleForm.customerName} onChange={(e) => setSaleForm((s) => ({ ...s, customerName: e.target.value }))} placeholder={isBackOrder ? "Контактно лице (по желание)" : "Контактно лице*"} />
-              <Input value={saleForm.customerPhone} onChange={(e) => setSaleForm((s) => ({ ...s, customerPhone: e.target.value }))} placeholder={isBackOrder ? "Телефон (по желание)" : "Телефон*"} />
+              <Input value={saleForm.customerName} onChange={(e) => setSaleForm((s) => ({ ...s, customerName: e.target.value }))} placeholder="Контактно лице*" />
+              <Input value={saleForm.customerPhone} onChange={(e) => setSaleForm((s) => ({ ...s, customerPhone: e.target.value }))} placeholder="Телефон*" />
               <Input value={saleForm.customerEmail} onChange={(e) => setSaleForm((s) => ({ ...s, customerEmail: e.target.value }))} placeholder="Имейл" />
               <Input value={saleForm.customerAddress} onChange={(e) => setSaleForm((s) => ({ ...s, customerAddress: e.target.value }))} placeholder="Адрес" className="md:col-span-2" />
               <Textarea value={saleForm.notes} onChange={(e) => setSaleForm((s) => ({ ...s, notes: e.target.value }))} placeholder="Бележки (по желание)" rows={2} className="md:col-span-2 min-h-[2.75rem]" />
 
-              {isBackOrder ? (
-                <div className="col-span-full border-t border-slate-100 pt-3 mt-1">
-                  <div className="text-xs font-black uppercase tracking-wide text-violet-700 mb-2">Договорена цена</div>
-                  <p className="mb-2 text-xs text-slate-500">
-                    Каталог:{" "}
-                    <span className="font-bold text-slate-800">
-                      €{formatAdminPriceEuro(Number(saleFor.price), { decimals: true })}
-                    </span>
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <label className="grid gap-1.5">
-                      <span className="text-xs font-bold text-slate-600">Отстъпка (%)</span>
-                      <Input
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="0.1"
-                        value={saleForm.agreedPriceDiscountPct}
-                        onChange={(e) => {
-                          const pctStr = e.target.value;
-                          const catalog = Number(saleFor.price);
-                          const pct = parseDecimalInput(pctStr);
-                          const nextPrice =
-                            pctStr.trim() === "" || !Number.isFinite(catalog)
-                              ? saleForm.agreedPrice
-                              : formatAgreedPriceInput(agreedPriceAfterDiscount(catalog, pct));
-                          setSaleForm((s) => ({
-                            ...s,
-                            agreedPriceDiscountPct: pctStr,
-                            agreedPrice: nextPrice,
-                          }));
-                        }}
-                        placeholder="0"
-                      />
-                    </label>
-                    <label className="grid gap-1.5">
-                      <span className="text-xs font-bold text-slate-600">Цена (€)</span>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={saleForm.agreedPrice}
-                        onChange={(e) => {
-                          const agreedStr = e.target.value;
-                          const catalog = Number(saleFor.price);
-                          const agreed = parseDecimalInput(agreedStr);
-                          const pctStr =
-                            agreedStr.trim() === "" || !Number.isFinite(catalog)
-                              ? ""
-                              : discountPercentFromAgreedPrice(catalog, agreed);
-                          setSaleForm((s) => ({
-                            ...s,
-                            agreedPrice: agreedStr,
-                            agreedPriceDiscountPct: pctStr,
-                          }));
-                        }}
-                        placeholder={formatAgreedPriceInput(Number(saleFor.price))}
-                      />
-                    </label>
-                  </div>
-                </div>
-              ) : (
-                <div className="col-span-full border-t border-slate-100 pt-3 mt-1 space-y-3">
-                  {isClimateProduct && (
-                    <label className="flex items-start gap-3 cursor-pointer rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5">
-                      <input
-                        type="checkbox"
-                        checked={saleForm.includeMount}
-                        onChange={(e) => setSaleForm((s) => ({ ...s, includeMount: e.target.checked }))}
-                        className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-blue-600 focus:ring-brand-blue-500"
-                      />
-                      <span className="text-sm text-slate-700 leading-snug">
-                        <span className="font-bold text-slate-900">С монтаж</span>
-                        <span className="block text-xs text-slate-500 mt-0.5">
-                          Изключете за продажба само на уред — без насрочване в календара.
-                        </span>
+              <div className="col-span-full border-t border-slate-100 pt-3 mt-1 space-y-3">
+                {isClimateProduct && (
+                  <label className="flex items-start gap-3 cursor-pointer rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5">
+                    <input
+                      type="checkbox"
+                      checked={saleForm.includeMount}
+                      onChange={(e) => setSaleForm((s) => ({ ...s, includeMount: e.target.checked }))}
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-blue-600 focus:ring-brand-blue-500"
+                    />
+                    <span className="text-sm text-slate-700 leading-snug">
+                      <span className="font-bold text-slate-900">С монтаж</span>
+                      <span className="block text-xs text-slate-500 mt-0.5">
+                        Изключете за продажба само на уред — без насрочване в календара.
                       </span>
-                    </label>
-                  )}
-                  {withInstallation ? (
-                    <>
-                      <div className="text-xs font-black uppercase tracking-wide text-brand-blue-700">Монтаж</div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <label className="grid gap-1.5">
-                          <span className="text-xs font-bold text-slate-600">Дата *</span>
-                          <Input
-                            type="date"
-                            value={saleForm.mountDate}
-                            onChange={(e) => setSaleForm((s) => ({ ...s, mountDate: e.target.value }))}
-                          />
-                        </label>
-                        <label className="grid gap-1.5">
-                          <span className="text-xs font-bold text-slate-600">Час от</span>
-                          <Input
-                            type="time"
-                            value={saleForm.mountTimeFrom}
-                            onChange={(e) => setSaleForm((s) => ({ ...s, mountTimeFrom: e.target.value }))}
-                          />
-                        </label>
-                        <label className="grid gap-1.5">
-                          <span className="text-xs font-bold text-slate-600">Час до</span>
-                          <Input
-                            type="time"
-                            value={saleForm.mountTimeTo}
-                            onChange={(e) => setSaleForm((s) => ({ ...s, mountTimeTo: e.target.value }))}
-                          />
-                        </label>
-                      </div>
-                    </>
-                  ) : !isBackOrder ? (
-                    <p className="text-xs text-slate-500 rounded-lg border border-dashed border-slate-200 bg-white px-3 py-2">
-                      Продажбата ще бъде записана като <strong className="text-slate-700">завършена</strong> в панела „Продажби“.
-                    </p>
-                  ) : null}
-                </div>
-              )}
+                    </span>
+                  </label>
+                )}
+                {withInstallation ? (
+                  <>
+                    <div className="text-xs font-black uppercase tracking-wide text-brand-blue-700">Монтаж</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <label className="grid gap-1.5">
+                        <span className="text-xs font-bold text-slate-600">Дата *</span>
+                        <Input
+                          type="date"
+                          value={saleForm.mountDate}
+                          onChange={(e) => setSaleForm((s) => ({ ...s, mountDate: e.target.value }))}
+                        />
+                      </label>
+                      <label className="grid gap-1.5">
+                        <span className="text-xs font-bold text-slate-600">Час от</span>
+                        <Input
+                          type="time"
+                          value={saleForm.mountTimeFrom}
+                          onChange={(e) => setSaleForm((s) => ({ ...s, mountTimeFrom: e.target.value }))}
+                        />
+                      </label>
+                      <label className="grid gap-1.5">
+                        <span className="text-xs font-bold text-slate-600">Час до</span>
+                        <Input
+                          type="time"
+                          value={saleForm.mountTimeTo}
+                          onChange={(e) => setSaleForm((s) => ({ ...s, mountTimeTo: e.target.value }))}
+                        />
+                      </label>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-xs text-slate-500 rounded-lg border border-dashed border-slate-200 bg-white px-3 py-2">
+                    Продажбата ще бъде записана като <strong className="text-slate-700">завършена</strong> в панела „Продажби“.
+                  </p>
+                )}
+              </div>
             </div>
 
             <div className="flex justify-between items-center border-t border-slate-100 bg-slate-50 px-6 py-4 gap-2 flex-wrap">
               <span className="text-sm font-black text-slate-900">
-                {isBackOrder
-                  ? <span className="text-violet-700">По поръчка — монтажът се насрочва при доставка</span>
-                  : `Сума: €${formatAdminPriceEuro(Number(saleFor.price))}`}
+                Сума: €{formatAdminPriceEuro(Number(saleFor.price))}
               </span>
               <div className="flex gap-2">
                 <Button
@@ -2676,98 +2575,76 @@ export default function AdminProductsPage() {
                   + Нов контакт
                 </Button>
                 <Button variant="secondary" disabled={saleBusy} onClick={() => setSaleFor(null)}>Отказ</Button>
-                {isBackOrder ? (
-                  <Button
-                    variant="primary"
-                    disabled={saleBusy}
-                    onClick={async () => {
-                      setSaleBusy(true);
-                      try {
-                        const ok = await createSupplierOrder(saleFor, {
+                <Button
+                  variant="primary"
+                  disabled={
+                    saleBusy ||
+                    !saleForm.customerName.trim() ||
+                    !saleForm.customerPhone.trim() ||
+                    (withInstallation && !saleForm.mountDate.trim())
+                  }
+                  onClick={async () => {
+                    setSaleBusy(true);
+                    try {
+                      const resolvedPrice = saleForm.agreedPrice.trim()
+                        ? Number(saleForm.agreedPrice.replace(",", "."))
+                        : Number(saleFor.price);
+                      const ok = await markAsSold(
+                        saleFor,
+                        {
                           id: saleForm.contactId || undefined,
                           name: saleForm.customerName.trim(),
                           phone: saleForm.customerPhone.trim(),
                           address: saleForm.customerAddress.trim(),
                           email: saleForm.customerEmail.trim(),
                           notes: saleForm.notes.trim(),
-                          agreedPrice: saleForm.agreedPrice,
+                        },
+                        withInstallation
+                          ? {
+                              date: saleForm.mountDate,
+                              timeFrom: saleForm.mountTimeFrom,
+                              timeTo: saleForm.mountTimeTo,
+                            }
+                          : null,
+                        Number.isFinite(resolvedPrice) ? resolvedPrice : Number(saleFor.price),
+                        withInstallation,
+                      );
+                      if (ok) {
+                        setSaleSuccess({
+                          productName: saleFor.name,
+                          customerName: saleForm.customerName.trim(),
+                          amount: Number.isFinite(resolvedPrice) ? resolvedPrice : Number(saleFor.price),
                         });
-                        if (ok) {
-                          const price = saleForm.agreedPrice.trim()
-                            ? Number(saleForm.agreedPrice.replace(",", "."))
-                            : Number(saleFor.price);
-                          setSaleSuccess({
-                            productName: saleFor.name,
-                            customerName: saleForm.customerName.trim() || "Обща поръчка",
-                            amount: price,
-                            isBackOrder: true,
-                          });
-                          setSaleFor(null);
-                        }
-                      } finally {
-                        setSaleBusy(false);
+                        setSaleFor(null);
                       }
-                    }}
-                  >
-                    {saleBusy ? "Запис..." : "Запиши поръчка"}
-                  </Button>
-                ) : (
-                  <Button
-                    variant="primary"
-                    disabled={
-                      saleBusy ||
-                      !saleForm.customerName.trim() ||
-                      !saleForm.customerPhone.trim() ||
-                      (withInstallation && !saleForm.mountDate.trim())
+                    } finally {
+                      setSaleBusy(false);
                     }
-                    onClick={async () => {
-                      setSaleBusy(true);
-                      try {
-                        const resolvedPrice = saleForm.agreedPrice.trim()
-                          ? Number(saleForm.agreedPrice.replace(",", "."))
-                          : Number(saleFor.price);
-                        const ok = await markAsSold(
-                          saleFor,
-                          {
-                            id: saleForm.contactId || undefined,
-                            name: saleForm.customerName.trim(),
-                            phone: saleForm.customerPhone.trim(),
-                            address: saleForm.customerAddress.trim(),
-                            email: saleForm.customerEmail.trim(),
-                            notes: saleForm.notes.trim(),
-                          },
-                          withInstallation
-                            ? {
-                                date: saleForm.mountDate,
-                                timeFrom: saleForm.mountTimeFrom,
-                                timeTo: saleForm.mountTimeTo,
-                              }
-                            : null,
-                          Number.isFinite(resolvedPrice) ? resolvedPrice : Number(saleFor.price),
-                          withInstallation,
-                        );
-                        if (ok) {
-                          setSaleSuccess({
-                            productName: saleFor.name,
-                            customerName: saleForm.customerName.trim(),
-                            amount: Number.isFinite(resolvedPrice) ? resolvedPrice : Number(saleFor.price),
-                          });
-                          setSaleFor(null);
-                        }
-                      } finally {
-                        setSaleBusy(false);
-                      }
-                    }}
-                  >
-                    {saleBusy ? "Запис..." : "Запиши продажба"}
-                  </Button>
-                )}
+                  }}
+                >
+                  {saleBusy ? "Запис..." : "Запиши продажба"}
+                </Button>
               </div>
             </div>
           </div>
         </div>
         );
       })()}
+
+      <ProductSupplierOrderModal
+        open={Boolean(orderFor)}
+        product={orderFor}
+        onClose={() => setOrderFor(null)}
+        onSuccess={(result) => {
+          setSaleSuccess({
+            productName: result.productName,
+            customerName: result.customerName,
+            amount: result.amount,
+            quantity: result.quantity,
+            isBackOrder: true,
+          });
+        }}
+      />
 
       {saleSuccess && (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/55 p-0 md:p-4 backdrop-blur-md" onClick={() => setSaleSuccess(null)}>
@@ -2791,8 +2668,15 @@ export default function AdminProductsPage() {
             </div>
             <div className="grid gap-3 p-4 md:p-6 overflow-y-auto flex-1 min-h-0">
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Договорена цена</div>
-                <div className="mt-1 text-2xl font-black text-slate-900">€{formatAdminPriceEuro(saleSuccess.amount)}</div>
+                <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                  {saleSuccess.isBackOrder ? "Обща стойност" : "Договорена цена"}
+                </div>
+                <div className="mt-1 text-2xl font-black text-slate-900">
+                  €{formatAdminPriceEuro(saleSuccess.amount, { decimals: true })}
+                </div>
+                {saleSuccess.isBackOrder && saleSuccess.quantity && saleSuccess.quantity > 1 ? (
+                  <div className="mt-1 text-xs font-medium text-slate-500">Количество: {saleSuccess.quantity} бр.</div>
+                ) : null}
               </div>
               {saleSuccess.isBackOrder ? (
                 <div className="rounded-2xl border border-violet-100 bg-violet-50 p-4 text-sm font-semibold leading-6 text-violet-900">

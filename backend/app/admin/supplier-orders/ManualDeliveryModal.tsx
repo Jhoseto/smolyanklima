@@ -60,6 +60,7 @@ type ManualOrderForm = {
   customerEmail: string;
   notes: string;
   orderDate: string;
+  quantity: string;
   purchasePrice: string;
   agreedPrice: string;
   supplierKey: string;
@@ -93,6 +94,7 @@ function emptyForm(section: OrderSection): ManualOrderForm {
     customerEmail: "",
     notes: "",
     orderDate: today,
+    quantity: "1",
     purchasePrice: "",
     agreedPrice: "",
     supplierKey: "",
@@ -116,6 +118,7 @@ function hasMeaningfulDraft(draft: ManualDeliveryDraft): boolean {
       f.customerAddress.trim() ||
       f.customerEmail.trim() ||
       f.notes.trim() ||
+      f.quantity.trim() !== "1" ||
       f.purchasePrice.trim() ||
       f.agreedPrice.trim() ||
       f.supplierKey.trim(),
@@ -640,6 +643,12 @@ export function ManualDeliveryModal({
       setError("Посочете дата на поръчката.");
       return;
     }
+    const quantityRaw = form.quantity.trim();
+    const quantity = quantityRaw === "" ? 1 : Number(quantityRaw.replace(",", "."));
+    if (!Number.isFinite(quantity) || quantity < 1 || !Number.isInteger(quantity)) {
+      setError("Въведете валидно количество (цяло число ≥ 1).");
+      return;
+    }
 
     setBusy(true);
     setError(null);
@@ -660,6 +669,7 @@ export function ManualDeliveryModal({
           purchasePrice: purchasePrice != null && Number.isFinite(purchasePrice) ? purchasePrice : null,
           agreedPrice: agreedPrice != null && Number.isFinite(agreedPrice) ? agreedPrice : null,
           orderDate: form.orderDate,
+          quantity,
           contactId: form.contactId || null,
           customerName: form.customerName.trim() || null,
           customerPhone: form.customerPhone.trim() || null,
@@ -809,6 +819,17 @@ export function ManualDeliveryModal({
           <label className="grid gap-1.5 md:col-span-2">
             <span className="text-xs font-bold text-slate-600">Дата на поръчката *</span>
             <Input type="date" value={form.orderDate} onChange={(e) => setForm((s) => ({ ...s, orderDate: e.target.value }))} />
+          </label>
+
+          <label className="grid gap-1.5">
+            <span className="text-xs font-bold text-slate-600">Количество *</span>
+            <Input
+              type="number"
+              min={1}
+              step={1}
+              value={form.quantity}
+              onChange={(e) => setForm((s) => ({ ...s, quantity: e.target.value }))}
+            />
           </label>
 
           <label className="grid gap-1.5">

@@ -12,7 +12,7 @@ import {
 import { buildAdminSearchOrFilter } from "@/lib/admin/phoneSearchPattern";
 import { parseOrderPhaseCsv } from "@/lib/admin/supplierOrdersQueryFilters";
 import { normalizeSupplierKey, supplierNameMatchesKey } from "@/lib/admin/supplierNameNormalize";
-import { recordManualDelivery } from "@/lib/admin/recordManualDelivery";
+import { recordManualDelivery, recordSupplierOrderFromProduct } from "@/lib/admin/recordManualDelivery";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export async function OPTIONS(req: NextRequest) {
@@ -345,6 +345,8 @@ export async function POST(req: NextRequest) {
         : typeof json.agreedPrice === "number" && Number.isFinite(json.agreedPrice)
           ? json.agreedPrice
           : null;
+    const quantity =
+      typeof json.quantity === "number" && Number.isFinite(json.quantity) ? json.quantity : null;
 
     try {
       const result = await recordManualDelivery(supabase, {
@@ -361,6 +363,7 @@ export async function POST(req: NextRequest) {
           typeof json.orderDate === "string" && json.orderDate.trim()
             ? json.orderDate.trim()
             : adminLocalDateKey(),
+        quantity,
         contactId: contactId && typeof contactId === "string" ? contactId : null,
         customerName: customerName && typeof customerName === "string" ? customerName : null,
         customerPhone: customerPhone && typeof customerPhone === "string" ? customerPhone : null,
@@ -394,68 +397,53 @@ export async function POST(req: NextRequest) {
 
   const customerNameTrim =
     customerName && typeof customerName === "string" ? String(customerName).trim() : "";
-  const customerPhoneTrim =
-    customerPhone && typeof customerPhone === "string" ? String(customerPhone).trim() : "";
+  const purchasePrice =
+    typeof json.purchasePrice === "number" && Number.isFinite(json.purchasePrice) ? json.purchasePrice : null;
+  const unitPrice =
+    typeof agreedPrice === "number" && Number.isFinite(agreedPrice) && agreedPrice >= 0 ? agreedPrice : null;
+  const quantity =
+    typeof json.quantity === "number" && Number.isFinite(json.quantity) ? json.quantity : null;
+  const orderDate =
+    typeof json.orderDate === "string" && json.orderDate.trim() ? json.orderDate.trim() : adminLocalDateKey();
 
-  const { data: product, error: prodErr } = await supabase
-    .from("products")
-    .select("id, name, stock_status, price")
-    .eq("id", productId)
-    .maybeSingle();
-
-  if (prodErr) return withCors(req, NextResponse.json({ error: prodErr.message }, { status: 500 }));
-  if (!product) return withCors(req, NextResponse.json({ error: "Продуктът не е намерен" }, { status: 404 }));
-  if (product.stock_status !== "on_order") {
-    return withCors(
-      req,
-      NextResponse.json(
-        { error: 'Само продукти с статус "По поръчка" могат да се поръчват от доставчик.' },
-        { status: 400 },
-      ),
-    );
-  }
-
-  const today = adminLocalDateKey();
-  const unitPrice = typeof agreedPrice === "number" && agreedPrice >= 0 ? agreedPrice : Number(product.price);
-
-  const { data: workItem, error: wiErr } = await supabase
-    .from("work_items")
-    .insert({
-      type: "sale",
-      event_code: "supplier_order",
-      title: `Поръчка от доставчик: ${product.name}`,
-      status: "planned",
-      priority: "medium",
-      due_date: today,
-      product_id: productId,
-      contact_id: contactId && typeof contactId === "string" ? contactId : null,
-      customer_name: customerNameTrim || null,
-      customer_phone: customerPhoneTrim || null,
-      customer_address: customerAddress && typeof customerAddress === "string" ? String(customerAddress).trim() : null,
-      notes: notes && typeof notes === "string" ? String(notes).trim() : null,
-      quantity: 1,
-      unit_price: unitPrice,
-      total_amount: unitPrice,
-    })
-    .select("*")
-    .single();
-
-  if (wiErr) return withCors(req, NextResponse.json({ error: wiErr.message }, { status: 500 }));
-
-  await logAdminActivity({
-    action: "supplier_order.create",
-    entityType: "supplier_order",
-    entityId: (workItem as { id: string }).id,
-    details: {
+  try {
+    const result = await recordSupplierOrderFromProduct(supabase, {
       productId,
-      customer_name: customerNameTrim || null,
-      unit_price: unitPrice,
-    },
-  });
+      orderDate,
+      quantity,
+      purchasePrice,
+      agreedPrice: unitPrice,
+      supplierName: typeof json.supplierName === "string" ? json.supplierName : null,
+      contactId: contactId && typeof contactId === "string" ? contactId : null,
+      customerName: customerNameTrim || null,
+      customerPhone: customerPhone && typeof customerPhone === "string" ? customerPhone : null,
+      customerAddress: customerAddress && typeof customerAddress === "string" ? customerAddress : null,
+      notes: notes && typeof notes === "string" ? notes : null,
+      createdBy: session.userId,
+    });
 
-  if (customerEmail && typeof customerEmail === "string" && customerEmail.trim() && contactId && typeof contactId === "string") {
-    // Optionally store email on contact — best-effort, no fatal error
+    const { data: workItem } = await supabase.from("work_items").select("*").eq("id", result.orderId).single();
+
+    await logAdminActivity({
+      action: "supplier_order.create",
+      entityType: "supplier_order",
+      entityId: result.orderId,
+      details: {
+        productId,
+        customer_name: customerNameTrim || null,
+        unit_price: unitPrice,
+        quantity,
+      },
+    });
+
+    if (customerEmail && typeof customerEmail === "string" && customerEmail.trim() && contactId && typeof contactId === "string") {
+      // Optionally store email on contact — best-effort, no fatal error
+    }
+
+    return withCors(req, NextResponse.json({ data: workItem }, { status: 201 }));
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e);
+    const status = message.includes("не е намерен") ? 404 : message.includes("По поръчка") ? 400 : 400;
+    return withCors(req, NextResponse.json({ error: message }, { status }));
   }
-
-  return withCors(req, NextResponse.json({ data: workItem }, { status: 201 }));
 }

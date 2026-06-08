@@ -11,6 +11,7 @@ export type ManualDeliveryInput = {
   purchasePrice?: number | null;
   agreedPrice?: number | null;
   orderDate: string;
+  quantity?: number | null;
   contactId?: string | null;
   customerName?: string | null;
   customerPhone?: string | null;
@@ -18,6 +19,27 @@ export type ManualDeliveryInput = {
   notes?: string | null;
   createdBy: string;
 };
+
+export type SupplierOrderFromProductInput = {
+  productId: string;
+  orderDate?: string | null;
+  quantity?: number | null;
+  purchasePrice?: number | null;
+  agreedPrice?: number | null;
+  supplierName?: string | null;
+  contactId?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  customerAddress?: string | null;
+  notes?: string | null;
+  createdBy: string;
+};
+
+function normalizeOrderQuantity(quantity: number | null | undefined): number {
+  if (quantity == null || !Number.isFinite(quantity)) return 1;
+  const n = Math.floor(quantity);
+  return n >= 1 ? n : 1;
+}
 
 type ProductTemplate = {
   id: string;
@@ -80,10 +102,17 @@ export async function recordManualDelivery(
       ? template.product_condition
       : null) ?? input.productCondition;
 
+  const quantity = normalizeOrderQuantity(input.quantity);
+  const totalAmount =
+    agreedPrice != null && Number.isFinite(agreedPrice) ? agreedPrice * quantity : agreedPrice;
+
   const workItemPayload: Record<string, unknown> = {
     type: "sale",
     event_code: "supplier_order",
-    title: `Поръчка от доставчик: ${productName}`,
+    title:
+      quantity > 1
+        ? `Поръчка от доставчик: ${productName} (×${quantity})`
+        : `Поръчка от доставчик: ${productName}`,
     status: "planned",
     priority: "medium",
     due_date: orderDate,
@@ -95,9 +124,9 @@ export async function recordManualDelivery(
     customer_phone: input.customerPhone?.trim() || null,
     customer_address: input.customerAddress?.trim() || null,
     notes: input.notes?.trim() || null,
-    quantity: 1,
+    quantity,
     unit_price: agreedPrice,
-    total_amount: agreedPrice,
+    total_amount: totalAmount,
     purchase_price: purchasePrice,
     supplier_name: input.supplierName?.trim() || null,
     supplier_invoice_number: null,
@@ -112,4 +141,51 @@ export async function recordManualDelivery(
   if (orderErr) throw new Error(orderErr.message);
 
   return { orderId: orderRow.id as string };
+}
+
+export async function recordSupplierOrderFromProduct(
+  supabase: SupabaseClient,
+  input: SupplierOrderFromProductInput,
+): Promise<{ orderId: string }> {
+  const { data: product, error: prodErr } = await supabase
+    .from("products")
+    .select(
+      "id, name, stock_status, price, purchase_price, product_condition, product_region, brand_id, model_code",
+    )
+    .eq("id", input.productId)
+    .maybeSingle();
+  if (prodErr) throw new Error(prodErr.message);
+  if (!product) throw new Error("Продуктът не е намерен.");
+  if (product.stock_status !== "on_order") {
+    throw new Error('Само продукти с статус "По поръчка" могат да се поръчват от доставчик.');
+  }
+
+  const productCondition =
+    product.product_condition === "used" || product.product_condition === "new"
+      ? product.product_condition
+      : "new";
+  const productRegion =
+    product.product_region === "japan" || product.product_region === "europe"
+      ? product.product_region
+      : null;
+
+  return recordManualDelivery(supabase, {
+    productId: product.id,
+    productName: product.name,
+    brandId: product.brand_id ?? null,
+    modelCode: product.model_code ?? null,
+    productCondition,
+    productRegion,
+    supplierName: input.supplierName ?? null,
+    purchasePrice: input.purchasePrice ?? null,
+    agreedPrice: input.agreedPrice ?? null,
+    orderDate: input.orderDate?.trim() || new Date().toISOString().slice(0, 10),
+    quantity: input.quantity ?? null,
+    contactId: input.contactId ?? null,
+    customerName: input.customerName ?? null,
+    customerPhone: input.customerPhone ?? null,
+    customerAddress: input.customerAddress ?? null,
+    notes: input.notes ?? null,
+    createdBy: input.createdBy,
+  });
 }
