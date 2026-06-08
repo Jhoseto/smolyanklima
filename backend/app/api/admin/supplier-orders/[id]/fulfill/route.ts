@@ -162,6 +162,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       status: "done",
       completed_at: new Date().toISOString(),
       purchase_price: purchasePrice,
+      product_id: newProductId,
     })
     .eq("id", id);
 

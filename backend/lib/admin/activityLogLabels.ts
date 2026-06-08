@@ -53,6 +53,7 @@ const ACTION_LABELS: Record<string, string> = {
   "staff.delete": "Изтрит служител",
   "profile.update": "Променен собствен профил",
   "supplier_order.create": "Създадена поръчка към доставчик",
+  "supplier_order.reorder": "Променен ред на поръчки от доставчик",
   "supplier_order.fulfill": "Получена и отразена поръчка от доставчик",
   "service_protocol.create": "Създаден приемно-предавателен протокол",
   "service_protocol.update": "Редактиран приемно-предавателен протокол",

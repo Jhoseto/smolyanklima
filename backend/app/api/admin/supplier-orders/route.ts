@@ -125,6 +125,7 @@ export async function GET(req: NextRequest) {
       .eq("event_code", "supplier_order")
       .neq("status", "done")
       .neq("status", "cancelled")
+      .order("supplier_order_sort_order", { ascending: true, nullsFirst: false })
       .order("due_date", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: false })
       .limit(200);

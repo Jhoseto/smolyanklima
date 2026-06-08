@@ -87,6 +87,7 @@ export default async function AdminDashboardPage() {
       )
       .eq("event_code", "supplier_order")
       .not("status", "in", '("done","cancelled")')
+      .order("supplier_order_sort_order", { ascending: true, nullsFirst: false })
       .order("due_date", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: false })
       .limit(50),
@@ -221,6 +222,7 @@ export default async function AdminDashboardPage() {
         <SupplierOrdersPanel
           initialRows={supplierOrderRows}
           readOnly={readOnlyDashboard}
+          canReorder={session.role === "master_admin"}
         />
       </div>
 

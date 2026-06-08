@@ -106,6 +106,19 @@ export async function recordManualDelivery(
   const totalAmount =
     agreedPrice != null && Number.isFinite(agreedPrice) ? agreedPrice * quantity : agreedPrice;
 
+  const { data: maxSortRow } = await supabase
+    .from("work_items")
+    .select("supplier_order_sort_order")
+    .eq("event_code", "supplier_order")
+    .in("status", ["planned", "in_progress"])
+    .order("supplier_order_sort_order", { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle();
+  const maxSort =
+    maxSortRow?.supplier_order_sort_order != null && Number.isFinite(Number(maxSortRow.supplier_order_sort_order))
+      ? Number(maxSortRow.supplier_order_sort_order)
+      : 0;
+
   const workItemPayload: Record<string, unknown> = {
     type: "sale",
     event_code: "supplier_order",
@@ -130,6 +143,7 @@ export async function recordManualDelivery(
     purchase_price: purchasePrice,
     supplier_name: input.supplierName?.trim() || null,
     supplier_invoice_number: null,
+    supplier_order_sort_order: maxSort + 1,
     created_by: input.createdBy,
   };
 

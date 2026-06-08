@@ -68,6 +68,7 @@ export type NormalizedSupplierOrderRow = {
   contacts: { id?: string; full_name?: string; phone?: string; email?: string; address?: string } | null;
   /** Складова бройка след „Доставен“ — за продажба от панела. */
   delivered_product?: SupplierOrderDeliveredProduct | null;
+  supplier_order_sort_order: number | null;
 };
 
 export function normalizeSupplierOrderRow(row: Record<string, unknown>): NormalizedSupplierOrderRow {
@@ -146,6 +147,10 @@ export function normalizeSupplierOrderRow(row: Record<string, unknown>): Normali
       row.order_product_condition === "new" || row.order_product_condition === "used"
         ? row.order_product_condition
         : null,
+    supplier_order_sort_order:
+      row.supplier_order_sort_order != null && Number.isFinite(Number(row.supplier_order_sort_order))
+        ? Number(row.supplier_order_sort_order)
+        : null,
     products,
     contacts: contactRaw
       ? {
@@ -212,7 +217,7 @@ export function supplierOrderSelect(needsProductInner: boolean): string {
   id, title, status, priority, due_date, completed_at, customer_name, customer_phone,
   customer_address, unit_price, total_amount, notes, created_at,
   product_id, contact_id, supplier_name, supplier_invoice_number, purchase_price,
-  order_product_condition,
+  order_product_condition, supplier_order_sort_order,
   ${productEmbed},
   contacts:contact_id (id, full_name, phone, email, address)
 `;

@@ -8,6 +8,11 @@ import { ProductQuickViewButton } from "../ProductQuickView";
 import { useDebounce } from "@/lib/hooks/useDebounce";
 import { assertNoContactPrimaryPhoneDuplicate } from "@/lib/admin/contactPhoneConflictClient";
 import { inquiryServiceTypeLabel } from "@/lib/inquiry/serviceTypeLabels";
+import {
+  contactHistoryEventTitle,
+  contactHistoryTypeBadgeClass,
+  contactHistoryTypeLabel,
+} from "@/lib/admin/contactHistoryLabels";
 import { ContactsNewModal, type NewContactForm } from "./ContactsNewModal";
 import { ContactsListColumn } from "./ContactsListColumn";
 
@@ -1089,12 +1094,14 @@ function AdminContactsPageInner() {
                       {history.map((r) => (
                         <tr key={r.id} className="hover:bg-slate-50 transition-colors">
                           <Td>
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${r.source === "inquiry" ? "bg-purple-50 text-purple-700" : "bg-brand-blue-50 text-brand-blue-700"}`}>
-                              {r.source === "inquiry" ? "Запитване" : "Операция"}
+                            <span className={contactHistoryTypeBadgeClass(r)}>
+                              {contactHistoryTypeLabel(r)}
                             </span>
                           </Td>
                           <Td className="font-medium text-slate-900">
-                            {r.source === "inquiry" ? `Запитване${r.service_type ? ` — ${inquiryServiceTypeLabel(r.service_type)}` : ""}` : r.title}
+                            {r.source === "inquiry"
+                              ? `Запитване${r.service_type ? ` — ${inquiryServiceTypeLabel(r.service_type)}` : ""}`
+                              : contactHistoryEventTitle(r)}
                           </Td>
                           <Td><span className={statusBadgeClass(r.status)}>{statusLabel(r.status)}</span></Td>
                           <Td>
@@ -1121,15 +1128,17 @@ function AdminContactsPageInner() {
                     <div key={r.id} className="bg-white rounded-xl border border-slate-200 p-3">
                       <div className="flex items-start justify-between gap-2 mb-1.5">
                         <div className="font-semibold text-slate-900 text-sm leading-snug">
-                          {r.source === "inquiry" ? `Запитване${r.service_type ? ` — ${inquiryServiceTypeLabel(r.service_type)}` : ""}` : r.title}
+                          {r.source === "inquiry"
+                            ? `Запитване${r.service_type ? ` — ${inquiryServiceTypeLabel(r.service_type)}` : ""}`
+                            : contactHistoryEventTitle(r)}
                         </div>
                         {r.total_amount != null && (
                           <span className="font-black text-slate-900 text-sm shrink-0 tabular-nums">{fmtEuro(r.total_amount)}</span>
                         )}
                       </div>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${r.source === "inquiry" ? "bg-purple-50 text-purple-700" : "bg-brand-blue-50 text-brand-blue-700"}`}>
-                          {r.source === "inquiry" ? "Запитване" : "Операция"}
+                        <span className={`${contactHistoryTypeBadgeClass(r)} text-[10px]`}>
+                          {contactHistoryTypeLabel(r)}
                         </span>
                         <span className={statusBadgeClass(r.status)}>{statusLabel(r.status)}</span>
                         {r.products?.name && <ProductQuickViewButton productId={r.products.id} productName={r.products.name} />}
