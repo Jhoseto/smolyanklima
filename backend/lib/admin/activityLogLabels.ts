@@ -55,6 +55,8 @@ const ACTION_LABELS: Record<string, string> = {
   "supplier_order.create": "Създадена поръчка към доставчик",
   "supplier_order.reorder": "Променен ред на поръчки от доставчик",
   "supplier_order.fulfill": "Получена и отразена поръчка от доставчик",
+  "reservation.create": "Резервиран продукт за клиент",
+  "reservation.cancel": "Отменена резервация на продукт",
   "service_protocol.create": "Създаден приемно-предавателен протокол",
   "service_protocol.update": "Редактиран приемно-предавателен протокол",
   "service_protocol.delete": "Изтрит приемно-предавателен протокол",
@@ -251,6 +253,7 @@ const EVENT_CODE_LABELS: Record<string, string> = {
   maintenance: "Профилактика",
   consultation: "Консултация",
   supplier_order: "Поръчка от доставчик",
+  reservation: "Резервация",
   stock_in: "Зареждане на склад",
   stock_out: "Изход от склад",
   item_added: "Добавяне в склад",
@@ -299,6 +302,7 @@ const STOCK_STATUS: Record<string, string> = {
   in_stock: "В наличност",
   out_of_stock: "Няма наличност",
   on_order: "По поръчка",
+  reserved: "Резервиран",
 };
 
 const PRODUCT_CONDITION: Record<string, string> = {

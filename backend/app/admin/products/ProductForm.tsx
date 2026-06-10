@@ -583,7 +583,9 @@ export function mapLoadedProductToForm(p: {
     isFeatured: Boolean(p.is_featured),
     showInPublicCatalog: Boolean(p.show_in_public_catalog),
     stockStatus:
-      p.stock_status === "out_of_stock" || p.stock_status === "on_order" ? p.stock_status : "in_stock",
+      p.stock_status === "out_of_stock" || p.stock_status === "on_order" || p.stock_status === "reserved"
+        ? p.stock_status
+        : "in_stock",
     stockLocation: normalizeProductStockLocation(p.stock_location),
     productRegion: normalizeProductRegion(p.product_region),
     stockQuantity: Number(p.stock_quantity ?? 0),
@@ -1748,6 +1750,7 @@ export function ProductFormFields({
               <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-1">Статус</div>
               <Select value={form.stockStatus} onChange={(e) => setForm({ ...form, stockStatus: e.target.value as AdminProductForm["stockStatus"] })}>
                 <option value="in_stock">В наличност</option>
+                <option value="reserved">Резервиран</option>
                 <option value="out_of_stock">Изчерпан</option>
                 <option value="on_order">По поръчка</option>
               </Select>

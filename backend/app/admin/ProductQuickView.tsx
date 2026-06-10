@@ -579,6 +579,7 @@ function warranty(value: unknown) {
 function stockLabel(value: string | null | undefined) {
   if (value === "out_of_stock") return "Изчерпан";
   if (value === "on_order") return "По поръчка";
+  if (value === "reserved") return "Резервиран";
   return "В наличност";
 }
 

@@ -5,7 +5,7 @@ export type PublicCatalogProductRow = {
 };
 
 export function isOnPublicCatalog(p: PublicCatalogProductRow): boolean {
-  if (p.stock_status === "out_of_stock") return false;
+  if (p.stock_status === "out_of_stock" || p.stock_status === "reserved") return false;
   return p.show_in_public_catalog === true;
 }
 
@@ -14,7 +14,7 @@ export function isOnPublicCatalog(p: PublicCatalogProductRow): boolean {
 export function applyPublicCatalogFilter<T = any>(query: T): T {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const q = query as any;
-  return q.eq("show_in_public_catalog", true).neq("stock_status", "out_of_stock") as T;
+  return q.eq("show_in_public_catalog", true).neq("stock_status", "out_of_stock").neq("stock_status", "reserved") as T;
 }
 
 /** @deprecated Използвай applyPublicCatalogFilter. */

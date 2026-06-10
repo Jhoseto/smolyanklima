@@ -1,5 +1,5 @@
 export type ProductConditionFilter = "new" | "used";
-export type StockStatusFilter = "in_stock" | "out_of_stock" | "on_order";
+export type StockStatusFilter = "in_stock" | "out_of_stock" | "on_order" | "reserved";
 export type FeaturedFilter = "featured" | "regular";
 export type PublicCatalogFilter = "visible" | "hidden";
 
@@ -11,7 +11,7 @@ export type ProductListChipFilters = {
 };
 
 const ALL_CONDITIONS: ProductConditionFilter[] = ["new", "used"];
-const ALL_STOCK_STATUSES: StockStatusFilter[] = ["in_stock", "out_of_stock", "on_order"];
+const ALL_STOCK_STATUSES: StockStatusFilter[] = ["in_stock", "out_of_stock", "on_order", "reserved"];
 const ALL_FEATURED: FeaturedFilter[] = ["featured", "regular"];
 const ALL_PUBLIC_CATALOG: PublicCatalogFilter[] = ["visible", "hidden"];
 

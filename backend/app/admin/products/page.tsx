@@ -37,6 +37,8 @@ import {
   EyeOff,
   ExternalLink,
   Truck,
+  Bookmark,
+  BookmarkX,
 } from "lucide-react";
 import { ShareToChatModal } from "../chat/ShareToChatModal";
 import { useAdminBackHandler } from "@/lib/admin/useAdminBackHandler";
@@ -44,6 +46,7 @@ import { CatalogItemQuickViewButton } from "../ProductQuickView";
 import { FeaturedSlotModal } from "./FeaturedSlotModal";
 import { ProductCatalogSettingsModal } from "./ProductCatalogSettingsModal";
 import { ProductSupplierOrderModal } from "./ProductSupplierOrderModal";
+import { ProductReservationModal } from "./ProductReservationModal";
 import { formatAdminPriceEuro, formatAdminDateOnly } from "@/lib/admin/formatEuro";
 import {
   PriceRangeSlider,
@@ -230,8 +233,17 @@ function canRecordSale(p: ProductRow) {
   return p.stock_status === "in_stock" || p.stock_status === "on_order";
 }
 
+function canReserveProduct(p: ProductRow) {
+  return !isAccessoryRow(p) && p.stock_status === "in_stock";
+}
+
+function isProductReserved(p: ProductRow) {
+  return !isAccessoryRow(p) && p.stock_status === "reserved";
+}
+
 function saleButtonTitle(p: ProductRow): string {
   if (p.stock_status === "on_order") return "Поръчай от доставчик";
+  if (p.stock_status === "reserved") return "Резервиран — продажба след отмяна на резервацията";
   if (p.stock_status === "out_of_stock") return "Изчерпан — продажба не е възможна";
   if (canRecordSale(p)) return "Продажба";
   return "Продажба не е възможна";
@@ -294,11 +306,13 @@ function catalogStockBadgeText(status: string, compact = false) {
     if (status === "in_stock") return "Наличен";
     if (status === "out_of_stock") return "Изчерпан";
     if (status === "on_order") return "По поръчка";
+    if (status === "reserved") return "Резервиран";
     return status || "—";
   }
   if (status === "in_stock") return "В наличност";
   if (status === "out_of_stock") return "Изчерпан";
   if (status === "on_order") return "По поръчка";
+  if (status === "reserved") return "Резервиран";
   return status || "—";
 }
 
@@ -311,6 +325,7 @@ function catalogStockBadgeClass(status: string) {
   if (status === "in_stock") return "bg-emerald-100 text-emerald-800 border border-emerald-200/70";
   if (status === "out_of_stock") return "bg-rose-50 text-rose-800 border border-rose-200/70";
   if (status === "on_order") return "bg-amber-50 text-amber-900 border border-amber-200/70";
+  if (status === "reserved") return "bg-sky-50 text-sky-900 border border-sky-200/70";
   return "bg-slate-100 text-slate-700 border border-slate-200/70";
 }
 
@@ -597,6 +612,9 @@ export default function AdminProductsPage() {
   useAdminBackHandler(Boolean(saleFor), () => setSaleFor(null), "catalog-product-sale");
   const [orderFor, setOrderFor] = useState<ProductRow | null>(null);
   useAdminBackHandler(Boolean(orderFor), () => setOrderFor(null), "catalog-product-order");
+  const [reserveFor, setReserveFor] = useState<ProductRow | null>(null);
+  useAdminBackHandler(Boolean(reserveFor), () => setReserveFor(null), "catalog-product-reserve");
+  const [reserveCancelBusyId, setReserveCancelBusyId] = useState<string | null>(null);
   const [saleBusy, setSaleBusy] = useState(false);
   const [saleForm, setSaleForm] = useState(emptySaleModalForm);
   const [contactQuery, setContactQuery] = useState("");
@@ -608,7 +626,15 @@ export default function AdminProductsPage() {
   const [editingPurchaseId, setEditingPurchaseId] = useState<string | null>(null);
   const [purchaseDraft, setPurchaseDraft] = useState("");
   const [purchaseBusy, setPurchaseBusy] = useState(false);
-  const [saleSuccess, setSaleSuccess] = useState<{ productName: string; customerName: string; amount: number; isBackOrder?: boolean; quantity?: number } | null>(null);
+  const [saleSuccess, setSaleSuccess] = useState<{
+    productName: string;
+    customerName: string;
+    amount: number;
+    isBackOrder?: boolean;
+    isReservation?: boolean;
+    isReservationCancel?: boolean;
+    quantity?: number;
+  } | null>(null);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [listFiltersReady, setListFiltersReady] = useState(false);
@@ -1140,6 +1166,50 @@ export default function AdminProductsPage() {
     }
   }
 
+  async function cancelProductReservation(prod: ProductRow) {
+    if (!isProductReserved(prod)) return false;
+    setReserveCancelBusyId(prod.id);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/product-reservations", {
+        method: "DELETE",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId: prod.id }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(json.error || "Грешка при отмяна на резервацията");
+
+      const modelKey = (prod.model_code ?? "").trim().toLowerCase();
+      setItems((prev) =>
+        prev.map((x) => {
+          if (x.id === prod.id) return { ...x, stock_status: "in_stock" };
+          if (
+            modelKey &&
+            x.brand_id &&
+            x.brand_id === prod.brand_id &&
+            (x.model_code ?? "").trim().toLowerCase() === modelKey
+          ) {
+            return { ...x, stock_quantity: Math.max(0, Number(x.stock_quantity ?? 0) + 1) };
+          }
+          return x;
+        }),
+      );
+      setSaleSuccess({
+        productName: prod.name,
+        customerName: "—",
+        amount: Number(prod.price) || 0,
+        isReservationCancel: true,
+      });
+      return true;
+    } catch (e: unknown) {
+      setError(String(e instanceof Error ? e.message : e));
+      return false;
+    } finally {
+      setReserveCancelBusyId(null);
+    }
+  }
+
   function startPriceEdit(p: ProductRow) {
     if (!canEditMasterPricesInline) return;
     setEditingPriceId(p.id);
@@ -1308,7 +1378,14 @@ export default function AdminProductsPage() {
     });
   }
   for (const status of stockStatuses) {
-    const label = status === "in_stock" ? "В наличност" : "По поръчка";
+    const label =
+      status === "in_stock"
+        ? "В наличност"
+        : status === "on_order"
+          ? "По поръчка"
+          : status === "reserved"
+            ? "Резервиран"
+            : "Изчерпан";
     activeFilters.push({
       key: `stockStatus-${status}`,
       label: `Наличност: ${label}`,
@@ -1529,6 +1606,13 @@ export default function AdminProductsPage() {
                 onClick={() => { setStockStatuses((prev) => toggleChipFilter(prev, "on_order")); }}
               >
                 <Clock4 className="w-3 h-3" /> По поръчка
+              </ChipToggle>
+              <ChipToggle
+                active={stockStatuses.includes("reserved")}
+                tone="brand"
+                onClick={() => { setStockStatuses((prev) => toggleChipFilter(prev, "reserved")); }}
+              >
+                <Bookmark className="w-3 h-3" /> Резервиран
               </ChipToggle>
               <span className="hidden md:inline-block h-5 w-px bg-slate-200 mx-0.5" aria-hidden />
               <ChipToggle
@@ -2030,28 +2114,54 @@ export default function AdminProductsPage() {
                     <span className="text-[10px] text-slate-500 font-medium">Аксесоар</span>
                   ) : canMutateProductRows ? (
                   <div className="flex flex-nowrap items-center justify-center gap-0.5 min-w-0">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => {
-                        if (p.stock_status === "on_order") {
-                          setOrderFor(p);
-                          return;
-                        }
-                        setSaleFor(p);
-                        setSaleForm(saleModalFormForProduct(p));
-                        setContactQuery("");
-                        setContactResults([]);
-                      }}
-                      disabled={!canRecordSale(p)}
-                      className={`!p-1 shrink-0 ${p.stock_status === "on_order" ? "!text-violet-700 !border-violet-300 !bg-violet-50 hover:!bg-violet-100" : ""}`}
-                      title={p.stock_status === "on_order" ? "Поръчай от доставчик" : saleButtonTitle(p)}
-                    >
-                      {p.stock_status === "on_order" ? <Truck className="w-3 h-3" /> : <PackageCheck className="w-3 h-3" />}
-                    </Button>
+                    {!isProductReserved(p) && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          if (p.stock_status === "on_order") {
+                            setOrderFor(p);
+                            return;
+                          }
+                          setSaleFor(p);
+                          setSaleForm(saleModalFormForProduct(p));
+                          setContactQuery("");
+                          setContactResults([]);
+                        }}
+                        disabled={!canRecordSale(p)}
+                        className={`!p-1 shrink-0 ${p.stock_status === "on_order" ? "!text-violet-700 !border-violet-300 !bg-violet-50 hover:!bg-violet-100" : ""}`}
+                        title={p.stock_status === "on_order" ? "Поръчай от доставчик" : saleButtonTitle(p)}
+                      >
+                        {p.stock_status === "on_order" ? <Truck className="w-3 h-3" /> : <PackageCheck className="w-3 h-3" />}
+                      </Button>
+                    )}
                     <Link href={catalogEditHref(p)} className="inline-flex items-center justify-center p-1 bg-brand-blue-50 text-brand-blue-700 hover:bg-brand-blue-100 rounded shrink-0" title="Редакция">
                       <Edit className="w-3 h-3 shrink-0" />
                     </Link>
+                    {isProductReserved(p) ? (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => void cancelProductReservation(p)}
+                        disabled={reserveCancelBusyId === p.id}
+                        className="!p-1 shrink-0 !text-sky-800 !border-sky-300 !bg-sky-50 hover:!bg-sky-100"
+                        title="Отмени резервацията"
+                      >
+                        <BookmarkX className="w-3 h-3" />
+                      </Button>
+                    ) : (
+                      canReserveProduct(p) && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setReserveFor(p)}
+                          className="!p-1 shrink-0 !text-sky-800 !border-sky-300 !bg-sky-50 hover:!bg-sky-100"
+                          title="Резервирай за клиент"
+                        >
+                          <Bookmark className="w-3 h-3" />
+                        </Button>
+                      )
+                    )}
                     <button
                       onClick={() => setShareProduct(p)}
                       title="Сподели в чат"
@@ -2324,25 +2434,36 @@ export default function AdminProductsPage() {
             </div>
 
             {canMutateProductRows ? (
-              <div className="grid grid-cols-4 border-t border-slate-100 divide-x divide-slate-100 bg-slate-50/50">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (p.stock_status === "on_order") {
-                      setOrderFor(p);
-                      return;
-                    }
-                    setSaleFor(p);
-                    setSaleForm(saleModalFormForProduct(p));
-                    setContactQuery("");
-                    setContactResults([]);
-                  }}
-                  disabled={!canRecordSale(p)}
-                  title={p.stock_status === "on_order" ? "Поръчай от доставчик" : saleButtonTitle(p)}
-                  className={`py-2 px-0.5 text-[10px] font-bold leading-tight transition-colors disabled:opacity-35 ${p.stock_status === "on_order" ? "text-violet-700 hover:bg-violet-50 active:bg-violet-100" : "text-slate-800 hover:bg-white active:bg-slate-100"}`}
-                >
-                  {p.stock_status === "on_order" ? "Поръчване" : "Продажба"}
-                </button>
+              <div className={`grid border-t border-slate-100 divide-x divide-slate-100 bg-slate-50/50 ${canReserveProduct(p) || isProductReserved(p) ? "grid-cols-5" : "grid-cols-4"}`}>
+                {isProductReserved(p) ? (
+                  <button
+                    type="button"
+                    disabled
+                    title={saleButtonTitle(p)}
+                    className="py-2 px-0.5 text-[10px] font-bold leading-tight text-slate-400 opacity-35"
+                  >
+                    Продажба
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (p.stock_status === "on_order") {
+                        setOrderFor(p);
+                        return;
+                      }
+                      setSaleFor(p);
+                      setSaleForm(saleModalFormForProduct(p));
+                      setContactQuery("");
+                      setContactResults([]);
+                    }}
+                    disabled={!canRecordSale(p)}
+                    title={p.stock_status === "on_order" ? "Поръчай от доставчик" : saleButtonTitle(p)}
+                    className={`py-2 px-0.5 text-[10px] font-bold leading-tight transition-colors disabled:opacity-35 ${p.stock_status === "on_order" ? "text-violet-700 hover:bg-violet-50 active:bg-violet-100" : "text-slate-800 hover:bg-white active:bg-slate-100"}`}
+                  >
+                    {p.stock_status === "on_order" ? "Поръчване" : "Продажба"}
+                  </button>
+                )}
                 <Link
                   href={catalogEditHref(p)}
                   className="flex flex-col items-center justify-center gap-0.5 py-2.5 min-h-[44px] text-xs font-bold text-brand-blue-700 hover:bg-white active:bg-brand-blue-50/60 min-w-0"
@@ -2351,6 +2472,28 @@ export default function AdminProductsPage() {
                   <Edit className="w-3.5 h-3.5 shrink-0" />
                   <span className="leading-none">Ред.</span>
                 </Link>
+                {isProductReserved(p) ? (
+                  <button
+                    type="button"
+                    onClick={() => void cancelProductReservation(p)}
+                    disabled={reserveCancelBusyId === p.id}
+                    title="Отмени резервацията"
+                    className="py-2 px-0.5 text-[10px] font-bold leading-tight text-sky-800 hover:bg-sky-50 active:bg-sky-100 disabled:opacity-35"
+                  >
+                    Отм. рез.
+                  </button>
+                ) : (
+                  canReserveProduct(p) && (
+                    <button
+                      type="button"
+                      onClick={() => setReserveFor(p)}
+                      title="Резервирай за клиент"
+                      className="py-2 px-0.5 text-[10px] font-bold leading-tight text-sky-800 hover:bg-sky-50 active:bg-sky-100"
+                    >
+                      Резерв.
+                    </button>
+                  )
+                )}
                 <button
                   type="button"
                   onClick={() => setShareProduct(p)}
@@ -2646,6 +2789,37 @@ export default function AdminProductsPage() {
         }}
       />
 
+      <ProductReservationModal
+        open={Boolean(reserveFor)}
+        product={reserveFor}
+        onClose={() => setReserveFor(null)}
+        onSuccess={(result) => {
+          if (reserveFor) {
+            const modelKey = (reserveFor.model_code ?? "").trim().toLowerCase();
+            setItems((prev) =>
+              prev.map((x) => {
+                if (x.id === reserveFor.id) return { ...x, stock_status: "reserved" };
+                if (
+                  modelKey &&
+                  x.brand_id &&
+                  x.brand_id === reserveFor.brand_id &&
+                  (x.model_code ?? "").trim().toLowerCase() === modelKey
+                ) {
+                  return { ...x, stock_quantity: Math.max(0, Number(x.stock_quantity ?? 0) - 1) };
+                }
+                return x;
+              }),
+            );
+          }
+          setSaleSuccess({
+            productName: result.productName,
+            customerName: result.customerName,
+            amount: result.amount,
+            isReservation: true,
+          });
+        }}
+      />
+
       {saleSuccess && (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/55 p-0 md:p-4 backdrop-blur-md" onClick={() => setSaleSuccess(null)}>
           <div
@@ -2655,21 +2829,44 @@ export default function AdminProductsPage() {
             <div className="flex justify-center pt-3 pb-1 md:hidden shrink-0">
               <div className="w-10 h-1 rounded-full bg-slate-200" />
             </div>
-            <div className={`px-4 py-5 md:px-6 md:py-6 text-center shrink-0 ${saleSuccess.isBackOrder ? "bg-[radial-gradient(circle_at_top_left,#ede9fe_0,#ffffff_44%,#f8fafc_100%)]" : "bg-[radial-gradient(circle_at_top_left,#dcfce7_0,#ffffff_44%,#f8fafc_100%)]"}`}>
-              <div className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl text-white shadow-lg ${saleSuccess.isBackOrder ? "bg-violet-600 shadow-violet-600/25" : "bg-emerald-600 shadow-emerald-600/25"}`}>
+            <div className={`px-4 py-5 md:px-6 md:py-6 text-center shrink-0 ${
+              saleSuccess.isReservationCancel
+                ? "bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#ffffff_44%,#f8fafc_100%)]"
+                : saleSuccess.isReservation
+                  ? "bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#ffffff_44%,#f8fafc_100%)]"
+                  : saleSuccess.isBackOrder
+                    ? "bg-[radial-gradient(circle_at_top_left,#ede9fe_0,#ffffff_44%,#f8fafc_100%)]"
+                    : "bg-[radial-gradient(circle_at_top_left,#dcfce7_0,#ffffff_44%,#f8fafc_100%)]"
+            }`}>
+              <div className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl text-white shadow-lg ${
+                saleSuccess.isReservationCancel || saleSuccess.isReservation
+                  ? "bg-sky-600 shadow-sky-600/25"
+                  : saleSuccess.isBackOrder
+                    ? "bg-violet-600 shadow-violet-600/25"
+                    : "bg-emerald-600 shadow-emerald-600/25"
+              }`}>
                 <CheckCircle className="h-7 w-7" />
               </div>
               <div className="text-xl md:text-2xl font-black text-slate-950">
-                {saleSuccess.isBackOrder ? "Поръчката е записана" : "Продажбата е записана"}
+                {saleSuccess.isReservationCancel
+                  ? "Резервацията е отменена"
+                  : saleSuccess.isReservation
+                    ? "Резервацията е записана"
+                    : saleSuccess.isBackOrder
+                      ? "Поръчката е записана"
+                      : "Продажбата е записана"}
               </div>
               <div className="mt-2 text-sm font-medium text-slate-500">
-                {saleSuccess.productName} · {saleSuccess.customerName}
+                {saleSuccess.isReservationCancel
+                  ? saleSuccess.productName
+                  : `${saleSuccess.productName} · ${saleSuccess.customerName}`}
               </div>
             </div>
             <div className="grid gap-3 p-4 md:p-6 overflow-y-auto flex-1 min-h-0">
+              {!saleSuccess.isReservationCancel ? (
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                  {saleSuccess.isBackOrder ? "Обща стойност" : "Договорена цена"}
+                  {saleSuccess.isBackOrder ? "Обща стойност" : saleSuccess.isReservation ? "Договорена цена" : "Договорена цена"}
                 </div>
                 <div className="mt-1 text-2xl font-black text-slate-900">
                   €{formatAdminPriceEuro(saleSuccess.amount, { decimals: true })}
@@ -2678,7 +2875,16 @@ export default function AdminProductsPage() {
                   <div className="mt-1 text-xs font-medium text-slate-500">Количество: {saleSuccess.quantity} бр.</div>
                 ) : null}
               </div>
-              {saleSuccess.isBackOrder ? (
+              ) : null}
+              {saleSuccess.isReservation ? (
+                <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm font-semibold leading-6 text-sky-900">
+                  Продуктът е маркиран като <strong>резервиран</strong>. Събитието е записано в историята на клиента.
+                </div>
+              ) : saleSuccess.isReservationCancel ? (
+                <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4 text-sm font-semibold leading-6 text-sky-900">
+                  Продуктът отново е <strong>в наличност</strong>. Отмяната е записана в историята на клиента.
+                </div>
+              ) : saleSuccess.isBackOrder ? (
                 <div className="rounded-2xl border border-violet-100 bg-violet-50 p-4 text-sm font-semibold leading-6 text-violet-900">
                   Поръчката е записана в панела <strong>Поръчки</strong>. След доставката попълнете серийните номера и насрочете монтаж.
                 </div>

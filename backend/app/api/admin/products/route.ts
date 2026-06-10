@@ -141,7 +141,7 @@ const CreateSchema = z.object({
   purchasePrice: z.number().nonnegative().optional().nullable(),
   isFeatured: z.boolean().optional().default(false),
   showInPublicCatalog: z.boolean().optional().default(false),
-  stockStatus: z.enum(["in_stock", "out_of_stock", "on_order"]).optional().default("in_stock"),
+  stockStatus: z.enum(["in_stock", "out_of_stock", "on_order", "reserved"]).optional().default("in_stock"),
   stockQuantity: z.number().int().nonnegative().optional().default(0),
   soldQuantity: z.number().int().nonnegative().optional().default(0),
   stockLocation: z.enum(["showroom", "warehouse"]).optional().default("warehouse"),

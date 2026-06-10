@@ -14,6 +14,7 @@ export function contactHistoryTypeLabel(row: ContactHistoryTypeInput): string {
   const code = (row.event_code ?? "").trim();
   if (code === "sale") return "Продажба";
   if (code === "supplier_order") return "Поръчка";
+  if (code === "reservation") return "Резервация";
   if (code === "service_installation") return "Монтаж";
   if (code === "service_maintenance") return "Профилактика";
   if (code === "service_on_site") return "Сервиз на терен";
@@ -38,6 +39,7 @@ export function contactHistoryTypeBadgeClass(row: ContactHistoryTypeInput): stri
   const code = (row.event_code ?? "").trim();
   if (code === "sale") return `${base} bg-emerald-50 text-emerald-800 border-emerald-200`;
   if (code === "supplier_order") return `${base} bg-violet-50 text-violet-800 border-violet-200`;
+  if (code === "reservation") return `${base} bg-sky-50 text-sky-900 border-sky-200`;
   if (code === "service_installation") return `${base} bg-brand-blue-50 text-brand-blue-800 border-brand-blue-200`;
   if (code === "service_maintenance") return `${base} bg-cyan-50 text-cyan-800 border-cyan-200`;
   if (code === "service_on_site" || code === "service_in_shop") {
@@ -53,7 +55,7 @@ export function contactHistoryEventTitle(row: ContactHistoryTypeInput & { title:
   const title = row.title.trim();
   if (!title) return "—";
 
-  const prefixes = [typeLabel, "Поръчка от доставчик"];
+  const prefixes = [typeLabel, "Поръчка от доставчик", "Резервация"];
   for (const prefix of prefixes) {
     const withColon = `${prefix}:`;
     if (title.startsWith(withColon)) return title.slice(withColon.length).trim() || title;

@@ -13,6 +13,10 @@ import {
   canRestoreStockForPendingSale,
   restoreProductStockAfterPendingSaleCancel,
 } from "@/lib/admin/restoreProductStockAfterSaleCancel";
+import {
+  canRestoreStockForReservation,
+  restoreProductStockAfterReservationCancel,
+} from "@/lib/admin/restoreProductStockAfterReservationCancel";
 import { syncConsultationContactFollowUp } from "@/lib/work-items/consultation-contact";
 import { isSaleCancelReason } from "@/lib/admin/saleCancelReason";
 import { cascadeDeleteBeforeSaleWorkItem } from "@/lib/admin/deleteSaleWorkItemCascade";
@@ -27,6 +31,7 @@ const WORK_ITEM_EVENT_CODES = [
   "service_in_shop",
   "consultation",
   "supplier_order",
+  "reservation",
 ] as const;
 
 const UpdateSchema = z.object({
@@ -233,6 +238,11 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     br.event_code === "service_installation" &&
     br.status !== "cancelled";
 
+  const markReservationCancelled =
+    parsed.data.status === "cancelled" &&
+    br.event_code === "reservation" &&
+    br.status !== "cancelled";
+
   const saleDeniedMsg =
     "Продажбите се създават от панела „Продажби“ (каталог → „Продажба“), не чрез смяна на тип в календара.";
   if (parsed.data.eventCode === "sale" && br.event_code !== "sale") {
@@ -279,6 +289,10 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         { status: 400 },
       ),
     );
+  }
+
+  if (markReservationCancelled && br.status === "done") {
+    return withCors(req, NextResponse.json({ error: "Завършена резервация не може да се отмени от тук." }, { status: 400 }));
   }
 
   if (markSaleCancelled && br.sale_install_state === "completed") {
@@ -417,8 +431,11 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   }
 
   let stockRestoreTarget: { productId: string; quantity: number } | null = null;
+  let reservationRestoreProductId: string | null = null;
   if (markSaleCancelled && br.product_id && canRestoreStockForPendingSale(br)) {
     stockRestoreTarget = { productId: br.product_id, quantity: br.quantity ?? 1 };
+  } else if (markReservationCancelled && br.product_id && canRestoreStockForReservation(br)) {
+    reservationRestoreProductId = br.product_id;
   } else if (markInstallCancelled && br.sale_work_item_id) {
     const { data: linkedSaleForStock } = await supabase
       .from("work_items")
@@ -496,6 +513,9 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         stockRestoreTarget.quantity,
       );
       if (result.restored) restoredProductId = result.productId;
+    } else if (reservationRestoreProductId) {
+      const result = await restoreProductStockAfterReservationCancel(supabase, reservationRestoreProductId);
+      if (result.restored) restoredProductId = result.productId;
     }
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e);
@@ -516,9 +536,11 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     ? "sale_cancelled"
     : markInstallCancelled
       ? "install_cancelled"
-      : markMountComplete
-        ? "sale_completed"
-        : "update";
+      : markReservationCancelled
+        ? "reservation_cancelled"
+        : markMountComplete
+          ? "sale_completed"
+          : "update";
 
   await logAdminActivity({
     action: "work_item.update",

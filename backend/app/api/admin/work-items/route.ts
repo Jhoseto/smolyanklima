@@ -23,6 +23,7 @@ const WORK_ITEM_EVENT_CODES = [
   "service_in_shop",
   "consultation",
   "supplier_order",
+  "reservation",
 ] as const;
 
 const QuerySchema = z.object({

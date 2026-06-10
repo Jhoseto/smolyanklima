@@ -96,7 +96,7 @@ const UpdateSchema = z
   purchasePrice: z.number().nonnegative().optional().nullable(),
   isFeatured: z.boolean().optional(),
   showInPublicCatalog: z.boolean().optional(),
-  stockStatus: z.enum(["in_stock", "out_of_stock", "on_order"]).optional(),
+  stockStatus: z.enum(["in_stock", "out_of_stock", "on_order", "reserved"]).optional(),
   stockLocation: z.enum(["showroom", "warehouse"]).optional(),
   productRegion: z.enum(["europe", "japan"]).optional(),
   stockQuantity: z.number().int().nonnegative().optional(),
