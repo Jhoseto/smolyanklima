@@ -5,7 +5,7 @@ export type AdminCatalogKind = "climatics" | "accessories" | "all";
 
 export type AdminCatalogListFilters = {
   q?: string;
-  stockStatuses?: ("in_stock" | "out_of_stock" | "on_order")[];
+  stockStatuses?: ("in_stock" | "out_of_stock" | "on_order" | "reserved")[];
   brandId?: string;
   priceMin?: number;
   priceMax?: number;

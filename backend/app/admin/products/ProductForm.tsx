@@ -74,7 +74,7 @@ export type AdminProductForm = {
   purchasePrice: string;
   isFeatured: boolean;
   showInPublicCatalog: boolean;
-  stockStatus: "in_stock" | "out_of_stock" | "on_order";
+  stockStatus: "in_stock" | "out_of_stock" | "on_order" | "reserved";
   /** Витрина (магазин) или склад — вътрешно, не е публичният stock_status. */
   stockLocation: ProductStockLocation;
   /** EUROPE / JAPAN в БД: europe / japan */
