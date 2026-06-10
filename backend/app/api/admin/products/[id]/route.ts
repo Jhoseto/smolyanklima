@@ -301,7 +301,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       parsed.data.purchasedAt !== undefined ||
       parsed.data.supplierInvoiceNumber !== undefined;
 
-    if (isDeliveredProductInstance(current)) {
+    if (isDeliveredProductInstance(current) && deliveryTouched) {
       const deliveryErr = validateDeliveryFieldsComplete(mergedDelivery);
       if (deliveryErr) {
         return withCors(req, NextResponse.json({ error: deliveryErr }, { status: 400 }));
