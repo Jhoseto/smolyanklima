@@ -4,6 +4,7 @@ import {
   formatSerialConflictError,
   trimDeliveryFields,
   validateDeliveryFieldsComplete,
+  validateDeliveryFieldsForOrderFulfill,
   type DeliveryFields,
 } from "@/lib/admin/productDeliveryValidation";
 import { normalizeProductStockLocation } from "@/lib/admin/productStockLocation";
@@ -23,6 +24,8 @@ export type CreateProductInstanceInput = {
   supplierOrderWorkItemId?: string | null;
   /** Продажна цена на инстанцията (ако липсва — от шаблона). */
   priceOverride?: number | null;
+  /** false = поръчка от доставчик (само дата + доставна цена; серийни № и фактура по избор). */
+  requireFullDelivery?: boolean;
 };
 
 /**
@@ -35,7 +38,10 @@ export async function createProductInstanceFromTemplate(
   input: CreateProductInstanceInput,
 ): Promise<{ id: string; name: string }> {
   const delivery = trimDeliveryFields(input.delivery);
-  const deliveryErr = validateDeliveryFieldsComplete(delivery);
+  const deliveryErr =
+    input.requireFullDelivery === false
+      ? validateDeliveryFieldsForOrderFulfill(delivery)
+      : validateDeliveryFieldsComplete(delivery);
   if (deliveryErr) throw new Error(deliveryErr);
 
   if (!Number.isFinite(input.purchasePrice) || input.purchasePrice < 0) {
@@ -83,9 +89,9 @@ export async function createProductInstanceFromTemplate(
       source_url: template.source_url ?? null,
       product_region: template.product_region ?? null,
       stock_location: normalizeProductStockLocation(input.stockLocation ?? template.stock_location),
-      indoor_unit_serial: delivery.indoorUnitSerial,
-      outdoor_unit_serial: delivery.outdoorUnitSerial,
-      supplier_invoice_number: delivery.supplierInvoiceNumber,
+      indoor_unit_serial: delivery.indoorUnitSerial || null,
+      outdoor_unit_serial: delivery.outdoorUnitSerial || null,
+      supplier_invoice_number: delivery.supplierInvoiceNumber || null,
       purchased_at: delivery.purchasedAt,
       supplier_order_work_item_id: input.supplierOrderWorkItemId ?? null,
     })

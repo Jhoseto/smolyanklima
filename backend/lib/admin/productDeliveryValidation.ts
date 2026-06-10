@@ -25,15 +25,25 @@ export function trimDeliveryFields(
   };
 }
 
-export function validateDeliveryFieldsComplete(fields: DeliveryFields): string | null {
-  if (!fields.indoorUnitSerial) return "Въведете сериен номер на вътрешното тяло.";
-  if (!fields.outdoorUnitSerial) return "Въведете сериен номер на външното тяло.";
-  if (!fields.supplierInvoiceNumber) return "Въведете номер на фактура от доставчик.";
+function validatePurchasedAt(fields: DeliveryFields): string | null {
   if (!fields.purchasedAt) return "Въведете дата на доставка.";
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fields.purchasedAt)) {
     return "Невалидна дата на доставка (формат ГГГГ-ММ-ДД).";
   }
   return null;
+}
+
+/** Пълни данни за доставка (редакция на бройка / създаване от формата на продукт). */
+export function validateDeliveryFieldsComplete(fields: DeliveryFields): string | null {
+  if (!fields.indoorUnitSerial) return "Въведете сериен номер на вътрешното тяло.";
+  if (!fields.outdoorUnitSerial) return "Въведете сериен номер на външното тяло.";
+  if (!fields.supplierInvoiceNumber) return "Въведете номер на фактура от доставчик.";
+  return validatePurchasedAt(fields);
+}
+
+/** Минимум за „Получена“ поръчка от доставчик — само дата (серийни № и фактура по избор). */
+export function validateDeliveryFieldsForOrderFulfill(fields: DeliveryFields): string | null {
+  return validatePurchasedAt(fields);
 }
 
 export function formatSerialConflictError(matches: SerialConflict[]): string {
@@ -98,17 +108,12 @@ export async function findSerialConflicts(
 }
 
 function rowDeliveryIncomplete(row: {
-  indoor_unit_serial?: string | null;
-  outdoor_unit_serial?: string | null;
-  supplier_invoice_number?: string | null;
   purchased_at?: string | null;
+  purchase_price?: number | null;
 }): boolean {
-  return (
-    !String(row.indoor_unit_serial ?? "").trim() ||
-    !String(row.outdoor_unit_serial ?? "").trim() ||
-    !String(row.supplier_invoice_number ?? "").trim() ||
-    !String(row.purchased_at ?? "").trim()
-  );
+  const purchasedAt = String(row.purchased_at ?? "").trim();
+  const price = row.purchase_price != null ? Number(row.purchase_price) : NaN;
+  return !purchasedAt || !Number.isFinite(price) || price < 0;
 }
 
 /** Незавършена доставена бройка за същия модел (блокира нова инстанция). */
@@ -121,7 +126,7 @@ export async function findIncompleteDeliveredInstanceForModel(
 
   let query = supabase
     .from("products")
-    .select("id,name,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,purchased_at")
+    .select("id,name,purchased_at,purchase_price")
     .eq("brand_id", opts.brandId)
     .ilike("model_code", modelCode)
     .eq("stock_status", "in_stock")

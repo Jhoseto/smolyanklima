@@ -260,9 +260,6 @@ export function SupplierOrderDetailModal({
   }, [debouncedOutdoor]);
 
   const deliveryIncomplete =
-    !indoorSerial.trim() ||
-    !outdoorSerial.trim() ||
-    !invoiceNumber.trim() ||
     !purchasedAt.trim() ||
     !purchasePriceDraft.trim() ||
     !Number.isFinite(parseDecimalInput(purchasePriceDraft)) ||
@@ -272,7 +269,7 @@ export function SupplierOrderDetailModal({
 
   const deliveryHint = useMemo(() => {
     if (deliveryHasDup) return "Серийните номера вече съществуват при друг продукт.";
-    if (deliveryIncomplete) return "Попълнете всички полета за доставка (вкл. доставна цена) преди да отбележите получаване.";
+    if (deliveryIncomplete) return "Попълнете дата на доставка и доставна цена преди да отбележите получаване.";
     return null;
   }, [deliveryHasDup, deliveryIncomplete]);
 
@@ -765,47 +762,35 @@ export function SupplierOrderDetailModal({
                 {!isArchived && (
                   <div className="rounded-2xl border border-violet-200 bg-white px-3 py-3">
                     <p className="text-[10px] font-bold uppercase tracking-wide text-violet-700">
-                      Данни при получаване (задължителни)
+                      Данни при получаване
                     </p>
                     <p className="mt-1 text-[11px] text-slate-500">
-                      Без серийни номера, дата, доставна цена и фактура не се създава нова складова бройка — избягва се
-                      дублиране на модела.
+                      Задължителни: дата на доставка и доставна цена. Серийните номера и фактурата могат да се
+                      попълнят по-късно.
                     </p>
                     <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                       <div>
-                        <FieldLabel label="Сериен № вътрешно" className="text-slate-500" />
+                        <FieldLabel label="Сериен № вътрешно (по избор)" className="text-slate-500" />
                         <Input
                           value={indoorSerial}
                           onChange={(e) => setIndoorSerial(e.target.value)}
                           placeholder="от табелката"
-                          className={
-                            indoorDup.length > 0
-                              ? "border-amber-400"
-                              : deliveryIncomplete && !indoorSerial.trim()
-                                ? "border-red-400"
-                                : ""
-                          }
+                          className={indoorDup.length > 0 ? "border-amber-400" : ""}
                         />
                         <SerialDupNotice matches={indoorDup} />
                       </div>
                       <div>
-                        <FieldLabel label="Сериен № външно" className="text-slate-500" />
+                        <FieldLabel label="Сериен № външно (по избор)" className="text-slate-500" />
                         <Input
                           value={outdoorSerial}
                           onChange={(e) => setOutdoorSerial(e.target.value)}
                           placeholder="от табелката"
-                          className={
-                            outdoorDup.length > 0
-                              ? "border-amber-400"
-                              : deliveryIncomplete && !outdoorSerial.trim()
-                                ? "border-red-400"
-                                : ""
-                          }
+                          className={outdoorDup.length > 0 ? "border-amber-400" : ""}
                         />
                         <SerialDupNotice matches={outdoorDup} />
                       </div>
                       <div>
-                        <FieldLabel label="Дата на доставка" className="text-slate-500" />
+                        <FieldLabel label="Дата на доставка *" className="text-slate-500" />
                         <Input
                           type="date"
                           value={purchasedAt}
@@ -814,16 +799,15 @@ export function SupplierOrderDetailModal({
                         />
                       </div>
                       <div>
-                        <FieldLabel label="Фактура доставчик" className="text-slate-500" />
+                        <FieldLabel label="Фактура доставчик (по избор)" className="text-slate-500" />
                         <Input
                           value={invoiceNumber}
                           onChange={(e) => setInvoiceNumber(e.target.value)}
                           placeholder="напр. 0000123456"
-                          className={deliveryIncomplete && !invoiceNumber.trim() ? "border-red-400" : ""}
                         />
                       </div>
                       <div>
-                        <FieldLabel label="Доставна цена (€)" className="text-slate-500" />
+                        <FieldLabel label="Доставна цена (€) *" className="text-slate-500" />
                         <Input
                           type="text"
                           inputMode="decimal"

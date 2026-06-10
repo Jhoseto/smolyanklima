@@ -6,7 +6,7 @@ import { createProductInstanceFromTemplate } from "@/lib/admin/createProductInst
 import {
   findIncompleteDeliveredInstanceForModel,
   trimDeliveryFields,
-  validateDeliveryFieldsComplete,
+  validateDeliveryFieldsForOrderFulfill,
 } from "@/lib/admin/productDeliveryValidation";
 import { logAdminActivity } from "@/lib/admin/audit";
 
@@ -15,9 +15,9 @@ export async function OPTIONS(req: NextRequest) {
 }
 
 const FulfillBodySchema = z.object({
-  indoorUnitSerial: z.string().min(1).max(200),
-  outdoorUnitSerial: z.string().min(1).max(200),
-  supplierInvoiceNumber: z.string().min(1).max(120),
+  indoorUnitSerial: z.string().max(200).optional().nullable(),
+  outdoorUnitSerial: z.string().max(200).optional().nullable(),
+  supplierInvoiceNumber: z.string().max(120).optional().nullable(),
   purchasedAt: z.string().min(1).max(32),
   purchasePrice: z.number().nonnegative(),
 });
@@ -25,9 +25,8 @@ const FulfillBodySchema = z.object({
 /**
  * POST /api/admin/supplier-orders/[id]/fulfill
  *
- * Маркира поръчката като доставена и създава складова инстанция само ако са
- * попълнени серийни номера, дата на доставка и номер на фактура, и серийните
- * не съществуват при друг продукт.
+ * Маркира поръчката като доставена и създава складова инстанция при попълнена
+ * дата на доставка и доставна цена. Серийните номера и фактурата са по избор.
  */
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   let session;
@@ -49,8 +48,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       req,
       NextResponse.json(
         {
-          error:
-            "Попълнете серийните номера, датата на доставка, доставната цена и номера на фактурата преди да отбележите доставката.",
+          error: "Попълнете датата на доставка и доставната цена преди да отбележите доставката.",
         },
         { status: 400 },
       ),
@@ -58,7 +56,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   }
 
   const delivery = trimDeliveryFields(parsedBody.data);
-  const deliveryErr = validateDeliveryFieldsComplete(delivery);
+  const deliveryErr = validateDeliveryFieldsForOrderFulfill(delivery);
   if (deliveryErr) {
     return withCors(req, NextResponse.json({ error: deliveryErr }, { status: 400 }));
   }
@@ -124,7 +122,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
           req,
           NextResponse.json(
             {
-              error: `Има незавършена доставена бройка за този модел („${incomplete.name}“). Попълнете серийните номера, фактурата и датата преди нова доставка.`,
+              error: `Има незавършена доставена бройка за този модел („${incomplete.name}“). Попълнете датата и доставната цена преди нова доставка.`,
             },
             { status: 409 },
           ),
@@ -148,6 +146,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       purchasePrice,
       supplierOrderWorkItemId: id,
       priceOverride: agreedFromOrder,
+      requireFullDelivery: false,
     });
     newProductId = created.id;
   } catch (e) {
