@@ -349,14 +349,12 @@ export function SupplierOrderDetailModal({
         return;
       }
       const productInstanceId = (json as { data?: { productInstanceId?: string } }).data?.productInstanceId;
-      if (productInstanceId && onFulfilled) {
-        onFulfilled(productInstanceId);
+      if (productInstanceId) {
+        onFulfilled?.(productInstanceId);
         onClose();
+        router.push(`/admin/products?focusProductId=${encodeURIComponent(productInstanceId)}`);
       } else {
         onClose();
-        if (productInstanceId) {
-          router.push(`/admin/products/${productInstanceId}`);
-        }
       }
     } catch (e) {
       setActionError(String((e as Error)?.message ?? "Неочаквана грешка"));

@@ -291,6 +291,30 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     );
   }
 
+  if (
+    parsed.data.status === "done" &&
+    br.event_code === "supplier_order" &&
+    br.status !== "done"
+  ) {
+    const { data: delivered } = await supabase
+      .from("products")
+      .select("id")
+      .eq("supplier_order_work_item_id", id)
+      .maybeSingle();
+    if (!delivered) {
+      return withCors(
+        req,
+        NextResponse.json(
+          {
+            error:
+              "Поръчката се приключва с „Получена“ в детайлите — така климатикът влиза в наличност в Продукти.",
+          },
+          { status: 400 },
+        ),
+      );
+    }
+  }
+
   if (markReservationCancelled && br.status === "done") {
     return withCors(req, NextResponse.json({ error: "Завършена резервация не може да се отмени от тук." }, { status: 400 }));
   }

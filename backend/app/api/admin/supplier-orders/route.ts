@@ -125,6 +125,8 @@ export async function GET(req: NextRequest) {
       .eq("event_code", "supplier_order")
       .neq("status", "done")
       .neq("status", "cancelled")
+      // planned („Чака“) преди in_progress — после ръчен ред и дата на поръчка
+      .order("status", { ascending: false, nullsFirst: false })
       .order("supplier_order_sort_order", { ascending: true, nullsFirst: false })
       .order("due_date", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: false })
@@ -175,6 +177,11 @@ export async function GET(req: NextRequest) {
     .select(selectFields, { count: "exact" })
     .eq("event_code", "supplier_order");
 
+  // По подразбиране „Чака“ (planned) отгоре, освен при изрично сортиране по статус.
+  if (sortBy !== "status") {
+    query = query.order("status", { ascending: false, nullsFirst: false });
+  }
+
   if (sortBy) {
     switch (sortBy) {
       case "product":
@@ -209,8 +216,8 @@ export async function GET(req: NextRequest) {
     }
   } else {
     query = query
-      .order("due_date", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false });
+      .order("due_date", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: true });
   }
 
   if (q?.trim()) {

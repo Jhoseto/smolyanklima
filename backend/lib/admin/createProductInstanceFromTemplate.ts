@@ -82,6 +82,7 @@ export async function createProductInstanceFromTemplate(
       stock_quantity: 1,
       sold_quantity: 0,
       show_in_public_catalog: false,
+      is_active: true,
       is_featured: false,
       featured_position: null,
       model_code: template.model_code ?? null,

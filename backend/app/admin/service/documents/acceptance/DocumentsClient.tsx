@@ -288,7 +288,7 @@ export function DocumentsClient({ role }: Props) {
     return (
       <div
         key={p.id}
-        onClick={() => isOffline ? openEdit(p.id) : openPreview(p)}
+        onClick={() => isOffline || p.status !== "signed" ? openEdit(p.id) : openPreview(p)}
         className={`rounded-xl px-3 py-2.5 flex items-center gap-2.5 cursor-pointer shadow-sm transition-colors ${
           isOffline
             ? "bg-amber-50 border-2 border-dashed border-amber-300 active:bg-amber-100"

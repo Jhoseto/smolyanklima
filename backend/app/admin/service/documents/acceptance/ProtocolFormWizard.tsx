@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import {
   ChevronLeft, ChevronRight, Check, Download, Mail,
-  PenLine, Trash2, X, Loader2, CheckCircle2, CloudOff,
+  PenLine, Trash2, X, Loader2, CheckCircle2, CloudOff, Save,
 } from "lucide-react";
 import {
   PROTOCOL_MATERIALS, LEFT_MATERIALS, RIGHT_MATERIALS,
@@ -87,6 +87,35 @@ const STEPS = [
   "Подписи",
 ] as const;
 
+function formHasDraftContent(data: FormData): boolean {
+  return Boolean(
+    data.client_name || data.ac_model || data.indoor_unit_serial || data.outdoor_unit_serial ||
+    data.address || data.paid_amount || data.client_phone || data.client_email ||
+    data.notes.trim() || data.cable_channels_m ||
+    data.mount_types.length > 0 ||
+    Object.values(data.materials).some(v => v > 0) ||
+    Object.values(data.accessories).some(v => Number(v ?? 0) > 0) ||
+    data.signature_team || data.signature_client
+  );
+}
+
+/** Отваря черновата на стъпката, от която логично да се продължи попълването. */
+function inferResumeStep(data: FormData): number {
+  if (data.status === "signed") return STEPS.length - 1;
+  let maxStep = 0;
+  if (
+    data.client_name || data.ac_model || data.address || data.indoor_unit_serial ||
+    data.outdoor_unit_serial || data.paid_amount || data.client_phone || data.client_email
+  ) maxStep = 0;
+  if (data.mount_types.length > 0) maxStep = 1;
+  if (LEFT_MATERIALS.some(m => (data.materials[m.id] ?? 0) > 0)) maxStep = 2;
+  if (RIGHT_MATERIALS.some(m => (data.materials[m.id] ?? 0) > 0)) maxStep = 3;
+  if (data.cable_channels_m) maxStep = 4;
+  if (data.notes.trim()) maxStep = 5;
+  if (data.signature_team || data.signature_client) return STEPS.length - 1;
+  return Math.min(maxStep + 1, STEPS.length - 1);
+}
+
 // ─── Главен компонент ────────────────────────────────────────────────────────
 
 export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }: Props) {
@@ -146,10 +175,10 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
         if (m?.id && typeof m.qty === "number") materialsMap[m.id] = m.qty;
       }
     }
-    setForm(prev => ({
-      ...prev,
+    const nextForm: FormData = {
+      ...defaultForm(),
       work_item_id:     (data.work_item_id as string | null) ?? null,
-      date:             (data.date as string) ?? prev.date,
+      date:             (data.date as string) ?? defaultForm().date,
       client_name:      (data.client_name as string) ?? "",
       ac_model:         (data.ac_model as string) ?? "",
       indoor_unit_serial:  (data.indoor_unit_serial as string) ?? (data.serial_number as string) ?? "",
@@ -159,16 +188,18 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
       client_email:     (data.client_email as string) ?? "",
       client_phone:     (data.client_phone as string) ?? "",
       mount_types:      (data.mount_types as string[]) ?? [],
-      materials:        Object.keys(materialsMap).length ? materialsMap : prev.materials,
+      materials:        Object.keys(materialsMap).length ? materialsMap : defaultForm().materials,
       cable_channels_m: data.cable_channels_m != null ? String(data.cable_channels_m) : "",
-      accessories:      (data.accessories as AccessoriesEntry) ?? prev.accessories,
+      accessories:      (data.accessories as AccessoriesEntry) ?? { ...EMPTY_ACCESSORIES },
       notes:            (data.notes as string) ?? "",
       signature_team:   (data.signature_team as string | null) ?? null,
       signature_client: (data.signature_client as string | null) ?? null,
-      status:           (data.status as FormData["status"]) ?? prev.status,
-    }));
-    setEmailInput((data.client_email as string) ?? "");
-  }, []);
+      status:           (data.status as FormData["status"]) ?? "prepared",
+    };
+    setForm(nextForm);
+    setEmailInput(nextForm.client_email);
+    if (protocolId) setStep(inferResumeStep(nextForm));
+  }, [protocolId]);
 
   // In-flight lock: предотвратява двойно повикване на persistForm,
   // което би създало дубликати при паралелен auto-save + finalize (виж P7 в кода ревюто).
@@ -187,10 +218,7 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
   // Автоматично запазване при смяна на данните
   // Не стартира auto-save ако формулярът е все още напълно празен (нищо не е въведено)
   const autoSave = useCallback(async (data: FormData, id: string | null) => {
-    const hasContent = data.client_name || data.ac_model || data.indoor_unit_serial || data.outdoor_unit_serial ||
-      data.address || data.paid_amount || data.client_phone || data.client_email ||
-      data.mount_types.length > 0 || Object.values(data.materials).some(v => v > 0);
-    if (!hasContent && !id) return; // Не запазвай напълно празен протокол
+    if (!formHasDraftContent(data) && !id) return; // Не запазвай напълно празен протокол
 
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(async () => {
@@ -303,6 +331,7 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Грешка");
+      return null;
     } finally {
       if (showSaving) setSaving(false);
     }
@@ -314,6 +343,50 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
   const finalize = async () => {
     const id = await persistForm(form, savedId, true);
     if (id) setSavedId(id);
+  };
+
+  const clearAutoSaveTimer = () => {
+    if (autoSaveTimer.current) {
+      clearTimeout(autoSaveTimer.current);
+      autoSaveTimer.current = null;
+    }
+  };
+
+  const validateContactFields = useCallback((data: FormData): Record<string, string> => {
+    const errs: Record<string, string> = {};
+    const phoneErr = validateProtocolPhone(data.client_phone);
+    if (phoneErr) errs.client_phone = phoneErr;
+    const emailErr = validateProtocolEmail(data.client_email);
+    if (emailErr) errs.client_email = emailErr;
+    return errs;
+  }, []);
+
+  const saveDraftAndClose = async () => {
+    if (form.status === "signed") {
+      onClose();
+      return;
+    }
+    if (!formHasDraftContent(form) && !savedId) {
+      onClose();
+      return;
+    }
+    const errs = validateContactFields(form);
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors(errs);
+      setError("Поправете телефон или имейл, преди да запазите черновата.");
+      return;
+    }
+    clearAutoSaveTimer();
+    setFieldErrors({});
+    setError(null);
+    const id = await persistForm(form, savedId, true);
+    if (id == null) return;
+    if (id) setSavedId(id);
+    onClose();
+  };
+
+  const handleClose = () => {
+    void saveDraftAndClose();
   };
 
   // Изпращане на имейл
@@ -382,7 +455,7 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
       {/* ── Хедър с прогрес ── */}
       <div className="bg-white border-b border-slate-200 shrink-0">
         <div className="flex items-center gap-3 px-4 py-3">
-          <button onClick={onClose} className="text-slate-500 active:text-slate-800 p-1 -ml-1">
+          <button onClick={handleClose} className="text-slate-500 active:text-slate-800 p-1 -ml-1" title="Запази и затвори">
             <X className="w-5 h-5" />
           </button>
           <div className="flex-1">
@@ -681,16 +754,28 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
         </div>
       </div>
 
-      {/* ── Навигация Назад / Напред ── */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-3 flex gap-3 safe-bottom">
+      {/* ── Навигация Назад / Запази / Напред ── */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-3 flex gap-2 safe-bottom">
         <button
           onClick={() => { setStep(s => s - 1); setError(null); setFieldErrors({}); }}
           disabled={step === 0}
-          className="flex items-center gap-1.5 px-4 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold text-sm disabled:opacity-30"
+          className="flex items-center gap-1.5 px-3 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold text-sm disabled:opacity-30 shrink-0"
         >
           <ChevronLeft className="w-5 h-5" />
-          Назад
+          <span className="hidden sm:inline">Назад</span>
         </button>
+
+        {!isSigned && (
+          <button
+            onClick={() => void saveDraftAndClose()}
+            disabled={saving}
+            className="flex items-center gap-1.5 px-3 py-3 rounded-xl border-2 border-slate-300 text-slate-700 font-semibold text-sm active:bg-slate-50 disabled:opacity-50 shrink-0"
+            title="Запазва текущото съдържание без подписи — може да довършите по-късно"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            <span className="hidden sm:inline">Запази и затвори</span>
+          </button>
+        )}
 
         <div className="flex-1" />
 
@@ -698,19 +783,19 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
           <button
             onClick={finalize}
             disabled={saving || isSigned}
-            className="flex items-center gap-2 bg-green-600 disabled:bg-slate-400 text-white px-5 py-3 rounded-xl font-semibold text-sm active:bg-green-700"
+            className="flex items-center gap-2 bg-green-600 disabled:bg-slate-400 text-white px-4 sm:px-5 py-3 rounded-xl font-semibold text-sm active:bg-green-700 shrink-0"
           >
             {saving
-              ? <><Loader2 className="w-5 h-5 animate-spin" /> Запазва се...</>
+              ? <><Loader2 className="w-5 h-5 animate-spin" /> <span className="hidden sm:inline">Запазва се...</span></>
               : isSigned
-                ? <><CheckCircle2 className="w-5 h-5" /> Подписан</>
+                ? <><CheckCircle2 className="w-5 h-5" /> <span className="hidden sm:inline">Подписан</span></>
                 : <><Check className="w-5 h-5" /> Финализирай</>
             }
           </button>
         ) : (
           <button
             onClick={goNext}
-            className="flex items-center gap-1.5 px-5 py-3 rounded-xl bg-blue-600 text-white font-semibold text-sm active:bg-blue-700"
+            className="flex items-center gap-1.5 px-4 sm:px-5 py-3 rounded-xl bg-blue-600 text-white font-semibold text-sm active:bg-blue-700 shrink-0"
           >
             Напред
             <ChevronRight className="w-5 h-5" />

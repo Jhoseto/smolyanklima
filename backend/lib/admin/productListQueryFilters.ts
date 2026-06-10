@@ -80,14 +80,14 @@ function applyBooleanPairFilter(
 
 /**
  * Админ каталог: филтър „публичен каталог“ важи за шаблони, не за складови бройки.
- * Инстанциите със серийни № винаги се виждат при „В публичен каталог“.
+ * Инстанциите със серийни № или от получена поръчка винаги се виждат при „В публичен каталог“.
  */
 function applyAdminPublicCatalogFilter(query: FilterQuery, flags: readonly string[]): FilterQuery {
   const hasVisible = flags.includes("visible");
   const hasHidden = flags.includes("hidden");
   if (hasVisible && !hasHidden) {
     return query.or(
-      "show_in_public_catalog.eq.true,indoor_unit_serial.not.is.null,outdoor_unit_serial.not.is.null",
+      "show_in_public_catalog.eq.true,indoor_unit_serial.not.is.null,outdoor_unit_serial.not.is.null,supplier_order_work_item_id.not.is.null",
     );
   }
   if (hasHidden && !hasVisible) {

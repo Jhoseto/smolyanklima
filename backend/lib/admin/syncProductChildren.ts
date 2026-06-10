@@ -130,6 +130,44 @@ export async function replaceProductFeatures(
   return { error };
 }
 
+/** Копира specs и снимки от каталожен шаблон към нова складова бройка. */
+export async function copyProductChildrenFromTemplate(
+  supabase: SupabaseClient,
+  templateProductId: string,
+  instanceProductId: string,
+): Promise<string | null> {
+  const { data: specsRow, error: specsErr } = await supabase
+    .from("product_specs")
+    .select(
+      "btu,coverage_m2,noise_db,cooling_power_kw,heating_power_kw,refrigerant,wifi,energy_class_cool,energy_class_heat,seer,scop,warranty_months,weight_indoor_kg,weight_outdoor_kg,dim_indoor_length_mm,dim_indoor_width_mm,dim_indoor_height_mm,dim_outdoor_length_mm,dim_outdoor_width_mm,dim_outdoor_height_mm",
+    )
+    .eq("product_id", templateProductId)
+    .maybeSingle();
+  if (specsErr) return specsErr.message;
+  if (specsRow) {
+    const { error } = await upsertProductSpecs(supabase, instanceProductId, specsRow as SpecsInput);
+    if (error) return error.message;
+  }
+
+  const { data: images, error: imgListErr } = await supabase
+    .from("product_images")
+    .select("url,sort_order,is_main")
+    .eq("product_id", templateProductId)
+    .order("sort_order", { ascending: true });
+  if (imgListErr) return imgListErr.message;
+  if (images?.length) {
+    const mapped: ImageInput[] = images.map((im, i) => ({
+      url: String(im.url ?? ""),
+      sort_order: Number(im.sort_order ?? i),
+      is_main: Boolean(im.is_main),
+    }));
+    const { error } = await replaceProductImages(supabase, instanceProductId, mapped);
+    if (error) return error.message;
+  }
+
+  return null;
+}
+
 export async function replaceProductImages(
   supabase: SupabaseClient,
   productId: string,

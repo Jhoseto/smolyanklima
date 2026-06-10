@@ -9,6 +9,8 @@ import {
   validateDeliveryFieldsForOrderFulfill,
 } from "@/lib/admin/productDeliveryValidation";
 import { logAdminActivity } from "@/lib/admin/audit";
+import { insertProductCatalogStockCalendarEvent } from "@/lib/admin/productCatalogWorkItems";
+import { copyProductChildrenFromTemplate } from "@/lib/admin/syncProductChildren";
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflight(req);
@@ -138,8 +140,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       ? orderRow.unit_price
       : null;
   const purchasePrice = parsedBody.data.purchasePrice;
+  const templateProductId = orderRow.product_id;
 
   let newProductId: string;
+  let newProductName: string;
   try {
     const created = await createProductInstanceFromTemplate(supabase, tpl, {
       delivery,
@@ -149,6 +153,13 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       requireFullDelivery: false,
     });
     newProductId = created.id;
+    newProductName = created.name;
+
+    const childErr = await copyProductChildrenFromTemplate(supabase, templateProductId, newProductId);
+    if (childErr) {
+      await supabase.from("products").delete().eq("id", newProductId);
+      return withCors(req, NextResponse.json({ error: childErr }, { status: 500 }));
+    }
   } catch (e) {
     const message = String((e as Error).message);
     const status = message.includes("Сериен номер") ? 409 : 400;
@@ -170,13 +181,20 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     return withCors(req, NextResponse.json({ error: updateErr.message }, { status: 500 }));
   }
 
+  await insertProductCatalogStockCalendarEvent(supabase, {
+    kind: "added",
+    productId: newProductId,
+    productName: newProductName,
+    createdBy: session.userId,
+  });
+
   await logAdminActivity({
     action: "supplier_order.fulfill",
     entityType: "supplier_order",
     entityId: id,
     details: {
       productInstanceId: newProductId,
-      productId: orderRow.product_id,
+      productId: templateProductId,
       client_name: orderRow.customer_name,
     },
   });

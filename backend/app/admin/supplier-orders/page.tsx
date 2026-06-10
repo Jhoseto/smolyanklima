@@ -93,10 +93,7 @@ function orderAgreedPrice(row: NormalizedSupplierOrderRow): number | null {
 }
 
 function orderDateDisplay(row: NormalizedSupplierOrderRow): string {
-  const raw =
-    row.status === "done" && row.delivered_product?.purchased_at
-      ? row.delivered_product.purchased_at
-      : row.due_date;
+  const raw = row.due_date ?? row.created_at;
   if (!raw) return "—";
   try {
     return new Date(raw).toLocaleDateString("bg-BG");
@@ -133,10 +130,10 @@ const TEXT_ASC_FIELDS: SortField[] = [
   "customer_name",
   "customer_phone",
   "customer_address",
-  "status",
 ];
 
 function defaultSortDir(field: SortField): SortDir {
+  if (field === "status") return "desc";
   if (DATE_DESC_FIELDS.includes(field)) return "desc";
   if (TEXT_ASC_FIELDS.includes(field)) return "asc";
   return "asc";
@@ -146,6 +143,9 @@ function sortHint(field: SortField, sortBy: SortField, sortDir: SortDir, label: 
   if (sortBy !== field) return `Сортирай по „${label}"`;
   if (field === "order_date") {
     return sortDir === "desc" ? "Най-новите отгоре" : "Най-старите отгоре";
+  }
+  if (field === "status") {
+    return sortDir === "desc" ? "Чакащите отгоре" : "Завършените отгоре";
   }
   if (field === "purchase_price" || field === "total_amount") {
     return sortDir === "desc" ? "Най-големите суми отгоре" : "Най-малките суми отгоре";
@@ -288,7 +288,7 @@ export default function SupplierOrdersHistoryPage() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [saleOrder, setSaleOrder] = useState<NormalizedSupplierOrderRow | null>(null);
   const [manualDeliveryOpen, setManualDeliveryOpen] = useState(false);
-  const [sortBy, setSortBy] = useState<SortField>("order_date");
+  const [sortBy, setSortBy] = useState<SortField>("status");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   useEffect(() => {
@@ -686,7 +686,7 @@ export default function SupplierOrdersHistoryPage() {
               <Th>Фактура</Th>
               <SortableTh label="Доставна" field="purchase_price" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
               <SortableTh label="Договорена" field="total_amount" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
-              <SortableTh label="Дата" field="order_date" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+              <SortableTh label="Дата поръчка" field="order_date" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
               <Th></Th>
             </tr>
           </thead>
@@ -800,7 +800,7 @@ export default function SupplierOrdersHistoryPage() {
                 )}
               </div>
             )}
-            <div className="mt-2 text-xs text-slate-400">Дата: {orderDateDisplay(row)}</div>
+            <div className="mt-2 text-xs text-slate-400">Дата поръчка: {orderDateDisplay(row)}</div>
             <div className="mt-3 grid grid-cols-2 gap-2">
               <Button variant="secondary" size="sm" className="col-span-2 font-bold !text-xs" onClick={() => setDetailId(row.id)}>
                 <Eye className="mr-1 inline h-3.5 w-3.5" />
