@@ -15,6 +15,8 @@ import type { AdminRole } from "@/lib/admin/db";
 import { listCachedDocuments, type CachedDocument } from "@/lib/offline/db";
 import { isLocalId } from "@/lib/offline/offlineFetch";
 import { resolveServerId } from "@/lib/offline/queue";
+import { parseOfflineApiError } from "@/lib/offline/acceptancePayload";
+import { purgeLocalDocument } from "@/lib/offline/purgeLocalDocument";
 import { useOnlineStatus } from "@/lib/hooks/useOnlineStatus";
 import { useOfflineQueue } from "@/lib/hooks/useOfflineQueue";
 
@@ -255,6 +257,30 @@ export function DocumentsClient({ role }: Props) {
 
   // Изтрива един протокол след явно потвърждение. Само master_admin вижда
   // бутона; API също валидира ролята и връща 403 за останалите.
+  const handleDeleteOffline = async (e: React.MouseEvent, p: Protocol) => {
+    e.stopPropagation();
+    if (deletingId) return;
+    const label = p.protocol_number || "този локален протокол";
+    const ok = window.confirm(
+      `Да изтрия „${label}“ от това устройство?\n\nЗаписът е само локален — няма да се изтрие от сървъра (ако изобщо е качен).`,
+    );
+    if (!ok) return;
+    setDeletingId(p.id);
+    setErrorMsg(null);
+    try {
+      await purgeLocalDocument(p.id, "acceptance");
+      await refreshQueueState();
+      setOfflineRows((prev) => prev.filter((x) => x.id !== p.id));
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Грешка при изтриване на локалния запис");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const formatSyncError = (raw: string | undefined) =>
+    parseOfflineApiError(raw) ?? raw;
+
   const handleDelete = async (e: React.MouseEvent, p: Protocol) => {
     e.stopPropagation();
     if (!canDelete || deletingId) return;
@@ -361,6 +387,18 @@ export function DocumentsClient({ role }: Props) {
               disabled={deletingId === p.id}
               className="p-2 min-h-11 min-w-11 flex items-center justify-center text-rose-400 hover:text-rose-700 hover:bg-rose-50 active:bg-rose-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait"
               title="Изтрий протокола"
+            >
+              {deletingId === p.id
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <Trash2 className="w-4 h-4" />}
+            </button>
+          )}
+          {isOffline && (
+            <button
+              onClick={(e) => handleDeleteOffline(e, p)}
+              disabled={deletingId === p.id}
+              className="p-2 min-h-11 min-w-11 flex items-center justify-center text-rose-500 hover:text-rose-800 hover:bg-rose-50 active:bg-rose-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait"
+              title="Изтрий локалния запис от това устройство"
             >
               {deletingId === p.id
                 ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -545,7 +583,7 @@ export function DocumentsClient({ role }: Props) {
               </p>
               {(pendingSampleError || lastError) && (
                 <p className="text-xs text-rose-700 mt-1 font-medium">
-                  {pendingSampleError || lastError}
+                  {formatSyncError(pendingSampleError || lastError)}
                 </p>
               )}
               {online && (

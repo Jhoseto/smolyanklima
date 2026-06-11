@@ -4,6 +4,7 @@
  */
 import {
   countPendingMutations,
+  clearIdMap,
   deleteMutation,
   listPendingMutations,
   markError,
@@ -26,6 +27,7 @@ import {
   type CachedDocument,
   type DocKind,
 } from "./db";
+import { parseOfflineApiError, sanitizeAcceptanceProtocolBody } from "./acceptancePayload";
 
 function isLocalDocumentId(id: string): boolean {
   return id.startsWith("local-");
@@ -33,6 +35,18 @@ function isLocalDocumentId(id: string): boolean {
 
 const MAX_RETRIES = 5;
 const LOCK_NAME = "sk-offline-sync";
+
+function sanitizeMutationBody(kind: DocKind, body: unknown): unknown {
+  if (kind !== "acceptance" || !body || typeof body !== "object") return body;
+  return sanitizeAcceptanceProtocolBody(body as Record<string, unknown>);
+}
+
+function isStaleProtocolMutation(method: string, status: number, errText: string): boolean {
+  if (method !== "PUT") return false;
+  if (status === 404) return true;
+  const msg = (parseOfflineApiError(errText) ?? errText).toLowerCase();
+  return msg.includes("cannot coerce") || msg.includes("не е намерен");
+}
 
 /** UUID в пътя на endpoint след успешна мутация — синхронизираме `dirty` в кеша. */
 const ID_IN_API_PATH =
@@ -125,10 +139,35 @@ export async function syncOrphanedLocalDocuments(): Promise<number> {
   return recovered;
 }
 
+/** Нулира заседнали PUT/POST грешки (напр. „Cannot coerce“), за да може „Качи сега“ да помогне. */
+async function resetRecoverableAcceptanceMutations(): Promise<number> {
+  let n = 0;
+  try {
+    const pending = await listPendingMutations();
+    const all = pending.filter((m) => m.kind === "acceptance" && m.retries >= MAX_RETRIES);
+    for (const m of all) {
+      if (!m.id) continue;
+      const err = (parseOfflineApiError(m.lastError) ?? m.lastError ?? "").toLowerCase();
+      const recoverable =
+        m.method === "POST" ||
+        (m.method === "PUT" &&
+          (err.includes("cannot coerce") ||
+            err.includes("не е намерен") ||
+            err.includes("не съществува")));
+      if (!recoverable) continue;
+      if (m.localId) await clearIdMap(m.localId);
+      await updateMutation(m.id, { status: "pending", retries: 0, lastError: undefined });
+      n += 1;
+    }
+  } catch { /* IDB */ }
+  return n;
+}
+
 /**
  * Пълен sync: recovery на „сираци“ + flush на опашката.
  */
 export async function syncAllPending(): Promise<SyncResult> {
+  await resetRecoverableAcceptanceMutations();
   await syncOrphanedLocalDocuments();
   return flushQueue();
 }
@@ -199,22 +238,54 @@ async function doFlush(): Promise<SyncResult> {
         headers: { "Content-Type": "application/json" },
       };
       if (m.body !== undefined && m.method !== "DELETE") {
-        init.body = JSON.stringify(m.body);
+        init.body = JSON.stringify(sanitizeMutationBody(m.kind, m.body));
       }
       if (m.idempotencyKey) {
         init.headers = { ...init.headers, "Idempotency-Key": m.idempotencyKey };
       }
 
-      const res = await fetch(endpoint, init);
+      let res = await fetch(endpoint, init);
       if (!res.ok && res.status !== 204) {
-        const isClientErr = res.status >= 400 && res.status < 500;
         const errText = await res.text().catch(() => `HTTP ${res.status}`);
+        const readable = parseOfflineApiError(errText) ?? errText;
+
+        if (isStaleProtocolMutation(m.method, res.status, errText) && m.localId) {
+          await clearIdMap(m.localId);
+          const sid = await attemptRecoveryPost(
+            m.localId,
+            m.kind,
+            m.body as Record<string, unknown> | undefined,
+          );
+          if (sid) {
+            endpoint = m.endpoint.includes(":localId")
+              ? m.endpoint.replace(":localId", sid)
+              : endpoint.replace(
+                  /\/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/,
+                  `/${sid}`,
+                );
+            init.body =
+              m.body !== undefined && m.method !== "DELETE"
+                ? JSON.stringify(sanitizeMutationBody(m.kind, m.body))
+                : undefined;
+            res = await fetch(endpoint, init);
+            if (res.ok || res.status === 204) {
+              if (m.method !== "POST") {
+                await reconcileDocumentCacheAfterMutation(endpoint, m.method);
+              }
+              await deleteMutation(m.id);
+              flushed += 1;
+              continue;
+            }
+          }
+        }
+
+        const isClientErr = res.status >= 400 && res.status < 500;
         if (isClientErr) {
-          await markError(m.id, errText);
+          await markError(m.id, readable);
           await updateMutation(m.id, { retries: MAX_RETRIES });
           failed += 1;
         } else {
-          await markError(m.id, errText);
+          await markError(m.id, readable);
         }
         continue;
       }
@@ -285,6 +356,7 @@ async function attemptRecoveryPost(
     payload = doc?.data;
   }
   if (!payload || typeof payload !== "object") return undefined;
+  payload = sanitizeAcceptanceProtocolBody(payload);
 
   const init: RequestInit = {
     method: "POST",

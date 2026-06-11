@@ -24,6 +24,7 @@ import {
   normalizeProtocolPhoneForApi,
   normalizeWorkItemIdForApi,
 } from "@/lib/protocol-contact-validation";
+import { parseOfflineApiError } from "@/lib/offline/acceptancePayload";
 
 // ─── Типове ──────────────────────────────────────────────────────────────────
 
@@ -778,7 +779,7 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
           {online && pendingSync && pendingSampleError && (
             <div className="mt-4 bg-amber-50 border border-amber-200 text-amber-900 text-sm rounded-xl px-4 py-3">
               <p className="font-semibold">Протоколът не се качи автоматично</p>
-              <p className="mt-1 text-amber-800">{pendingSampleError}</p>
+              <p className="mt-1 text-amber-800">{parseOfflineApiError(pendingSampleError) ?? pendingSampleError}</p>
               <button
                 type="button"
                 onClick={() => void syncNow()}

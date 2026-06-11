@@ -17,6 +17,7 @@ import {
   type IdMapEntry,
   type QueuedMutation,
 } from "./db";
+import { parseOfflineApiError } from "./acceptancePayload";
 
 export interface EnqueueOptions {
   kind: DocKind;
@@ -122,7 +123,8 @@ export async function getPendingQueueSampleError(): Promise<string | undefined> 
   const all = [...pending, ...errs]
     .filter((m): m is QueuedMutation & { lastError?: string } => Boolean(m.lastError?.trim()))
     .sort((a, b) => b.updatedAt - a.updatedAt);
-  return all[0]?.lastError?.trim();
+  const raw = all[0]?.lastError?.trim();
+  return parseOfflineApiError(raw) ?? raw;
 }
 
 /** Маркира мутация като in-progress, за да не я хване друг tab/SW. */
@@ -167,6 +169,11 @@ export async function setIdMap(localId: string, serverId: string, kind: DocKind)
 export async function resolveServerId(localId: string): Promise<string | undefined> {
   const entry = await idbGet<IdMapEntry>("id_map", localId);
   return entry?.serverId;
+}
+
+/** Маха остаряла localId → serverId връзка (напр. след изтрит запис на сървъра). */
+export async function clearIdMap(localId: string): Promise<void> {
+  await idbDelete("id_map", localId);
 }
 
 /**

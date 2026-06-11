@@ -144,9 +144,12 @@ export async function PUT(
     .update(update)
     .eq("id", id)
     .select("*")
-    .single();
+    .maybeSingle();
 
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
+  if (!data) {
+    return withCors(req, NextResponse.json({ error: "Протоколът не е намерен" }, { status: 404 }));
+  }
 
   await logAdminActivity({
     action: "service_protocol.update",
