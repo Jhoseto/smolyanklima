@@ -14,6 +14,7 @@ import { ProtocolPreview } from "./ProtocolPreview";
 import type { AdminRole } from "@/lib/admin/db";
 import { listCachedDocuments, type CachedDocument } from "@/lib/offline/db";
 import { isLocalId } from "@/lib/offline/offlineFetch";
+import { resolveServerId } from "@/lib/offline/queue";
 import { useOnlineStatus } from "@/lib/hooks/useOnlineStatus";
 import { useOfflineQueue } from "@/lib/hooks/useOfflineQueue";
 
@@ -103,7 +104,7 @@ export function DocumentsClient({ role }: Props) {
   const [deletingId, setDeletingId]   = useState<string | null>(null);
   const [errorMsg, setErrorMsg]       = useState<string | null>(null);
   const online = useOnlineStatus();
-  const { pendingCount } = useOfflineQueue();
+  const { pendingCount, syncNow, isSyncing, pendingSampleError, lastError, refreshQueueState } = useOfflineQueue();
   const perPage = 20;
 
   // Изтриването е разрешено САМО за главен администратор. API също го
@@ -115,14 +116,18 @@ export function DocumentsClient({ role }: Props) {
   // Зарежда cached/offline протоколи от IndexedDB.
   // Тези записи се показват винаги — независимо дали сме online или offline —
   // за да може екипът да види своите чернови, които още чакат качване.
-  const loadOfflineRows = useCallback(async () => {
+  const loadOfflineRows = useCallback(async (serverIds?: Set<string>) => {
     try {
       const cached = await listCachedDocuments<Record<string, unknown>>("acceptance");
-      // Показваме само записи, които или нямат server id (local-...),
-      // или са маркирани като dirty (имат неизпратени промени).
-      const rows = cached
-        .filter(c => isLocalId(c.key) || c.dirty)
-        .map(cachedToProtocol);
+      const rows: Protocol[] = [];
+      for (const c of cached) {
+        if (!isLocalId(c.key) && !c.dirty) continue;
+        if (isLocalId(c.key)) {
+          const sid = await resolveServerId(c.key);
+          if (sid && serverIds?.has(sid)) continue;
+        }
+        rows.push(cachedToProtocol(c));
+      }
       setOfflineRows(rows);
     } catch {
       // IDB не е достъпен (private mode, SSR…) → продължаваме без offline rows.
@@ -142,6 +147,7 @@ export function DocumentsClient({ role }: Props) {
       if (q) params.set("q", q);
       if (status) params.set("status", status);
 
+      let serverIds: Set<string> | undefined;
       try {
         const res = await fetch(`/api/admin/service/protocols?${params}`, { credentials: "include" });
         if (res.ok) {
@@ -149,6 +155,7 @@ export function DocumentsClient({ role }: Props) {
           const rows: Protocol[] = json.data ?? [];
           setProtocols((prev) => (p === 1 ? rows : [...prev, ...rows]));
           setTotal(json.meta?.total ?? 0);
+          serverIds = new Set(rows.map((r) => r.id));
         } else if (p === 1) {
           const json = await res.json().catch(() => ({}));
           setProtocols([]);
@@ -170,7 +177,7 @@ export function DocumentsClient({ role }: Props) {
         }
       }
 
-      await loadOfflineRows();
+      await loadOfflineRows(serverIds);
     } finally {
       setLoading(false);
     }
@@ -178,9 +185,21 @@ export function DocumentsClient({ role }: Props) {
 
   useEffect(() => { load(1, search, statusFilter, sort); }, [load, search, statusFilter, sort]);
 
-  // Презареждаме offline rows при промяна на броя pending mutations
-  // (т.е. след auto-sync — изчистваме маркираните като качени).
-  useEffect(() => { void loadOfflineRows(); }, [pendingCount, loadOfflineRows]);
+  // Презареждаме offline rows и сървърния списък след sync.
+  const prevPendingRef = useRef(pendingCount);
+  useEffect(() => {
+    void loadOfflineRows();
+    if (prevPendingRef.current > 0 && pendingCount === 0 && online) {
+      void load(1, search, statusFilter, sort);
+    }
+    prevPendingRef.current = pendingCount;
+  }, [pendingCount, loadOfflineRows, online, load, search, statusFilter, sort]);
+
+  const handleSyncPending = async () => {
+    await refreshQueueState();
+    await syncNow();
+    await load(1, search, statusFilter, sort);
+  };
 
   // P13: При възстановяване на мрежа след офлайн → ре-зареждаме целия списък.
   // Refs гарантират, че не правим double load на mount (когато online стартира true).
@@ -515,6 +534,32 @@ export function DocumentsClient({ role }: Props) {
         {/* Offline-only записи (чернови, които още не са качени към сървъра) */}
         {offlineRows.length > 0 && (
           <div className="mb-4">
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 mb-2 text-sm text-amber-950">
+              <p className="font-semibold">
+                {offlineRows.length === 1
+                  ? "1 протокол е само на това устройство"
+                  : `${offlineRows.length} протокола са само на това устройство`}
+              </p>
+              <p className="text-xs text-amber-800 mt-1">
+                Другите компютри виждат само качените в системата протоколи. Натиснете „Качи сега“, докато имате интернет.
+              </p>
+              {(pendingSampleError || lastError) && (
+                <p className="text-xs text-rose-700 mt-1 font-medium">
+                  {pendingSampleError || lastError}
+                </p>
+              )}
+              {online && (
+                <button
+                  type="button"
+                  onClick={() => void handleSyncPending()}
+                  disabled={isSyncing}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-60"
+                >
+                  {isSyncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CloudOff className="w-3.5 h-3.5" />}
+                  {isSyncing ? "Качване…" : "Качи сега"}
+                </button>
+              )}
+            </div>
             <div className="flex items-center gap-2 mb-2 px-1">
               <CloudOff className="w-3.5 h-3.5 text-slate-500" />
               <p className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">

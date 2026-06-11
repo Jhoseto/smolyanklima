@@ -92,7 +92,13 @@ export async function offlineSend<TBody = unknown, TData = unknown>(
     try {
       let endpoint = opts.endpoint;
       if (endpoint.includes(":localId") && opts.localId) {
-        const sid = await resolveServerId(opts.localId);
+        let sid = await resolveServerId(opts.localId);
+        if (!sid) {
+          // Опит за flush на чакащ POST преди да опашкаме PUT (често online, но POST още не е минал).
+          const { flushQueue } = await import("./sync");
+          await flushQueue();
+          sid = await resolveServerId(opts.localId);
+        }
         if (!sid) {
           await enqueueMutation({
             kind: opts.kind, method: opts.method, endpoint: opts.endpoint,

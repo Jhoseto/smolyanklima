@@ -20,10 +20,16 @@ import {
   idbDelete,
   idbGet,
   idbPut,
+  listCachedDocuments,
   purgeUnsupportedCachedDocuments,
   purgeUnsupportedIdMapEntries,
   type CachedDocument,
+  type DocKind,
 } from "./db";
+
+function isLocalDocumentId(id: string): boolean {
+  return id.startsWith("local-");
+}
 
 const MAX_RETRIES = 5;
 const LOCK_NAME = "sk-offline-sync";
@@ -98,6 +104,36 @@ export function flushQueue(): Promise<SyncResult> {
 }
 
 /**
+ * Качва локални протоколи, които са само в IndexedDB (без запис в mutation_queue).
+ * Случва се при прекъснат sync или изчистена опашка с останал кеш.
+ */
+export async function syncOrphanedLocalDocuments(): Promise<number> {
+  let recovered = 0;
+  try {
+    const cached = await listCachedDocuments<Record<string, unknown>>("acceptance");
+    for (const doc of cached) {
+      if (!isLocalDocumentId(doc.key)) continue;
+      if (await resolveServerId(doc.key)) continue;
+      const hasPending = (await listPendingMutations()).some(
+        (m) => m.localId === doc.key || m.endpoint.includes(doc.key),
+      );
+      if (hasPending) continue;
+      const sid = await attemptRecoveryPost(doc.key, doc.kind, doc.data);
+      if (sid) recovered += 1;
+    }
+  } catch { /* IDB недостъпен */ }
+  return recovered;
+}
+
+/**
+ * Пълен sync: recovery на „сираци“ + flush на опашката.
+ */
+export async function syncAllPending(): Promise<SyncResult> {
+  await syncOrphanedLocalDocuments();
+  return flushQueue();
+}
+
+/**
  * Веднъж при mount на админ панела:
  *   0) Премахва исторически offline записи за видове, които вече не се синхронизират.
  *   1) Изчиства "syncing" мутации, които са останали зомби от убит tab/SW (P3).
@@ -141,7 +177,15 @@ async function doFlush(): Promise<SyncResult> {
       // Заместване на :localId с реален server id, ако вече сме го получили.
       let endpoint = m.endpoint;
       if (endpoint.includes(":localId") && m.localId) {
-        const sid = await resolveServerId(m.localId);
+        let sid = await resolveServerId(m.localId);
+        if (!sid) {
+          const hasPendingPost = pending.some(
+            (p) => p.method === "POST" && p.localId === m.localId && p.id !== m.id,
+          );
+          if (!hasPendingPost) {
+            sid = await attemptRecoveryPost(m.localId, m.kind, m.body as Record<string, unknown> | undefined);
+          }
+        }
         if (!sid) {
           await updateMutation(m.id, { status: "pending" });
           continue;
@@ -226,6 +270,40 @@ async function migrateDocumentKey(localId: string, serverId: string): Promise<vo
   await idbPut("documents", next);
   if (localId !== serverId) {
     await idbDelete("documents", localId);
+  }
+}
+
+/** POST от локален кеш, когато PUT е в опашката, но липсва POST. */
+async function attemptRecoveryPost(
+  localId: string,
+  kind: DocKind,
+  body?: Record<string, unknown>,
+): Promise<string | undefined> {
+  let payload = body;
+  if (!payload || typeof payload !== "object") {
+    const doc = await idbGet<CachedDocument<Record<string, unknown>>>("documents", localId);
+    payload = doc?.data;
+  }
+  if (!payload || typeof payload !== "object") return undefined;
+
+  const init: RequestInit = {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  };
+  const res = await fetch("/api/admin/service/protocols", init);
+  if (!res.ok && res.status !== 204) return undefined;
+
+  try {
+    const json = await res.json();
+    const serverId: string | undefined = json?.data?.id ?? json?.id;
+    if (!serverId) return undefined;
+    await setIdMap(localId, serverId, kind);
+    await migrateDocumentKey(localId, serverId);
+    return serverId;
+  } catch {
+    return undefined;
   }
 }
 

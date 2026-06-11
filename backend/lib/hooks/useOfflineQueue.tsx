@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { countPendingMutations, getPendingQueueSampleError } from "@/lib/offline/queue";
-import { flushQueue, type SyncResult } from "@/lib/offline/sync";
+import { syncAllPending, type SyncResult } from "@/lib/offline/sync";
 import { useOnlineStatus } from "./useOnlineStatus";
 
 export interface QueueState {
@@ -77,7 +77,7 @@ export function OfflineQueueProvider({ children }: { children: ReactNode }) {
     setIsSyncing(true);
     setLastError(undefined);
     try {
-      const result = await flushQueue();
+      const result = await syncAllPending();
       if (mountedRef.current) {
         setLastResult(result);
         await refreshCount();

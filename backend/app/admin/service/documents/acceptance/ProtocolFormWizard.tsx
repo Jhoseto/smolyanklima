@@ -13,11 +13,16 @@ import type { AccessoriesEntry, MaterialEntry } from "@/lib/protocol-materials";
 import { SignatureCanvas } from "./SignatureCanvas";
 import { ProductAutocomplete } from "./ProductAutocomplete";
 import { offlineSend, offlineGet, newLocalId, isLocalId } from "@/lib/offline/offlineFetch";
+import { resolveServerId } from "@/lib/offline/queue";
 import { useOnlineStatus } from "@/lib/hooks/useOnlineStatus";
+import { useOfflineQueue } from "@/lib/hooks/useOfflineQueue";
 import {
   digitsOnlyPhoneInput,
   validateProtocolEmail,
   validateProtocolPhone,
+  normalizeProtocolEmailForApi,
+  normalizeProtocolPhoneForApi,
+  normalizeWorkItemIdForApi,
 } from "@/lib/protocol-contact-validation";
 
 // ─── Типове ──────────────────────────────────────────────────────────────────
@@ -131,6 +136,7 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
   const localIdRef = useRef<string | null>(null);
   const [pendingSync, setPendingSync] = useState(false);
   const online = useOnlineStatus();
+  const { syncNow, refreshQueueState, pendingSampleError, isSyncing } = useOfflineQueue();
   const [sigOpen, setSigOpen] = useState<"team" | "client" | null>(null);
   const [sendEmail, setSendEmail] = useState(false);
   const [emailInput, setEmailInput] = useState(initialData?.client_email ?? "");
@@ -264,16 +270,20 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
       //   prepared → in_progress (поява на техническо съдържание)
       //   in_progress → signed   (двата подписа са налични)
       const payload = {
-        work_item_id:     data.work_item_id,
+        work_item_id:     normalizeWorkItemIdForApi(data.work_item_id),
         date:             data.date || new Date().toISOString().slice(0, 10),
         client_name:      data.client_name || null,
         ac_model:         data.ac_model || null,
         indoor_unit_serial:  data.indoor_unit_serial || null,
         outdoor_unit_serial: data.outdoor_unit_serial || null,
         address:          data.address || null,
-        paid_amount:      data.paid_amount ? parseFloat(data.paid_amount) : null,
-        client_email:     data.client_email || null,
-        client_phone:     data.client_phone || null,
+        paid_amount:      (() => {
+          if (!data.paid_amount) return null;
+          const n = parseFloat(data.paid_amount);
+          return Number.isFinite(n) && n >= 0 ? n : null;
+        })(),
+        client_email:     normalizeProtocolEmailForApi(data.client_email),
+        client_phone:     normalizeProtocolPhoneForApi(data.client_phone),
         mount_types:      data.mount_types,
         materials:        PROTOCOL_MATERIALS
           .filter(m => (data.materials[m.id] ?? 0) > 0)
@@ -283,6 +293,23 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
         notes:            data.notes || null,
         signature_team:   data.signature_team,
         signature_client: data.signature_client,
+      };
+
+      const afterQueuedSave = async (result: { queued: boolean }, effectiveId: string) => {
+        if (!result.queued) return;
+        if (online) {
+          await syncNow();
+          await refreshQueueState();
+          if (isLocalId(effectiveId)) {
+            const sid = await resolveServerId(effectiveId);
+            if (sid) {
+              setSavedId(sid);
+              setPendingSync(false);
+            }
+          } else {
+            setPendingSync(false);
+          }
+        }
       };
 
       if (id) {
@@ -304,6 +331,7 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
         if (result.data?.status && result.data.status !== data.status) {
           setForm(prev => ({ ...prev, status: result.data!.status! }));
         }
+        await afterQueuedSave(result, id);
       } else {
         // CREATE: винаги генерираме localId за tracking в IndexedDB.
         const localId = localIdRef.current ?? newLocalId();
@@ -327,6 +355,7 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
           setForm(prev => ({ ...prev, status: result.data!.status! }));
         }
         onSaved(effectiveId);
+        await afterQueuedSave(result, effectiveId);
         return effectiveId;
       }
     } catch (e: unknown) {
@@ -470,8 +499,8 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
           )}
           {online && pendingSync && (
             <div title="Чака да се качи към сървъра" className="flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500 text-white text-[10px] font-bold">
-              <Loader2 className="w-3 h-3 animate-spin" />
-              Чака
+              {isSyncing ? <Loader2 className="w-3 h-3 animate-spin" /> : <CloudOff className="w-3 h-3" />}
+              {isSyncing ? "Качване…" : "Чака качване"}
             </div>
           )}
           {saving && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
@@ -746,6 +775,20 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
           )}
 
           {/* Грешка */}
+          {online && pendingSync && pendingSampleError && (
+            <div className="mt-4 bg-amber-50 border border-amber-200 text-amber-900 text-sm rounded-xl px-4 py-3">
+              <p className="font-semibold">Протоколът не се качи автоматично</p>
+              <p className="mt-1 text-amber-800">{pendingSampleError}</p>
+              <button
+                type="button"
+                onClick={() => void syncNow()}
+                disabled={isSyncing}
+                className="mt-2 text-xs font-bold text-amber-900 underline disabled:opacity-50"
+              >
+                {isSyncing ? "Качване…" : "Опитай отново"}
+              </button>
+            </div>
+          )}
           {error && (
             <div className="mt-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">
               {error}
