@@ -16,6 +16,7 @@ import {
   Receipt,
   Truck,
   Bot,
+  Headphones,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/admin/db";
 import type { AdminNavIconKey } from "@/lib/admin/adminNavIconStyles";
@@ -115,6 +116,12 @@ export function AdminSidebarNav({ role }: { role: AdminRole }) {
 
       {showService && (
         <AdminNavCollapsibleSection id="service" label="Сервиз" open={open.service} onToggle={toggle}>
+          <NavLink
+            href="/admin/service/tasks"
+            label="Задачи"
+            iconKey="tasks"
+            icon={<Headphones className="w-4 h-4" />}
+          />
           <NavLink
             href="/admin/service/documents"
             label="Документи"

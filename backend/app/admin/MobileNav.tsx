@@ -92,7 +92,7 @@ export function MobileNav({
             id: "service",
             title: "Сервиз",
             links: [
-              { href: "/admin/service/tasks", label: "Задачи", icon: Headphones, iconKey: "service" as const },
+              { href: "/admin/service/tasks", label: "Задачи", icon: Headphones, iconKey: "tasks" as const },
               { href: "/admin/service/documents", label: "Документи", icon: FolderOpen, iconKey: "documents" },
             ],
           },
