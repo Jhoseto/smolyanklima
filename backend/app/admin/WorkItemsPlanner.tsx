@@ -103,6 +103,7 @@ const CALENDAR_EVENT_FILTERS: Array<{ id: EventCode; label: string }> = [
 const CALENDAR_EVENT_FILTER_SHORT: Record<EventCode, string> = {
   item_added: "Добавяне",
   item_removed: "Премахване",
+  sale: "Продажба",
   service_installation: "Монтаж",
   service_maintenance: "Профилактика",
   service_on_site: "Сервиз терен",
