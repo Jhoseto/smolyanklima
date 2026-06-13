@@ -7,10 +7,15 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Запитвания | Смолян Клима" };
 
 export default async function AdminInquiriesPage() {
+  let session;
   try {
-    await adminSession();
+    session = await adminSession();
   } catch {
     redirect("/login");
+  }
+
+  if (session.role === "service_staff") {
+    redirect("/admin");
   }
 
   return (

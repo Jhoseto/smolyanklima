@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { FileSignature, Wrench, ShieldCheck, FileText, Receipt, ChevronRight, Clock } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -23,8 +23,6 @@ const TONE_CLASSES: Record<DocKind["tone"], { iconBg: string; iconText: string; 
 };
 
 export function DocumentsHubClient({ kinds }: { kinds: DocKind[] }) {
-  const router = useRouter();
-
   return (
     <div className="p-4 space-y-3 max-w-3xl mx-auto w-full">
       {kinds.map((doc) => {
@@ -65,14 +63,14 @@ export function DocumentsHubClient({ kinds }: { kinds: DocKind[] }) {
         }
 
         return (
-          <button
+          <Link
             key={doc.id}
-            type="button"
-            onClick={() => router.push(doc.href)}
-            className={`block w-full text-left bg-white rounded-2xl border border-slate-100 p-4 ring-2 ring-transparent transition-shadow ${tone.ring} shadow-sm active:scale-[0.99] min-h-[44px]`}
+            href={doc.href}
+            prefetch={false}
+            className={`block w-full text-left bg-white rounded-2xl border border-slate-100 p-4 ring-2 ring-transparent transition-shadow ${tone.ring} shadow-sm active:scale-[0.99] min-h-[44px] no-underline text-inherit`}
           >
             {inner}
-          </button>
+          </Link>
         );
       })}
     </div>

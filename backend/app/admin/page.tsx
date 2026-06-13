@@ -126,10 +126,12 @@ export default async function AdminDashboardPage() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { label: "Продукти", value: String(nProducts), accent: "" },
-          { label: "Нови запитвания", value: String(nInquiries), accent: nInquiries > 0 ? "border-t-2 border-t-brand-blue-400" : "" },
+          !readOnlyDashboard
+            ? { label: "Нови запитвания", value: String(nInquiries), accent: nInquiries > 0 ? "border-t-2 border-t-brand-blue-400" : "" }
+            : null,
           { label: "Днес / просрочени", value: `${nWorkToday} / ${nWorkOverdue}`, accent: nWorkOverdue > 0 ? "border-t-2 border-t-red-400" : "" },
           { label: "По поръчка", value: String(nSupplierOrders), accent: nSupplierOrders > 0 ? "border-t-2 border-t-violet-400" : "" },
-        ].map((card) => (
+        ].filter(Boolean).map((card) => (
           <Card key={card.label} className={`p-4 shadow-sm ring-1 ring-slate-200/70 bg-white ${card.accent}`}>
             <div className="text-[10px] md:text-xs font-semibold text-slate-500 uppercase tracking-wider leading-tight">{card.label}</div>
             <div className="text-2xl md:text-3xl font-bold text-slate-900 mt-1 md:mt-2 tabular-nums">{card.value}</div>
@@ -188,29 +190,31 @@ export default async function AdminDashboardPage() {
             },
           }))}
         />
-        <DashboardPanel
-          title="Нови заявки"
-          description="Нови клиентски запитвания от сайта, които чакат обработка."
-          href="/admin/inquiries"
-          empty="Няма нови заявки."
-          badge={nInquiries}
-          tone={nInquiries > 0 ? "info" : "neutral"}
-          readOnly={readOnlyDashboard}
-          items={(latestInquiries.data ?? []).map((item) => ({
-            title: item.customer_name,
-            meta: [item.customer_phone, inquiryServiceTypeLabel(item.service_type), formatBgDateTime(item.created_at)].filter(Boolean).join(" · "),
-            detail: {
+        {!readOnlyDashboard && (
+          <DashboardPanel
+            title="Нови заявки"
+            description="Нови клиентски запитвания от сайта, които чакат обработка."
+            href="/admin/inquiries"
+            empty="Няма нови заявки."
+            badge={nInquiries}
+            tone={nInquiries > 0 ? "info" : "neutral"}
+            readOnly={false}
+            items={(latestInquiries.data ?? []).map((item) => ({
               title: item.customer_name,
-              subtitle: "Ново клиентско запитване",
-              fields: [
-                { label: "Телефон", value: item.customer_phone },
-                { label: "Тип заявка", value: inquiryServiceTypeLabel(item.service_type) },
-                { label: "Получено", value: formatBgDateTime(item.created_at) },
-                { label: "Следващо действие", value: "Отвори всички заявки, прегледай съобщението и маркирай като В работа / Контакт / Оглед." },
-              ],
-            },
-          }))}
-        />
+              meta: [item.customer_phone, inquiryServiceTypeLabel(item.service_type), formatBgDateTime(item.created_at)].filter(Boolean).join(" · "),
+              detail: {
+                title: item.customer_name,
+                subtitle: "Ново клиентско запитване",
+                fields: [
+                  { label: "Телефон", value: item.customer_phone },
+                  { label: "Тип заявка", value: inquiryServiceTypeLabel(item.service_type) },
+                  { label: "Получено", value: formatBgDateTime(item.created_at) },
+                  { label: "Следващо действие", value: "Отвори всички заявки, прегледай съобщението и маркирай като В работа / Контакт / Оглед." },
+                ],
+              },
+            }))}
+          />
+        )}
         <SupplierOrdersPanel
           initialRows={supplierOrderRows}
           readOnly={readOnlyDashboard}

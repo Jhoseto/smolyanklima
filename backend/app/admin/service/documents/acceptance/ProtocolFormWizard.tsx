@@ -456,6 +456,8 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
     void saveDraftAndClose();
   };
 
+  useAdminBackHandler(true, handleClose, "protocol-wizard");
+
   // Изпращане на имейл
   const doSendEmail = async () => {
     if (!emailInput) return;

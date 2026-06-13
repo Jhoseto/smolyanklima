@@ -41,7 +41,7 @@ export function adminNavIconClass(
   key: AdminNavIconKey,
   size: "sidebar" | "drawer" = "sidebar",
 ): string {
-  const s = ADMIN_NAV_ICON_STYLES[key];
+  const s = ADMIN_NAV_ICON_STYLES[key] ?? ADMIN_NAV_ICON_STYLES.documents;
   const dim = size === "drawer" ? "w-8 h-8 rounded-xl" : "w-6 h-6 rounded-md";
   return `inline-flex items-center justify-center shrink-0 ${dim} ${s.box} ${s.icon}`;
 }

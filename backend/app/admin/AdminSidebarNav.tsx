@@ -5,18 +5,6 @@ import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import {
   LayoutDashboard,
-  Package,
-  Users,
-  FileText,
-  Star,
-  Activity,
-  Settings,
-  ShieldCheck,
-  FolderOpen,
-  Receipt,
-  Truck,
-  Bot,
-  Headphones,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/admin/db";
 import type { AdminNavIconKey } from "@/lib/admin/adminNavIconStyles";
@@ -26,6 +14,12 @@ import { AdminNavCollapsibleSection } from "./AdminNavCollapsibleSection";
 import { AdminNavIcon } from "./AdminNavIcon";
 import { useAdminNavSections } from "@/lib/admin/useAdminNavSections";
 import { adminNavSectionForPath } from "@/lib/admin/adminNavSectionForPath";
+import {
+  DASHBOARD_LINK,
+  getAdminNavSections,
+  isNavLinkActive,
+  type AdminNavLinkDef,
+} from "@/lib/admin/adminNavConfig";
 
 function NavLink({
   href,
@@ -41,7 +35,7 @@ function NavLink({
   exact?: boolean;
 }) {
   const pathname = usePathname();
-  const active = exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
+  const active = isNavLinkActive(pathname, href, exact);
 
   return (
     <Link
@@ -58,97 +52,84 @@ function NavLink({
   );
 }
 
+function ConfigNavLink({ link }: { link: AdminNavLinkDef }) {
+  const Icon = link.Icon;
+  return (
+    <NavLink
+      href={link.href}
+      label={link.label}
+      iconKey={link.iconKey}
+      exact={link.exact}
+      icon={<Icon className="w-4 h-4" />}
+    />
+  );
+}
+
 export function AdminSidebarNav({ role }: { role: AdminRole }) {
   const pathname = usePathname();
   const { open, toggle, expand } = useAdminNavSections();
-
-  const showOffice = role === "master_admin" || role === "office_staff";
-  const showService = true;
-  const showReports = role === "master_admin" || role === "office_staff";
-  const showStaff = role === "master_admin" || role === "office_staff";
-  const showSettings = role === "master_admin";
-  const showSales = role === "master_admin" || role === "office_staff";
+  const sections = getAdminNavSections(role);
 
   useEffect(() => {
     const active = adminNavSectionForPath(pathname, role);
     if (active) expand(active);
   }, [pathname, role, expand]);
 
+  const officeSection = sections.find((s) => s.id === "office");
+  const catalogSection = sections.find((s) => s.id === "catalog");
+  const serviceSection = sections.find((s) => s.id === "service");
+  const reportsSection = sections.find((s) => s.id === "reports");
+  const adminSection = sections.find((s) => s.id === "admin");
+
   return (
     <nav className="flex flex-col gap-0.5 flex-1 p-2.5">
       <NavLink
-        href="/admin"
-        label="Табло"
-        iconKey="dashboard"
+        href={DASHBOARD_LINK.href}
+        label={DASHBOARD_LINK.label}
+        iconKey={DASHBOARD_LINK.iconKey}
         exact
         icon={<LayoutDashboard className="w-4 h-4" />}
       />
 
-      {showOffice && (
-        <AdminNavCollapsibleSection id="office" label="Офис" open={open.office} onToggle={toggle}>
-          <NavLink href="/admin/products" label="Продукти" iconKey="products" icon={<Package className="w-4 h-4" />} />
-          {showSales && (
-            <>
-              <NavLink href="/admin/history" label="Продажби" iconKey="sales" icon={<Receipt className="w-4 h-4" />} />
-              <NavLink
-                href="/admin/supplier-orders"
-                label="Поръчки"
-                iconKey="orders"
-                icon={<Truck className="w-4 h-4" />}
-              />
-            </>
-          )}
-          <NavLink href="/admin/contacts" label="Контакти" iconKey="contacts" icon={<Users className="w-4 h-4" />} />
-          <ChatNavBadge />
-          <InquiriesNavBadge />
-          <NavLink href="/admin/articles" label="Статии" iconKey="articles" icon={<FileText className="w-4 h-4" />} />
-          {role === "office_staff" && (
-            <NavLink href="/admin/ai-agent" label="СК Help Agent" iconKey="ai-agent" icon={<Bot className="w-4 h-4" />} />
-          )}
+      {officeSection && (
+        <AdminNavCollapsibleSection id="office" label={officeSection.title} open={open.office} onToggle={toggle}>
+          {officeSection.links.map((link) => {
+            if (link.href === "/admin/chat") return <ChatNavBadge key={link.href} />;
+            if (link.href === "/admin/inquiries") return <InquiriesNavBadge key={link.href} />;
+            return <ConfigNavLink key={link.href} link={link} />;
+          })}
         </AdminNavCollapsibleSection>
       )}
 
-      {role === "service_staff" && (
-        <AdminNavCollapsibleSection id="catalog" label="Каталог" open={open.catalog} onToggle={toggle}>
-          <NavLink href="/admin/products" label="Продукти" iconKey="products" icon={<Package className="w-4 h-4" />} />
+      {catalogSection && (
+        <AdminNavCollapsibleSection id="catalog" label={catalogSection.title} open={open.catalog} onToggle={toggle}>
+          {catalogSection.links.map((link) => (
+            <ConfigNavLink key={link.href} link={link} />
+          ))}
         </AdminNavCollapsibleSection>
       )}
 
-      {showService && (
-        <AdminNavCollapsibleSection id="service" label="Сервиз" open={open.service} onToggle={toggle}>
-          <NavLink
-            href="/admin/service/tasks"
-            label="Задачи"
-            iconKey="tasks"
-            icon={<Headphones className="w-4 h-4" />}
-          />
-          <NavLink
-            href="/admin/service/documents"
-            label="Документи"
-            iconKey="documents"
-            icon={<FolderOpen className="w-4 h-4" />}
-          />
+      {serviceSection && (
+        <AdminNavCollapsibleSection id="service" label={serviceSection.title} open={open.service} onToggle={toggle}>
+          {serviceSection.links.map((link) => (
+            <ConfigNavLink key={link.href} link={link} />
+          ))}
         </AdminNavCollapsibleSection>
       )}
 
-      {showReports && (
-        <AdminNavCollapsibleSection id="reports" label="Отчети" open={open.reports} onToggle={toggle}>
-          <NavLink href="/admin/ratings" label="Оценки" iconKey="ratings" icon={<Star className="w-4 h-4" />} />
-          <NavLink href="/admin/activity" label="Активност" iconKey="activity" icon={<Activity className="w-4 h-4" />} />
+      {reportsSection && (
+        <AdminNavCollapsibleSection id="reports" label={reportsSection.title} open={open.reports} onToggle={toggle}>
+          {reportsSection.links.map((link) => (
+            <ConfigNavLink key={link.href} link={link} />
+          ))}
         </AdminNavCollapsibleSection>
       )}
 
-      {(showStaff || showSettings) && (
-        <AdminNavCollapsibleSection id="admin" label="Администрация" open={open.admin} onToggle={toggle}>
-          {showStaff && (
-            <NavLink href="/admin/staff" label="Персонал" iconKey="staff" icon={<ShieldCheck className="w-4 h-4" />} />
-          )}
-          {showSettings && (
-            <NavLink href="/admin/settings" label="Настройки" iconKey="settings" icon={<Settings className="w-4 h-4" />} />
-          )}
-          {showSettings && role === "master_admin" && (
-            <NavLink href="/admin/ai-agent" label="СК Help Agent" iconKey="ai-agent" icon={<Bot className="w-4 h-4" />} />
-          )}
+      {adminSection && (
+        <AdminNavCollapsibleSection id="admin" label={adminSection.title} open={open.admin} onToggle={toggle}>
+          {adminSection.links.map((link) => (
+            <ConfigNavLink key={link.href} link={link} />
+          ))}
         </AdminNavCollapsibleSection>
       )}
     </nav>
