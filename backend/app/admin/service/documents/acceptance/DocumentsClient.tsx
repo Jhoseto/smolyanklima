@@ -14,7 +14,7 @@ import { ProtocolPreview } from "./ProtocolPreview";
 import type { AdminRole } from "@/lib/admin/db";
 import { listCachedDocuments, type CachedDocument } from "@/lib/offline/db";
 import { isLocalId } from "@/lib/offline/offlineFetch";
-import { resolveServerId } from "@/lib/offline/queue";
+import { resolveServerId, listPendingMutations } from "@/lib/offline/queue";
 import { parseOfflineApiError } from "@/lib/offline/acceptancePayload";
 import { purgeLocalDocument } from "@/lib/offline/purgeLocalDocument";
 import { useOnlineStatus } from "@/lib/hooks/useOnlineStatus";
@@ -129,6 +129,16 @@ export function DocumentsClient({ role }: Props) {
   const loadOfflineRows = useCallback(async (serverIds?: Set<string>) => {
     try {
       const cached = await listCachedDocuments<Record<string, unknown>>("acceptance");
+
+      // Само документи с реална чакаща мутация в опашката са истински "офлайн".
+      // Оптимистичният кеш (dirty:true) се пише преди всяка мрежова заявка,
+      // но ако заявката успее онлайн — мутация не влиза в опашката.
+      // Без тази проверка успешно запазени протоколи се показват като офлайн.
+      const pendingMuts = await listPendingMutations();
+      const pendingLocalIds = new Set<string>(
+        pendingMuts.map(m => m.localId).filter((id): id is string => Boolean(id)),
+      );
+
       const rows: Protocol[] = [];
       for (const c of cached) {
         if (!isLocalId(c.key) && !c.dirty) continue;
@@ -137,6 +147,10 @@ export function DocumentsClient({ role }: Props) {
           const sid = await resolveServerId(c.key);
           if (sid && serverIds?.has(sid)) continue;
         }
+        // Показваме само ако има реална чакаща мутация за този документ.
+        const localKey = isLocalId(c.key) ? c.key : (c.localId ?? "");
+        if (!pendingLocalIds.has(localKey) && !pendingLocalIds.has(c.key)) continue;
+
         rows.push(cachedToProtocol(c));
       }
       setOfflineRows(rows);
@@ -588,34 +602,19 @@ export function DocumentsClient({ role }: Props) {
           </div>
         )}
 
-        {/* Offline-only записи (чернови, които още не са качени към сървъра) */}
-        {offlineRows.length > 0 && (
+        {/* Offline-only записи — видими САМО при липса на интернет.
+           При интернет системата качва автоматично и не е нужно да се показва нищо. */}
+        {offlineRows.length > 0 && !online && (
           <div className="mb-4">
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 mb-2 text-sm text-amber-950">
               <p className="font-semibold">
                 {offlineRows.length === 1
-                  ? "1 протокол е само на това устройство"
-                  : `${offlineRows.length} протокола са само на това устройство`}
+                  ? "1 протокол без интернет"
+                  : `${offlineRows.length} протокола без интернет`}
               </p>
               <p className="text-xs text-amber-800 mt-1">
-                Другите компютри виждат само качените в системата протоколи. Натиснете „Качи сега“, докато имате интернет.
+                Ще се качи автоматично при свързване с интернет.
               </p>
-              {(pendingSampleError || lastError) && (
-                <p className="text-xs text-rose-700 mt-1 font-medium">
-                  {formatSyncError(pendingSampleError || lastError)}
-                </p>
-              )}
-              {online && (
-                <button
-                  type="button"
-                  onClick={() => void handleSyncPending()}
-                  disabled={isSyncing}
-                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-60"
-                >
-                  {isSyncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CloudOff className="w-3.5 h-3.5" />}
-                  {isSyncing ? "Качване…" : "Качи сега"}
-                </button>
-              )}
             </div>
             <div className="flex items-center gap-2 mb-2 px-1">
               <CloudOff className="w-3.5 h-3.5 text-slate-500" />

@@ -126,12 +126,12 @@ export default async function AdminDashboardPage() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { label: "Продукти", value: String(nProducts), accent: "" },
-          !readOnlyDashboard
-            ? { label: "Нови запитвания", value: String(nInquiries), accent: nInquiries > 0 ? "border-t-2 border-t-brand-blue-400" : "" }
-            : null,
+          ...(!readOnlyDashboard
+            ? [{ label: "Нови запитвания", value: String(nInquiries), accent: nInquiries > 0 ? "border-t-2 border-t-brand-blue-400" : "" }]
+            : []),
           { label: "Днес / просрочени", value: `${nWorkToday} / ${nWorkOverdue}`, accent: nWorkOverdue > 0 ? "border-t-2 border-t-red-400" : "" },
           { label: "По поръчка", value: String(nSupplierOrders), accent: nSupplierOrders > 0 ? "border-t-2 border-t-violet-400" : "" },
-        ].filter(Boolean).map((card) => (
+        ].map((card) => (
           <Card key={card.label} className={`p-4 shadow-sm ring-1 ring-slate-200/70 bg-white ${card.accent}`}>
             <div className="text-[10px] md:text-xs font-semibold text-slate-500 uppercase tracking-wider leading-tight">{card.label}</div>
             <div className="text-2xl md:text-3xl font-bold text-slate-900 mt-1 md:mt-2 tabular-nums">{card.value}</div>

@@ -159,8 +159,6 @@ export function SupplierOrderDetailModal({
   onRequestSale?: (order: NormalizedSupplierOrderRow) => void;
 }) {
   const router = useRouter();
-  useAdminBackHandler(cancelStep === "idle", onClose, `supplier-order-${orderId}`);
-  useAdminBackHandler(cancelStep === "confirm", () => setCancelStep("idle"), `supplier-order-cancel-${orderId}`);
   const [order, setOrder] = useState<NormalizedSupplierOrderRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -180,6 +178,8 @@ export function SupplierOrderDetailModal({
   const [purchasePriceDraft, setPurchasePriceDraft] = useState("");
   const [indoorDup, setIndoorDup] = useState<SerialMatch[]>([]);
   const [outdoorDup, setOutdoorDup] = useState<SerialMatch[]>([]);
+  useAdminBackHandler(cancelStep === "idle", onClose, `supplier-order-${orderId}`);
+  useAdminBackHandler(cancelStep === "confirm", () => setCancelStep("idle"), `supplier-order-cancel-${orderId}`);
   const debouncedIndoor = useDebouncedValue(indoorSerial.trim(), 350);
   const debouncedOutdoor = useDebouncedValue(outdoorSerial.trim(), 350);
 

@@ -7,7 +7,7 @@ import {
   Document, Page, View, Text, Image, StyleSheet, Font,
 } from "@react-pdf/renderer";
 import { ProtocolPdfBrandMark } from "@/lib/protocol-pdf-brand";
-import { LEFT_MATERIALS, RIGHT_MATERIALS, ACCESSORIES_LABELS } from "@/lib/protocol-materials";
+import { PDF_LEFT_MATERIALS, PDF_RIGHT_MATERIALS, ACCESSORIES_LABELS } from "@/lib/protocol-materials";
 import type { AccessoriesEntry, MaterialEntry } from "@/lib/protocol-materials";
 
 const NOTO_REG =
@@ -482,8 +482,8 @@ export function ProtocolPDF({ data }: { data: ProtocolData }) {
 
         <View style={s.matOuter}>
           <View style={s.matHalf}>
-            {LEFT_MATERIALS.map((mat, i) => {
-              const last = i === LEFT_MATERIALS.length - 1;
+            {PDF_LEFT_MATERIALS.map((mat, i) => {
+              const last = i === PDF_LEFT_MATERIALS.length - 1;
               const Row = last ? s.matRowLast : s.matRow;
               return (
                 <View key={mat.id} style={Row}>
@@ -498,8 +498,8 @@ export function ProtocolPDF({ data }: { data: ProtocolData }) {
             })}
           </View>
           <View style={s.matHalfR}>
-            {RIGHT_MATERIALS.map((mat, i) => {
-              const last = i === RIGHT_MATERIALS.length - 1;
+            {PDF_RIGHT_MATERIALS.map((mat, i) => {
+              const last = i === PDF_RIGHT_MATERIALS.length - 1;
               const Row = last ? s.matRowLast : s.matRow;
               return (
                 <View key={mat.id} style={Row}>

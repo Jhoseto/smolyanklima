@@ -6,12 +6,12 @@ import { Logo } from "@/app/admin/ui/Logo";
 import { useAdminBackHandler } from "@/app/admin/ui";
 import type { AdminRole } from "@/lib/admin/db";
 import {
-  LEFT_MATERIALS,
-  RIGHT_MATERIALS,
+  PDF_LEFT_MATERIALS,
+  PDF_RIGHT_MATERIALS,
   ACCESSORIES_LABELS,
   EMPTY_ACCESSORIES,
 } from "@/lib/protocol-materials";
-import type { AccessoriesEntry, MaterialEntry } from "@/lib/protocol-materials";
+import type { AccessoriesEntry, MaterialEntry, ProtocolMaterial } from "@/lib/protocol-materials";
 
 interface Props {
   protocolId: string;
@@ -374,8 +374,8 @@ export function ProtocolPreview({
                 {/* Таблица материали */}
                 <div className="border border-black rounded-none overflow-hidden text-[11px]">
                   <div className="grid grid-cols-2 divide-x divide-black">
-                    <MaterialColumn materials={LEFT_MATERIALS} qtyMap={qtyMap} />
-                    <MaterialColumn materials={RIGHT_MATERIALS} qtyMap={qtyMap} />
+                    <MaterialColumn materials={PDF_LEFT_MATERIALS} qtyMap={qtyMap} />
+                    <MaterialColumn materials={PDF_RIGHT_MATERIALS} qtyMap={qtyMap} />
                   </div>
                 </div>
 
@@ -435,7 +435,7 @@ function MaterialColumn({
   materials,
   qtyMap,
 }: {
-  materials: typeof LEFT_MATERIALS;
+  materials: ProtocolMaterial[];
   qtyMap: Record<string, number>;
 }) {
   return (
