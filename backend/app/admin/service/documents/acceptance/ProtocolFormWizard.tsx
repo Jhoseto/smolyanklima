@@ -141,7 +141,8 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
   const [fieldErrors, setFieldErrors]     = useState<Record<string, string>>({});
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoError, setPhotoError]         = useState<string | null>(null);
-  const photoInputRef = useRef<HTMLInputElement>(null);
+  const photoCameraInputRef = useRef<HTMLInputElement>(null);
+  const photoFileInputRef = useRef<HTMLInputElement>(null);
   useAdminBackHandler(Boolean(sigOpen), () => setSigOpen(null), "protocol-signature");
   useAdminBackHandler(lightboxIdx !== null, () => setLightboxIdx(null), "protocol-lightbox");
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -965,21 +966,47 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
                         Снимките изискват интернет връзка.
                       </div>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => photoInputRef.current?.click()}
-                        disabled={photoUploading}
-                        className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-slate-300 rounded-xl py-4 text-slate-500 text-sm active:bg-slate-50 disabled:opacity-50"
-                      >
-                        {photoUploading
-                          ? <><Loader2 className="w-4 h-4 animate-spin" /> Качва се…</>
-                          : <><ImagePlus className="w-4 h-4" /> Добави снимка</>
-                        }
-                      </button>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => photoCameraInputRef.current?.click()}
+                          disabled={photoUploading}
+                          className="flex items-center justify-center gap-2 border-2 border-dashed border-blue-300 bg-blue-50/50 rounded-xl py-4 text-blue-700 text-sm font-semibold active:bg-blue-100 disabled:opacity-50"
+                        >
+                          {photoUploading
+                            ? <Loader2 className="w-4 h-4 animate-spin" />
+                            : <Camera className="w-4 h-4" />
+                          }
+                          Снимай
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => photoFileInputRef.current?.click()}
+                          disabled={photoUploading}
+                          className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-300 rounded-xl py-4 text-slate-600 text-sm font-semibold active:bg-slate-50 disabled:opacity-50"
+                        >
+                          {photoUploading
+                            ? <Loader2 className="w-4 h-4 animate-spin" />
+                            : <ImagePlus className="w-4 h-4" />
+                          }
+                          От файл
+                        </button>
+                      </div>
                     )}
-                    {/* Без capture="environment" — позволява и камера, и галерия, и файл от PC */}
                     <input
-                      ref={photoInputRef}
+                      ref={photoCameraInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (file) void uploadPhoto(file);
+                        e.target.value = "";
+                      }}
+                    />
+                    <input
+                      ref={photoFileInputRef}
                       type="file"
                       accept="image/jpeg,image/png,image/webp,image/heic,image/*"
                       className="hidden"
