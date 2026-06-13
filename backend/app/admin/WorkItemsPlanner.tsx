@@ -5,7 +5,7 @@ import { Card, Button, Select, Input, Textarea, AdminContactMetaLine, AdminPhone
 import { ContactPersonPicker } from "./ContactPersonPicker";
 import { InstallationMountDetailModal } from "./InstallationMountDetailModal";
 import { SupplierOrderDetailModal } from "./SupplierOrderDetailModal";
-import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, List } from "lucide-react";
+import { CalendarDays, CheckCircle2, List } from "lucide-react";
 import { notifyFollowUpCallsChanged } from "@/lib/admin/follow-up-calls-events";
 import { isPaidServiceEventCode } from "@/lib/admin/serviceEventCodes";
 import { useAdminBackHandler } from "@/lib/admin/useAdminBackHandler";
@@ -98,6 +98,18 @@ const CALENDAR_EVENT_FILTERS: Array<{ id: EventCode; label: string }> = [
   { id: "consultation", label: "Консултация" },
   { id: "supplier_order", label: "Поръчка от доставчик" },
 ];
+
+/** Кратки етикети за филтрите на телефон (PWA). */
+const CALENDAR_EVENT_FILTER_SHORT: Record<EventCode, string> = {
+  item_added: "Добавяне",
+  item_removed: "Премахване",
+  service_installation: "Монтаж",
+  service_maintenance: "Профилактика",
+  service_on_site: "Сервиз терен",
+  service_in_shop: "Сервиз склад",
+  consultation: "Консултация",
+  supplier_order: "Поръчка",
+};
 
 const ALL_CALENDAR_FILTER_IDS = CALENDAR_EVENT_FILTERS.map((f) => f.id);
 
@@ -315,7 +327,10 @@ export function WorkItemsPlanner({
   const [confirmCompleteItem, setConfirmCompleteItem] = useState<WorkItem | null>(null);
   const [displayMode, setDisplayMode] = useState<"day" | "month">("day");
   const [mobileSelectedKey, setMobileSelectedKey] = useState(() => formatDateKey(new Date()));
-  const [weekAnchor, setWeekAnchor] = useState(() => new Date());
+  const dayStripRef = useRef<HTMLDivElement>(null);
+  const dayButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const stripScrollLock = useRef(false);
+  const contentTouchRef = useRef<{ x: number; y: number } | null>(null);
   const [mountDetailId, setMountDetailId] = useState<string | null>(null);
   const [supplierOrderDetailId, setSupplierOrderDetailId] = useState<string | null>(null);
 
@@ -463,7 +478,15 @@ export function WorkItemsPlanner({
 
   const agendaDates = [...agendaByDate.keys()].sort();
 
-  const mobileWeekDays = useMemo(() => weekOf(weekAnchor), [weekAnchor]);
+  const mobileScrollDays = useMemo(() => {
+    const rangeStart = new Date(viewYear, viewMonth - 1, 15);
+    const rangeEnd = new Date(viewYear, viewMonth + 1, 15);
+    const out: Date[] = [];
+    for (let d = new Date(rangeStart); d <= rangeEnd; d = addDays(d, 1)) {
+      out.push(new Date(d));
+    }
+    return out;
+  }, [viewYear, viewMonth]);
 
   const mobileDayItems = useMemo(() => {
     return (byDate.get(mobileSelectedKey) ?? []).filter(matchesViewMode);
@@ -471,11 +494,64 @@ export function WorkItemsPlanner({
   }, [byDate, mobileSelectedKey, enabledFiltersKey]);
 
   useEffect(() => {
-    const d = new Date(`${mobileSelectedKey}T00:00:00`);
+    const d = new Date(`${mobileSelectedKey}T12:00:00`);
     if (Number.isNaN(d.getTime())) return;
     setViewYear((y) => (y === d.getFullYear() ? y : d.getFullYear()));
     setViewMonth((m) => (m === d.getMonth() ? m : d.getMonth()));
   }, [mobileSelectedKey]);
+
+  function scrollDayIntoView(key: string, smooth = true) {
+    const el = dayButtonRefs.current.get(key);
+    if (!el || !dayStripRef.current) return;
+    stripScrollLock.current = true;
+    el.scrollIntoView({ inline: "center", block: "nearest", behavior: smooth ? "smooth" : "auto" });
+    window.setTimeout(() => {
+      stripScrollLock.current = false;
+    }, smooth ? 350 : 50);
+  }
+
+  useEffect(() => {
+    scrollDayIntoView(mobileSelectedKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mobileSelectedKey, mobileScrollDays.length]);
+
+  function handleDayStripScroll() {
+    if (stripScrollLock.current) return;
+    const container = dayStripRef.current;
+    if (!container) return;
+    const centerX = container.scrollLeft + container.clientWidth / 2;
+    let bestKey: string | null = null;
+    let bestDist = Infinity;
+    for (const [key, el] of dayButtonRefs.current) {
+      const elCenter = el.offsetLeft + el.offsetWidth / 2;
+      const dist = Math.abs(elCenter - centerX);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestKey = key;
+      }
+    }
+    if (bestKey && bestKey !== mobileSelectedKey) {
+      setMobileSelectedKey(bestKey);
+    }
+  }
+
+  function shiftMobileDay(delta: number) {
+    setMobileSelectedKey((prev) => formatDateKey(addDays(new Date(`${prev}T12:00:00`), delta)));
+  }
+
+  function onMobileContentTouchStart(e: React.TouchEvent) {
+    contentTouchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }
+
+  function onMobileContentTouchEnd(e: React.TouchEvent) {
+    const start = contentTouchRef.current;
+    contentTouchRef.current = null;
+    if (!start) return;
+    const dx = e.changedTouches[0].clientX - start.x;
+    const dy = e.changedTouches[0].clientY - start.y;
+    if (Math.abs(dx) < 48 || Math.abs(dx) <= Math.abs(dy)) return;
+    shiftMobileDay(dx < 0 ? 1 : -1);
+  }
 
   // Memoize expensive calendar grid — avoids recomputing on every render tick
   const days = useMemo<Date[]>(() => {
@@ -582,13 +658,8 @@ export function WorkItemsPlanner({
 
   function goMobileToday() {
     const key = formatDateKey(new Date());
-    setWeekAnchor(new Date());
     setMobileSelectedKey(key);
     resetCalendarToToday();
-  }
-
-  function shiftMobileWeek(delta: number) {
-    setWeekAnchor((prev) => addDays(prev, delta * 7));
   }
 
   function closeDayModal() {
@@ -709,88 +780,89 @@ export function WorkItemsPlanner({
   return (
     <Card className="mt-3 overflow-hidden p-0 md:p-3">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-3 md:border-0 md:px-0 md:py-0 md:mb-2">
+      <div className="flex flex-col gap-2 border-b border-slate-100 px-3 py-3 md:flex-row md:items-center md:justify-between md:border-0 md:px-0 md:py-0 md:mb-2">
         <div className="min-w-0">
           <div className="text-sm font-bold text-slate-900 leading-tight">Оперативен календар</div>
           <div className="text-xs text-slate-500 capitalize leading-tight">{title}</div>
         </div>
-        <div className="flex gap-1 shrink-0 flex-wrap justify-end items-center">
-          {/* Mobile view toggle */}
+        <div className="flex w-full flex-col gap-2 md:w-auto md:items-end">
           <div className="flex md:hidden overflow-hidden rounded-xl border border-slate-200">
             <button
               type="button"
               onClick={() => setDisplayMode("day")}
-              className={`flex min-h-[44px] items-center gap-1.5 px-4 py-2 text-xs font-semibold transition-colors ${displayMode === "day" ? "bg-brand-blue-500 text-white" : "bg-white text-slate-600"}`}
+              className={`flex min-h-[44px] flex-1 items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold transition-colors ${displayMode === "day" ? "bg-brand-blue-500 text-white" : "bg-white text-slate-600"}`}
             >
               <CalendarDays className="h-4 w-4" /> Ден
             </button>
             <button
               type="button"
               onClick={() => setDisplayMode("month")}
-              className={`flex min-h-[44px] items-center gap-1.5 px-4 py-2 text-xs font-semibold transition-colors ${displayMode === "month" ? "bg-brand-blue-500 text-white" : "bg-white text-slate-600"}`}
+              className={`flex min-h-[44px] flex-1 items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold transition-colors ${displayMode === "month" ? "bg-brand-blue-500 text-white" : "bg-white text-slate-600"}`}
             >
               <List className="h-4 w-4" /> Месец
             </button>
           </div>
-          <Select
-            value={String(viewMonth)}
-            onChange={(e) => {
-              const newMonth = Number(e.target.value);
-              setViewMonth(newMonth);
-              const selDate = new Date(`${mobileSelectedKey}T00:00:00`);
-              if (selDate.getMonth() !== newMonth) {
-                const clampedDay = Math.min(selDate.getDate(), new Date(viewYear, newMonth + 1, 0).getDate());
-                setMobileSelectedKey(`${viewYear}-${String(newMonth + 1).padStart(2, "0")}-${String(clampedDay).padStart(2, "0")}`);
-              }
-            }}
-            className="!w-auto min-w-[7.75rem] !py-1.5 !px-2 !text-xs font-semibold capitalize"
-            aria-label="Месец"
-          >
-            {BG_CALENDAR_MONTHS.map((name, index) => (
-              <option key={name} value={index}>
-                {name}
-              </option>
-            ))}
-          </Select>
-          <Select
-            value={String(viewYear)}
-            onChange={(e) => {
-              const newYear = Number(e.target.value);
-              setViewYear(newYear);
-              const selDate = new Date(`${mobileSelectedKey}T00:00:00`);
-              if (selDate.getFullYear() !== newYear) {
-                const clampedDay = Math.min(selDate.getDate(), new Date(newYear, viewMonth + 1, 0).getDate());
-                setMobileSelectedKey(`${newYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(clampedDay).padStart(2, "0")}`);
-              }
-            }}
-            className="!w-auto min-w-[5.25rem] !py-1.5 !px-2 !text-xs font-semibold"
-            aria-label="Година"
-          >
-            {yearOptions.map((year) => (
-              <option key={year} value={year}>
-                {year}
-              </option>
-            ))}
-          </Select>
-          <Button variant="secondary" size="sm" onClick={() => shiftViewMonth(-1)} aria-label="Предишен месец">
-            ◀
-          </Button>
-          <Button variant="secondary" size="sm" onClick={goMobileToday}>
-            Днес
-          </Button>
-          <Button variant="secondary" size="sm" onClick={() => shiftViewMonth(1)} aria-label="Следващ месец">
-            ▶
-          </Button>
+          <div className="grid grid-cols-[1fr_auto_auto] gap-1.5 md:flex md:flex-wrap md:justify-end md:items-center">
+            <Select
+              value={String(viewMonth)}
+              onChange={(e) => {
+                const newMonth = Number(e.target.value);
+                setViewMonth(newMonth);
+                const selDate = new Date(`${mobileSelectedKey}T12:00:00`);
+                if (selDate.getMonth() !== newMonth) {
+                  const clampedDay = Math.min(selDate.getDate(), new Date(viewYear, newMonth + 1, 0).getDate());
+                  setMobileSelectedKey(`${viewYear}-${String(newMonth + 1).padStart(2, "0")}-${String(clampedDay).padStart(2, "0")}`);
+                }
+              }}
+              className="!w-full min-w-0 !py-2 !px-2 !text-xs font-semibold capitalize md:!w-auto md:min-w-[7.75rem]"
+              aria-label="Месец"
+            >
+              {BG_CALENDAR_MONTHS.map((name, index) => (
+                <option key={name} value={index}>
+                  {name}
+                </option>
+              ))}
+            </Select>
+            <Select
+              value={String(viewYear)}
+              onChange={(e) => {
+                const newYear = Number(e.target.value);
+                setViewYear(newYear);
+                const selDate = new Date(`${mobileSelectedKey}T12:00:00`);
+                if (selDate.getFullYear() !== newYear) {
+                  const clampedDay = Math.min(selDate.getDate(), new Date(newYear, viewMonth + 1, 0).getDate());
+                  setMobileSelectedKey(`${newYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(clampedDay).padStart(2, "0")}`);
+                }
+              }}
+              className="!w-auto min-w-[5.25rem] !py-2 !px-2 !text-xs font-semibold"
+              aria-label="Година"
+            >
+              {yearOptions.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </Select>
+            <Button variant="secondary" size="sm" onClick={goMobileToday} className="min-h-[44px] shrink-0">
+              Днес
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => shiftViewMonth(-1)} aria-label="Предишен месец" className="hidden md:inline-flex">
+              ◀
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => shiftViewMonth(1)} aria-label="Следващ месец" className="hidden md:inline-flex">
+              ▶
+            </Button>
+          </div>
         </div>
       </div>
 
       {/* Multi on/off филтри по тип събитие */}
-      <div className="-mx-3 mb-3 overflow-x-auto px-3 scrollbar-hide md:mx-0 md:px-0">
-        <div className="flex min-w-max gap-2 pb-1 md:flex-wrap">
+      <div className="mb-3 px-3 md:px-0">
+        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 md:flex md:flex-wrap md:gap-2">
         <button
           type="button"
           onClick={toggleAllEventFilters}
-          className={`shrink-0 rounded-full px-3 py-2 min-h-[36px] text-xs font-bold border transition-colors ${
+          className={`rounded-full px-2.5 py-2 min-h-[36px] text-[11px] md:text-xs font-bold border transition-colors md:shrink-0 md:px-3 ${
             allEventFiltersOn
               ? "border-brand-blue-500 bg-brand-blue-50 text-brand-blue-700"
               : "border-slate-300 bg-white text-slate-500 hover:bg-slate-50"
@@ -805,13 +877,14 @@ export function WorkItemsPlanner({
               key={m.id}
               type="button"
               onClick={() => toggleEventFilter(m.id)}
-              className={`shrink-0 rounded-full px-3 py-2 min-h-[36px] text-xs font-bold border transition-colors ${
+              className={`rounded-full px-2.5 py-2 min-h-[36px] text-[11px] md:text-xs font-bold border transition-colors md:shrink-0 md:px-3 ${
                 on
                   ? "border-brand-blue-500 bg-brand-blue-50 text-brand-blue-700"
                   : "border-slate-300 bg-white text-slate-500 hover:bg-slate-50 opacity-60"
               }`}
             >
-              {m.label}
+              <span className="md:hidden">{CALENDAR_EVENT_FILTER_SHORT[m.id]}</span>
+              <span className="hidden md:inline">{m.label}</span>
             </button>
           );
         })}
@@ -885,73 +958,70 @@ export function WorkItemsPlanner({
         {displayMode === "day" ? (
           <>
             <div className="border-b border-slate-100 bg-slate-50/80 px-2 py-2">
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => shiftMobileWeek(-1)}
-                  className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl text-slate-500 active:bg-white"
-                  aria-label="Предишна седмица"
-                >
-                  <ChevronLeft className="h-5 w-5" />
-                </button>
-                <div className="flex flex-1 gap-1.5 overflow-x-auto scrollbar-hide py-1">
-                  {mobileWeekDays.map((day) => {
-                    const dateKey = formatDateKey(day);
-                    const isSelected = dateKey === mobileSelectedKey;
-                    const isToday = dateKey === todayKey;
-                    const count = (byDate.get(dateKey) ?? []).filter(matchesViewMode).length;
-                    return (
-                      <button
-                        key={dateKey}
-                        type="button"
-                        onClick={() => setMobileSelectedKey(dateKey)}
-                        className={`flex h-[4.25rem] min-w-[3rem] shrink-0 flex-col items-center justify-center rounded-2xl px-2 transition-all ${
-                          isSelected
-                            ? "bg-brand-blue-500 text-white shadow-md shadow-brand-blue-200"
-                            : isToday
-                              ? "border border-brand-blue-200 bg-brand-blue-50 text-brand-blue-700"
-                              : "border border-slate-200 bg-white text-slate-700"
-                        }`}
-                      >
-                        <span className={`text-[10px] font-semibold ${isSelected ? "text-brand-blue-100" : "text-slate-400"}`}>
-                          {BG_WEEKDAY_SHORT[day.getDay()]}
+              <div
+                ref={dayStripRef}
+                onScroll={handleDayStripScroll}
+                className="flex gap-1.5 overflow-x-auto scrollbar-hide py-1 snap-x snap-mandatory touch-pan-x overscroll-x-contain"
+                aria-label="Избор на ден — плъзнете наляво или надясно"
+              >
+                {mobileScrollDays.map((day) => {
+                  const dateKey = formatDateKey(day);
+                  const isSelected = dateKey === mobileSelectedKey;
+                  const isToday = dateKey === todayKey;
+                  const count = (byDate.get(dateKey) ?? []).filter(matchesViewMode).length;
+                  return (
+                    <button
+                      key={dateKey}
+                      ref={(el) => {
+                        if (el) dayButtonRefs.current.set(dateKey, el);
+                        else dayButtonRefs.current.delete(dateKey);
+                      }}
+                      type="button"
+                      onClick={() => setMobileSelectedKey(dateKey)}
+                      className={`flex h-[4.25rem] min-w-[3rem] shrink-0 snap-center flex-col items-center justify-center rounded-2xl px-2 transition-all ${
+                        isSelected
+                          ? "bg-brand-blue-500 text-white shadow-md shadow-brand-blue-200"
+                          : isToday
+                            ? "border border-brand-blue-200 bg-brand-blue-50 text-brand-blue-700"
+                            : "border border-slate-200 bg-white text-slate-700"
+                      }`}
+                    >
+                      <span className={`text-[10px] font-semibold ${isSelected ? "text-brand-blue-100" : "text-slate-400"}`}>
+                        {BG_WEEKDAY_SHORT[day.getDay()]}
+                      </span>
+                      <span className="text-base font-black tabular-nums leading-none">{day.getDate()}</span>
+                      {count > 0 ? (
+                        <span
+                          className={`mt-1 rounded-full px-1.5 text-[9px] font-bold leading-4 ${
+                            isSelected ? "bg-white/20 text-white" : "bg-amber-100 text-amber-800"
+                          }`}
+                        >
+                          {count}
                         </span>
-                        <span className="text-base font-black tabular-nums leading-none">{day.getDate()}</span>
-                        {count > 0 ? (
-                          <span
-                            className={`mt-1 rounded-full px-1.5 text-[9px] font-bold leading-4 ${
-                              isSelected ? "bg-white/20 text-white" : "bg-amber-100 text-amber-800"
-                            }`}
-                          >
-                            {count}
-                          </span>
-                        ) : (
-                          <span className="mt-1 h-4" />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => shiftMobileWeek(1)}
-                  className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl text-slate-500 active:bg-white"
-                  aria-label="Следваща седмица"
-                >
-                  <ChevronRight className="h-5 w-5" />
-                </button>
+                      ) : (
+                        <span className="mt-1 h-4" />
+                      )}
+                    </button>
+                  );
+                })}
               </div>
-              <div className="mt-1 flex items-center justify-between px-2 pb-1">
+              <div className="mt-1 flex items-center justify-between gap-2 px-2 pb-1">
                 <span className="text-[11px] font-medium capitalize text-slate-500">{title}</span>
-                {mobileSelectedKey !== todayKey && (
-                  <button type="button" onClick={goMobileToday} className="text-[11px] font-bold text-brand-blue-600">
+                {mobileSelectedKey !== todayKey ? (
+                  <button type="button" onClick={goMobileToday} className="text-[11px] font-bold text-brand-blue-600 shrink-0">
                     Към днес
                   </button>
+                ) : (
+                  <span className="text-[10px] font-medium text-slate-400 shrink-0">Плъзни за дни ← →</span>
                 )}
               </div>
             </div>
 
-            <div className="space-y-3 px-3 py-3">
+            <div
+              className="space-y-3 px-3 py-3 touch-pan-y"
+              onTouchStart={onMobileContentTouchStart}
+              onTouchEnd={onMobileContentTouchEnd}
+            >
               <div>
                 <h3 className="text-sm font-bold capitalize text-slate-900">
                   {new Date(`${mobileSelectedKey}T00:00:00`).toLocaleDateString("bg-BG", {
@@ -1559,12 +1629,6 @@ function addDays(d: Date, n: number): Date {
   const next = new Date(d);
   next.setDate(next.getDate() + n);
   return next;
-}
-
-function weekOf(anchor: Date): Date[] {
-  const day = anchor.getDay();
-  const monday = addDays(anchor, -(day === 0 ? 6 : day - 1));
-  return Array.from({ length: 7 }, (_, i) => addDays(monday, i));
 }
 
 function eventCodeLabel(item: WorkItem): string {

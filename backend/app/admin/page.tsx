@@ -30,7 +30,9 @@ export default async function AdminDashboardPage() {
     callPanelItems,
     supplierOrderCount,
   ] = await Promise.all([
-    supabase.from("products").select("id", { count: "exact", head: true }),
+    readOnlyDashboard
+      ? Promise.resolve({ count: null, error: null })
+      : supabase.from("products").select("id", { count: "exact", head: true }),
     supabase.from("inquiries").select("id", { count: "exact", head: true }).eq("status", "new"),
     supabase.from("email_outbox").select("id", { count: "exact", head: true }).eq("status", "pending"),
     supabase.from("email_outbox").select("id", { count: "exact", head: true }).eq("status", "failed"),
@@ -75,7 +77,7 @@ export default async function AdminDashboardPage() {
       .eq("status", "failed")
       .order("created_at", { ascending: false })
       .limit(4),
-    fetchCallFollowUpPanelItems(supabase, today),
+    readOnlyDashboard ? Promise.resolve([]) : fetchCallFollowUpPanelItems(supabase, today),
     supabase
       .from("work_items")
       .select("id", { count: "exact", head: true })
@@ -83,9 +85,10 @@ export default async function AdminDashboardPage() {
       .not("status", "in", '("done","cancelled")'),
   ]);
 
-  const dbError = products.error ?? inquiriesNew.error ?? workToday.error ?? workOverdue.error ?? null;
+  const dbError =
+    (readOnlyDashboard ? null : products.error) ?? inquiriesNew.error ?? workToday.error ?? workOverdue.error ?? null;
 
-  const nProducts = products.count ?? 0;
+  const nProducts = readOnlyDashboard ? 0 : (products.count ?? 0);
   const nInquiries = inquiriesNew.count ?? 0;
   const nOutbox = outboxPending.count ?? 0;
   const nFailedEmails = outboxFailed.count ?? 0;
@@ -125,7 +128,9 @@ export default async function AdminDashboardPage() {
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: "Продукти", value: String(nProducts), accent: "" },
+          ...(!readOnlyDashboard
+            ? [{ label: "Продукти", value: String(nProducts), accent: "" }]
+            : []),
           ...(!readOnlyDashboard
             ? [{ label: "Нови запитвания", value: String(nInquiries), accent: nInquiries > 0 ? "border-t-2 border-t-brand-blue-400" : "" }]
             : []),
@@ -222,7 +227,7 @@ export default async function AdminDashboardPage() {
         />
       </div>
 
-      <CallFollowUpsPanel initialItems={callPanelItems} readOnly={readOnlyDashboard} />
+      {!readOnlyDashboard && <CallFollowUpsPanel initialItems={callPanelItems} readOnly={false} />}
 
       {!readOnlyDashboard && (nOutbox > 0 || nFailedEmails > 0) && (
         <Card className="p-4">

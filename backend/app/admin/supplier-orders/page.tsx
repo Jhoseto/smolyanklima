@@ -139,6 +139,26 @@ function defaultSortDir(field: SortField): SortDir {
   return "asc";
 }
 
+const ORDER_TABLE_TH = "text-center whitespace-nowrap !text-xs !px-2 !py-2.5";
+
+const ORDER_TABLE_TD = "!px-2.5 !py-2 align-middle text-xs";
+
+const ORDER_PRICE_TD =
+  `${ORDER_TABLE_TD} text-center tabular-nums font-semibold whitespace-nowrap min-w-[5.5rem]`;
+
+const ORDER_STICKY_ACTIONS =
+  "sticky right-0 z-20 bg-white shadow-[-6px_0_8px_-4px_rgba(15,23,42,0.12)] !px-2 !py-2 w-[9rem] min-w-[9rem] text-center";
+
+const ORDER_STICKY_ACTIONS_HEAD = `${ORDER_STICKY_ACTIONS} bg-slate-50`;
+
+function OrderHeaderTh({ label, className = "" }: { label: string; className?: string }) {
+  return (
+    <Th className={`${ORDER_TABLE_TH} ${className}`}>
+      {label}
+    </Th>
+  );
+}
+
 function sortHint(field: SortField, sortBy: SortField, sortDir: SortDir, label: string): string {
   if (sortBy !== field) return `Сортирай по „${label}"`;
   if (field === "order_date") {
@@ -175,12 +195,12 @@ function SortableTh({
       <button
         type="button"
         onClick={() => onSort(field)}
-        className={`w-full px-3 py-2 inline-flex items-center gap-0.5 text-left text-xs font-bold transition-colors hover:bg-slate-100 ${
+        className={`w-full px-2 py-2.5 inline-flex items-center justify-center gap-1 text-xs font-bold whitespace-nowrap transition-colors hover:bg-slate-100 ${
           isActive ? "text-brand-blue-700 bg-brand-blue-50/60" : "text-slate-600"
         }`}
         title={sortHint(field, sortBy, sortDir, label)}
       >
-        <span className="truncate">{label}</span>
+        <span>{label}</span>
         <ArrowIcon className={`w-3 h-3 shrink-0 ${isActive ? "opacity-100" : "opacity-40"}`} />
       </button>
     </Th>
@@ -684,68 +704,72 @@ export default function SupplierOrdersHistoryPage() {
         <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">{error}</div>
       )}
 
-      <div className="hidden md:block">
-        <Table>
+      <div className="hidden md:block min-w-0">
+        <Table tableClassName="w-full min-w-[1180px]">
           <thead>
             <tr>
-              <SortableTh label="Продукт" field="product" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
-              <Th>Фаза</Th>
-              <SortableTh label="Оперативен" field="status" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
-              <SortableTh label="Контакт" field="customer_name" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
-              <SortableTh label="Телефон" field="customer_phone" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
-              <SortableTh label="Адрес" field="customer_address" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
-              <Th>Доставчик</Th>
-              <Th>Фактура</Th>
-              <SortableTh label="Доставна" field="purchase_price" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
-              <SortableTh label="Договорена" field="total_amount" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
-              <SortableTh label="Дата поръчка" field="order_date" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
-              <Th></Th>
+              <SortableTh label="Продукт" field="product" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className={`${ORDER_TABLE_TH} min-w-[11rem]`} />
+              <OrderHeaderTh label="Фаза" className="min-w-[5.5rem]" />
+              <SortableTh label="Статус" field="status" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className={`${ORDER_TABLE_TH} min-w-[5.5rem]`} />
+              <SortableTh label="Контакт" field="customer_name" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className={`${ORDER_TABLE_TH} min-w-[8rem]`} />
+              <SortableTh label="Телефон" field="customer_phone" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className={`${ORDER_TABLE_TH} min-w-[6.5rem]`} />
+              <SortableTh label="Адрес" field="customer_address" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className={`${ORDER_TABLE_TH} min-w-[9rem]`} />
+              <OrderHeaderTh label="Доставчик" className="min-w-[7rem]" />
+              <OrderHeaderTh label="Фактура" className="min-w-[6.5rem]" />
+              <SortableTh label="Доставна" field="purchase_price" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className={`${ORDER_TABLE_TH} min-w-[5.5rem]`} />
+              <SortableTh label="Продажна" field="total_amount" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className={`${ORDER_TABLE_TH} min-w-[5.5rem]`} />
+              <SortableTh label="Дата" field="order_date" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className={`${ORDER_TABLE_TH} min-w-[5.5rem]`} />
+              <OrderHeaderTh label="Действия" className={ORDER_STICKY_ACTIONS_HEAD} />
             </tr>
           </thead>
           <tbody>
             {items.map((row) => (
-              <tr key={row.id} className="transition-colors hover:bg-slate-50">
-                <Td className="max-w-[200px] min-w-0">
-                  <OrderProductTitle row={row} className="block truncate text-sm font-semibold text-slate-800" />
+              <tr key={row.id} className="transition-colors hover:bg-slate-50 group">
+                <Td className={`${ORDER_TABLE_TD} max-w-[14rem]`}>
+                  <OrderProductTitle row={row} className="block truncate font-semibold text-slate-800 text-left" />
                 </Td>
-                <Td>
+                <Td className={`${ORDER_TABLE_TD} text-center`}>
                   <span className={orderPhasePillClass(row)}>{orderPhaseLabel(row)}</span>
                 </Td>
-                <Td>
+                <Td className={`${ORDER_TABLE_TD} text-center`}>
                   <span className={statusPillClass(row.status)}>{STATUS_TEXT[row.status] ?? row.status}</span>
                 </Td>
-                <Td className="font-medium text-slate-700">{row.customer_name ?? row.contacts?.full_name ?? "—"}</Td>
-                <Td className="text-slate-600">
+                <Td className={`${ORDER_TABLE_TD} max-w-[10rem] truncate font-medium text-slate-700 text-left`}>
+                  {row.customer_name ?? row.contacts?.full_name ?? "—"}
+                </Td>
+                <Td className={`${ORDER_TABLE_TD} text-center whitespace-nowrap text-slate-600`}>
                   <AdminPhoneLink
                     phone={row.customer_phone ?? row.contacts?.phone}
                     showIcon={false}
                     className="font-medium text-slate-600"
                   />
                 </Td>
-                <Td className="max-w-[180px] truncate text-slate-600" title={row.customer_address ?? ""}>
+                <Td className={`${ORDER_TABLE_TD} max-w-[11rem] truncate text-slate-600 text-left`} title={row.customer_address ?? ""}>
                   {row.customer_address ?? row.contacts?.address ?? "—"}
                 </Td>
-                <Td className="max-w-[120px] truncate text-slate-600" title={orderSupplierName(row) ?? ""}>
+                <Td className={`${ORDER_TABLE_TD} max-w-[9rem] truncate text-slate-600 text-left`} title={orderSupplierName(row) ?? ""}>
                   {orderSupplierName(row) || "—"}
                 </Td>
-                <Td className="max-w-[100px] truncate font-mono text-[11px] text-slate-700" title={orderSupplierInvoice(row) ?? ""}>
+                <Td className={`${ORDER_TABLE_TD} max-w-[8rem] truncate font-mono text-[11px] text-center text-slate-700`} title={orderSupplierInvoice(row) ?? ""}>
                   {orderSupplierInvoice(row) || "—"}
                 </Td>
-                <Td className="font-semibold text-slate-700">
+                <Td className={`${ORDER_PRICE_TD} text-slate-700`}>
                   {orderPurchasePrice(row) != null ? `€${Number(orderPurchasePrice(row)).toLocaleString()}` : "—"}
                 </Td>
-                <Td className="font-semibold text-slate-900">
+                <Td className={`${ORDER_PRICE_TD} text-slate-900`}>
                   {orderAgreedPrice(row) != null ? `€${Number(orderAgreedPrice(row)).toLocaleString()}` : "—"}
                 </Td>
-                <Td className="text-xs font-medium text-slate-500">{orderDateDisplay(row)}</Td>
-                <Td className="text-right">
-                  <div className="flex flex-wrap justify-end gap-1.5">
-                    <Button variant="secondary" size="sm" className="!text-xs font-bold" onClick={() => setDetailId(row.id)}>
+                <Td className={`${ORDER_TABLE_TD} text-center text-slate-500 font-medium whitespace-nowrap tabular-nums`}>
+                  {orderDateDisplay(row)}
+                </Td>
+                <Td className={`${ORDER_STICKY_ACTIONS} group-hover:bg-slate-50`}>
+                  <div className="flex flex-col items-center gap-1">
+                    <Button variant="secondary" size="sm" className="!text-[11px] font-bold w-full justify-center" onClick={() => setDetailId(row.id)}>
                       <Eye className="mr-1 inline h-3.5 w-3.5" />
                       Детайли
                     </Button>
                     {canSellDelivered(row) && (
-                      <Button variant="primary" size="sm" className="!text-xs font-bold" onClick={() => setSaleOrder(row)}>
+                      <Button variant="primary" size="sm" className="!text-[11px] font-bold w-full justify-center" onClick={() => setSaleOrder(row)}>
                         <Receipt className="mr-1 inline h-3.5 w-3.5" />
                         Продажба
                       </Button>

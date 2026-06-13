@@ -573,7 +573,18 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
               <span className="hidden xs:inline">{isSyncing ? "Качване…" : "Локален"}</span>
             </div>
           )}
-          {saving && <Loader2 className="w-4 h-4 animate-spin text-slate-400 shrink-0" />}
+          {!isSigned && (
+            <button
+              onClick={() => void saveDraftAndClose()}
+              disabled={saving}
+              className="flex items-center gap-1.5 px-3 min-h-[44px] rounded-xl border-2 border-slate-200 text-slate-700 font-semibold text-sm hover:bg-slate-50 active:bg-slate-100 disabled:opacity-50 shrink-0 transition-colors"
+              title="Запазва текущото съдържание — може да довършите по-късно"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              <span className="text-xs font-bold">Запази</span>
+            </button>
+          )}
+          {saving && isSigned && <Loader2 className="w-4 h-4 animate-spin text-slate-400 shrink-0" />}
         </div>
 
         {/* Dot progress indicator */}
@@ -931,53 +942,42 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
         </div>
       </div>
 
-      {/* ── Навигация Назад / Запази / Напред ── */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 px-4 py-3 flex gap-2 pb-safe">
-        <button
-          onClick={() => { setStep(s => s - 1); setError(null); setFieldErrors({}); }}
-          disabled={step === 0}
-          className="flex items-center justify-center gap-1.5 w-12 h-12 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold disabled:opacity-30 shrink-0 active:bg-slate-50 transition-colors"
-          title="Назад"
-        >
-          <ChevronLeft className="w-5 h-5" />
-        </button>
-
-        {!isSigned && (
+      {/* ── Навигация Назад / Напред ── */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 pb-safe">
+        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between md:justify-center md:gap-4">
           <button
-            onClick={() => void saveDraftAndClose()}
-            disabled={saving}
-            className="flex items-center gap-1.5 px-3 h-12 rounded-xl border-2 border-slate-200 text-slate-700 font-semibold text-sm active:bg-slate-50 disabled:opacity-50 shrink-0 transition-colors"
-            title="Запазва текущото съдържание без подписи — може да довършите по-късно"
+            onClick={() => { setStep(s => s - 1); setError(null); setFieldErrors({}); }}
+            disabled={step === 0}
+            className="flex items-center justify-center gap-1.5 min-w-[3rem] h-12 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold disabled:opacity-30 shrink-0 active:bg-slate-50 transition-colors md:px-5"
+            title="Назад"
           >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            <span className="text-xs">Запази</span>
+            <ChevronLeft className="w-5 h-5" />
+            <span className="hidden md:inline text-sm">Назад</span>
           </button>
-        )}
 
-        <div className="flex-1" />
-
-        {isLastStep ? (
-          <button
-            onClick={finalize}
-            disabled={saving || isSigned}
-            className="flex items-center gap-2 bg-green-600 disabled:bg-slate-300 text-white px-5 h-12 rounded-xl font-bold text-sm active:bg-green-700 shrink-0 shadow-sm shadow-green-200 transition-colors"
-          >
-            {saving
-              ? <><Loader2 className="w-5 h-5 animate-spin" /> Запазва се…</>
-              : isSigned
-                ? <><CheckCircle2 className="w-5 h-5" /> Подписан</>
-                : <><Check className="w-5 h-5" /> Финализирай</>
-            }
-          </button>
-        ) : (
-          <button
-            onClick={goNext}
-            className="flex items-center gap-1.5 px-5 h-12 rounded-xl bg-brand-orange-500 text-white font-bold text-sm active:bg-brand-orange-600 shrink-0 shadow-sm shadow-brand-orange-200 transition-colors"
-          >
-            Напред
-            <ChevronRight className="w-5 h-5" />
-          </button>
-        )}
+          {isLastStep ? (
+            <button
+              onClick={finalize}
+              disabled={saving || isSigned}
+              className="flex items-center gap-2 bg-green-600 disabled:bg-slate-300 text-white px-5 h-12 rounded-xl font-bold text-sm active:bg-green-700 shrink-0 shadow-sm shadow-green-200 transition-colors"
+            >
+              {saving
+                ? <><Loader2 className="w-5 h-5 animate-spin" /> Запазва се…</>
+                : isSigned
+                  ? <><CheckCircle2 className="w-5 h-5" /> Подписан</>
+                  : <><Check className="w-5 h-5" /> Финализирай</>
+              }
+            </button>
+          ) : (
+            <button
+              onClick={goNext}
+              className="flex items-center gap-1.5 px-5 h-12 rounded-xl bg-brand-orange-500 text-white font-bold text-sm active:bg-brand-orange-600 shrink-0 shadow-sm shadow-brand-orange-200 transition-colors"
+            >
+              Напред
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── Canvas за подпис ── */}

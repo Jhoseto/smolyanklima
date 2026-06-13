@@ -54,6 +54,8 @@ const QuerySchema = z.object({
   amountMax: z.coerce.number().nonnegative().optional(),
   /** UUID на потребител — филтрира само неговите задачи (за service_staff). */
   assignedTo: z.string().uuid().optional(),
+  /** Панел „Само монтаж“: изключва монтажи, свързани с продажба на климатик. */
+  standaloneInstallationOnly: z.enum(["yes"]).optional(),
   page: z.coerce.number().int().min(1).optional().default(1),
   perPage: z.coerce.number().int().min(1).max(500).optional().default(200),
   sortBy: z
@@ -145,6 +147,7 @@ export async function GET(req: NextRequest) {
     amountMin,
     amountMax,
     assignedTo,
+    standaloneInstallationOnly,
     page,
     perPage,
     sortBy,
@@ -268,6 +271,9 @@ export async function GET(req: NextRequest) {
     if (orFilter) query = query.or(orFilter);
   }
   if (eventCode) query = query.eq("event_code", eventCode);
+  if (eventCode === "service_installation" && standaloneInstallationOnly === "yes") {
+    query = query.is("sale_work_item_id", null);
+  }
   if (type) query = query.eq("type", type);
   if (assignedTo) query = query.eq("assigned_to", assignedTo);
   const statusFilters = (statusCsv ?? "")

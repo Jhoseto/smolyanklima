@@ -130,23 +130,31 @@ function mountPhasePillClass(row: WorkRow): string {
   return `${base} bg-amber-100 border-amber-200 text-amber-900`;
 }
 
+const SALE_TABLE_TH = "text-center whitespace-nowrap !text-xs !px-2 !py-2.5";
+
+const SALE_TABLE_TD = "!px-2.5 !py-2 align-middle text-xs";
+
 const SALE_SERIAL_TD =
-  "text-[8px] leading-none font-mono text-slate-600 truncate !py-0.5 !px-1 max-w-0";
-
-const SALE_TABLE_TH = "!text-[10px] !px-1 !py-1 whitespace-nowrap";
-
-const SALE_PRICE_TH = `${SALE_TABLE_TH} text-center`;
+  `${SALE_TABLE_TD} text-center font-mono text-[11px] text-slate-600 truncate max-w-[7rem]`;
 
 const SALE_PRICE_TD =
-  "font-semibold whitespace-nowrap text-[10px] text-center tabular-nums !px-1";
+  `${SALE_TABLE_TD} text-center tabular-nums font-semibold whitespace-nowrap min-w-[5.5rem]`;
 
 const SALE_STICKY_ACTIONS =
-  "sticky right-0 z-20 bg-white shadow-[-6px_0_8px_-4px_rgba(15,23,42,0.12)] !px-1.5 !py-1 w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem]";
+  "sticky right-0 z-20 bg-white shadow-[-6px_0_8px_-4px_rgba(15,23,42,0.12)] !px-2 !py-2 w-[8.5rem] min-w-[8.5rem] text-center";
 
 const SALE_STICKY_ACTIONS_HEAD = `${SALE_STICKY_ACTIONS} bg-slate-50`;
 
 const SALE_COMPACT_PILL =
-  "inline-flex items-center px-1 py-px rounded text-[9px] font-bold whitespace-nowrap border leading-none";
+  "inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap border leading-tight";
+
+function SaleHeaderTh({ label, className = "" }: { label: string; className?: string }) {
+  return (
+    <Th className={`${SALE_TABLE_TH} ${className}`}>
+      {label}
+    </Th>
+  );
+}
 
 function tableMountPhaseLabel(row: WorkRow): string {
   if (row.status === "cancelled") return "Отказ";
@@ -259,21 +267,17 @@ function SortableTh({
 }) {
   const isActive = sortBy === field;
   const ArrowIcon = !isActive ? ArrowUpDown : sortDir === "asc" ? ArrowUp : ArrowDown;
-  const compact = className.includes("!text-[10px]");
-  const centered = className.includes("text-center");
   return (
     <Th className={`p-0 ${className}`}>
       <button
         type="button"
         onClick={() => onSort(field)}
-        className={`w-full inline-flex items-center gap-0.5 font-bold transition-colors hover:bg-slate-100 ${
-          centered ? "justify-center" : "text-left"
-        } ${compact ? "px-1 py-1 text-[10px]" : "px-3 py-2 text-xs"} ${
+        className={`w-full inline-flex items-center justify-center gap-1 px-2 py-2.5 text-xs font-bold whitespace-nowrap transition-colors hover:bg-slate-100 ${
           isActive ? "text-brand-blue-700 bg-brand-blue-50/60" : "text-slate-600"
         }`}
         title={sortHint(field, sortBy, sortDir, label)}
       >
-        <span className="truncate">{label}</span>
+        <span>{label}</span>
         <ArrowIcon className={`w-3 h-3 shrink-0 ${isActive ? "opacity-100" : "opacity-40"}`} />
       </button>
     </Th>
@@ -367,6 +371,9 @@ const PERIOD_YEARS = [2026, 2025, 2024, 2023, 2022] as const;
 
 function emptyServiceMessage(tab: SalesPanelTabId): string {
   if (tab === "products") return "Няма записи.";
+  if (tab === "service_installation") {
+    return "Няма самостоятелни монтажи (без продажба на климатик).";
+  }
   const label = PAID_SERVICE_EVENT_LABELS[tab];
   return `Няма записи за „${label}“.`;
 }
@@ -528,6 +535,9 @@ export default function AdminHistoryPage() {
     const sp = new URLSearchParams();
     if (debouncedQ.trim()) sp.set("q", debouncedQ.trim());
     sp.set("eventCode", salesPanelEventCode(salesTab));
+    if (salesTab === "service_installation") {
+      sp.set("standaloneInstallationOnly", "yes");
+    }
     if (isProductSales) {
       const mountCsv = mountPhaseCsv(mountPhases);
       if (mountCsv) sp.set("mountPhase", mountCsv);
@@ -1040,40 +1050,22 @@ export default function AdminHistoryPage() {
         <>
       {/* Desktop table */}
       <div className="hidden md:block min-w-0">
-        <Table
-          tableClassName="table-fixed min-w-[920px]"
-          className="[&_td]:!text-[11px] [&_td]:!py-1 [&_td]:!px-1"
-        >
-          <colgroup>
-            <col className="w-[13%]" />
-            <col className="w-[5%]" />
-            <col className="w-[5%]" />
-            <col className="w-[10%]" />
-            <col className="w-[8%]" />
-            <col className="w-[8%]" />
-            <col className="w-[8%]" />
-            <col className="w-[7%]" />
-            <col className="w-[6%]" />
-            <col className="w-[5%]" />
-            <col className="w-[5%]" />
-            <col className="w-[6%]" />
-            <col className="w-[7.5rem]" />
-          </colgroup>
+        <Table tableClassName="w-full min-w-[1180px]">
           <thead>
             <tr>
-              <SortableTh label="Продукт" field="product" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={SALE_TABLE_TH} />
-              <SortableTh label="Монтаж" field="sale_install_state" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={SALE_TABLE_TH} />
-              <SortableTh label="Статус" field="status" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={SALE_TABLE_TH} />
-              <SortableTh label="Контакт" field="customer_name" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={SALE_TABLE_TH} />
-              <SortableTh label="Тел." field="customer_phone" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={SALE_TABLE_TH} />
-              <Th className={`${SALE_TABLE_TH} !text-[8px]`}>Вътр.</Th>
-              <Th className={`${SALE_TABLE_TH} !text-[8px]`}>Външ.</Th>
-              <SortableTh label="Дост." field="supplier" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={SALE_TABLE_TH} />
-              <SortableTh label="Факт." field="supplier_invoice" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={SALE_TABLE_TH} />
-              <SortableTh label="Дост.€" field="purchase_price" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={SALE_PRICE_TH} />
-              <SortableTh label="Прод.€" field="total_amount" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={SALE_PRICE_TH} />
-              <SortableTh label="Дата" field="sale_date" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={SALE_TABLE_TH} />
-              <Th className={SALE_STICKY_ACTIONS_HEAD} aria-label="Действия" />
+              <SortableTh label="Продукт" field="product" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[11rem]`} />
+              <SortableTh label="Монтаж" field="sale_install_state" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[5.5rem]`} />
+              <SortableTh label="Статус" field="status" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[5.5rem]`} />
+              <SortableTh label="Контакт" field="customer_name" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[8rem]`} />
+              <SortableTh label="Телефон" field="customer_phone" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[6.5rem]`} />
+              <SaleHeaderTh label="Вътрешно" className="min-w-[6.5rem]" />
+              <SaleHeaderTh label="Външно" className="min-w-[6.5rem]" />
+              <SortableTh label="Доставчик" field="supplier" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[7rem]`} />
+              <SortableTh label="Фактура" field="supplier_invoice" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[6.5rem]`} />
+              <SortableTh label="Доставна" field="purchase_price" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[5.5rem]`} />
+              <SortableTh label="Продажна" field="total_amount" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[5.5rem]`} />
+              <SortableTh label="Дата" field="sale_date" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[5.5rem]`} />
+              <SaleHeaderTh label="Действия" className={SALE_STICKY_ACTIONS_HEAD} />
             </tr>
           </thead>
           <tbody>
@@ -1083,35 +1075,35 @@ export default function AdminHistoryPage() {
               const cancelLabel = saleCancelReasonLabel(row.cancel_reason);
               return (
                 <tr key={row.id} className="hover:bg-slate-50 transition-colors group">
-                  <Td className="max-w-0 truncate">
+                  <Td className={`${SALE_TABLE_TD} max-w-[14rem]`}>
                     <ProductQuickViewButton
                       productId={row.products?.id}
                       productName={productName}
-                      className="block truncate text-[11px] font-semibold text-slate-800"
+                      className="block truncate font-semibold text-slate-800 text-left"
                     />
                     {cancelLabel && (
-                      <div className="text-[9px] text-red-700 font-medium truncate" title={cancelLabel}>
+                      <div className="text-[10px] text-red-700 font-medium truncate text-left" title={cancelLabel}>
                         {cancelLabel}
                       </div>
                     )}
                   </Td>
-                  <Td className="text-center">
+                  <Td className={`${SALE_TABLE_TD} text-center`}>
                     <span className={tableMountPhasePillClass(row)}>{tableMountPhaseLabel(row)}</span>
                   </Td>
-                  <Td className="text-center">
+                  <Td className={`${SALE_TABLE_TD} text-center`}>
                     <span className={tableStatusPillClass(row.status)}>{TABLE_STATUS_TEXT[row.status]}</span>
                   </Td>
-                  <Td className="max-w-0 truncate">
+                  <Td className={`${SALE_TABLE_TD} max-w-[10rem]`}>
                     <ContactNameButton
                       name={row.customer_name}
                       contactId={contactTargetFromRow(row).contactId}
                       customerPhone={row.customer_phone}
                       onOpen={setContactHistoryTarget}
-                      className="text-[11px] text-slate-700"
+                      className="truncate block text-left text-slate-700"
                     />
                   </Td>
-                  <Td className="text-slate-600 max-w-0 truncate whitespace-nowrap">
-                    <AdminPhoneLink phone={row.customer_phone} showIcon={false} className="font-medium text-slate-600 !text-[10px]" />
+                  <Td className={`${SALE_TABLE_TD} text-center whitespace-nowrap`}>
+                    <AdminPhoneLink phone={row.customer_phone} showIcon={false} className="font-medium text-slate-600" />
                   </Td>
                   <Td className={SALE_SERIAL_TD} title={row.products?.indoor_unit_serial ?? ""}>
                     {row.products?.indoor_unit_serial?.trim() || "—"}
@@ -1119,10 +1111,10 @@ export default function AdminHistoryPage() {
                   <Td className={SALE_SERIAL_TD} title={row.products?.outdoor_unit_serial ?? ""}>
                     {row.products?.outdoor_unit_serial?.trim() || "—"}
                   </Td>
-                  <Td className="text-slate-600 max-w-0 truncate" title={saleSupplierName(row) ?? ""}>
+                  <Td className={`${SALE_TABLE_TD} max-w-[9rem] truncate text-left text-slate-600`} title={saleSupplierName(row) ?? ""}>
                     {saleSupplierName(row) || "—"}
                   </Td>
-                  <Td className="text-slate-700 max-w-0 truncate font-mono text-[10px]" title={saleSupplierInvoice(row) ?? ""}>
+                  <Td className={`${SALE_TABLE_TD} max-w-[8rem] truncate font-mono text-[11px] text-center text-slate-700`} title={saleSupplierInvoice(row) ?? ""}>
                     {saleSupplierInvoice(row) || "—"}
                   </Td>
                   <Td className={`${SALE_PRICE_TD} text-slate-700`}>
@@ -1135,15 +1127,15 @@ export default function AdminHistoryPage() {
                         ? `€${Number(row.unit_price).toLocaleString()}`
                         : "—"}
                   </Td>
-                  <Td className="text-[10px] text-slate-500 font-medium whitespace-nowrap tabular-nums">
+                  <Td className={`${SALE_TABLE_TD} text-center text-slate-500 font-medium whitespace-nowrap tabular-nums`}>
                     {saleDateDisplay(row)}
                   </Td>
-                  <Td className={`${SALE_STICKY_ACTIONS} group-hover:bg-slate-50 text-right`}>
-                    <div className="flex flex-col items-end gap-1">
+                  <Td className={`${SALE_STICKY_ACTIONS} group-hover:bg-slate-50`}>
+                    <div className="flex flex-col items-center gap-1">
                       <Button
                         variant="secondary"
                         size="sm"
-                        className="!text-[10px] font-bold whitespace-nowrap"
+                        className="!text-[11px] font-bold whitespace-nowrap w-full justify-center"
                         onClick={() => setDetailSaleId(row.id)}
                       >
                         <Eye className="w-3.5 h-3.5 inline mr-1" />
@@ -1154,7 +1146,7 @@ export default function AdminHistoryPage() {
                           <Button
                             variant="secondary"
                             size="sm"
-                            className="!text-[10px] font-bold whitespace-nowrap"
+                            className="!text-[11px] font-bold whitespace-nowrap w-full justify-center"
                             disabled={actionRowId === row.id}
                             onClick={() => setConfirm({ kind: "complete", row })}
                           >
@@ -1164,7 +1156,7 @@ export default function AdminHistoryPage() {
                           <Button
                             variant="danger"
                             size="sm"
-                            className="!text-[10px] font-bold whitespace-nowrap"
+                            className="!text-[11px] font-bold whitespace-nowrap w-full justify-center"
                             disabled={actionRowId === row.id}
                             onClick={() => openCancelConfirm(row)}
                           >

@@ -13,7 +13,6 @@ import {
   Bot,
   Headphones,
   MessageSquare,
-  CalendarClock,
   UserCircle,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -99,13 +98,6 @@ const DOCUMENTS_LINK: AdminNavLinkDef = {
   Icon: FolderOpen,
 };
 
-const TASKS_LINK: AdminNavLinkDef = {
-  href: "/admin/service/tasks",
-  label: "Задачи",
-  iconKey: "tasks",
-  Icon: CalendarClock,
-};
-
 /** Секции в sidebar / drawer — един източник на истина за desktop и PWA. */
 export function getAdminNavSections(role: AdminRole): AdminNavSectionDef[] {
   const sections: AdminNavSectionDef[] = [];
@@ -118,18 +110,9 @@ export function getAdminNavSections(role: AdminRole): AdminNavSectionDef[] {
     });
   }
 
-  if (role === "service_staff") {
-    sections.push({
-      id: "catalog",
-      title: "Каталог",
-      links: [{ href: "/admin/products", label: "Продукти", iconKey: "products", Icon: Package }],
-    });
-  }
-
-  // service_staff has Задачи in their bottom bar (ServiceTasksClient — different view).
+  // service_staff: без каталог — само табло + документи.
   // master_admin + office_staff already see WorkItemsPlanner on the dashboard — no separate Tasks link.
-  const serviceLinks: AdminNavLinkDef[] =
-    role === "service_staff" ? [TASKS_LINK, DOCUMENTS_LINK] : [DOCUMENTS_LINK];
+  const serviceLinks: AdminNavLinkDef[] = [DOCUMENTS_LINK];
 
   sections.push({
     id: "service",
@@ -171,15 +154,7 @@ export function getAdminNavSections(role: AdminRole): AdminNavSectionDef[] {
 /** Основни табове в долната лента на PWA — същите модули като desktop, подредени за бърз достъп. */
 export function getMobilePrimaryLinks(role: AdminRole): AdminNavLinkDef[] {
   if (role === "service_staff") {
-    // ServiceTasksClient at /admin/service/tasks is the primary task view for service_staff.
-    // master_admin/office_staff see WorkItemsPlanner on the dashboard — no Tasks tab needed.
-    return [
-      DASHBOARD_LINK,
-      { href: "/admin/products", label: "Продукти", iconKey: "products", Icon: Package },
-      TASKS_LINK,
-      DOCUMENTS_LINK,
-      PROFILE_LINK,
-    ];
+    return [DASHBOARD_LINK, DOCUMENTS_LINK, PROFILE_LINK];
   }
 
   if (role === "office_staff") {

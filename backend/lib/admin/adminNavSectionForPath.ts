@@ -19,9 +19,6 @@ export function adminNavSectionForPath(pathname: string, role: AdminRole): Admin
   ) {
     return "office";
   }
-  if (role === "service_staff" && (pathname === "/admin/products" || pathname.startsWith("/admin/products/"))) {
-    return "catalog";
-  }
   if (role !== "service_staff" && (pathname === "/admin/products" || pathname.startsWith("/admin/products/"))) {
     return "office";
   }

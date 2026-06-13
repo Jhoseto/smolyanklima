@@ -22,6 +22,7 @@ export type SalesPanelTabId = "products" | PaidServiceEventCode;
 
 export const SALES_PANEL_TABS: Array<{ id: SalesPanelTabId; label: string; eventCode: string }> = [
   { id: "products", label: "Климатици", eventCode: "sale" },
+  /** Монтаж без продажба на климатик — монтажи от продажби са в таб „Климатици“. */
   { id: "service_installation", label: "Само монтаж", eventCode: "service_installation" },
   { id: "service_maintenance", label: "Профилактика", eventCode: "service_maintenance" },
   { id: "service_on_site", label: "Сервиз на терен", eventCode: "service_on_site" },
