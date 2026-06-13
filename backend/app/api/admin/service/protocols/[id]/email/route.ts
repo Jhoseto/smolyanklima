@@ -6,6 +6,7 @@ import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
 import { ProtocolPDF } from "@/lib/protocol-pdf";
+import { trimProtocolSignatures } from "@/lib/signature-trim";
 import { sendResendEmail } from "@/lib/email/resend";
 import { EMAIL_BRAND_LOGO_SVG } from "@/lib/brand-email";
 
@@ -52,9 +53,11 @@ export async function POST(
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   if (!data)  return withCors(req, NextResponse.json({ error: "Не е намерен" }, { status: 404 }));
 
+  const trimmed = await trimProtocolSignatures(data);
+
   // Генериране на PDF
   const pdfBuffer = await renderToBuffer(
-    React.createElement(ProtocolPDF, { data }) as Parameters<typeof renderToBuffer>[0]
+    React.createElement(ProtocolPDF, { data: trimmed }) as Parameters<typeof renderToBuffer>[0]
   );
   const pdfBase64 = Buffer.from(pdfBuffer).toString("base64");
 

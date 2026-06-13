@@ -4,6 +4,7 @@ import React from "react";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
 import { ProtocolPDF } from "@/lib/protocol-pdf";
+import { trimProtocolSignatures } from "@/lib/signature-trim";
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflight(req);
@@ -30,8 +31,10 @@ export async function GET(
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   if (!data)  return withCors(req, NextResponse.json({ error: "Не е намерен" }, { status: 404 }));
 
+  const trimmed = await trimProtocolSignatures(data);
+
   const pdfBuffer = await renderToBuffer(
-    React.createElement(ProtocolPDF, { data }) as Parameters<typeof renderToBuffer>[0]
+    React.createElement(ProtocolPDF, { data: trimmed }) as Parameters<typeof renderToBuffer>[0]
   );
 
   const filename = `protokol-${String(data.protocol_number).replace(/[^\w.-]+/g, "_")}.pdf`;

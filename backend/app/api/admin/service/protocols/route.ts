@@ -203,6 +203,7 @@ export async function POST(req: NextRequest) {
     cable_channels_m: d.cable_channels_m,
     accessories:      d.accessories,
     notes:            d.notes ?? null,
+    photo_urls:       d.photo_urls ?? [],
     signature_team:   d.signature_team ?? null,
     signature_client: d.signature_client ?? null,
     status:           computedStatus,

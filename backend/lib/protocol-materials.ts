@@ -7,9 +7,10 @@ export interface ProtocolMaterial {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Оригинален ляв стълб (за PDF — непроменен спрямо хартиения протокол)
+// Пълен ред на материалите за PDF/преглед (ляво→дясно от хартиения протокол)
 // ─────────────────────────────────────────────────────────────────────────────
-export const PDF_LEFT_MATERIALS: ProtocolMaterial[] = [
+const PDF_MATERIALS_ORDERED: ProtocolMaterial[] = [
+  // Ляв стълб (оригинал)
   { id: "pipe_635",       name: "Тръба Ф6,35 + изолация 6х6",      unit: "м",   column: "left" },
   { id: "pipe_952",       name: "Тръба Ф9,52 + изолация 10х6",     unit: "м",   column: "left" },
   { id: "pipe_127",       name: "Тръба Ф12,7 + изолация 12х6",     unit: "м",   column: "left" },
@@ -28,13 +29,7 @@ export const PDF_LEFT_MATERIALS: ProtocolMaterial[] = [
   { id: "piron_8x60",     name: "Пирон-дюбел PKK 8x60",             unit: "бр.", column: "left" },
   { id: "gaika_6",        name: "Конусна гайка Ф6 CP",              unit: "бр.", column: "left" },
   { id: "gaika_10",       name: "Конусна гайка Ф10 CP",             unit: "бр.", column: "left" },
-];
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Оригинален десен стълб + новите елементи добавени накрая (за PDF)
-// ─────────────────────────────────────────────────────────────────────────────
-export const PDF_RIGHT_MATERIALS: ProtocolMaterial[] = [
-  // ── Оригинални (непроменени) ─────────────────────────────────────────────
+  // Десен стълб (оригинал + нови pri_*)
   { id: "kabel_shvps_3x15",  name: "Кабел ШВПС 3х1,5",                  unit: "м",      column: "right" },
   { id: "kabel_shvps_4x1",   name: "Кабел ШВПС 4х1",                    unit: "м",      column: "right" },
   { id: "kabel_shvps_5x1",   name: "Кабел ШВПС 5х1",                    unit: "м",      column: "right" },
@@ -53,7 +48,6 @@ export const PDF_RIGHT_MATERIALS: ProtocolMaterial[] = [
   { id: "sprei",             name: "Спрей за климатици",                 unit: "бр.",    column: "right" },
   { id: "drenaj_pompa",      name: "Дренажна помпа",                     unit: "бр.",    column: "right" },
   { id: "transformator",     name: "Трансформатор 100V-18A/ 200V-18A",   unit: "бр.",    column: "right" },
-  // ── Нови елементи (добавени след оригиналния хартиен протокол) ───────────
   { id: "pri_gofre",         name: "Гофре",                              unit: "м",      column: "right" },
   { id: "pri_kabel_3x25",    name: "Кабел - 3 х 2,5",                   unit: "м",      column: "right" },
   { id: "pri_izolatsia",     name: "Изолация",                           unit: "м",      column: "right" },
@@ -68,6 +62,17 @@ export const PDF_RIGHT_MATERIALS: ProtocolMaterial[] = [
   { id: "pri_dyubel_16x200", name: "Дюбел - 16 х 200",                  unit: "бр.",    column: "right" },
   { id: "pri_vint_5x70",     name: "Винт - 5 х 70",                     unit: "бр.",    column: "right" },
 ];
+
+/** Равномерно разделяне на две колони за PDF и преглед (26 + 26 реда). */
+const PDF_SPLIT_AT = Math.ceil(PDF_MATERIALS_ORDERED.length / 2);
+
+export const PDF_LEFT_MATERIALS: ProtocolMaterial[] = PDF_MATERIALS_ORDERED
+  .slice(0, PDF_SPLIT_AT)
+  .map(m => ({ ...m, column: "left" as const }));
+
+export const PDF_RIGHT_MATERIALS: ProtocolMaterial[] = PDF_MATERIALS_ORDERED
+  .slice(PDF_SPLIT_AT)
+  .map(m => ({ ...m, column: "right" as const }));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Стъпка 2 в уизарда — Главни монтажни елементи

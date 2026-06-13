@@ -12,6 +12,8 @@ import {
   EMPTY_ACCESSORIES,
 } from "@/lib/protocol-materials";
 import type { AccessoriesEntry, MaterialEntry, ProtocolMaterial } from "@/lib/protocol-materials";
+import { ProtocolPhotosGallery } from "./ProtocolPhotosGallery";
+import { SignatureDisplay } from "./SignatureDisplay";
 
 interface Props {
   protocolId: string;
@@ -41,6 +43,7 @@ interface ProtocolRow {
   cable_channels_m: number | null;
   accessories: Record<string, number> | null;
   notes: string | null;
+  photo_urls: string[] | null;
   signature_team: string | null;
   signature_client: string | null;
   status: string;
@@ -402,8 +405,13 @@ export function ProtocolPreview({
                   </div>
                 </div>
 
+                {/* Снимки от монтажа */}
+                {Array.isArray(row.photo_urls) && row.photo_urls.length > 0 && (
+                  <ProtocolPhotosGallery urls={row.photo_urls} compact />
+                )}
+
                 {/* Подписи */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-5 pt-4">
                   <SigBlock title="Монтажна група" src={row.signature_team} />
                   <SigBlock title="Подпис на клиента:" src={row.signature_client} />
                 </div>
@@ -480,14 +488,18 @@ function AccessoryInline({ label, value }: { label: string; value: number }) {
 
 function SigBlock({ title, src }: { title: string; src: string | null }) {
   return (
-    <div>
-      <p className="text-xs font-semibold mb-2">{title}</p>
-      <div className="border-b-2 border-black min-h-[56px] flex items-end justify-center pb-1 bg-slate-50/80">
+    <div className="flex items-end gap-2.5 min-h-[88px]">
+      <p className="text-[11px] font-semibold text-slate-900 shrink-0 w-[92px] leading-snug pb-2">
+        {title}
+      </p>
+      <div className="flex-1 bg-white border-b-2 border-black min-h-[84px] flex items-end justify-center px-1 pb-0">
         {src ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={src} alt="" className="max-h-14 max-w-full object-contain" />
+          <SignatureDisplay
+            src={src}
+            className="max-h-[80px] w-full object-contain object-bottom"
+          />
         ) : (
-          <span className="text-[10px] text-slate-400">—</span>
+          <span className="text-[10px] text-slate-300 pb-2">—</span>
         )}
       </div>
     </div>

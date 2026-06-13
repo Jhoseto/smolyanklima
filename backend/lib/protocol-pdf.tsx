@@ -311,24 +311,33 @@ const s = StyleSheet.create({
 
   sigWrap: {
     flexDirection: "row",
-    gap: 18,
-    marginTop: 6,
+    gap: 14,
+    marginTop: 8,
   },
-  sigCol: { flex: 1 },
-  sigCap: { fontSize: 8.3, marginBottom: 5 },
+  sigRow: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "flex-end",
+  },
+  sigLabel: {
+    fontSize: 8.3,
+    width: 74,
+    paddingBottom: 5,
+    paddingRight: 4,
+  },
   sigArea: {
+    flex: 1,
     borderBottomWidth: W.rule,
     borderBottomColor: C.line,
-    minHeight: 42,
-    position: "relative",
+    backgroundColor: "#ffffff",
+    minHeight: 54,
     justifyContent: "flex-end",
+    alignItems: "center",
+    paddingBottom: 1,
   },
   sigImg: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 38,
+    height: 50,
+    width: "100%",
     objectFit: "contain",
     objectPosition: "center bottom",
   },
@@ -557,16 +566,16 @@ export function ProtocolPDF({ data }: { data: ProtocolData }) {
         </View>
 
         <View style={s.sigWrap}>
-          <View style={s.sigCol}>
-            <Text style={s.sigCap}>Монтажна група</Text>
+          <View style={s.sigRow}>
+            <Text style={s.sigLabel}>Монтажна група</Text>
             <View style={s.sigArea}>
               {data.signature_team ? (
                 <Image src={data.signature_team} style={s.sigImg} />
               ) : null}
             </View>
           </View>
-          <View style={s.sigCol}>
-            <Text style={s.sigCap}>Подпис на клиента:</Text>
+          <View style={s.sigRow}>
+            <Text style={s.sigLabel}>Подпис на клиента:</Text>
             <View style={s.sigArea}>
               {data.signature_client ? (
                 <Image src={data.signature_client} style={s.sigImg} />

@@ -27,6 +27,8 @@ import {
   normalizeProtocolPhoneForApi,
   normalizeWorkItemIdForApi,
 } from "@/lib/protocol-contact-validation";
+import { SignatureDisplay } from "./SignatureDisplay";
+import { ProtocolPhotosGallery } from "./ProtocolPhotosGallery";
 import { parseOfflineApiError } from "@/lib/offline/acceptancePayload";
 
 // ─── Типове ──────────────────────────────────────────────────────────────────
@@ -1004,6 +1006,9 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
           {/* ──────────── Стъпка 7: Подписи ──────────── */}
           {step === 7 && (
             <div className="space-y-6">
+              {form.photo_urls.length > 0 && (
+                <ProtocolPhotosGallery urls={form.photo_urls} />
+              )}
               <SignatureBlock
                 label="Монтажна група"
                 value={form.signature_team}
@@ -1400,19 +1405,18 @@ function SignatureBlock({
   onClear: () => void;
 }) {
   return (
-    <div>
-      <p className="text-sm font-semibold text-slate-700 mb-2">{label}</p>
+    <div className="flex items-end gap-3 min-h-[96px]">
+      <p className="text-sm font-semibold text-slate-700 shrink-0 w-[108px] leading-snug pb-2">{label}</p>
       {value ? (
-        <div className="relative border-2 border-green-300 rounded-xl overflow-hidden bg-white">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+        <div className="relative flex-1 bg-white border-b-2 border-slate-800 min-h-[92px] flex items-end justify-center px-1">
+          <SignatureDisplay
             src={value}
             alt={label}
-            className="w-full h-32 object-contain"
+            className="max-h-[88px] w-full object-contain object-bottom"
           />
           <button
             onClick={onClear}
-            className="absolute top-2 right-2 bg-red-100 text-red-600 rounded-lg p-1.5 active:bg-red-200"
+            className="absolute top-1 right-1 bg-red-100 text-red-600 rounded-lg p-1.5 active:bg-red-200"
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -1420,7 +1424,7 @@ function SignatureBlock({
       ) : (
         <button
           onClick={onSign}
-          className="w-full h-28 border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center gap-2 text-slate-400 active:bg-slate-50"
+          className="flex-1 h-24 border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center gap-2 text-slate-400 active:bg-slate-50 bg-white"
         >
           <PenLine className="w-7 h-7" />
           <span className="text-sm">Докосни за подпис</span>

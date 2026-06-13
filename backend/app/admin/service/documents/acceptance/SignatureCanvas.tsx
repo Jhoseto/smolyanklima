@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useEffect, useCallback, useState } from "react";
+import { trimSignatureCanvas } from "./SignatureDisplay";
 import { X, RotateCcw, Check } from "lucide-react";
 
 interface Props {
@@ -97,9 +98,9 @@ export function SignatureCanvas({ label, onSave, onClose, existing }: Props) {
     setIsEmpty(true);
   }, []);
 
-  const save = useCallback(() => {
+  const save = useCallback(async () => {
     const canvas = canvasRef.current!;
-    const dataUrl = canvas.toDataURL("image/png", 0.85);
+    const dataUrl = await trimSignatureCanvas(canvas);
     onSave(dataUrl);
   }, [onSave]);
 
