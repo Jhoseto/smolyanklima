@@ -34,7 +34,7 @@ export async function GET(
     React.createElement(ProtocolPDF, { data }) as Parameters<typeof renderToBuffer>[0]
   );
 
-  const filename = `protokol-${data.protocol_number}.pdf`;
+  const filename = `protokol-${String(data.protocol_number).replace(/[^\w.-]+/g, "_")}.pdf`;
   const res = new NextResponse(new Blob([new Uint8Array(pdfBuffer)]), {
     status: 200,
     headers: {

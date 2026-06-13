@@ -134,6 +134,7 @@ export function ProtocolPreview({
   }, [row?.materials]);
 
   const acc = useMemo(() => mergeAccessories(row?.accessories ?? undefined), [row?.accessories]);
+  const cableChannelsM = Number(row?.cable_channels_m ?? acc.cable_channels_m ?? 0);
 
   const mountSet = useMemo(() => new Set(row?.mount_types ?? []), [row?.mount_types]);
 
@@ -363,7 +364,7 @@ export function ProtocolPreview({
 
                 {/* Кабелни канали */}
                 <div className="border border-black p-2 space-y-2 text-[11px]">
-                  <AccessoryRow label={ACCESSORIES_LABELS.cable_channels_m} value={acc.cable_channels_m} />
+                  <AccessoryRow label={ACCESSORIES_LABELS.cable_channels_m} value={cableChannelsM} />
                   <div className="flex flex-wrap gap-x-4 gap-y-2">
                     {(["outer_corner", "inner_corner", "angle_out", "connector"] as const).map(k => (
                       <AccessoryInline key={k} label={ACCESSORIES_LABELS[k]} value={acc[k]} />

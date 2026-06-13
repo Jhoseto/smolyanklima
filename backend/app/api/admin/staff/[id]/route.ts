@@ -11,7 +11,9 @@ const UpdateSchema = z.object({
   phone: z.string().min(6).optional(),
   role: z.enum(["master_admin", "office_staff", "service_staff"]).optional(),
   is_active: z.boolean().optional(),
-  password: z.string().min(12).optional(),
+  password: z.string().min(6, "Паролата трябва да е поне 6 символа")
+    .refine(pw => (pw.match(/\d/g) ?? []).length >= 2, "Паролата трябва да съдържа поне 2 цифри")
+    .optional(),
   avatar_url: z.union([z.string().url("Невалиден URL").max(2048), z.null()]).optional(),
 });
 

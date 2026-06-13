@@ -397,6 +397,7 @@ export function ProtocolPDF({ data }: { data: ProtocolData }) {
   for (const m of data.materials) qtyMap[m.id] = m.qty;
 
   const acc = data.accessories as Partial<AccessoriesEntry>;
+  const cableChannelsM = Number(data.cable_channels_m ?? acc.cable_channels_m ?? 0);
   const dateStr = fmtDate(data.date);
 
   const cableSecondRowKeys = ["outer_corner", "inner_corner", "angle_out", "connector"] as const;
@@ -520,7 +521,7 @@ export function ProtocolPDF({ data }: { data: ProtocolData }) {
               <Text style={s.cableLblCol}>{ACCESSORIES_LABELS.cable_channels_m}</Text>
               <View style={s.cableBoxWrap}>
                 <Text style={s.cableBoxText}>
-                  {acc.cable_channels_m ? String(acc.cable_channels_m) : ""}
+                  {cableChannelsM > 0 ? String(cableChannelsM) : ""}
                 </Text>
               </View>
             </View>

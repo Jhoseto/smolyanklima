@@ -50,6 +50,14 @@ const SORT_OPTIONS: Array<{ value: SortOption; label: string }> = [
   { value: "client-desc", label: "Клиент Я→А" },
 ];
 
+/** Нормализира стари (draft/sent) или невалидни статуси към текущия enum. */
+function normalizeProtocolStatus(s: string | undefined): ProtocolStatus {
+  if (s === "draft") return "prepared";
+  if (s === "sent")  return "signed";
+  if (s === "prepared" || s === "in_progress" || s === "signed") return s;
+  return "prepared";
+}
+
 /**
  * Превръща cache документ в Protocol row, подходящ за списъка.
  * Cache форматът съдържа raw payload, който изпращахме към API → има същите полета.
@@ -66,7 +74,7 @@ function cachedToProtocol(doc: CachedDocument<Record<string, unknown>>): Protoco
     ac_model:        (d.ac_model as string) ?? null,
     address:         (d.address as string) ?? null,
     paid_amount:     typeof d.paid_amount === "number" ? d.paid_amount : null,
-    status:          ((d.status as ProtocolStatus) ?? "prepared"),
+    status:          normalizeProtocolStatus(d.status as string | undefined),
     created_at:      new Date(doc.updatedAt).toISOString(),
     pendingSync:     isOffline,
   };
@@ -124,6 +132,7 @@ export function DocumentsClient({ role }: Props) {
       const rows: Protocol[] = [];
       for (const c of cached) {
         if (!isLocalId(c.key) && !c.dirty) continue;
+        if (serverIds?.has(c.key)) continue;
         if (isLocalId(c.key)) {
           const sid = await resolveServerId(c.key);
           if (sid && serverIds?.has(sid)) continue;
@@ -227,10 +236,13 @@ export function DocumentsClient({ role }: Props) {
   const handleNew = () => { setPreview(null); setEditId(null); setOpenForm(true); };
   const openPreview = (p: Protocol) => { setPreview(p); };
   const openEdit = (id: string) => { setPreview(null); setEditId(id); setOpenForm(true); };
+  const openedFromUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     const editFromUrl = searchParams.get("edit")?.trim();
     if (!editFromUrl || loading) return;
+    if (openedFromUrlRef.current === editFromUrl) return;
+    openedFromUrlRef.current = editFromUrl;
     openEdit(editFromUrl);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, loading]);
@@ -247,7 +259,8 @@ export function DocumentsClient({ role }: Props) {
 
   const handleSaved = (id: string) => {
     setEditId(id);
-    load(1, search, statusFilter, sort);
+    // Не презареждаме списъка докато формулярът е отворен — избягваме remount/side effects.
+    if (!openForm) void load(1, search, statusFilter, sort);
   };
 
   const downloadPdf = (e: React.MouseEvent, id: string) => {
@@ -303,6 +316,7 @@ export function DocumentsClient({ role }: Props) {
       // Оптимистично махам реда от списъка и презареждам броячите.
       setProtocols((prev) => prev.filter((x) => x.id !== p.id));
       setTotal((t) => Math.max(0, t - 1));
+      try { await purgeLocalDocument(p.id, "acceptance"); } catch { /* best-effort */ }
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Грешка при изтриване");
     } finally {
@@ -415,6 +429,7 @@ export function DocumentsClient({ role }: Props) {
     return (
       <ProtocolFormWizard
         protocolId={editId ?? undefined}
+        role={role}
         onClose={() => { setOpenForm(false); load(1, search, statusFilter, sort); }}
         onSaved={handleSaved}
       />

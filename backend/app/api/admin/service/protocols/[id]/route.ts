@@ -84,28 +84,45 @@ export async function PUT(
   }
 
   const update: Record<string, unknown> = { ...parsed.data };
+
+  // Единствен SELECT — взима всички полета нужни за валидация, serial и workflow.
+  const { data: current } = await session.db
+    .from("service_protocols")
+    .select("status, indoor_unit_serial, outdoor_unit_serial, signature_team, signature_client, mount_types, materials, cable_channels_m, accessories")
+    .eq("id", id)
+    .maybeSingle();
+  if (!current) {
+    return withCors(req, NextResponse.json({ error: "Протоколът не е намерен" }, { status: 404 }));
+  }
+
+  // Забрана за връщане назад от "подписан" без master_admin
+  if (
+    parsed.data.status !== undefined &&
+    current.status === "signed" &&
+    parsed.data.status !== "signed" &&
+    session.role !== "master_admin"
+  ) {
+    return withCors(req, NextResponse.json({ error: "Подписан протокол не може да се върне назад" }, { status: 400 }));
+  }
+
   if (
     parsed.data.indoor_unit_serial !== undefined ||
     parsed.data.outdoor_unit_serial !== undefined
   ) {
-    update.serial_number = combineUnitSerials(
-      parsed.data.indoor_unit_serial,
-      parsed.data.outdoor_unit_serial,
-    );
+    const indoor = parsed.data.indoor_unit_serial !== undefined
+      ? parsed.data.indoor_unit_serial
+      : (current.indoor_unit_serial as string | null);
+    const outdoor = parsed.data.outdoor_unit_serial !== undefined
+      ? parsed.data.outdoor_unit_serial
+      : (current.outdoor_unit_serial as string | null);
+    update.serial_number = combineUnitSerials(indoor, outdoor);
+    if (parsed.data.indoor_unit_serial !== undefined) update.indoor_unit_serial = indoor;
+    if (parsed.data.outdoor_unit_serial !== undefined) update.outdoor_unit_serial = outdoor;
   }
 
   // Автоматичен workflow на статуси (само ако клиентът не подава явно status):
-  //   prepared    → in_progress : при поява на техническо съдържание (начин на монтаж, материали и т.н.)
-  //   in_progress → signed      : при наличие на двата подписа (екип + клиент)
-  //   signed                    : final — не се връща назад автоматично
   if (parsed.data.status === undefined) {
-    const { data: current } = await session.db
-      .from("service_protocols")
-      .select("status, mount_types, materials, cable_channels_m, accessories, signature_team, signature_client")
-      .eq("id", id)
-      .maybeSingle();
-
-    if (current && current.status !== "signed") {
+    if (current.status !== "signed") {
       const merged = {
         mount_types:      parsed.data.mount_types      ?? (current.mount_types as string[] | null),
         materials:        parsed.data.materials        ?? (current.materials as Array<{ qty?: number }> | null),
@@ -136,6 +153,31 @@ export async function PUT(
       if (newStatus !== current.status) {
         update.status = newStatus;
       }
+    } else {
+      // Статус е вече "подписан" — проверяваме, че двата подписа остават
+      const mergedTeam = parsed.data.signature_team !== undefined
+        ? parsed.data.signature_team
+        : (current.signature_team as string | null);
+      const mergedClient = parsed.data.signature_client !== undefined
+        ? parsed.data.signature_client
+        : (current.signature_client as string | null);
+      const teamOk = Boolean(mergedTeam?.trim());
+      const clientOk = Boolean(mergedClient?.trim());
+      if (!teamOk || !clientOk) {
+        return withCors(req, NextResponse.json(
+          { error: "Подписан протокол не може да остане без двата подписа" },
+          { status: 400 },
+        ));
+      }
+    }
+  } else if (parsed.data.status === "signed") {
+    const team = parsed.data.signature_team ?? (current.signature_team as string | null);
+    const client = parsed.data.signature_client ?? (current.signature_client as string | null);
+    if (!team?.trim() || !client?.trim()) {
+      return withCors(req, NextResponse.json(
+        { error: "Статус подписан изисква и двата подписа" },
+        { status: 400 },
+      ));
     }
   }
 

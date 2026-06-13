@@ -242,6 +242,8 @@ async function doFlush(): Promise<SyncResult> {
       }
       if (m.idempotencyKey) {
         init.headers = { ...init.headers, "Idempotency-Key": m.idempotencyKey };
+      } else if (m.method === "POST" && m.localId) {
+        init.headers = { ...init.headers, "Idempotency-Key": m.localId };
       }
 
       let res = await fetch(endpoint, init);
@@ -294,10 +296,12 @@ async function doFlush(): Promise<SyncResult> {
       if (m.method === "POST" && m.localId) {
         try {
           const json = await res.clone().json();
-          const serverId: string | undefined = json?.data?.id ?? json?.id;
+          const serverData: Record<string, unknown> | undefined = json?.data ?? json;
+          const serverId: string | undefined =
+            (serverData as { id?: string } | undefined)?.id;
           if (serverId) {
             await setIdMap(m.localId, serverId, m.kind);
-            await migrateDocumentKey(m.localId, serverId);
+            await migrateDocumentKey(m.localId, serverId, serverData);
           }
         } catch {
           /* без JSON отговор е ОК */
@@ -324,19 +328,29 @@ async function doFlush(): Promise<SyncResult> {
 
 /**
  * Премества cached документ от localId към serverId, маркира го като clean.
- * Запазва съществуващото data (попълнено от потребителя на терен) —
- * сървърният отговор обикновено връща само id/status, не цялата форма.
+ * Overlay-ва само id/status от сървъра — останалото (mount_types, materials,
+ * signatures) идва от потребителя и не трябва да се презапише от частичния
+ * POST отговор. Същата стратегия като в offlineFetch.ts.
  */
-async function migrateDocumentKey(localId: string, serverId: string): Promise<void> {
+async function migrateDocumentKey(
+  localId: string,
+  serverId: string,
+  serverData?: Record<string, unknown>,
+): Promise<void> {
   const old = await idbGet<CachedDocument>("documents", localId);
   if (!old) return;
+  const safeOverlay: Record<string, unknown> = {};
+  if (serverData) {
+    if (serverData.id)     safeOverlay.id = serverData.id;
+    if (serverData.status) safeOverlay.status = serverData.status;
+  }
   const next: CachedDocument = {
     ...old,
     key: serverId,
     serverId,
+    data: { ...(old.data as object), ...safeOverlay },
     dirty: false,
     updatedAt: Date.now(),
-    // data не се пипа — попълненото от потребителя е истината.
   };
   await idbPut("documents", next);
   if (localId !== serverId) {
@@ -350,10 +364,12 @@ async function attemptRecoveryPost(
   kind: DocKind,
   body?: Record<string, unknown>,
 ): Promise<string | undefined> {
-  let payload = body;
-  if (!payload || typeof payload !== "object") {
-    const doc = await idbGet<CachedDocument<Record<string, unknown>>>("documents", localId);
-    payload = doc?.data;
+  const doc = await idbGet<CachedDocument<Record<string, unknown>>>("documents", localId);
+  let payload = doc?.data;
+  if ((!payload || typeof payload !== "object") && body && typeof body === "object") {
+    payload = body;
+  } else if (payload && body && typeof body === "object") {
+    payload = { ...payload, ...body };
   }
   if (!payload || typeof payload !== "object") return undefined;
   payload = sanitizeAcceptanceProtocolBody(payload);
@@ -361,7 +377,10 @@ async function attemptRecoveryPost(
   const init: RequestInit = {
     method: "POST",
     credentials: "include",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": localId,
+    },
     body: JSON.stringify(payload),
   };
   const res = await fetch("/api/admin/service/protocols", init);
@@ -369,10 +388,11 @@ async function attemptRecoveryPost(
 
   try {
     const json = await res.json();
-    const serverId: string | undefined = json?.data?.id ?? json?.id;
+    const serverData: Record<string, unknown> | undefined = json?.data ?? json;
+    const serverId: string | undefined = (serverData as { id?: string } | undefined)?.id;
     if (!serverId) return undefined;
     await setIdMap(localId, serverId, kind);
-    await migrateDocumentKey(localId, serverId);
+    await migrateDocumentKey(localId, serverId, serverData);
     return serverId;
   } catch {
     return undefined;

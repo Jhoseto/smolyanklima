@@ -75,15 +75,18 @@ function isMissingColumnError(error: { code?: string; message?: string } | null)
   return error.code === "42703" || error.code === "PGRST204" || msg.includes("does not exist");
 }
 
-function isStatusCheckError(error: { code?: string; message?: string } | null): boolean {
-  if (!error) return false;
-  const msg = String(error.message ?? "").toLowerCase();
-  return msg.includes("service_protocols_status_check") || (msg.includes("status") && msg.includes("check constraint"));
-}
-
 async function nextProtocolNumber(db: Db): Promise<string> {
   const year = new Date().getFullYear();
-  const { count, error } = await db.from("service_protocols").select("*", { count: "exact", head: true });
+  // Атомарно генериране чрез DB sequence — предотвратява дублирани номера при паралелни INSERT-ове.
+  const { data: rpcNum, error: rpcErr } = await db.rpc("next_protocol_number");
+  if (!rpcErr && typeof rpcNum === "string" && rpcNum.trim()) {
+    return rpcNum.trim();
+  }
+  // Fallback: брои само протоколи от текущата година (по-безопасно от глобален count).
+  const { count, error } = await db
+    .from("service_protocols")
+    .select("*", { count: "exact", head: true })
+    .gte("created_at", `${year}-01-01T00:00:00Z`);
   if (error) throw new Error(error.message);
   const seq = (count ?? 0) + 1;
   return `SK-${year}${String(seq).padStart(3, "0")}`;
@@ -140,7 +143,7 @@ async function loadInstallContext(db: Db, installWorkItemId: string) {
 function buildPageOneFields(ctx: Awaited<ReturnType<typeof loadInstallContext>>) {
   const { install, product, contact, sale } = ctx;
   const clientName = install.customer_name?.trim() || contact?.full_name?.trim() || null;
-  const clientPhone = protocolPhone(install.customer_phone ?? contact?.phone);
+  const clientPhone = protocolPhone(install.customer_phone) ?? protocolPhone(contact?.phone);
   const clientEmail = contact?.email?.trim() || null;
   const address = install.customer_address?.trim() || contact?.address?.trim() || null;
   const indoor = product?.indoor_unit_serial?.trim() || null;
@@ -175,13 +178,14 @@ function buildProtocolInsertPayload(
   ctx: Awaited<ReturnType<typeof loadInstallContext>>,
   protocolNumber: string,
   createdBy: string | null,
-  status: "prepared" | "draft" = "prepared",
 ) {
   const pageOne = buildPageOneFields(ctx);
   return {
     protocol_number: protocolNumber,
     created_by: createdBy,
-    status,
+    // Новосъздаденият протокол е "prepared" — офисът е попълнил клиентските данни,
+    // чака сервизният екип да го завърши на място (виж миграция 0036).
+    status: "prepared" as const,
     ...pageOne,
   };
 }
@@ -193,7 +197,7 @@ async function insertProtocolRow(
   let attemptPayload: Record<string, unknown> = { ...payload };
   let lastError: { code?: string; message?: string } | null = null;
 
-  for (let i = 0; i < 4; i += 1) {
+  for (let i = 0; i < 2; i += 1) {
     const { data, error } = await db
       .from("service_protocols")
       .insert(attemptPayload)
@@ -203,11 +207,8 @@ async function insertProtocolRow(
     if (!error && data) return data as LinkedAcceptanceProtocol;
     lastError = error;
 
-    if (isStatusCheckError(error) && attemptPayload.status === "prepared") {
-      attemptPayload = { ...attemptPayload, status: "draft" };
-      continue;
-    }
-
+    // Fallback: ако БД схемата е по-стара и няма indoor/outdoor_unit_serial колоните,
+    // пробваме без тях (поддържа се само за legacy инсталации преди миграция 0049).
     if (isMissingColumnError(error)) {
       const next = { ...attemptPayload };
       delete next.indoor_unit_serial;
@@ -246,7 +247,7 @@ export async function findAcceptanceProtocolByWorkItem(
   return data as LinkedAcceptanceProtocol;
 }
 
-/** Idempotent: създава чернова протокол за монтаж от продажба, ако липсва. */
+/** Idempotent: създава протокол за монтаж от продажба, ако липсва. */
 export async function ensureAcceptanceProtocolForInstallation(
   db: Db,
   installWorkItemId: string,
@@ -312,7 +313,7 @@ export async function deleteAcceptanceProtocolForInstallation(
   return true;
 }
 
-/** Синхронизира дата и клиентски данни от монтажа към протокола (само prepared/in_progress/draft). */
+/** Синхронизира дата и клиентски данни от монтажа към протокола (само prepared/in_progress). */
 export async function syncAcceptanceProtocolFromInstallation(
   db: Db,
   installWorkItemId: string,

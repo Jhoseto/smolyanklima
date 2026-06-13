@@ -25,6 +25,8 @@ export interface OfflineSendOpts<TBody = unknown, TData = unknown> {
   body?: TBody;
   /** Локален UUID — задължителен при POST, за да трекваме новосъздадения запис. */
   localId?: string;
+  /** Явен idempotency key за опашката (при offline POST se използва localId). */
+  idempotencyKey?: string;
   /** При success → как да изчислиш ключа за cache от response (default: data.id). */
   pickKey?: (resp: TData) => string | undefined;
   /** Оптимистична подбана за UI при offline (мерж-ва с тялото). */
@@ -110,10 +112,14 @@ export async function offlineSend<TBody = unknown, TData = unknown>(
         endpoint = endpoint.replace(":localId", sid);
       }
 
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (opts.method === "POST" && (opts.localId || opts.idempotencyKey)) {
+        headers["Idempotency-Key"] = opts.localId ?? opts.idempotencyKey!;
+      }
       const init: RequestInit = {
         method: opts.method,
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers,
       };
       if (opts.body !== undefined && opts.method !== "DELETE") {
         init.body = JSON.stringify(opts.body);
@@ -173,6 +179,7 @@ export async function offlineSend<TBody = unknown, TData = unknown>(
   await enqueueMutation({
     kind: opts.kind, method: opts.method, endpoint: opts.endpoint,
     body: opts.body, localId: opts.localId,
+    idempotencyKey: opts.method === "POST" && opts.localId ? opts.localId : opts.idempotencyKey,
     initialError: "Няма мрежова връзка — записът е в опашката.",
   });
   return { ok: true, queued: true, key: cacheKey };
@@ -218,10 +225,10 @@ async function writeDocument<TData>(
 /**
  * Премества cache документ от localId към serverId след първи успешен POST.
  *
- * Merge стратегия: `latestData` от сървъра обикновено връща САМО id/status
- * (бекендът не репликира цялата форма). Не искаме да заличаваме попълнените
- * полета (mount_types, materials, signatures…). Затова old.data винаги е основата,
- * а latestData насложва само върнатите полета.
+ * Merge стратегия: old.data (попълненото от потребителя) е основата.
+ * От сървърния отговор overlay-ваме само id и status — останалите полета
+ * се пазят от формата, за да не се загубят mount_types, materials, signatures и пр.
+ * Същата логика се прилага и в sync.ts за последователност.
  */
 async function migrateDocumentKey<TData>(
   localId: string,
@@ -231,13 +238,19 @@ async function migrateDocumentKey<TData>(
 ): Promise<void> {
   const old = await idbGet<CachedDocument<TData>>("documents", localId);
   const baseData = (old?.data as object | undefined) ?? {};
-  const overlay = (latestData as object | undefined) ?? {};
+  // Overlay само id/status от сървъра — не целия отговор
+  const safeOverlay: Partial<Record<string, unknown>> = {};
+  if (latestData && typeof latestData === "object") {
+    const d = latestData as Record<string, unknown>;
+    if (d.id)     safeOverlay.id = d.id;
+    if (d.status) safeOverlay.status = d.status;
+  }
   const merged: CachedDocument<TData> = {
     key: serverId,
     kind,
     localId,
     serverId,
-    data: { ...baseData, ...overlay } as TData,
+    data: { ...baseData, ...safeOverlay } as TData,
     updatedAt: Date.now(),
     dirty: false,
   };

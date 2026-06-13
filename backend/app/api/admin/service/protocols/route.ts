@@ -123,6 +123,20 @@ export async function POST(req: NextRequest) {
   try { requireRole(session, "master_admin", "office_staff", "service_staff"); }
   catch { return withCors(req, NextResponse.json({ error: "Забранен достъп" }, { status: 403 })); }
 
+  // Idempotency: ако клиентът изпраща повторен POST (offline retry),
+  // проверяваме дали вече съществува запис с този sync_key и го връщаме.
+  const syncKey = req.headers.get("Idempotency-Key")?.trim() || null;
+  if (syncKey) {
+    const { data: existing } = await session.db
+      .from("service_protocols")
+      .select("*")
+      .eq("sync_key", syncKey)
+      .maybeSingle();
+    if (existing) {
+      return withCors(req, NextResponse.json({ data: existing }, { status: 200 }));
+    }
+  }
+
   const json = await req.json().catch(() => null);
   if (!json) return withCors(req, NextResponse.json({ error: "Невалидно тяло" }, { status: 400 }));
 
@@ -132,15 +146,21 @@ export async function POST(req: NextRequest) {
     return withCors(req, NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Невалидни данни", details: parsed.error.issues }, { status: 400 }));
   }
 
-  // Генериране на номер на протокол (SK-YYYYNNN)
-  const year = new Date().getFullYear();
-  const { count, error: cntErr } = await session.db
-    .from("service_protocols")
-    .select("*", { count: "exact", head: true });
-  if (cntErr) return withCors(req, NextResponse.json({ error: cntErr.message }, { status: 500 }));
-
-  const seq = (count ?? 0) + 1;
-  const protocolNumber = `SK-${year}${String(seq).padStart(3, "0")}`;
+  // Генериране на номер на протокол (SK-YYYYNNN) — атомарно през DB sequence
+  let protocolNumber: string;
+  const { data: rpcNumber, error: rpcErr } = await session.db.rpc("next_protocol_number");
+  if (!rpcErr && typeof rpcNumber === "string" && rpcNumber.trim()) {
+    protocolNumber = rpcNumber.trim();
+  } else {
+    const year = new Date().getFullYear();
+    const { count, error: cntErr } = await session.db
+      .from("service_protocols")
+      .select("*", { count: "exact", head: true })
+      .gte("created_at", `${year}-01-01T00:00:00Z`);
+    if (cntErr) return withCors(req, NextResponse.json({ error: cntErr.message }, { status: 500 }));
+    const seq = (count ?? 0) + 1;
+    protocolNumber = `SK-${year}${String(seq).padStart(3, "0")}`;
+  }
 
   const d = parsed.data;
 
@@ -186,7 +206,15 @@ export async function POST(req: NextRequest) {
     signature_client: d.signature_client ?? null,
     status:           computedStatus,
     created_by:       session.userId,
+    sync_key:         syncKey,
   };
+
+  // Ако клиентът явно подава status: "signed", изискваме и двата подписа (като PUT).
+  if (inputHadStatus && computedStatus === "signed") {
+    if (!d.signature_team || !d.signature_client) {
+      return withCors(req, NextResponse.json({ error: "За подписан протокол са необходими и двата подписа." }, { status: 400 }));
+    }
+  }
 
   const { data, error } = await session.db
     .from("service_protocols")
@@ -195,6 +223,17 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) {
+    // Уникален sync_key → race между два паралелни POST-а — върни съществуващия запис.
+    if (error.code === "23505" && syncKey) {
+      const { data: existing } = await session.db
+        .from("service_protocols")
+        .select("*")
+        .eq("sync_key", syncKey)
+        .maybeSingle();
+      if (existing) {
+        return withCors(req, NextResponse.json({ data: existing }, { status: 200 }));
+      }
+    }
     console.error("[POST /api/admin/service/protocols] insert error:", error);
     return withCors(req, NextResponse.json({ error: error.message, code: error.code }, { status: 500 }));
   }

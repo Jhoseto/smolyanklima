@@ -11,7 +11,8 @@ import {
 } from "@/lib/protocol-materials";
 import type { AccessoriesEntry, MaterialEntry } from "@/lib/protocol-materials";
 import { SignatureCanvas } from "./SignatureCanvas";
-import { ProductAutocomplete } from "./ProductAutocomplete";
+import { ProductAutocomplete, type ProductSuggestion } from "./ProductAutocomplete";
+import { ContactAutocomplete, type ContactSuggestion } from "./ContactAutocomplete";
 import { offlineSend, offlineGet, newLocalId, isLocalId } from "@/lib/offline/offlineFetch";
 import { resolveServerId } from "@/lib/offline/queue";
 import { useOnlineStatus } from "@/lib/hooks/useOnlineStatus";
@@ -79,6 +80,8 @@ const defaultForm = (): FormData => ({
 interface Props {
   protocolId?: string;
   initialData?: Partial<FormData>;
+  /** Ролята на текущия потребител — определя дали подписан протокол може да се редактира. */
+  role: import("@/lib/admin/db").AdminRole;
   onClose: () => void;
   onSaved: (id: string) => void;
 }
@@ -124,7 +127,7 @@ function inferResumeStep(data: FormData): number {
 
 // ─── Главен компонент ────────────────────────────────────────────────────────
 
-export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }: Props) {
+export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onSaved }: Props) {
   const [step, setStep]     = useState(0);
   const [form, setForm]     = useState<FormData>({ ...defaultForm(), ...initialData });
   const [saving, setSaving] = useState(false);
@@ -146,6 +149,11 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
   const [error, setError]    = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const persistFormRef = useRef<(data: FormData, id: string | null, showSaving?: boolean) => Promise<string | null>>(() => Promise.resolve(null));
+  const onlineRef = useRef(online);
+  onlineRef.current = online;
+  /** Само при отваряне на съществуващ протокол — не при auto-save CREATE в същата сесия. */
+  const resumeStepOnLoadRef = useRef(Boolean(protocolId));
 
   // ── Зареждане на initial data при отваряне на съществуващ протокол ─────────
   useEffect(() => {
@@ -153,6 +161,7 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
     let cancelled = false;
     (async () => {
       // Първо опитай мрежата (ако сме онлайн); fallback към cache.
+      let serverFailed = false;
       try {
         if (typeof navigator !== "undefined" && navigator.onLine && !isLocalId(protocolId)) {
           const res = await fetch(`/api/admin/service/protocols/${protocolId}`, {
@@ -164,11 +173,18 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
             applyServerData(data);
             return;
           }
+          serverFailed = true;
         }
-      } catch { /* mrejа падна — пробваме cache */ }
+      } catch { serverFailed = true; /* мрежа падна — пробваме cache */ }
       // Cache fallback (offline или мрежова грешка)
       const cached = await offlineGet<Record<string, unknown>>(protocolId);
-      if (cancelled || !cached) return;
+      if (cancelled) return;
+      if (!cached) {
+        if (serverFailed) {
+          setError("Протоколът не може да бъде зареден. Може би е изтрит или нямате достъп.");
+        }
+        return;
+      }
       applyServerData(cached.data as Record<string, unknown>);
     })();
     return () => { cancelled = true; };
@@ -205,8 +221,11 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
     };
     setForm(nextForm);
     setEmailInput(nextForm.client_email);
-    if (protocolId) setStep(inferResumeStep(nextForm));
-  }, [protocolId]);
+    if (resumeStepOnLoadRef.current) {
+      setStep(inferResumeStep(nextForm));
+      resumeStepOnLoadRef.current = false;
+    }
+  }, []);
 
   // In-flight lock: предотвратява двойно повикване на persistForm,
   // което би създало дубликати при паралелен auto-save + finalize (виж P7 в кода ревюто).
@@ -222,16 +241,15 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
     }
   }, []);
 
-  // Автоматично запазване при смяна на данните
-  // Не стартира auto-save ако формулярът е все още напълно празен (нищо не е въведено)
-  const autoSave = useCallback(async (data: FormData, id: string | null) => {
-    if (!formHasDraftContent(data) && !id) return; // Не запазвай напълно празен протокол
+  // Автоматично запазване — без да уведомяваме родителя (onSaved/load/inferResumeStep).
+  const autoSave = useCallback((data: FormData, id: string | null) => {
+    if (!formHasDraftContent(data) && !id) return;
 
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
-    autoSaveTimer.current = setTimeout(async () => {
-      await persistForm(data, id, false);
+    autoSaveTimer.current = setTimeout(() => {
+      void persistFormRef.current(data, id, false);
     }, 2000);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   const update = useCallback(<K extends keyof FormData>(key: K, val: FormData[K]) => {
     setForm(prev => {
@@ -296,9 +314,13 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
         signature_client: data.signature_client,
       };
 
-      const afterQueuedSave = async (result: { queued: boolean }, effectiveId: string) => {
-        if (!result.queued) return;
-        if (online) {
+      const afterQueuedSave = async (
+        result: { queued: boolean },
+        effectiveId: string,
+        notifySync: boolean,
+      ) => {
+        if (!result.queued || !notifySync) return;
+        if (onlineRef.current) {
           await syncNow();
           await refreshQueueState();
           if (isLocalId(effectiveId)) {
@@ -328,11 +350,12 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
           localId: isLocal ? id : undefined,
         });
         if (!result.ok) throw new Error(result.error ?? "Грешка при запазване");
-        setPendingSync(result.queued);
+        if (!result.queued) setPendingSync(false);
+        else if (showSaving || !online) setPendingSync(true);
         if (result.data?.status && result.data.status !== data.status) {
           setForm(prev => ({ ...prev, status: result.data!.status! }));
         }
-        await afterQueuedSave(result, id);
+        await afterQueuedSave(result, id, showSaving);
       } else {
         // CREATE: винаги генерираме localId за tracking в IndexedDB.
         const localId = localIdRef.current ?? newLocalId();
@@ -351,12 +374,14 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
         // Offline: оперираме с localId докато не дойде мрежа.
         const effectiveId = result.data?.id ?? localId;
         setSavedId(effectiveId);
-        setPendingSync(result.queued);
+        if (!result.queued) setPendingSync(false);
+        else if (showSaving || !online) setPendingSync(true);
         if (result.data?.status && result.data.status !== data.status) {
           setForm(prev => ({ ...prev, status: result.data!.status! }));
         }
-        onSaved(effectiveId);
-        await afterQueuedSave(result, effectiveId);
+        // onSaved само при явно запазване — auto-save не трябва да презарежда формата/стъпката.
+        if (showSaving) onSaved(effectiveId);
+        await afterQueuedSave(result, effectiveId, showSaving);
         return effectiveId;
       }
     } catch (e: unknown) {
@@ -368,9 +393,12 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
     return id;
   };
 
+  persistFormRef.current = persistForm;
+
   // Финализиране + подписи: backend-ът ще зададе status="signed" автоматично,
   // ако и двата подписа (екип + клиент) са налични в текущия запис.
   const finalize = async () => {
+    clearAutoSaveTimer();
     const id = await persistForm(form, savedId, true);
     if (id) setSavedId(id);
   };
@@ -392,7 +420,9 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
   }, []);
 
   const saveDraftAndClose = async () => {
-    if (form.status === "signed") {
+    // Подписан протокол: service_staff само затваря (read-only).
+    // master_admin и office_staff могат да запазват корекции.
+    if (form.status === "signed" && !canEditSigned) {
       onClose();
       return;
     }
@@ -412,6 +442,7 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
     const id = await persistForm(form, savedId, true);
     if (id == null) return;
     if (id) setSavedId(id);
+    onSaved(id);
     onClose();
   };
 
@@ -421,7 +452,7 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
 
   // Изпращане на имейл
   const doSendEmail = async () => {
-    if (!savedId || !emailInput) return;
+    if (!emailInput) return;
     const emailErr = validateProtocolEmail(emailInput);
     if (emailErr) {
       setError(emailErr);
@@ -430,7 +461,9 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
     setSending(true);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/service/protocols/${savedId}/email`, {
+      const id = await resolvePdfEmailId();
+      if (!id) throw new Error("Протоколът още не е качен в системата.");
+      const res = await fetch(`/api/admin/service/protocols/${id}/email`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -446,13 +479,37 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
   };
 
   // PDF сваляне
-  const downloadPdf = () => {
-    if (!savedId) return;
-    window.open(`/api/admin/service/protocols/${savedId}/pdf`, "_blank");
+  const downloadPdf = async () => {
+    const id = await resolvePdfEmailId();
+    if (!id) {
+      setError("Протоколът още не е качен в системата. Опитайте отново след малко.");
+      return;
+    }
+    window.open(`/api/admin/service/protocols/${id}/pdf`, "_blank");
   };
 
   const isLastStep = step === STEPS.length - 1;
-  const isSigned   = form.status === "signed";
+  const bothSigned = Boolean(form.signature_team?.trim()) && Boolean(form.signature_client?.trim());
+  // master_admin и office_staff могат да коригират дори подписан протокол.
+  // service_staff виждат подписания протокол като read-only.
+  const canEditSigned = role === "master_admin" || role === "office_staff";
+  const isSigned = (form.status === "signed" || bothSigned) && !canEditSigned;
+
+  const resolvePdfEmailId = async (): Promise<string | null> => {
+    if (!savedId) return null;
+    if (!isLocalId(savedId)) return savedId;
+    if (onlineRef.current) {
+      await syncNow();
+      await refreshQueueState();
+    }
+    const sid = await resolveServerId(savedId);
+    if (sid) {
+      setSavedId(sid);
+      setPendingSync(false);
+      return sid;
+    }
+    return null;
+  };
 
   const validateStep0 = useCallback((data: FormData): Record<string, string> => {
     const errs: Record<string, string> = {};
@@ -493,15 +550,15 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
             <p className="text-sm font-bold text-slate-800">{STEPS[step]}</p>
           </div>
           {!online && (
-            <div title="Офлайн — промените се пазят локално и ще се качат при възстановяване на мрежа" className="flex items-center gap-1 px-2 py-1 rounded-full bg-slate-900 text-white text-[10px] font-bold">
+            <div title="Няма мрежа — промените се пазят локално" className="flex items-center gap-1 px-2 py-1 rounded-full bg-slate-900 text-white text-[10px] font-bold">
               <CloudOff className="w-3 h-3" />
-              Офлайн
+              Без мрежа
             </div>
           )}
           {online && pendingSync && (
-            <div title="Чака да се качи към сървъра" className="flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500 text-white text-[10px] font-bold">
-              {isSyncing ? <Loader2 className="w-3 h-3 animate-spin" /> : <CloudOff className="w-3 h-3" />}
-              {isSyncing ? "Качване…" : "Чака качване"}
+            <div title="Записът се качва към сървъра" className="flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500 text-white text-[10px] font-bold">
+              {isSyncing ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+              {isSyncing ? "Качване…" : "Запазен локално"}
             </div>
           )}
           {saving && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
@@ -529,18 +586,52 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
                   className="w-full text-base border-b-2 border-slate-300 focus:border-blue-500 outline-none py-2 bg-transparent"
                 />
               </Field>
-              <Field label="Клиент">
-                <input
-                  type="text" value={form.client_name} placeholder="Иван Иванов"
-                  onChange={e => update("client_name", e.target.value)}
-                  className="w-full text-base border-b-2 border-slate-300 focus:border-blue-500 outline-none py-2 bg-transparent"
-                />
-              </Field>
+              <ContactAutocomplete
+                label="Клиент"
+                value={form.client_name}
+                placeholder="Иван Иванов"
+                disabled={isSigned}
+                onChange={(name, contact?: ContactSuggestion) => {
+                  setForm(prev => {
+                    const next = {
+                      ...prev,
+                      client_name: name,
+                      ...(contact ? {
+                        client_phone: contact.phone
+                          ? digitsOnlyPhoneInput(contact.phone)
+                          : prev.client_phone,
+                        client_email: contact.email ?? prev.client_email,
+                        address:      contact.address ?? prev.address,
+                      } : {}),
+                    };
+                    autoSave(next, savedId);
+                    return next;
+                  });
+                }}
+              />
               <ProductAutocomplete
                 label="Модел климатик"
                 value={form.ac_model}
                 placeholder="Daikin FTXM25N..."
-                onChange={(name) => update("ac_model", name)}
+                disabled={isSigned}
+                onChange={(name, product?: ProductSuggestion) => {
+                  setForm(prev => {
+                    const next = {
+                      ...prev,
+                      ac_model: name,
+                      ...(product ? {
+                        indoor_unit_serial:  product.indoor_unit_serial?.trim()
+                          ? (prev.indoor_unit_serial || product.indoor_unit_serial.trim())
+                          : prev.indoor_unit_serial,
+                        outdoor_unit_serial: product.outdoor_unit_serial?.trim()
+                          ? (prev.outdoor_unit_serial || product.outdoor_unit_serial.trim())
+                          : prev.outdoor_unit_serial,
+                      } : {}),
+                    };
+                    autoSave(next, savedId);
+                    return next;
+                  });
+                }}
               />
               <Field label="Сериен № — вътрешно тяло" error={fieldErrors.indoor_unit_serial}>
                 <input
@@ -636,10 +727,13 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
                   <button
                     key={type}
                     onClick={() => {
-                      const next = active
-                        ? form.mount_types.filter(t => t !== type)
-                        : [...form.mount_types, type];
-                      update("mount_types", next);
+                      setForm(prev => {
+                        const next = active
+                          ? prev.mount_types.filter(t => t !== type)
+                          : [...prev.mount_types, type];
+                        autoSave({ ...prev, mount_types: next }, savedId);
+                        return { ...prev, mount_types: next };
+                      });
                     }}
                     className={`min-h-[56px] rounded-xl border-2 text-sm font-semibold transition-all
                       ${active
@@ -689,7 +783,13 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
                     <span className="text-sm text-slate-700">{ACCESSORIES_LABELS[k]}</span>
                     <Stepper
                       value={form.accessories[k]}
-                      onChange={v => update("accessories", { ...form.accessories, [k]: v })}
+                      onChange={v => {
+                        setForm(prev => {
+                          const nextAcc = { ...prev.accessories, [k]: v };
+                          autoSave({ ...prev, accessories: nextAcc }, savedId);
+                          return { ...prev, accessories: nextAcc };
+                        });
+                      }}
                     />
                   </div>
                 ))}
@@ -730,7 +830,7 @@ export function ProtocolFormWizard({ protocolId, initialData, onClose, onSaved }
               {isSigned && savedId && (
                 <div className="space-y-3 pt-4 border-t border-slate-200">
                   <button
-                    onClick={downloadPdf}
+                    onClick={() => void downloadPdf()}
                     className="w-full flex items-center justify-center gap-2 bg-slate-800 text-white py-3.5 rounded-xl font-semibold text-sm active:bg-slate-700"
                   >
                     <Download className="w-5 h-5" />

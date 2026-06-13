@@ -32,7 +32,7 @@ export const DOMAIN_SCHEMA_CATALOG = {
     product_types: { purpose: "Типове (стенен, мултисплит...)", keys: ["name"] },
     activity_logs: { purpose: "Audit trail", keys: ["action", "entity_type", "user_id", "created_at"], admin: "/admin/activity" },
     product_ratings: { purpose: "Рейтинги от клиенти", keys: ["product_id", "stars", "created_at"], admin: "/admin/ratings" },
-    service_protocols: { purpose: "Приемо-предавателни протоколи", keys: ["status", "customer_name"] },
+    service_protocols: { purpose: "Приемо-предавателни протоколи", keys: ["status", "client_name"] },
     service_repair_protocols: { purpose: "Сервизни протоколи", keys: ["status"] },
     live_chats: { purpose: "Live чат с посетители", keys: ["status", "visitor_name"], admin: "/admin/chat" },
     email_outbox: { purpose: "Изходящи имейли", keys: ["status", "to_email", "subject"] },

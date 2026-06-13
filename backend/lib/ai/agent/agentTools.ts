@@ -795,7 +795,7 @@ export async function executeAgentTool(
       if (typeFilter === "all" || typeFilter === "acceptance") {
         let q = ctx.db
           .from("service_protocols")
-          .select("id,customer_name,status,date,work_item_id,created_at")
+          .select("id,client_name,status,date,work_item_id,created_at")
           .order("date", { ascending: false })
           .limit(half);
         if (status) q = q.eq("status", status);
@@ -808,7 +808,7 @@ export async function executeAgentTool(
       if (typeFilter === "all" || typeFilter === "repair") {
         let q = ctx.db
           .from("service_repair_protocols")
-          .select("id,customer_name,status,date,work_item_id,created_at")
+          .select("id,client_name,status,date,work_item_id,created_at")
           .order("date", { ascending: false })
           .limit(half);
         if (status) q = q.eq("status", status);

@@ -1,31 +1,36 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Search, X, ChevronDown } from "lucide-react";
+import { UserSearch, X, ChevronDown, Phone, MapPin } from "lucide-react";
 
-export interface ProductSuggestion {
+export interface ContactSuggestion {
   id: string;
-  name: string;
-  slug: string;
-  model_number?: string | null;
-  indoor_unit_serial?: string | null;
-  outdoor_unit_serial?: string | null;
+  full_name: string;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
 }
 
 interface Props {
   value: string;
-  onChange: (name: string, product?: ProductSuggestion) => void;
+  onChange: (name: string, contact?: ContactSuggestion) => void;
   placeholder?: string;
   label?: string;
   disabled?: boolean;
 }
 
-export function ProductAutocomplete({ value, onChange, placeholder = "Въведи или избери...", label, disabled }: Props) {
-  const [query, setQuery]         = useState(value);
-  const [results, setResults]     = useState<ProductSuggestion[]>([]);
-  const [open, setOpen]           = useState(false);
-  const [loading, setLoading]     = useState(false);
-  const [selected, setSelected]   = useState(false);
+export function ContactAutocomplete({
+  value,
+  onChange,
+  placeholder = "Иван Иванов",
+  label,
+  disabled,
+}: Props) {
+  const [query, setQuery]       = useState(value);
+  const [results, setResults]   = useState<ContactSuggestion[]>([]);
+  const [open, setOpen]         = useState(false);
+  const [loading, setLoading]   = useState(false);
+  const [selected, setSelected] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef    = useRef<HTMLInputElement>(null);
   const listRef     = useRef<HTMLDivElement>(null);
@@ -39,11 +44,11 @@ export function ProductAutocomplete({ value, onChange, placeholder = "Въвед
     setLoading(true);
     try {
       const res = await fetch(
-        `/api/admin/products?q=${encodeURIComponent(q)}&perPage=10`,
+        `/api/admin/contacts?q=${encodeURIComponent(q)}&kind=client&perPage=8`,
         { credentials: "include" },
       );
       if (!res.ok) return;
-      const json = await res.json() as { data?: ProductSuggestion[] };
+      const json = await res.json() as { data?: ContactSuggestion[] };
       const list = json.data ?? [];
       setResults(list);
       setOpen(list.length > 0);
@@ -60,11 +65,11 @@ export function ProductAutocomplete({ value, onChange, placeholder = "Въвед
     debounceRef.current = setTimeout(() => search(v), 280);
   };
 
-  const handleSelect = (p: ProductSuggestion) => {
-    setQuery(p.name);
+  const handleSelect = (c: ContactSuggestion) => {
+    setQuery(c.full_name);
     setSelected(true);
     setOpen(false);
-    onChange(p.name, p);
+    onChange(c.full_name, c);
   };
 
   const handleClear = () => {
@@ -95,7 +100,7 @@ export function ProductAutocomplete({ value, onChange, placeholder = "Въвед
         </label>
       )}
       <div className="relative flex items-center">
-        <Search className="absolute left-0 bottom-2.5 w-4 h-4 text-slate-400 pointer-events-none" />
+        <UserSearch className="absolute left-0 bottom-2.5 w-4 h-4 text-slate-400 pointer-events-none" />
         <input
           ref={inputRef}
           type="text"
@@ -123,23 +128,25 @@ export function ProductAutocomplete({ value, onChange, placeholder = "Въвед
       {open && results.length > 0 && (
         <div
           ref={listRef}
-          className="absolute top-full left-0 right-0 z-50 bg-white border border-slate-200 rounded-xl shadow-xl mt-1 max-h-56 overflow-y-auto"
+          className="absolute top-full left-0 right-0 z-50 bg-white border border-slate-200 rounded-xl shadow-xl mt-1 max-h-64 overflow-y-auto"
         >
-          {results.map(p => (
+          {results.map(c => (
             <button
-              key={p.id}
+              key={c.id}
               type="button"
-              onMouseDown={e => { e.preventDefault(); handleSelect(p); }}
+              onMouseDown={e => { e.preventDefault(); handleSelect(c); }}
               className="w-full text-left px-4 py-3 hover:bg-blue-50 active:bg-blue-100 border-b border-slate-50 last:border-b-0"
             >
-              <p className="text-sm font-semibold text-slate-800 truncate">{p.name}</p>
-              <div className="flex flex-wrap gap-2 mt-0.5">
-                {p.model_number && (
-                  <span className="text-xs text-slate-400">{p.model_number}</span>
+              <p className="text-sm font-semibold text-slate-800 truncate">{c.full_name}</p>
+              <div className="flex gap-3 mt-0.5">
+                {c.phone && (
+                  <span className="flex items-center gap-1 text-xs text-slate-400">
+                    <Phone className="w-3 h-3" />{c.phone}
+                  </span>
                 )}
-                {(p.indoor_unit_serial || p.outdoor_unit_serial) && (
-                  <span className="text-xs text-emerald-600 font-medium">
-                    + серийни №
+                {c.address && (
+                  <span className="flex items-center gap-1 text-xs text-slate-400 truncate max-w-[180px]">
+                    <MapPin className="w-3 h-3" />{c.address}
                   </span>
                 )}
               </div>
