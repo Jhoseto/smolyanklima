@@ -1,7 +1,7 @@
 "use client";
 
 import { X, UserPlus, Plus, Trash2 } from "lucide-react";
-import { Button, Input, Select, Textarea } from "../ui";
+import { Button, Input, Select, Textarea, useAdminBackHandler } from "../ui";
 
 type ContactKind = "client" | "supplier";
 
@@ -48,6 +48,7 @@ export function ContactsNewModal({
   onClose,
   onSubmit,
 }: Props) {
+  useAdminBackHandler(open, onClose, "contacts-new-modal");
   if (!open) return null;
 
   const primaryBtn =
@@ -62,7 +63,7 @@ export function ContactsNewModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end md:items-stretch md:justify-end bg-slate-950/50 backdrop-blur-sm"
+      className="fixed inset-0 z-[60] flex items-end md:items-stretch md:justify-end bg-slate-950/50 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
@@ -86,7 +87,7 @@ export function ContactsNewModal({
           <button
             type="button"
             onClick={onClose}
-            className="shrink-0 w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200"
+            className="shrink-0 min-w-[44px] min-h-[44px] rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200"
             aria-label="Затвори"
           >
             <X className="w-5 h-5" />
@@ -156,7 +157,7 @@ export function ContactsNewModal({
                         additionalPhones: f.additionalPhones.filter((_, i) => i !== idx),
                       }))
                     }
-                    className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600"
+                    className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600"
                     title="Премахни"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -174,7 +175,7 @@ export function ContactsNewModal({
                 additionalPhones: [...f.additionalPhones, { phone: "", label: "" }],
               }))
             }
-            className={`w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-dashed text-xs font-semibold transition-colors ${dashedBtn}`}
+            className={`w-full inline-flex items-center justify-center gap-1.5 px-3 min-h-[44px] rounded-lg border border-dashed text-xs font-semibold transition-colors ${dashedBtn}`}
           >
             <Plus className="w-3.5 h-3.5" /> Добави още телефон
           </button>

@@ -344,6 +344,14 @@ export function WorkItemsPlanner({
     const d = new Date(viewYear, viewMonth + delta, 1);
     setViewYear(d.getFullYear());
     setViewMonth(d.getMonth());
+    // sync mobileSelectedKey to new month if current selection is outside it
+    const selDate = new Date(`${mobileSelectedKey}T00:00:00`);
+    if (selDate.getFullYear() !== d.getFullYear() || selDate.getMonth() !== d.getMonth()) {
+      const clampedDay = Math.min(selDate.getDate(), new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate());
+      setMobileSelectedKey(
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(clampedDay).padStart(2, "0")}`
+      );
+    }
   }
 
   function resetCalendarToToday() {
@@ -726,7 +734,15 @@ export function WorkItemsPlanner({
           </div>
           <Select
             value={String(viewMonth)}
-            onChange={(e) => setViewMonth(Number(e.target.value))}
+            onChange={(e) => {
+              const newMonth = Number(e.target.value);
+              setViewMonth(newMonth);
+              const selDate = new Date(`${mobileSelectedKey}T00:00:00`);
+              if (selDate.getMonth() !== newMonth) {
+                const clampedDay = Math.min(selDate.getDate(), new Date(viewYear, newMonth + 1, 0).getDate());
+                setMobileSelectedKey(`${viewYear}-${String(newMonth + 1).padStart(2, "0")}-${String(clampedDay).padStart(2, "0")}`);
+              }
+            }}
             className="!w-auto min-w-[7.75rem] !py-1.5 !px-2 !text-xs font-semibold capitalize"
             aria-label="Месец"
           >
@@ -738,7 +754,15 @@ export function WorkItemsPlanner({
           </Select>
           <Select
             value={String(viewYear)}
-            onChange={(e) => setViewYear(Number(e.target.value))}
+            onChange={(e) => {
+              const newYear = Number(e.target.value);
+              setViewYear(newYear);
+              const selDate = new Date(`${mobileSelectedKey}T00:00:00`);
+              if (selDate.getFullYear() !== newYear) {
+                const clampedDay = Math.min(selDate.getDate(), new Date(newYear, viewMonth + 1, 0).getDate());
+                setMobileSelectedKey(`${newYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(clampedDay).padStart(2, "0")}`);
+              }
+            }}
             className="!w-auto min-w-[5.25rem] !py-1.5 !px-2 !text-xs font-semibold"
             aria-label="Година"
           >
@@ -865,7 +889,7 @@ export function WorkItemsPlanner({
                 <button
                   type="button"
                   onClick={() => shiftMobileWeek(-1)}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-500 active:bg-white"
+                  className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl text-slate-500 active:bg-white"
                   aria-label="Предишна седмица"
                 >
                   <ChevronLeft className="h-5 w-5" />
@@ -911,7 +935,7 @@ export function WorkItemsPlanner({
                 <button
                   type="button"
                   onClick={() => shiftMobileWeek(1)}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-500 active:bg-white"
+                  className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl text-slate-500 active:bg-white"
                   aria-label="Следваща седмица"
                 >
                   <ChevronRight className="h-5 w-5" />
@@ -1034,11 +1058,11 @@ export function WorkItemsPlanner({
       {/* Day modal — bottom sheet on mobile, centered panel on desktop */}
       {selectedDate && (
         <div
-          className="fixed inset-0 z-50 flex items-end md:items-start justify-center md:overflow-y-auto bg-slate-900/40 md:p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[60] flex items-end md:items-start justify-center md:overflow-y-auto bg-slate-900/40 md:p-4 backdrop-blur-sm"
           onClick={() => !savingBusy && closeDayModal()}
         >
           <div
-            className="w-full max-h-[92vh] md:max-h-[calc(100vh-2rem)] md:my-4 md:max-w-6xl flex flex-col overflow-hidden rounded-t-3xl md:rounded-xl border border-slate-200 bg-white shadow-[0_-8px_40px_rgba(15,23,42,0.2)] md:shadow-xl"
+            className="w-full max-h-[92vh] md:max-h-[calc(100vh-2rem)] md:my-4 md:max-w-6xl flex flex-col overflow-hidden rounded-t-3xl md:rounded-xl border border-slate-200 bg-white shadow-[0_-8px_40px_rgba(15,23,42,0.2)] md:shadow-xl pb-safe md:pb-0"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Drag handle - mobile only */}
@@ -1286,7 +1310,7 @@ export function WorkItemsPlanner({
 
       {canDeleteEvents && confirmDeleteId && (
         <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center md:p-4 bg-slate-950/55 backdrop-blur-md" onClick={() => setConfirmDeleteId(null)}>
-          <div className="w-full md:max-w-lg rounded-t-3xl md:rounded-3xl border border-white/70 bg-white p-6 shadow-[0_-8px_40px_rgba(15,23,42,0.25)]" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full md:max-w-lg rounded-t-3xl md:rounded-3xl border border-white/70 bg-white p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] md:pb-6 shadow-[0_-8px_40px_rgba(15,23,42,0.25)]" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-center mb-3 md:hidden"><div className="w-10 h-1 rounded-full bg-slate-200" /></div>
             <div className="text-xl font-black text-slate-950">Изтриване на събитие</div>
             <div className="mt-2 text-sm text-slate-500">Сигурни ли сте, че искате да изтриете това събитие от календара?</div>
@@ -1673,7 +1697,7 @@ function WorkItemCompleteConfirmModal({
       onClick={() => !savingBusy && onCancel()}
     >
       <div
-        className="w-full max-w-lg rounded-t-3xl border border-white/70 bg-white p-6 shadow-[0_-8px_40px_rgba(15,23,42,0.25)] md:rounded-3xl"
+        className="w-full max-w-lg rounded-t-3xl border border-white/70 bg-white p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] md:pb-6 shadow-[0_-8px_40px_rgba(15,23,42,0.25)] md:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex justify-center md:hidden">

@@ -170,7 +170,7 @@ function TaskCard({
           </div>
           <button
             onClick={onToggle}
-            className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-300 hover:bg-slate-100 transition-colors shrink-0"
+            className="w-11 h-11 min-w-[44px] flex items-center justify-center rounded-xl text-slate-300 hover:bg-slate-100 active:bg-slate-200 transition-colors shrink-0"
           >
             <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`} />
           </button>
@@ -228,13 +228,13 @@ function TaskCard({
           <button
             onClick={() => onAdvance(task)}
             disabled={updating}
-            className={`w-full rounded-xl flex items-center justify-center gap-2 font-bold transition-all active:scale-[0.98] disabled:opacity-50 ${compact ? "py-2.5 text-xs" : "py-3.5 text-sm"} ${NEXT_BTN[task.status]}`}
+            className={`w-full rounded-xl flex items-center justify-center gap-2 font-bold transition-all active:scale-[0.98] disabled:opacity-50 min-h-[48px] text-sm ${NEXT_BTN[task.status]}`}
           >
             {updating
               ? <Loader2 className="w-4 h-4 animate-spin" />
               : task.status === "in_progress"
-              ? <CheckCircle2 className="w-4 h-4" />
-              : <Clock className="w-4 h-4" />}
+              ? <CheckCircle2 className="w-5 h-5" />
+              : <Clock className="w-5 h-5" />}
             {NEXT_LABEL[task.status]}
           </button>
         </div>
@@ -310,26 +310,62 @@ export function ServiceTasksClient({
     if (!next) return;
     setUpdatingId(task.id);
     try {
-      await fetch(`/api/admin/work-items/${task.id}`, {
+      const res = await fetch(`/api/admin/work-items/${task.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ status: next }),
       });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setError((json as { error?: string }).error ?? "Грешка при обновяване");
+        return;
+      }
       void fetchMonth();
+    } catch {
+      setError("Мрежова грешка при обновяване на задача");
     } finally { setUpdatingId(null); }
   }
 
-  function prevWeek() { setWeekAnchor(d => addDays(d, -7)); }
-  function nextWeek() { setWeekAnchor(d => addDays(d, 7)); }
+  function prevWeek() {
+    setWeekAnchor(d => {
+      const newAnchor = addDays(d, -7);
+      const newWeek = weekOf(newAnchor);
+      setSelectedKey(toKey(newWeek[0]));
+      return newAnchor;
+    });
+  }
+  function nextWeek() {
+    setWeekAnchor(d => {
+      const newAnchor = addDays(d, 7);
+      const newWeek = weekOf(newAnchor);
+      setSelectedKey(toKey(newWeek[0]));
+      return newAnchor;
+    });
+  }
   function goToday()  { setWeekAnchor(new Date()); setSelectedKey(todayKey); }
 
   function prevMonth() {
+    const newMonth = calMonth === 0 ? 11 : calMonth - 1;
+    const newYear = calMonth === 0 ? calYear - 1 : calYear;
     if (calMonth === 0) { setCalYear(y => y - 1); setCalMonth(11); }
     else setCalMonth(m => m - 1);
+    // clamp selectedKey to new month if out of range
+    const selDate = new Date(`${selectedKey}T00:00:00`);
+    if (selDate.getFullYear() !== newYear || selDate.getMonth() !== newMonth) {
+      setSelectedKey(`${newYear}-${String(newMonth + 1).padStart(2, "0")}-01`);
+    }
   }
   function nextMonth() {
+    const newMonth = calMonth === 11 ? 0 : calMonth + 1;
+    const newYear = calMonth === 11 ? calYear + 1 : calYear;
     if (calMonth === 11) { setCalYear(y => y + 1); setCalMonth(0); }
     else setCalMonth(m => m + 1);
+    // clamp selectedKey to new month if out of range
+    const selDate = new Date(`${selectedKey}T00:00:00`);
+    if (selDate.getFullYear() !== newYear || selDate.getMonth() !== newMonth) {
+      setSelectedKey(`${newYear}-${String(newMonth + 1).padStart(2, "0")}-01`);
+    }
   }
 
   const weekLabel = (() => {
@@ -508,15 +544,22 @@ export function ServiceTasksClient({
             </div>
             <button
               onClick={() => void fetchMonth()}
-              className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 text-slate-500 active:bg-slate-200 transition-colors"
+              className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl bg-slate-100 text-slate-500 active:bg-slate-200 transition-colors"
             >
               <RefreshCw className="w-4 h-4" />
             </button>
           </div>
 
+          {/* Month + year label */}
+          <div className="flex items-center justify-center px-4 pb-0.5">
+            <span className="text-xs font-black text-slate-700 capitalize tracking-wide">
+              {BG_MONTH_LONG[week[3].getMonth()]} {week[3].getFullYear()}
+            </span>
+          </div>
+
           {/* Week strip */}
           <div className="flex items-center gap-1 px-2 pb-1">
-            <button onClick={prevWeek} className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 active:bg-slate-100 shrink-0">
+            <button onClick={prevWeek} className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-slate-400 active:bg-slate-100 shrink-0">
               <ChevronLeft className="w-4 h-4" />
             </button>
             <div className="flex flex-1 gap-1 overflow-x-auto scrollbar-none py-1">
@@ -551,7 +594,7 @@ export function ServiceTasksClient({
                 );
               })}
             </div>
-            <button onClick={nextWeek} className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 active:bg-slate-100 shrink-0">
+            <button onClick={nextWeek} className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-slate-400 active:bg-slate-100 shrink-0">
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>

@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { X, Pencil, Download, Loader2, Mail, PlayCircle } from "lucide-react";
 import { Logo } from "@/app/admin/ui/Logo";
+import { useAdminBackHandler } from "@/app/admin/ui";
 import type { AdminRole } from "@/lib/admin/db";
 import {
   LEFT_MATERIALS,
@@ -83,6 +84,8 @@ export function ProtocolPreview({
   const [emailTo, setEmailTo] = useState("");
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailFeedback, setEmailFeedback] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useAdminBackHandler(true, onClose, `protocol-preview-${protocolId}`);
 
   const status = row?.status as "prepared" | "in_progress" | "signed" | undefined;
   const isFinished = status === "signed";
@@ -176,7 +179,7 @@ export function ProtocolPreview({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col bg-black/45 backdrop-blur-[2px]"
+      className="fixed inset-0 z-[60] flex flex-col bg-black/45 backdrop-blur-[2px]"
       role="dialog"
       aria-modal="true"
       aria-label="Преглед на протокол"
@@ -188,7 +191,7 @@ export function ProtocolPreview({
             <button
               type="button"
               onClick={onClose}
-              className="p-2 rounded-xl text-slate-600 hover:bg-slate-100 active:bg-slate-200"
+              className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100 active:bg-slate-200"
               aria-label="Затвори"
             >
               <X className="w-5 h-5" />
@@ -202,7 +205,21 @@ export function ProtocolPreview({
             {isFinished && (
               <button
                 type="button"
-                onClick={() => window.open(pdfUrl, "_blank")}
+                onClick={async () => {
+                  try {
+                    const res = await fetch(pdfUrl, { credentials: "include" });
+                    if (!res.ok) { window.open(pdfUrl, "_blank"); return; }
+                    const blob = await res.blob();
+                    const objectUrl = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = objectUrl;
+                    a.download = `protocol.pdf`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(objectUrl);
+                  } catch { window.open(pdfUrl, "_blank"); }
+                }}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900 shrink-0"
               >
                 <Download className="w-4 h-4" />

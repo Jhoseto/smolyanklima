@@ -326,12 +326,12 @@ export function StaffPageClient({
                   type={showPw ? "text" : "password"}
                   value={addPassword}
                   onChange={e => setAddPassword(e.target.value)}
-                  placeholder="Мин. 4 символа"
+                  placeholder="Мин. 6 знака, 2 цифри"
                   autoComplete="new-password"
                   className="pr-8"
                 />
                 <button type="button" onClick={() => setShowPw(v => !v)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                  className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 min-w-[44px] min-h-[44px] flex items-center justify-center">
                   {showPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                 </button>
               </div>
@@ -640,12 +640,12 @@ export function StaffPageClient({
                     type={showEditPw ? "text" : "password"}
                     value={editPw}
                     onChange={e => setEditPw(e.target.value)}
-                    placeholder="Мин. 4 символа"
+                    placeholder="Мин. 6 знака, 2 цифри"
                     autoComplete="new-password"
                     className="pr-8"
                   />
                   <button type="button" onClick={() => setShowEditPw(v => !v)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                    className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 min-w-[44px] min-h-[44px] flex items-center justify-center">
                     {showEditPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                   </button>
                 </div>

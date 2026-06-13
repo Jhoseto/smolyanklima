@@ -11,6 +11,7 @@ import {
   ADMIN_MODAL_PANEL,
   AdminModalDragHandle,
   AdminFieldValue,
+  useAdminBackHandler,
 } from "./ui";
 import { ProductQuickViewButton } from "./ProductQuickView";
 
@@ -124,12 +125,13 @@ export function DashboardPanel({
   onOpenInquiry?: (inquiryId: string) => void;
 }) {
   const [selected, setSelected] = useState<DashboardDetail | null>(null);
+  useAdminBackHandler(Boolean(selected), () => setSelected(null), "dashboard-panel-detail");
   const styles = TONE_STYLES[tone];
 
   return (
     <>
       <Card
-        className={`flex h-full min-h-[280px] flex-col overflow-hidden border-l-4 p-0 shadow-sm ring-1 ring-slate-200/70 ${styles.accent}`}
+        className={`flex h-full min-h-[280px] flex-col overflow-hidden border-l-[3px] p-0 shadow-sm ${styles.accent}`}
       >
         <div className={`shrink-0 border-b border-slate-100 px-4 py-3 ${styles.header}`}>
           <div className="flex items-start justify-between gap-3">
@@ -215,54 +217,52 @@ export function DashboardPanel({
                           !readOnly &&
                           (item.followUpWorkItemId ?? item.consultationWorkItemId) &&
                           onRequestCompleteConsultation && (
-                            <HoverTip tip={PANEL_TIPS.completeConsultation}>
-                              <button
-                                type="button"
-                                aria-label={PANEL_TIPS.completeConsultation}
-                                onClick={() => onRequestCompleteConsultation(item)}
-                                disabled={
-                                  completingConsultationId ===
-                                  (item.followUpWorkItemId ?? item.consultationWorkItemId)
-                                }
-                                className="inline-flex items-center gap-1 rounded-lg border border-green-700 bg-green-600 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-green-700 disabled:opacity-50"
-                              >
-                                <CheckCircle2 className="h-3.5 w-3.5" />
-                                {completingConsultationId ===
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="primary"
+                              aria-label={PANEL_TIPS.completeConsultation}
+                              onClick={() => onRequestCompleteConsultation(item)}
+                              disabled={
+                                completingConsultationId ===
                                 (item.followUpWorkItemId ?? item.consultationWorkItemId)
-                                  ? "Запис..."
-                                  : "Завърши"}
-                              </button>
-                            </HoverTip>
+                              }
+                              className="bg-green-600 hover:bg-green-700 shadow-green-200 border-0"
+                            >
+                              <CheckCircle2 className="h-4 w-4" />
+                              {completingConsultationId ===
+                              (item.followUpWorkItemId ?? item.consultationWorkItemId)
+                                ? "Запис..."
+                                : "Завърши"}
+                            </Button>
                           )}
                         {item.statusKind === "waiting" &&
                           !readOnly &&
                           item.contactFollowUpId &&
                           !(item.followUpWorkItemId ?? item.consultationWorkItemId) &&
                           onRequestCompleteConsultation && (
-                            <HoverTip tip={PANEL_TIPS.completeConsultation}>
-                              <button
-                                type="button"
-                                aria-label={PANEL_TIPS.completeConsultation}
-                                onClick={() => onRequestCompleteConsultation(item)}
-                                disabled={completingConsultationId === item.contactFollowUpId}
-                                className="inline-flex items-center gap-1 rounded-lg border border-green-700 bg-green-600 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-green-700 disabled:opacity-50"
-                              >
-                                <CheckCircle2 className="h-3.5 w-3.5" />
-                                {completingConsultationId === item.contactFollowUpId ? "Запис..." : "Завърши"}
-                              </button>
-                            </HoverTip>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="primary"
+                              aria-label={PANEL_TIPS.completeConsultation}
+                              onClick={() => onRequestCompleteConsultation(item)}
+                              disabled={completingConsultationId === item.contactFollowUpId}
+                              className="bg-green-600 hover:bg-green-700 shadow-green-200 border-0"
+                            >
+                              <CheckCircle2 className="h-4 w-4" />
+                              {completingConsultationId === item.contactFollowUpId ? "Запис..." : "Завърши"}
+                            </Button>
                           )}
-                        <HoverTip tip={PANEL_TIPS.viewDetails}>
-                          <button
-                            type="button"
-                            aria-label={PANEL_TIPS.viewDetails}
-                            onClick={() => setSelected(item.detail)}
-                            className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-brand-blue-700 hover:text-brand-blue-800"
-                          >
-                            Виж детайли
-                            <ChevronRight className="h-3 w-3" />
-                          </button>
-                        </HoverTip>
+                        <button
+                          type="button"
+                          aria-label={PANEL_TIPS.viewDetails}
+                          onClick={() => setSelected(item.detail)}
+                          className="inline-flex items-center gap-0.5 text-xs font-semibold text-brand-blue-700 hover:text-brand-blue-800 min-h-[36px] px-1"
+                        >
+                          Виж детайли
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        </button>
                       </div>
                     </div>
                   )}

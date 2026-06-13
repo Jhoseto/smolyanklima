@@ -159,7 +159,8 @@ export function SupplierOrderDetailModal({
   onRequestSale?: (order: NormalizedSupplierOrderRow) => void;
 }) {
   const router = useRouter();
-  useAdminBackHandler(true, onClose, `supplier-order-${orderId}`);
+  useAdminBackHandler(cancelStep === "idle", onClose, `supplier-order-${orderId}`);
+  useAdminBackHandler(cancelStep === "confirm", () => setCancelStep("idle"), `supplier-order-cancel-${orderId}`);
   const [order, setOrder] = useState<NormalizedSupplierOrderRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -413,11 +414,11 @@ export function SupplierOrderDetailModal({
         : "bg-violet-100 text-violet-900 border-violet-200";
 
   const linkBtnClass =
-    "inline-flex flex-1 min-w-0 items-center justify-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 px-2.5 py-2 text-[11px] font-bold text-violet-800 shadow-sm transition-colors hover:border-violet-300 hover:bg-violet-100";
+    "inline-flex flex-1 min-w-0 items-center justify-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 px-2.5 min-h-[44px] text-[11px] font-bold text-violet-800 shadow-sm transition-colors hover:border-violet-300 hover:bg-violet-100";
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/60 p-0 md:p-3 backdrop-blur-md"
+      className="fixed inset-0 z-[60] flex items-end md:items-center justify-center bg-slate-950/60 p-0 md:p-3 backdrop-blur-md"
       data-admin-overlay="true"
       onClick={() => !delivering && !cancelling && onClose()}
     >

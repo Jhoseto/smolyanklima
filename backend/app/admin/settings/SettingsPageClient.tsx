@@ -308,7 +308,7 @@ export default function SettingsPageClient() {
   const [reclassifying, setReclassifying] = useState(false);
   const [bulclimaProgress, setBulclimaProgress] = useState<{ current: number; total: number } | null>(null);
   const [bulclimaLog, setBulclimaLog] = useState<string[]>([]);
-  const bulclimaLogEndRef = useRef<HTMLDivElement>(null);
+  const bulclimaLogContainerRef = useRef<HTMLDivElement>(null);
   const [bulclimaStatus, setBulclimaStatus] = useState<{
     at: string | null;
     status: string | null;
@@ -317,7 +317,7 @@ export default function SettingsPageClient() {
   const [climacomSyncing, setClimacomSyncing] = useState(false);
   const [climacomProgress, setClimacomProgress] = useState<{ current: number; total: number } | null>(null);
   const [climacomLog, setClimacomLog] = useState<string[]>([]);
-  const climacomLogEndRef = useRef<HTMLDivElement>(null);
+  const climacomLogContainerRef = useRef<HTMLDivElement>(null);
   const [climacomStatus, setClimacomStatus] = useState<{
     at: string | null;
     status: string | null;
@@ -327,7 +327,7 @@ export default function SettingsPageClient() {
   const [condexProgress, setCondexProgress] = useState<CondexProgressView | null>(null);
   const [condexNowMs, setCondexNowMs] = useState(() => Date.now());
   const [condexLog, setCondexLog] = useState<string[]>([]);
-  const condexLogEndRef = useRef<HTMLDivElement>(null);
+  const condexLogContainerRef = useRef<HTMLDivElement>(null);
   const [condexStatus, setCondexStatus] = useState<{
     at: string | null;
     status: string | null;
@@ -337,7 +337,7 @@ export default function SettingsPageClient() {
   const [bittelProgress, setBittelProgress] = useState<CondexProgressView | null>(null);
   const [bittelNowMs, setBittelNowMs] = useState(() => Date.now());
   const [bittelLog, setBittelLog] = useState<string[]>([]);
-  const bittelLogEndRef = useRef<HTMLDivElement>(null);
+  const bittelLogContainerRef = useRef<HTMLDivElement>(null);
   const [bittelStatus, setBittelStatus] = useState<{
     at: string | null;
     status: string | null;
@@ -346,7 +346,7 @@ export default function SettingsPageClient() {
   const [allCatalogSyncing, setAllCatalogSyncing] = useState(false);
   const [allCatalogSyncStep, setAllCatalogSyncStep] = useState(0);
   const [allCatalogSyncLog, setAllCatalogSyncLog] = useState<string[]>([]);
-  const allCatalogSyncLogEndRef = useRef<HTMLDivElement>(null);
+  const allCatalogSyncLogContainerRef = useRef<HTMLDivElement>(null);
   const syncAllLockRef = useRef(false);
 
   const anyCatalogSyncing =
@@ -861,23 +861,28 @@ export default function SettingsPageClient() {
   }
 
   useEffect(() => {
-    allCatalogSyncLogEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const c = allCatalogSyncLogContainerRef.current;
+    if (c) c.scrollTop = c.scrollHeight;
   }, [allCatalogSyncLog]);
 
   useEffect(() => {
-    bulclimaLogEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const c = bulclimaLogContainerRef.current;
+    if (c) c.scrollTop = c.scrollHeight;
   }, [bulclimaLog]);
 
   useEffect(() => {
-    climacomLogEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const c = climacomLogContainerRef.current;
+    if (c) c.scrollTop = c.scrollHeight;
   }, [climacomLog]);
 
   useEffect(() => {
-    condexLogEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const c = condexLogContainerRef.current;
+    if (c) c.scrollTop = c.scrollHeight;
   }, [condexLog]);
 
   useEffect(() => {
-    bittelLogEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const c = bittelLogContainerRef.current;
+    if (c) c.scrollTop = c.scrollHeight;
   }, [bittelLog]);
 
   useEffect(() => {
@@ -1440,7 +1445,7 @@ export default function SettingsPageClient() {
           {(allCatalogSyncing || allCatalogSyncLog.length > 0) && (
             <div className="mt-4 space-y-2 border-t border-brand-blue-200/60 pt-4">
               <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Общ дневник</div>
-              <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 bg-slate-900/95 p-2 font-mono text-[10px] leading-relaxed text-slate-100">
+              <div ref={allCatalogSyncLogContainerRef} className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 bg-slate-900/95 p-2 font-mono text-[10px] leading-relaxed text-slate-100">
                 {allCatalogSyncLog.length === 0 ? (
                   <div className="text-slate-400">Очакване…</div>
                 ) : (
@@ -1450,7 +1455,6 @@ export default function SettingsPageClient() {
                     </div>
                   ))
                 )}
-                <div ref={allCatalogSyncLogEndRef} />
               </div>
             </div>
           )}
@@ -1535,7 +1539,7 @@ export default function SettingsPageClient() {
                 </div>
               )}
               <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Дневник на синхронизацията</div>
-              <div className="max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-slate-900/95 p-2 font-mono text-[10px] leading-relaxed text-slate-100">
+              <div ref={bulclimaLogContainerRef} className="max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-slate-900/95 p-2 font-mono text-[10px] leading-relaxed text-slate-100">
                 {bulclimaLog.length === 0 ? (
                   <div className="text-slate-400">Очакване на събития…</div>
                 ) : (
@@ -1545,7 +1549,6 @@ export default function SettingsPageClient() {
                     </div>
                   ))
                 )}
-                <div ref={bulclimaLogEndRef} />
               </div>
             </div>
           )}
@@ -1600,13 +1603,12 @@ export default function SettingsPageClient() {
                   </div>
                 </div>
               )}
-              <div className="max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-slate-900/95 p-2 font-mono text-[10px] text-slate-100">
+              <div ref={climacomLogContainerRef} className="max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-slate-900/95 p-2 font-mono text-[10px] text-slate-100">
                 {climacomLog.map((line, i) => (
                   <div key={`c-${i}`} className="whitespace-pre-wrap break-all py-0.5">
                     {line}
                   </div>
                 ))}
-                <div ref={climacomLogEndRef} />
               </div>
             </div>
           )}
@@ -1659,13 +1661,12 @@ export default function SettingsPageClient() {
           {(condexSyncing || condexLog.length > 0) && (
             <div className="mt-4 space-y-2 border-t border-sky-200/60 pt-4">
               <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Дневник</div>
-              <div className="max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-slate-900/95 p-2 font-mono text-[10px] text-slate-100">
+              <div ref={condexLogContainerRef} className="max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-slate-900/95 p-2 font-mono text-[10px] text-slate-100">
                 {condexLog.map((line, i) => (
                   <div key={`x-${i}`} className="whitespace-pre-wrap break-all py-0.5">
                     {line}
                   </div>
                 ))}
-                <div ref={condexLogEndRef} />
               </div>
             </div>
           )}
@@ -1715,13 +1716,12 @@ export default function SettingsPageClient() {
           {(bittelSyncing || bittelLog.length > 0) && (
             <div className="mt-4 space-y-2 border-t border-emerald-200/60 pt-4">
               <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Дневник</div>
-              <div className="max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-slate-900/95 p-2 font-mono text-[10px] text-slate-100">
+              <div ref={bittelLogContainerRef} className="max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-slate-900/95 p-2 font-mono text-[10px] text-slate-100">
                 {bittelLog.map((line, i) => (
                   <div key={`b-${i}`} className="whitespace-pre-wrap break-all py-0.5">
                     {line}
                   </div>
                 ))}
-                <div ref={bittelLogEndRef} />
               </div>
             </div>
           )}

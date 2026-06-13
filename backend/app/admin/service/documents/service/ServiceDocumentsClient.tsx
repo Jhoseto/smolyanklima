@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useDebounce } from "@/lib/hooks/useDebounce";
 import Link from "next/link";
 import {
   Plus, FileText, ChevronRight, Download,
@@ -45,6 +46,8 @@ export function ServiceDocumentsClient({ role }: Props) {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 300);
+  const isFirstRender = useRef(true);
   const [openForm, setOpenForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [preview, setPreview] = useState<RepairProtocol | null>(null);
@@ -86,9 +89,14 @@ export function ServiceDocumentsClient({ role }: Props) {
     }
   }, [perPage]);
 
-  useEffect(() => { void load(1, search); }, [load, search]);
+  useEffect(() => {
+    if (isFirstRender.current) { isFirstRender.current = false; void load(1, debouncedSearch); return; }
+    setPage(1);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    void load(1, debouncedSearch);
+  }, [load, debouncedSearch]);
 
-  const handleSearch = (v: string) => { setSearch(v); setPage(1); };
+  const handleSearch = (v: string) => { setSearch(v); };
   const handleNew = () => { setPreview(null); setEditId(null); setOpenForm(true); };
   const openPreview = (p: RepairProtocol) => { setPreview(p); };
   const openEdit = (id: string) => { setPreview(null); setEditId(id); setOpenForm(true); };
@@ -98,9 +106,21 @@ export function ServiceDocumentsClient({ role }: Props) {
     void load(1, search);
   };
 
-  const downloadPdf = (e: React.MouseEvent, id: string) => {
+  const downloadPdf = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    window.open(`/api/admin/service/repair-protocols/${id}/pdf`, "_blank");
+    const url = `/api/admin/service/repair-protocols/${id}/pdf`;
+    try {
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) { setErrorMsg("Грешка при генериране на PDF. Опитайте отново."); return; }
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = `repair-protocol-${id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(objectUrl); }, 1000);
+    } catch { setErrorMsg("Неуспешно сваляне на PDF. Проверете връзката."); }
   };
 
   const handleDelete = async (e: React.MouseEvent, p: RepairProtocol) => {
@@ -195,7 +215,7 @@ export function ServiceDocumentsClient({ role }: Props) {
         <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={e => downloadPdf(e, p.id)}
-            className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 active:bg-slate-200 rounded-lg transition-colors"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 active:bg-slate-200 rounded-lg transition-colors"
             title="Свали PDF"
           >
             <Download className="w-4 h-4" />
@@ -204,7 +224,7 @@ export function ServiceDocumentsClient({ role }: Props) {
             <button
               onClick={(e) => handleDelete(e, p)}
               disabled={deletingId === p.id}
-              className="p-2 text-rose-400 hover:text-rose-700 hover:bg-rose-50 active:bg-rose-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait"
+              className="min-w-[44px] min-h-[44px] flex items-center justify-center text-rose-400 hover:text-rose-700 hover:bg-rose-50 active:bg-rose-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait"
               title="Изтрий протокола"
             >
               {deletingId === p.id
@@ -248,12 +268,12 @@ export function ServiceDocumentsClient({ role }: Props) {
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-slate-50">
       {/* ── Хедър ── */}
-      <div className="bg-white border-b border-slate-200 px-4 py-4 sticky top-0 z-10">
+      <div className="bg-white border-b border-slate-200 px-4 py-4 sticky top-0 z-10 safe-top">
         <div className="flex items-center justify-between mb-3 gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <Link
               href="/admin/service/documents"
-              className="shrink-0 p-2 -ml-2 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 active:bg-slate-200"
+              className="shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center -ml-2 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 active:bg-slate-200"
               title="Назад към документи"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -328,7 +348,7 @@ export function ServiceDocumentsClient({ role }: Props) {
             {protocols.map(p => renderProtocolRow(p))}
             {protocols.length < total && (
               <button
-                onClick={() => { const p = page + 1; setPage(p); void load(p, search); }}
+                onClick={() => { const p = page + 1; setPage(p); void load(p, debouncedSearch); }}
                 disabled={loading}
                 className="w-full py-3 text-sm text-brand-blue-700 font-semibold flex items-center justify-center gap-2"
               >

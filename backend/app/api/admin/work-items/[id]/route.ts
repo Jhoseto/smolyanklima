@@ -187,10 +187,31 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   } catch {
     return withCors(req, NextResponse.json({ error: "Неоторизиран достъп" }, { status: 401 }));
   }
+  const isServiceStaff = session.role === "service_staff";
+
+  // service_staff могат само да ъпдейтват status на свои задачи
+  if (isServiceStaff) {
+    const { id } = await ctx.params;
+    const json = await req.json().catch(() => null);
+    const statusOnlySchema = z.object({ status: z.enum(["planned", "in_progress", "done", "cancelled"]) });
+    const parsed = statusOnlySchema.safeParse(json);
+    if (!parsed.success) return withCors(req, NextResponse.json({ error: "Само промяна на статус е разрешена." }, { status: 400 }));
+    const supabase = session.db;
+    const { data: existing } = await supabase.from("work_items").select("id,assigned_to").eq("id", id).maybeSingle();
+    if (!existing) return withCors(req, NextResponse.json({ error: "Не е намерено" }, { status: 404 }));
+    if ((existing as { assigned_to?: string | null }).assigned_to !== session.userId) {
+      return withCors(req, NextResponse.json({ error: "Може да обновявате само свои задачи." }, { status: 403 }));
+    }
+    const { error } = await supabase.from("work_items").update({ status: parsed.data.status, updated_at: new Date().toISOString() }).eq("id", id);
+    if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
+    const { data: updated } = await supabase.from("work_items").select("*").eq("id", id).maybeSingle();
+    return withCors(req, NextResponse.json({ data: updated }));
+  }
+
   try {
     requireRole(session, "master_admin", "office_staff");
   } catch {
-    return withCors(req, NextResponse.json({ error: "Сервизните акаунти могат само да преглеждат календара." }, { status: 403 }));
+    return withCors(req, NextResponse.json({ error: "Нямате право да редактирате тази задача." }, { status: 403 }));
   }
 
   const { id } = await ctx.params;

@@ -7,7 +7,8 @@ import {
   CheckCheck, Archive, Wifi, WifiOff, Info, StickyNote,
   ChevronRight, Headphones, Globe, Zap, ExternalLink, Trash2,
 } from "lucide-react";
-import { SectionTitle, AdminPhoneLink } from "../ui";
+import { SectionTitle, AdminPhoneLink, useAdminBackHandler } from "../ui";
+import { useRouter } from "next/navigation";
 import { toTelHref } from "@/lib/admin/telLink";
 import { CatalogProductImage } from "@/app/admin/components/CatalogProductImage";
 import { useAdminChatAlerts } from "../AdminChatAlertsProvider";
@@ -58,6 +59,7 @@ export default function AdminChatPage() {
 }
 
 function AdminChatClient() {
+  const router = useRouter();
   const { streamConnected: alertsStreamConnected, setViewingChatId, acknowledgeUserMessage, subscribeInboxChange } =
     useAdminChatAlerts();
   const [chats, setChats] = useState<LiveChat[]>([]);
@@ -78,11 +80,18 @@ function AdminChatClient() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [notesError, setNotesError] = useState<string | null>(null);
+  /** Инкрементира се при visibilitychange за да trigger-не SSE reconnect. */
+  const [sseVersion, setSseVersion] = useState(0);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const msgAbortRef = useRef<AbortController | null>(null);
   const lastTypingSentRef = useRef<number>(0);
+
+  useAdminBackHandler(Boolean(confirmDeleteId), () => setConfirmDeleteId(null), "chat-delete-confirm");
 
   // ── Fetch canned responses ────────────────────────────────────────────────
 
@@ -153,8 +162,19 @@ function AdminChatClient() {
     loadDetail(selectedId);
   }, [selectedId, mobilePane, loadDetail]);
 
+  // ── SSE reconnect при visibilitychange ────────────────────────────────────
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") setSseVersion(v => v + 1);
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
+
   // ── SSE: messages for selected chat (само когато панелът е отворен) ─────
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!selectedId) return;
     const isViewing =
@@ -220,7 +240,9 @@ function AdminChatClient() {
     })();
 
     return () => { aborted = true; ctrl.abort(); setMsgConnected(false); setUserTyping(false); };
-  }, [selectedId, mobilePane, acknowledgeUserMessage]);
+  // sseVersion triggers reconnect on visibilitychange
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, mobilePane, acknowledgeUserMessage, sseVersion]);
 
   // Scroll on message change
   useEffect(() => {
@@ -245,16 +267,24 @@ function AdminChatClient() {
     if (!overrideContent) setInputValue("");
     setSending(true);
     setShowCanned(false);
+    setSendError(null);
 
     try {
-      await fetch(`/api/admin/chat/${selectedId}/message`, {
+      const res = await fetch(`/api/admin/chat/${selectedId}/message`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content }),
       });
-      setChats((prev) => prev.map((c) => c.id === selectedId && c.status === "waiting" ? { ...c, status: "active" } : c));
-      setDetail((prev) => prev && prev.chat.status === "waiting" ? { ...prev, chat: { ...prev.chat, status: "active" } } : prev);
-    } catch { /* SSE will deliver the message */ } finally {
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setSendError((json as { error?: string }).error ?? "Грешка при изпращане");
+      } else {
+        setChats((prev) => prev.map((c) => c.id === selectedId && c.status === "waiting" ? { ...c, status: "active" } : c));
+        setDetail((prev) => prev && prev.chat.status === "waiting" ? { ...prev, chat: { ...prev.chat, status: "active" } } : prev);
+      }
+    } catch {
+      setSendError("Мрежова грешка при изпращане");
+    } finally {
       setSending(false);
       setTimeout(() => inputRef.current?.focus(), 50);
     }
@@ -264,15 +294,23 @@ function AdminChatClient() {
 
   const handleStatus = useCallback(async (status: ChatStatus) => {
     if (!selectedId) return;
+    setStatusError(null);
     try {
-      await fetch(`/api/admin/chat/${selectedId}`, {
+      const res = await fetch(`/api/admin/chat/${selectedId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
       });
-      setDetail((prev) => prev ? { ...prev, chat: { ...prev.chat, status } } : prev);
-      setChats((prev) => prev.map((c) => c.id === selectedId ? { ...c, status } : c));
-    } catch { /* ignore */ }
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setStatusError((json as { error?: string }).error ?? "Грешка при промяна на статус");
+      } else {
+        setDetail((prev) => prev ? { ...prev, chat: { ...prev.chat, status } } : prev);
+        setChats((prev) => prev.map((c) => c.id === selectedId ? { ...c, status } : c));
+      }
+    } catch {
+      setStatusError("Мрежова грешка при промяна на статус");
+    }
   }, [selectedId]);
 
   // ── Save notes ────────────────────────────────────────────────────────────
@@ -280,14 +318,22 @@ function AdminChatClient() {
   const handleSaveNotes = useCallback(async () => {
     if (!selectedId) return;
     setSavingNotes(true);
+    setNotesError(null);
     try {
-      await fetch(`/api/admin/chat/${selectedId}`, {
+      const res = await fetch(`/api/admin/chat/${selectedId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ admin_notes: notesValue }),
       });
-      setDetail((prev) => prev ? { ...prev, chat: { ...prev.chat, admin_notes: notesValue } } : prev);
-    } catch { /* ignore */ } finally {
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setNotesError((json as { error?: string }).error ?? "Грешка при записване");
+      } else {
+        setDetail((prev) => prev ? { ...prev, chat: { ...prev.chat, admin_notes: notesValue } } : prev);
+      }
+    } catch {
+      setNotesError("Мрежова грешка при записване на бележки");
+    } finally {
       setSavingNotes(false);
     }
   }, [selectedId, notesValue]);
@@ -314,7 +360,11 @@ function AdminChatClient() {
   }, [selectedId]);
 
   const waitingCount = chats.filter((c) => c.status === "waiting").length;
-  const handleSelectChat = (id: string) => { setSelectedId(id); setMobilePane("chat"); };
+  const handleSelectChat = (id: string) => {
+    setSelectedId(id);
+    setMobilePane("chat");
+    router.replace(`/admin/chat?chat=${id}`);
+  };
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -335,7 +385,7 @@ function AdminChatClient() {
             {alertsStreamConnected ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
             {alertsStreamConnected ? "На живо" : "Преповторно..."}
           </div>
-          <button onClick={() => fetchChats()} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
+          <button onClick={() => fetchChats()} className="flex items-center gap-1.5 px-2.5 py-1.5 min-h-[44px] rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
             <RefreshCw className="w-3.5 h-3.5" /> Обнови
           </button>
         </div>
@@ -351,7 +401,7 @@ function AdminChatClient() {
               const labels: Record<string, string> = { "": "Всички", waiting: "Изчакват", active: "Активни", closed: "Затворени" };
               return (
                 <button key={s} onClick={() => setFilter(s)}
-                  className={`flex-1 py-2 min-h-[36px] rounded-lg text-xs font-bold transition-colors ${filter === s ? "bg-brand-blue-500 text-white" : "text-slate-500 hover:bg-slate-100"}`}>
+                  className={`flex-1 py-2 min-h-[44px] rounded-lg text-xs font-bold transition-colors ${filter === s ? "bg-brand-blue-500 text-white" : "text-slate-500 hover:bg-slate-100"}`}>
                   {labels[s]}
                   {s === "waiting" && waitingCount > 0 && (
                     <span className="ml-1 inline-flex items-center justify-center w-4 h-4 rounded-full bg-orange-500 text-white text-[9px] font-black">{waitingCount}</span>
@@ -395,7 +445,7 @@ function AdminChatClient() {
               <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-white">
                 <div className="flex items-center gap-2 min-w-0">
                   <button className="md:hidden min-h-11 min-w-11 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors shrink-0"
-                    onClick={() => setMobilePane("list")}>
+                    onClick={() => { setMobilePane("list"); router.replace("/admin/chat"); }}>
                     <ChevronRight className="w-4 h-4 rotate-180" />
                   </button>
                   <div className="w-9 h-9 rounded-full bg-gradient-to-br from-brand-blue-400 to-brand-blue-500 flex items-center justify-center shrink-0">
@@ -416,7 +466,7 @@ function AdminChatClient() {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex flex-wrap items-center gap-1.5 shrink-0 justify-end">
                   {detail.chat.status === "closed" && (
                     <ActionButton
                       onClick={() => { setDeleteError(null); setConfirmDeleteId(detail.chat.id); }}
@@ -529,21 +579,33 @@ function AdminChatClient() {
                   className="flex-1 text-xs text-slate-700 bg-transparent resize-none focus:outline-none placeholder:text-slate-400 leading-relaxed min-h-[36px] max-h-[80px]"
                   rows={2} />
                 <button onClick={handleSaveNotes} disabled={savingNotes}
-                  className="shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-white border border-slate-200 text-slate-600 hover:bg-brand-blue-50 hover:border-brand-blue-200 hover:text-brand-blue-700 transition-colors disabled:opacity-50">
+                  className="shrink-0 px-2.5 min-h-[44px] rounded-lg text-[11px] font-bold bg-white border border-slate-200 text-slate-600 hover:bg-brand-blue-50 hover:border-brand-blue-200 hover:text-brand-blue-700 transition-colors disabled:opacity-50">
                   {savingNotes ? <Loader2 className="w-3 h-3 animate-spin" /> : "Запази"}
                 </button>
               </div>
+              {notesError && (
+                <div className="px-4 py-1 bg-red-50">
+                  <p className="text-[11px] text-red-600">{notesError}</p>
+                </div>
+              )}
 
               {/* Canned responses */}
               {detail.chat.status !== "closed" && showCanned && cannedResponses.length > 0 && (
                 <div className="shrink-0 px-3 py-2 bg-white border-t border-slate-100 flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
                   {cannedResponses.map((cr) => (
                     <button key={cr.id} onClick={() => handleSend(cr.content)}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-brand-blue-50 border border-brand-blue-200 text-brand-blue-700 hover:bg-brand-blue-100 transition-colors max-w-[250px] truncate"
+                      className="flex items-center gap-1 px-2.5 py-1.5 min-h-[44px] rounded-xl text-xs font-semibold bg-brand-blue-50 border border-brand-blue-200 text-brand-blue-700 hover:bg-brand-blue-100 transition-colors max-w-[250px] truncate"
                       title={cr.content}>
                       <Zap className="w-3 h-3 shrink-0" />{cr.shortcut}
                     </button>
                   ))}
+                </div>
+              )}
+
+              {/* Error feedback */}
+              {(sendError || statusError) && (
+                <div className="shrink-0 px-3 py-1.5 bg-red-50 border-t border-red-100">
+                  <p className="text-xs text-red-600 font-medium">{sendError || statusError}</p>
                 </div>
               )}
 

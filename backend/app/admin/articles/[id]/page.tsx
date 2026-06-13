@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { HelpRow, InfoDot, SectionTitle, HelpCard, Card, Input, Textarea, Select, Button } from "../../ui";
+import { HelpRow, InfoDot, SectionTitle, HelpCard, Card, Input, Textarea, Select, Button, useAdminBackHandler } from "../../ui";
 import { Save, Trash2, Upload } from "lucide-react";
 
 type BlogCategory = { slug: string; name: string };
@@ -15,12 +15,14 @@ export default function EditArticlePage() {
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [categories, setCategories] = useState<BlogCategory[]>([]);
   const [authors, setAuthors] = useState<BlogAuthor[]>([]);
   const [uploading, setUploading] = useState(false);
   const [slugTouched, setSlugTouched] = useState(false);
   const [seoTouched, setSeoTouched] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  useAdminBackHandler(confirmDelete, () => setConfirmDelete(false), "article-delete-confirm");
 
   const [form, setForm] = useState({
     slug: "",
@@ -71,6 +73,8 @@ export default function EditArticlePage() {
         seoKeywords: Array.isArray(json.data.seo?.keywords) ? json.data.seo.keywords.join(", ") : "",
         seoOgImage: json.data.seo?.ogImage ?? "",
       });
+      // Prevent auto-slug from overwriting the existing article slug
+      setSlugTouched(true);
     })()
       .catch((e) => setError(String(e?.message ?? e)))
       .finally(() => setLoading(false));
@@ -130,6 +134,7 @@ export default function EditArticlePage() {
 
   async function save() {
     setError(null);
+    setSaving(true);
     const res = await fetch(`/api/admin/articles/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -162,6 +167,7 @@ export default function EditArticlePage() {
     });
     const json = await res.json();
     if (!res.ok) setError(json.error || "Грешка при запис");
+    setSaving(false);
     return json;
   }
 
@@ -275,7 +281,7 @@ export default function EditArticlePage() {
                   }}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
                 />
-                <div className="flex items-center justify-center gap-2 w-full px-4 py-2 border-2 border-dashed border-brand-blue-200 bg-brand-blue-50 text-brand-blue-500 hover:bg-brand-blue-100 hover:border-brand-blue-300 rounded-lg text-sm font-semibold transition-colors">
+                <div className="flex items-center justify-center gap-2 w-full px-4 min-h-[44px] border-2 border-dashed border-brand-blue-200 bg-brand-blue-50 text-brand-blue-500 hover:bg-brand-blue-100 hover:border-brand-blue-300 rounded-lg text-sm font-semibold transition-colors">
                   <Upload className="w-4 h-4" />
                   {uploading ? "Качване..." : "Кликни или пусни файл тук"}
                 </div>
@@ -356,12 +362,21 @@ export default function EditArticlePage() {
         </div>
       </Card>
 
-      <div className="flex justify-between items-center">
+      {/* Sticky save bar — always accessible on mobile */}
+      <div className="sticky bottom-16 md:bottom-0 z-30 -mx-4 md:mx-0 px-4 py-3 bg-white/95 backdrop-blur border-t border-slate-200 flex justify-between items-center shadow-[0_-2px_8px_rgb(0,0,0,0.06)]">
         <Button variant="danger" onClick={remove} className="gap-2">
-          <Trash2 className="w-4 h-4" /> Изтрий статия
+          <Trash2 className="w-4 h-4" /> Изтрий
         </Button>
-        <Button variant="primary" size="lg" onClick={save} className="gap-2 shadow-sm">
-          <Save className="w-5 h-5" /> Запази промените
+        <Button variant="primary" size="lg" onClick={() => void save()} disabled={saving} className="gap-2 shadow-sm">
+          {saving ? (
+            <>
+              <Save className="w-5 h-5 animate-pulse" /> Запазване…
+            </>
+          ) : (
+            <>
+              <Save className="w-5 h-5" /> Запази промените
+            </>
+          )}
         </Button>
       </div>
 

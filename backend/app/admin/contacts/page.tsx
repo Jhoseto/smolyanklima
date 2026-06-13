@@ -1,8 +1,8 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
-import { useSearchParams } from "next/navigation";
-import { Card, Input, Select, Textarea, Button, Table, Th, Td, AdminContactSuggestRow } from "../ui";
+import { useSearchParams, useRouter } from "next/navigation";
+import { Card, Input, Select, Textarea, Button, Table, Th, Td, AdminContactSuggestRow, useAdminBackHandler } from "../ui";
 import { ChevronDown, ChevronUp, UserPlus, Users, Activity, FileText, Phone, Mail, MapPin, X, Truck, Plus, Trash2, Save, Pencil, Package } from "lucide-react";
 import { ProductQuickViewButton } from "../ProductQuickView";
 import { useDebounce } from "@/lib/hooks/useDebounce";
@@ -260,6 +260,7 @@ export default function AdminContactsPage() {
 
 function AdminContactsPageInner() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const initialKind: ContactKind = searchParams?.get("kind") === "supplier" ? "supplier" : "client";
   const [contactsTab, setContactsTab] = useState<ContactKind>(initialKind);
   const theme = TAB_THEME[contactsTab];
@@ -299,6 +300,9 @@ function AdminContactsPageInner() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showMerge, setShowMerge] = useState(false);
+
+  useAdminBackHandler(confirmDelete, () => setConfirmDelete(false), "contacts-delete-confirm");
+  useAdminBackHandler(confirmMerge && !confirmDelete, () => setConfirmMerge(false), "contacts-merge-confirm");
   const [showHistory, setShowHistory] = useState(true);
   const [showLinkedProducts, setShowLinkedProducts] = useState(true);
   const [mobileView, setMobileView] = useState<"list" | "detail">("list");
@@ -328,7 +332,8 @@ function AdminContactsPageInner() {
       setContactsTotal(json.meta?.total ?? rows.length);
       if (selected && rows.some((r) => r.id === selected)) {
         // keep current selection
-      } else if (rows[0]?.id) {
+      } else if (rows[0]?.id && typeof window !== "undefined" && window.innerWidth >= 768) {
+        // auto-select first row only on desktop; mobile users see list first
         setSelected(rows[0].id);
       } else {
         setSelected("");
@@ -343,6 +348,7 @@ function AdminContactsPageInner() {
 
   async function loadDetail(id: string) {
     if (!id) return;
+    setDetail(null);
     setError(null);
     try {
       const res = await fetch(`/api/admin/contacts/${id}`, { credentials: "include" });
@@ -625,7 +631,7 @@ function AdminContactsPageInner() {
         <div className={`flex rounded-xl border ${theme.accentBorderSoft} p-0.5 bg-white w-full sm:w-auto sm:min-w-[300px] shadow-sm`}>
           <button
             type="button"
-            onClick={() => setContactsTab("client")}
+            onClick={() => { setContactsTab("client"); router.replace("/admin/contacts?kind=client"); }}
             className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold transition-colors ${
               contactsTab === "client"
                 ? "bg-brand-blue-500 text-white shadow-sm"
@@ -636,7 +642,7 @@ function AdminContactsPageInner() {
           </button>
           <button
             type="button"
-            onClick={() => setContactsTab("supplier")}
+            onClick={() => { setContactsTab("supplier"); router.replace("/admin/contacts?kind=supplier"); }}
             className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold transition-colors ${
               contactsTab === "supplier"
                 ? "bg-brand-orange-500 text-white shadow-sm"

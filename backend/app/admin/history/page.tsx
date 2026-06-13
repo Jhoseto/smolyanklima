@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { SectionTitle, Card, Input, Select, Button, Table, Th, Td, AdminPhoneLink } from "../ui";
+import { useDebounce } from "@/lib/hooks/useDebounce";
+import { SectionTitle, Card, Input, Select, Button, Table, Th, Td, AdminPhoneLink, useAdminBackHandler } from "../ui";
 import { RefreshCw, CheckCircle2, Ban, Eye, ArrowUpDown, ArrowUp, ArrowDown, Sparkles, Recycle, FilterX, Plus, BarChart3 } from "lucide-react";
 import { ProductQuickViewButton } from "../ProductQuickView";
 import { SaleDetailModal } from "./SaleDetailModal";
@@ -380,6 +381,7 @@ export default function AdminHistoryPage() {
   const [productConditions, setProductConditions] = useState<SaleProductConditionFilter[]>([]);
   const [items, setItems] = useState<WorkRow[]>([]);
   const [q, setQ] = useState("");
+  const debouncedQ = useDebounce(q, 300);
   const [mountPhases, setMountPhases] = useState<SaleMountPhaseFilter[]>([]);
   const [dataFlags, setDataFlags] = useState<SaleDataFlagFilter[]>([]);
   const [productRegion, setProductRegion] = useState<"" | ProductRegion>("");
@@ -397,6 +399,7 @@ export default function AdminHistoryPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionRowId, setActionRowId] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<{ kind: ConfirmKind; row: WorkRow } | null>(null);
+  useAdminBackHandler(Boolean(confirm), () => setConfirm(null), "history-confirm");
   const [cancelReason, setCancelReason] = useState<SaleCancelReason | "">("");
   const [detailSaleId, setDetailSaleId] = useState<string | null>(null);
   const [manualSaleOpen, setManualSaleOpen] = useState(false);
@@ -407,6 +410,7 @@ export default function AdminHistoryPage() {
   const [contactHistoryTarget, setContactHistoryTarget] = useState<ContactHistoryTarget | null>(null);
   const [sortBy, setSortBy] = useState<HistorySortField>("sale_date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [loading, setLoading] = useState(false);
 
   const isProductSales = salesTab === "products";
 
@@ -468,9 +472,9 @@ export default function AdminHistoryPage() {
     if (amountMin.trim()) n += 1;
     if (amountMax.trim()) n += 1;
     if (fromDate || toDate) n += 1;
-    if (q.trim()) n += 1;
+    if (debouncedQ.trim()) n += 1;
     return n;
-  }, [isProductSales, productConditions, mountPhases, dataFlags, productRegion, brandId, supplierKey, serviceStatuses, amountMin, amountMax, fromDate, toDate, q]);
+  }, [isProductSales, productConditions, mountPhases, dataFlags, productRegion, brandId, supplierKey, serviceStatuses, amountMin, amountMax, fromDate, toDate, debouncedQ]);
 
   function switchSalesTab(tab: SalesPanelTabId) {
     setPage(1);
@@ -522,7 +526,7 @@ export default function AdminHistoryPage() {
 
   const qs = useMemo(() => {
     const sp = new URLSearchParams();
-    if (q.trim()) sp.set("q", q.trim());
+    if (debouncedQ.trim()) sp.set("q", debouncedQ.trim());
     sp.set("eventCode", salesPanelEventCode(salesTab));
     if (isProductSales) {
       const mountCsv = mountPhaseCsv(mountPhases);
@@ -548,11 +552,11 @@ export default function AdminHistoryPage() {
     sp.set("sortBy", sortBy);
     sp.set("sortDir", sortDir);
     return sp.toString();
-  }, [q, salesTab, isProductSales, mountPhases, dataFlags, productRegion, brandId, supplierKey, amountMin, amountMax, fromDate, toDate, page, productConditions, serviceStatuses, sortBy, sortDir]);
+  }, [debouncedQ, salesTab, isProductSales, mountPhases, dataFlags, productRegion, brandId, supplierKey, amountMin, amountMax, fromDate, toDate, page, productConditions, serviceStatuses, sortBy, sortDir]);
 
   const reportQs = useMemo(() => {
     const sp = new URLSearchParams();
-    if (q.trim()) sp.set("q", q.trim());
+    if (debouncedQ.trim()) sp.set("q", debouncedQ.trim());
     const mountCsv = mountPhaseCsv(mountPhases);
     if (mountCsv) sp.set("mountPhase", mountCsv);
     if (supplierKey.trim()) sp.set("supplierKey", supplierKey.trim());
@@ -569,7 +573,7 @@ export default function AdminHistoryPage() {
     const conditionCsv = productConditionCsv(productConditions);
     if (conditionCsv) sp.set("productCondition", conditionCsv);
     return sp.toString();
-  }, [q, mountPhases, dataFlags, productRegion, brandId, supplierKey, amountMin, amountMax, fromDate, toDate, productConditions]);
+  }, [debouncedQ, mountPhases, dataFlags, productRegion, brandId, supplierKey, amountMin, amountMax, fromDate, toDate, productConditions]);
 
   const reportFiltersHint = useMemo(() => {
     const parts: string[] = [saleProductConditionFilterLabel(productConditions)];
@@ -621,6 +625,7 @@ export default function AdminHistoryPage() {
 
   async function load() {
     setError(null);
+    setLoading(true);
     try {
       const res = await fetch(`/api/admin/work-items?${qs}`, { credentials: "include" });
       const json = await res.json();
@@ -629,6 +634,9 @@ export default function AdminHistoryPage() {
       setMeta(json.meta ?? { page: 1, perPage: 30, total: 0 });
     } catch (e: unknown) {
       setError(String(e instanceof Error ? e.message : e));
+      setItems([]);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -753,7 +761,7 @@ export default function AdminHistoryPage() {
               key={tab.id}
               type="button"
               onClick={() => switchSalesTab(tab.id)}
-              className={`px-3 py-2 text-xs font-bold rounded-t-lg border-b-2 transition-colors ${
+              className={`px-3 min-h-[44px] text-xs font-bold rounded-t-lg border-b-2 transition-colors ${
                 active
                   ? "border-brand-blue-500 text-brand-blue-700 bg-brand-blue-50/60"
                   : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50"
@@ -1020,7 +1028,13 @@ export default function AdminHistoryPage() {
         />
       )}
 
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm font-medium">{error}</div>}
+      {loading && (
+        <div className="flex items-center justify-center py-10 text-sm font-medium text-slate-500 gap-2">
+          <RefreshCw className="h-4 w-4 animate-spin" />
+          Зареждане…
+        </div>
+      )}
+      {!loading && error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm font-medium">{error}</div>}
 
       {isProductSales ? (
         <>
@@ -1302,13 +1316,13 @@ export default function AdminHistoryPage() {
           {isProductSales ? saleProductConditionFilterLabel(productConditions) : activeTabLabel} · общо: {meta.total}
         </span>
         <div className="flex items-center gap-2 md:gap-3">
-          <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+          <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => { setPage((p) => Math.max(1, p - 1)); window.scrollTo(0, 0); }}>
             ‹ Пред.
           </Button>
           <span className="text-sm font-medium text-slate-600">
             {page} / {pages}
           </span>
-          <Button variant="secondary" size="sm" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>
+          <Button variant="secondary" size="sm" disabled={page >= pages} onClick={() => { setPage((p) => p + 1); window.scrollTo(0, 0); }}>
             Следв. ›
           </Button>
         </div>

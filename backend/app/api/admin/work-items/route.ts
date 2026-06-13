@@ -52,6 +52,8 @@ const QuerySchema = z.object({
   productRegion: z.enum(["europe", "japan"]).optional(),
   amountMin: z.coerce.number().nonnegative().optional(),
   amountMax: z.coerce.number().nonnegative().optional(),
+  /** UUID на потребител — филтрира само неговите задачи (за service_staff). */
+  assignedTo: z.string().uuid().optional(),
   page: z.coerce.number().int().min(1).optional().default(1),
   perPage: z.coerce.number().int().min(1).max(500).optional().default(200),
   sortBy: z
@@ -142,6 +144,7 @@ export async function GET(req: NextRequest) {
     productRegion,
     amountMin,
     amountMax,
+    assignedTo,
     page,
     perPage,
     sortBy,
@@ -266,6 +269,7 @@ export async function GET(req: NextRequest) {
   }
   if (eventCode) query = query.eq("event_code", eventCode);
   if (type) query = query.eq("type", type);
+  if (assignedTo) query = query.eq("assigned_to", assignedTo);
   const statusFilters = (statusCsv ?? "")
     .split(",")
     .map((s) => s.trim())

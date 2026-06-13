@@ -720,7 +720,7 @@ export function ProductPhotoUploader({
 
                 {/* Action бутони — показват се при hover */}
                 {!uploading && p.status !== "done" && p.aiStatus !== "processing" && (
-                  <div className="absolute top-0.5 right-0.5 flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-all">
+                  <div className="absolute top-0.5 right-0.5 flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 max-md:opacity-100 transition-all">
                     {/* AI enhance (или undo, ако вече е обработена) */}
                     {p.aiStatus === "done" ? (
                       <button

@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { X, MessageCircle, Loader2, User, Clock, CheckCircle2, Search } from "lucide-react";
 import { CatalogProductImage } from "@/app/admin/components/CatalogProductImage";
+import { useAdminBackHandler } from "@/lib/admin/useAdminBackHandler";
 
 type ActiveChat = { id: string; visitor_name: string; status: string; last_message_at?: string | null };
 
@@ -19,6 +20,7 @@ interface Props {
 }
 
 export function ShareToChatModal({ product, onClose }: Props) {
+  useAdminBackHandler(true, onClose, "share-to-chat-modal");
   const [chats, setChats] = useState<ActiveChat[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState<string | null>(null);

@@ -231,7 +231,7 @@ function ChipToggle({
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-colors ${
+      className={`inline-flex items-center gap-0.5 px-3 min-h-[40px] rounded-full text-[10px] font-semibold border transition-colors ${
         active ? styles.active : styles.idle
       }`}
     >
@@ -285,6 +285,7 @@ export default function SupplierOrdersHistoryPage() {
   const [page, setPage] = useState(1);
   const [meta, setMeta] = useState({ page: 1, perPage: 30, total: 0 });
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [saleOrder, setSaleOrder] = useState<NormalizedSupplierOrderRow | null>(null);
   const [manualDeliveryOpen, setManualDeliveryOpen] = useState(false);
@@ -397,6 +398,7 @@ export default function SupplierOrdersHistoryPage() {
 
   async function load() {
     setError(null);
+    setLoading(true);
     try {
       const res = await fetch(`/api/admin/supplier-orders?${qs}`, { credentials: "include" });
       const json = await res.json().catch(() => ({}));
@@ -405,6 +407,9 @@ export default function SupplierOrdersHistoryPage() {
       setMeta((json as { meta?: typeof meta }).meta ?? { page: 1, perPage: 30, total: 0 });
     } catch (e: unknown) {
       setError(String(e instanceof Error ? e.message : e));
+      setItems([]);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -668,7 +673,14 @@ export default function SupplierOrdersHistoryPage() {
         </div>
       </Card>
 
-      {error && (
+      {loading && (
+        <div className="flex items-center justify-center py-10 text-sm font-medium text-slate-500 gap-2">
+          <RefreshCw className="h-4 w-4 animate-spin" />
+          Зареждане…
+        </div>
+      )}
+
+      {!loading && error && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">{error}</div>
       )}
 
@@ -821,13 +833,13 @@ export default function SupplierOrdersHistoryPage() {
           {section === "new" ? "Нови" : "Втора употреба"} · общо: {meta.total}
         </span>
         <div className="flex items-center gap-2 md:gap-3">
-          <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+          <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => { setPage((p) => Math.max(1, p - 1)); window.scrollTo(0, 0); }}>
             ‹ Пред.
           </Button>
           <span className="text-sm font-medium text-slate-600">
             {page} / {pages}
           </span>
-          <Button variant="secondary" size="sm" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>
+          <Button variant="secondary" size="sm" disabled={page >= pages} onClick={() => { setPage((p) => p + 1); window.scrollTo(0, 0); }}>
             Следв. ›
           </Button>
         </div>

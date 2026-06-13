@@ -219,7 +219,10 @@ export function ProfilePageClient() {
   return (
     <div className="w-full max-w-lg mx-auto space-y-4 pb-28 md:pb-6">
       {toast && (
-        <div className="fixed top-4 left-4 right-4 z-50 md:left-auto md:right-4 md:w-auto px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-bold shadow-lg text-center">
+        <div
+          className="fixed left-4 right-4 z-50 md:left-auto md:right-4 md:w-auto px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-bold shadow-lg text-center"
+          style={{ top: "calc(env(safe-area-inset-top, 0px) + 1rem)" }}
+        >
           {toast}
         </div>
       )}

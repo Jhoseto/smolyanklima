@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import Link from "next/link";
-import { Input, Select, Textarea, Button } from "../ui";
+import { Input, Select, Textarea, Button, useAdminBackHandler } from "../ui";
 import { AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, Sparkles, Wand2, X, ExternalLink, Loader2, Info } from "lucide-react";
 import { useDebounce } from "@/lib/hooks/useDebounce";
 import { normalizeProductStockLocation, type ProductStockLocation } from "@/lib/admin/productStockLocation";
@@ -769,6 +769,7 @@ export function ProductFormFields({
 
   const [aiBusy, setAiBusy] = useState(false);
   const [aiDialog, setAiDialog] = useState<"missing_name" | "replace_description" | "error" | null>(null);
+  useAdminBackHandler(Boolean(aiDialog), () => setAiDialog(null), "product-ai-dialog");
   const [aiError, setAiError] = useState("");
   const [dimsBusy, setDimsBusy] = useState(false);
   const [dimsNotice, setDimsNotice] = useState<{ kind: "ok" | "warn" | "error"; text: string } | null>(null);
@@ -1823,10 +1824,10 @@ export function ProductFormFields({
             </div>
           )}
 
-          <label className="flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50/80 px-2.5 py-2 cursor-pointer">
+          <label className="flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50/80 px-2.5 min-h-[44px] cursor-pointer">
             <input
               type="checkbox"
-              className="mt-0.5 rounded border-slate-300"
+              className="w-5 h-5 rounded border-slate-300 shrink-0"
               checked={form.showInPublicCatalog}
               onChange={(e) => setForm({ ...form, showInPublicCatalog: e.target.checked })}
             />
@@ -1868,8 +1869,8 @@ export function ProductFormFields({
             )}
           </label>
 
-          <label className="flex items-center gap-2 cursor-pointer rounded-md md:rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 md:px-3 md:py-2 mt-0.5 md:mt-1">
-            <input type="checkbox" className="w-4 h-4 max-md:w-3.5 max-md:h-3.5 rounded border-slate-300 text-brand-blue-500 focus:ring-brand-blue-500" checked={form.isFeatured} onChange={(e) => setForm({ ...form, isFeatured: e.target.checked })} />
+          <label className="flex items-center gap-2 cursor-pointer rounded-md md:rounded-lg border border-slate-200 bg-white px-2.5 min-h-[44px] md:px-3 mt-0.5 md:mt-1">
+            <input type="checkbox" className="w-5 h-5 rounded border-slate-300 text-brand-blue-500 focus:ring-brand-blue-500 shrink-0" checked={form.isFeatured} onChange={(e) => setForm({ ...form, isFeatured: e.target.checked })} />
             <span className="text-xs md:text-sm font-semibold text-slate-700">Избран <span className="text-slate-400 font-normal text-[10px] md:text-[11px]">(подчертава в каталога)</span></span>
           </label>
         </aside>
@@ -2055,8 +2056,8 @@ export function ProductFormFields({
             <FieldTitle label="Гаранция (месеци)" info="Напр. 36 = 3 години." ai={isAiField("specs.warranty_months")} />
             <Input value={form.specs.warranty_months} onChange={(e) => setSpec("warranty_months", e.target.value)} list="warranty-months-options" placeholder="36" className={aiHl("specs.warranty_months")} />
           </label>
-          <label className={`flex items-center gap-2 cursor-pointer rounded-md md:rounded-lg border px-2.5 py-1.5 md:px-3 md:py-2 self-end sm:col-span-2 lg:col-span-1 ${isAiField("specs.wifi") ? "border-emerald-300 bg-emerald-50/50" : "border-slate-200 bg-slate-50"}`}>
-            <input type="checkbox" className="w-3.5 h-3.5 md:w-4 md:h-4 rounded border-slate-300 text-brand-blue-500 focus:ring-brand-blue-500" checked={form.specs.wifi} onChange={(e) => setSpec("wifi", e.target.checked)} />
+          <label className={`flex items-center gap-2 cursor-pointer rounded-md md:rounded-lg border px-2.5 min-h-[44px] md:px-3 self-end sm:col-span-2 lg:col-span-1 ${isAiField("specs.wifi") ? "border-emerald-300 bg-emerald-50/50" : "border-slate-200 bg-slate-50"}`}>
+            <input type="checkbox" className="w-5 h-5 rounded border-slate-300 text-brand-blue-500 focus:ring-brand-blue-500 shrink-0" checked={form.specs.wifi} onChange={(e) => setSpec("wifi", e.target.checked)} />
             <span className="text-xs md:text-sm font-semibold text-slate-700 flex items-center gap-1">WiFi <span className="text-slate-400 font-normal text-[10px] md:text-[11px]">(модул)</span>{isAiField("specs.wifi") && <AiBadge />}</span>
           </label>
         </div>
@@ -2251,7 +2252,7 @@ export function ProductFormFields({
 
                     {/* Hover overlay с компактни action-и */}
                     {!isProcessing && !ro && (
-                      <div className="absolute inset-x-0 bottom-0 flex bg-slate-900/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                      <div className="absolute inset-x-0 bottom-0 flex bg-slate-900/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 focus-within:opacity-100 max-md:opacity-100 transition-opacity">
                         {!im.is_main && (
                           <button
                             type="button"
@@ -2381,11 +2382,11 @@ export function ProductFormFields({
 
       {aiDialog && (
         <div
-          className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4 bg-slate-950/55 backdrop-blur-md"
+          className="fixed inset-0 z-[60] flex items-end md:items-center justify-center md:p-4 bg-slate-950/55 backdrop-blur-md"
           onClick={() => !aiBusy && setAiDialog(null)}
         >
           <div
-            className="w-full md:max-w-xl overflow-hidden rounded-t-3xl md:rounded-3xl border border-white/70 bg-white shadow-[0_-8px_40px_rgba(15,23,42,0.3)]"
+            className="w-full md:max-w-xl overflow-hidden rounded-t-3xl md:rounded-3xl border border-white/70 bg-white shadow-[0_-8px_40px_rgba(15,23,42,0.3)] pb-safe md:pb-0"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-center pt-3 pb-1 md:hidden"><div className="w-10 h-1 rounded-full bg-slate-200" /></div>
@@ -2394,7 +2395,7 @@ export function ProductFormFields({
                 type="button"
                 onClick={() => setAiDialog(null)}
                 disabled={aiBusy}
-                className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white/80 text-slate-500 shadow-sm transition-colors hover:bg-white hover:text-slate-900 disabled:opacity-50"
+                className="absolute right-4 top-4 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full border border-slate-200 bg-white/80 text-slate-500 shadow-sm transition-colors hover:bg-white hover:text-slate-900 disabled:opacity-50"
                 aria-label="Затвори AI прозореца"
               >
                 <X className="h-4 w-4" />

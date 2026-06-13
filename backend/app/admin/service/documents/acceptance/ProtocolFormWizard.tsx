@@ -13,6 +13,7 @@ import type { AccessoriesEntry, MaterialEntry } from "@/lib/protocol-materials";
 import { SignatureCanvas } from "./SignatureCanvas";
 import { ProductAutocomplete, type ProductSuggestion } from "./ProductAutocomplete";
 import { ContactAutocomplete, type ContactSuggestion } from "./ContactAutocomplete";
+import { Input, useAdminBackHandler } from "@/app/admin/ui";
 import { offlineSend, offlineGet, newLocalId, isLocalId } from "@/lib/offline/offlineFetch";
 import { resolveServerId } from "@/lib/offline/queue";
 import { useOnlineStatus } from "@/lib/hooks/useOnlineStatus";
@@ -142,6 +143,7 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
   const online = useOnlineStatus();
   const { syncNow, refreshQueueState, pendingSampleError, isSyncing } = useOfflineQueue();
   const [sigOpen, setSigOpen] = useState<"team" | "client" | null>(null);
+  useAdminBackHandler(Boolean(sigOpen), () => setSigOpen(null), "protocol-signature");
   const [sendEmail, setSendEmail] = useState(false);
   const [emailInput, setEmailInput] = useState(initialData?.client_email ?? "");
   const [sending, setSending] = useState(false);
@@ -152,6 +154,8 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
   const persistFormRef = useRef<(data: FormData, id: string | null, showSaving?: boolean) => Promise<string | null>>(() => Promise.resolve(null));
   const onlineRef = useRef(online);
   onlineRef.current = online;
+  /** Следи дали протоколът е подписан и потребителят е service_staff (read-only). */
+  const isSignedRef = useRef(false);
   /** Само при отваряне на съществуващ протокол — не при auto-save CREATE в същата сесия. */
   const resumeStepOnLoadRef = useRef(Boolean(protocolId));
 
@@ -243,6 +247,7 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
 
   // Автоматично запазване — без да уведомяваме родителя (onSaved/load/inferResumeStep).
   const autoSave = useCallback((data: FormData, id: string | null) => {
+    if (isSignedRef.current) return;
     if (!formHasDraftContent(data) && !id) return;
 
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
@@ -252,6 +257,7 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
   }, []);
 
   const update = useCallback(<K extends keyof FormData>(key: K, val: FormData[K]) => {
+    if (isSignedRef.current) return;
     setForm(prev => {
       const next = { ...prev, [key]: val };
       autoSave(next, savedId);
@@ -478,14 +484,27 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
     }
   };
 
-  // PDF сваляне
+  // PDF сваляне — fetch→blob→<a download> за надеждност в iOS PWA
   const downloadPdf = async () => {
     const id = await resolvePdfEmailId();
     if (!id) {
       setError("Протоколът още не е качен в системата. Опитайте отново след малко.");
       return;
     }
-    window.open(`/api/admin/service/protocols/${id}/pdf`, "_blank");
+    try {
+      const res = await fetch(`/api/admin/service/protocols/${id}/pdf`, { credentials: "include" });
+      if (!res.ok) throw new Error("Грешка при генериране на PDF");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `protocol-${id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+    } catch {
+      setError("Неуспешно сваляне на PDF. Проверете връзката.");
+    }
   };
 
   const isLastStep = step === STEPS.length - 1;
@@ -494,6 +513,7 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
   // service_staff виждат подписания протокол като read-only.
   const canEditSigned = role === "master_admin" || role === "office_staff";
   const isSigned = (form.status === "signed" || bothSigned) && !canEditSigned;
+  isSignedRef.current = isSigned;
 
   const resolvePdfEmailId = async (): Promise<string | null> => {
     if (!savedId) return null;
@@ -537,36 +557,59 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
   // ─── Рендер стъпка ────────────────────────────────────────────────────────
 
   return (
-    <div className="fixed inset-0 z-40 bg-slate-50 flex flex-col">
+    <div className="fixed inset-0 z-[60] bg-slate-50 flex flex-col">
 
       {/* ── Хедър с прогрес ── */}
-      <div className="bg-white border-b border-slate-200 shrink-0">
+      <div className="bg-white border-b border-slate-200 shrink-0 safe-top">
         <div className="flex items-center gap-3 px-4 py-3">
-          <button onClick={handleClose} className="text-slate-500 active:text-slate-800 p-1 -ml-1" title="Запази и затвори">
+          <button
+            onClick={handleClose}
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 active:bg-slate-200 transition-colors -ml-1 shrink-0"
+            title="Запази и затвори"
+          >
             <X className="w-5 h-5" />
           </button>
-          <div className="flex-1">
-            <p className="text-xs text-slate-400">Стъпка {step + 1} от {STEPS.length}</p>
-            <p className="text-sm font-bold text-slate-800">{STEPS[step]}</p>
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              Стъпка {step + 1} / {STEPS.length}
+            </p>
+            <p className="text-sm font-black text-slate-900 truncate">{STEPS[step]}</p>
           </div>
           {!online && (
-            <div title="Няма мрежа — промените се пазят локално" className="flex items-center gap-1 px-2 py-1 rounded-full bg-slate-900 text-white text-[10px] font-bold">
+            <div title="Няма мрежа — промените се пазят локално" className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-800 text-white text-[10px] font-bold shrink-0">
               <CloudOff className="w-3 h-3" />
-              Без мрежа
+              <span className="hidden xs:inline">Без мрежа</span>
             </div>
           )}
           {online && pendingSync && (
-            <div title="Записът се качва към сървъра" className="flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500 text-white text-[10px] font-bold">
+            <div title="Записът се качва към сървъра" className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500 text-white text-[10px] font-bold shrink-0">
               {isSyncing ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-              {isSyncing ? "Качване…" : "Запазен локално"}
+              <span className="hidden xs:inline">{isSyncing ? "Качване…" : "Локален"}</span>
             </div>
           )}
-          {saving && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
+          {saving && <Loader2 className="w-4 h-4 animate-spin text-slate-400 shrink-0" />}
         </div>
+
+        {/* Dot progress indicator */}
+        <div className="flex items-center justify-center gap-1.5 pb-2.5">
+          {STEPS.map((_, i) => (
+            <div
+              key={i}
+              className={`rounded-full transition-all duration-300 ${
+                i === step
+                  ? "w-5 h-2 bg-brand-orange-500"
+                  : i < step
+                  ? "w-2 h-2 bg-brand-orange-300"
+                  : "w-2 h-2 bg-slate-200"
+              }`}
+            />
+          ))}
+        </div>
+
         {/* Прогрес лента */}
-        <div className="h-1 bg-slate-100">
+        <div className="h-0.5 bg-slate-100">
           <div
-            className="h-1 bg-blue-600 transition-all duration-300"
+            className="h-0.5 bg-brand-orange-500 transition-all duration-300"
             style={{ width: `${((step + 1) / STEPS.length) * 100}%` }}
           />
         </div>
@@ -580,10 +623,10 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
           {step === 0 && (
             <div className="space-y-4">
               <Field label="Дата">
-                <input
+                <Input
                   type="date" value={form.date}
                   onChange={e => update("date", e.target.value)}
-                  className="w-full text-base border-b-2 border-slate-300 focus:border-blue-500 outline-none py-2 bg-transparent"
+                  disabled={isSigned}
                 />
               </Field>
               <ContactAutocomplete
@@ -634,44 +677,47 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
                 }}
               />
               <Field label="Сериен № — вътрешно тяло" error={fieldErrors.indoor_unit_serial}>
-                <input
+                <Input
                   type="text"
                   value={form.indoor_unit_serial}
                   onChange={e => update("indoor_unit_serial", e.target.value)}
                   placeholder="Серийният номер от табелката на вътрешното тяло"
-                  className="w-full text-base border-b-2 border-slate-300 focus:border-blue-500 outline-none py-2 bg-transparent"
+                  disabled={isSigned}
+                  className={fieldErrors.indoor_unit_serial ? "border-red-400 focus:border-red-500 focus:ring-red-200" : ""}
                 />
               </Field>
               <Field label="Сериен № — външно тяло" error={fieldErrors.outdoor_unit_serial}>
-                <input
+                <Input
                   type="text"
                   value={form.outdoor_unit_serial}
                   onChange={e => update("outdoor_unit_serial", e.target.value)}
                   placeholder="Серийният номер от табелката на външното тяло"
-                  className="w-full text-base border-b-2 border-slate-300 focus:border-blue-500 outline-none py-2 bg-transparent"
+                  disabled={isSigned}
+                  className={fieldErrors.outdoor_unit_serial ? "border-red-400 focus:border-red-500 focus:ring-red-200" : ""}
                 />
               </Field>
               <Field label="Адрес">
-                <input
+                <Input
                   type="text" value={form.address} placeholder="гр. Смолян, ул. ..."
                   onChange={e => update("address", e.target.value)}
-                  className="w-full text-base border-b-2 border-slate-300 focus:border-blue-500 outline-none py-2 bg-transparent"
+                  disabled={isSigned}
                 />
               </Field>
               <Field label="Платена сума (€)">
-                <input
+                <Input
                   type="number" value={form.paid_amount} placeholder="0.00" min="0" step="0.01"
                   onChange={e => update("paid_amount", e.target.value)}
-                  className="w-full text-base border-b-2 border-slate-300 focus:border-blue-500 outline-none py-2 bg-transparent"
+                  disabled={isSigned}
                 />
               </Field>
               <Field label="Телефон на клиента" error={fieldErrors.client_phone}>
-                <input
+                <Input
                   type="tel"
                   inputMode="numeric"
                   autoComplete="tel"
                   value={form.client_phone}
                   placeholder="0888585816"
+                  disabled={isSigned}
                   onChange={e => {
                     update("client_phone", digitsOnlyPhoneInput(e.target.value));
                     if (fieldErrors.client_phone) {
@@ -682,20 +728,17 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
                       });
                     }
                   }}
-                  className={`w-full text-base border-b-2 outline-none py-2 bg-transparent ${
-                    fieldErrors.client_phone
-                      ? "border-red-400 focus:border-red-500"
-                      : "border-slate-300 focus:border-blue-500"
-                  }`}
+                  className={fieldErrors.client_phone ? "border-red-400 focus:border-red-500 focus:ring-red-200" : ""}
                 />
               </Field>
               <Field label="Имейл на клиента (за изпращане)" error={fieldErrors.client_email}>
-                <input
+                <Input
                   type="email"
                   inputMode="email"
                   autoComplete="email"
                   value={form.client_email}
                   placeholder="client@example.com"
+                  disabled={isSigned}
                   onChange={e => {
                     const v = e.target.value;
                     update("client_email", v);
@@ -708,11 +751,7 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
                       });
                     }
                   }}
-                  className={`w-full text-base border-b-2 outline-none py-2 bg-transparent ${
-                    fieldErrors.client_email
-                      ? "border-red-400 focus:border-red-500"
-                      : "border-slate-300 focus:border-blue-500"
-                  }`}
+                  className={fieldErrors.client_email ? "border-red-400 focus:border-red-500 focus:ring-red-200" : ""}
                 />
               </Field>
             </div>
@@ -899,25 +938,25 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
       </div>
 
       {/* ── Навигация Назад / Запази / Напред ── */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-3 flex gap-2 safe-bottom">
+      <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 px-4 py-3 flex gap-2 pb-safe">
         <button
           onClick={() => { setStep(s => s - 1); setError(null); setFieldErrors({}); }}
           disabled={step === 0}
-          className="flex items-center gap-1.5 px-3 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold text-sm disabled:opacity-30 shrink-0"
+          className="flex items-center justify-center gap-1.5 w-12 h-12 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold disabled:opacity-30 shrink-0 active:bg-slate-50 transition-colors"
+          title="Назад"
         >
           <ChevronLeft className="w-5 h-5" />
-          <span className="hidden sm:inline">Назад</span>
         </button>
 
         {!isSigned && (
           <button
             onClick={() => void saveDraftAndClose()}
             disabled={saving}
-            className="flex items-center gap-1.5 px-3 py-3 rounded-xl border-2 border-slate-300 text-slate-700 font-semibold text-sm active:bg-slate-50 disabled:opacity-50 shrink-0"
+            className="flex items-center gap-1.5 px-3 h-12 rounded-xl border-2 border-slate-200 text-slate-700 font-semibold text-sm active:bg-slate-50 disabled:opacity-50 shrink-0 transition-colors"
             title="Запазва текущото съдържание без подписи — може да довършите по-късно"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            <span className="hidden sm:inline">Запази и затвори</span>
+            <span className="text-xs">Запази</span>
           </button>
         )}
 
@@ -927,19 +966,19 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
           <button
             onClick={finalize}
             disabled={saving || isSigned}
-            className="flex items-center gap-2 bg-green-600 disabled:bg-slate-400 text-white px-4 sm:px-5 py-3 rounded-xl font-semibold text-sm active:bg-green-700 shrink-0"
+            className="flex items-center gap-2 bg-green-600 disabled:bg-slate-300 text-white px-5 h-12 rounded-xl font-bold text-sm active:bg-green-700 shrink-0 shadow-sm shadow-green-200 transition-colors"
           >
             {saving
-              ? <><Loader2 className="w-5 h-5 animate-spin" /> <span className="hidden sm:inline">Запазва се...</span></>
+              ? <><Loader2 className="w-5 h-5 animate-spin" /> Запазва се…</>
               : isSigned
-                ? <><CheckCircle2 className="w-5 h-5" /> <span className="hidden sm:inline">Подписан</span></>
+                ? <><CheckCircle2 className="w-5 h-5" /> Подписан</>
                 : <><Check className="w-5 h-5" /> Финализирай</>
             }
           </button>
         ) : (
           <button
             onClick={goNext}
-            className="flex items-center gap-1.5 px-4 sm:px-5 py-3 rounded-xl bg-blue-600 text-white font-semibold text-sm active:bg-blue-700 shrink-0"
+            className="flex items-center gap-1.5 px-5 h-12 rounded-xl bg-brand-orange-500 text-white font-bold text-sm active:bg-brand-orange-600 shrink-0 shadow-sm shadow-brand-orange-200 transition-colors"
           >
             Напред
             <ChevronRight className="w-5 h-5" />
@@ -977,11 +1016,11 @@ function Field({
 }) {
   return (
     <div>
-      <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">
+      <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">
         {label}
       </label>
       {children}
-      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+      {error && <p className="mt-1.5 text-xs font-semibold text-red-600">{error}</p>}
     </div>
   );
 }

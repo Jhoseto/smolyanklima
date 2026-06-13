@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { SectionTitle, Card, Input, Button, Select, Table, Th, Td } from "../ui";
+import { SectionTitle, Card, Input, Button, Select, Table, Th, Td, useAdminBackHandler } from "../ui";
+import { useDebounce } from "@/lib/hooks/useDebounce";
 import { RefreshCw, Star, ChevronRight, X, Trash2, Plus, Minus, SlidersHorizontal } from "lucide-react";
 
 type SortOption =
@@ -155,6 +156,7 @@ function DetailModal({
   onClose: () => void;
   onRefresh: () => void;
 }) {
+  useAdminBackHandler(true, onClose, `ratings-detail-${product.id}`);
   const [rows, setRows] = useState<DetailRow[]>([]);
   const [meta, setMeta] = useState({ page: 1, perPage: 50, total: 0 });
   const [page, setPage] = useState(1);
@@ -228,15 +230,20 @@ function DetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/60 md:p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[60] flex items-end md:items-center justify-center bg-slate-950/60 md:p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-2xl rounded-t-3xl md:rounded-3xl bg-white shadow-2xl overflow-hidden flex flex-col max-h-[90dvh]"
+        className="w-full max-w-2xl rounded-t-3xl md:rounded-3xl bg-white shadow-2xl overflow-hidden flex flex-col max-h-[90dvh] pb-safe md:pb-0"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Drag handle (mobile) */}
+        <div className="flex justify-center pt-2.5 pb-1 md:hidden shrink-0">
+          <div className="w-10 h-1 rounded-full bg-slate-200" />
+        </div>
+
         {/* Header */}
-        <div className="flex items-start justify-between gap-3 p-5 border-b border-slate-100">
+        <div className="flex items-start justify-between gap-3 px-5 pb-4 pt-2 md:pt-5 border-b border-slate-100">
           <div className="min-w-0">
             <div className="font-black text-slate-900 text-base leading-snug">{product.name}</div>
             <div className="flex items-center gap-2 mt-1">
@@ -245,7 +252,7 @@ function DetailModal({
               <span className="text-sm text-slate-400">({total} оценки)</span>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 transition-colors shrink-0">
+          <button onClick={onClose} className="p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl hover:bg-slate-100 transition-colors shrink-0">
             <X className="w-5 h-5 text-slate-500" />
           </button>
         </div>
@@ -275,18 +282,18 @@ function DetailModal({
                         </div>
                         <button
                           onClick={() => changeAdj(s, -1)}
-                          className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center hover:bg-red-50 hover:border-red-300 text-slate-600 transition-colors"
+                          className="w-11 h-11 rounded-xl border border-slate-200 flex items-center justify-center hover:bg-red-50 hover:border-red-300 text-slate-600 transition-colors active:bg-red-100"
                         >
-                          <Minus className="w-3 h-3" />
+                          <Minus className="w-4 h-4" />
                         </button>
                         <span className={`w-10 text-center text-sm font-bold ${adj > 0 ? "text-green-600" : adj < 0 ? "text-red-500" : "text-slate-400"}`}>
                           {adj > 0 ? `+${adj}` : adj === 0 ? "0" : adj}
                         </span>
                         <button
                           onClick={() => changeAdj(s, +1)}
-                          className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center hover:bg-green-50 hover:border-green-300 text-slate-600 transition-colors"
+                          className="w-11 h-11 rounded-xl border border-slate-200 flex items-center justify-center hover:bg-green-50 hover:border-green-300 text-slate-600 transition-colors active:bg-green-100"
                         >
-                          <Plus className="w-3 h-3" />
+                          <Plus className="w-4 h-4" />
                         </button>
                         <span className="text-xs text-slate-400 ml-1">→ {Math.max(0, (dist[s] ?? 0) + adj)}</span>
                       </div>
@@ -311,7 +318,7 @@ function DetailModal({
               <div className="flex gap-1">
                 <button
                   onClick={() => { setFilterStar(null); setPage(1); }}
-                  className={`px-2 py-1 rounded-lg text-xs font-medium transition-colors ${filterStar === null ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+                  className={`px-3 min-h-[40px] rounded-lg text-xs font-medium transition-colors ${filterStar === null ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
                 >
                   Всички
                 </button>
@@ -319,7 +326,7 @@ function DetailModal({
                   <button
                     key={s}
                     onClick={() => { setFilterStar(s); setPage(1); }}
-                    className={`px-2 py-1 rounded-lg text-xs font-medium transition-colors ${filterStar === s ? "bg-amber-500 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+                    className={`px-3 min-h-[40px] rounded-lg text-xs font-medium transition-colors ${filterStar === s ? "bg-amber-500 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
                   >
                     {s}★
                   </button>
@@ -340,7 +347,7 @@ function DetailModal({
                     <span className="text-xs text-slate-400 shrink-0">{new Date(r.created_at).toLocaleDateString("bg-BG")}</span>
                     <button
                       onClick={() => void deleteRow(r.id)}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-50 text-red-400 hover:text-red-600 transition-all"
+                      className="max-md:opacity-100 opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-50 text-red-400 hover:text-red-600 transition-all min-w-[36px] min-h-[36px] flex items-center justify-center"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -369,6 +376,7 @@ function DetailModal({
 export default function AdminRatingsPage() {
   const [items, setItems] = useState<ProductSummary[]>([]);
   const [filters, setFilters] = useState<SummaryFilters>(DEFAULT_FILTERS);
+  const debouncedQ = useDebounce(filters.q, 300);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [brands, setBrands] = useState<BrandOption[]>([]);
   const [page, setPage] = useState(1);
@@ -376,6 +384,7 @@ export default function AdminRatingsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<ProductSummary | null>(null);
+  useAdminBackHandler(Boolean(selected), () => setSelected(null), "ratings-detail-modal");
 
   useEffect(() => {
     void fetch("/api/admin/meta/brands?usedInProducts=1", { credentials: "include" })
@@ -398,7 +407,7 @@ export default function AdminRatingsPage() {
       featured: filters.featured,
       stockStatus: filters.stockStatus,
     });
-    if (filters.q.trim()) sp.set("q", filters.q.trim());
+    if (debouncedQ.trim()) sp.set("q", debouncedQ.trim());
     if (filters.minRating.trim()) sp.set("minRating", filters.minRating.trim());
     if (filters.maxRating.trim()) sp.set("maxRating", filters.maxRating.trim());
     if (filters.minReviews.trim()) sp.set("minReviews", filters.minReviews.trim());
@@ -406,7 +415,7 @@ export default function AdminRatingsPage() {
     if (filters.brandId) sp.set("brandId", filters.brandId);
     if (filters.hasStar) sp.set("hasStar", filters.hasStar);
     return sp.toString();
-  }, [filters, page]);
+  }, [filters, debouncedQ, page]);
 
   const hasActiveFilters = useMemo(
     () =>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, FilterX } from "lucide-react";
 import { Button, Card, Input, Select, SectionTitle, Table, Td, Th } from "../ui";
 import { useDebounce } from "@/lib/hooks/useDebounce";
 import { describeActivityLog, formatActivityUser } from "@/lib/admin/activityLogLabels";
@@ -62,6 +62,15 @@ export default function AdminActivityPage() {
   }, [qs]);
 
   const pages = Math.max(1, Math.ceil(meta.total / meta.perPage));
+  const hasFilters = Boolean(q.trim() || entityType || from || to);
+
+  function clearFilters() {
+    setQ("");
+    setEntityType("");
+    setFrom("");
+    setTo("");
+    setPage(1);
+  }
 
   const entityFilterOptions = useMemo(
     () =>
@@ -120,10 +129,25 @@ export default function AdminActivityPage() {
               </option>
             ))}
           </Select>
-          <Input type="date" value={from} onChange={(e) => { setPage(1); setFrom(e.target.value); }} />
-          <Input type="date" value={to} onChange={(e) => { setPage(1); setTo(e.target.value); }} />
+          <label className="block">
+            <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">От дата</span>
+            <Input type="date" value={from} onChange={(e) => { setPage(1); setFrom(e.target.value); }} />
+          </label>
+          <label className="block">
+            <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">До дата</span>
+            <Input type="date" value={to} onChange={(e) => { setPage(1); setTo(e.target.value); }} />
+          </label>
         </div>
       </Card>
+
+      {hasFilters && (
+        <div className="flex justify-end">
+          <Button variant="secondary" size="sm" onClick={clearFilters} className="gap-1.5 text-slate-600">
+            <FilterX className="w-3.5 h-3.5" />
+            Изчисти филтри
+          </Button>
+        </div>
+      )}
 
       {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">{error}</div>}
 
@@ -227,17 +251,19 @@ export default function AdminActivityPage() {
 
       <div className="flex justify-between items-center">
         <span className="text-sm text-slate-500 font-medium">Общо: {meta.total}</span>
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
-            ‹
-          </Button>
-          <span className="text-sm font-medium text-slate-600">
-            {page} / {pages}
-          </span>
-          <Button variant="secondary" size="sm" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>
-            ›
-          </Button>
-        </div>
+        {pages > 1 && (
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => { setPage((p) => Math.max(1, p - 1)); window.scrollTo(0, 0); }}>
+              ‹
+            </Button>
+            <span className="text-sm font-medium text-slate-600">
+              {page} / {pages}
+            </span>
+            <Button variant="secondary" size="sm" disabled={page >= pages} onClick={() => { setPage((p) => p + 1); window.scrollTo(0, 0); }}>
+              ›
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

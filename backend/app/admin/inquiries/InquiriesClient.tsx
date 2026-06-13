@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAdminBackHandler } from "@/lib/admin/useAdminBackHandler";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   HelpRow,
@@ -133,6 +134,10 @@ export function InquiriesClient() {
   const [lastLiveUpdate, setLastLiveUpdate] = useState<string | null>(null);
   const [aiReplyDraft, setAiReplyDraft] = useState<AiReplyDraft | null>(null);
   const [selectedInquiry, setSelectedInquiry] = useState<Inquiry | null>(null);
+
+  useAdminBackHandler(Boolean(selectedInquiry) && !notesForId && !aiReplyDraft, () => setSelectedInquiry(null), "inquiry-detail");
+  useAdminBackHandler(Boolean(notesForId), () => setNotesForId(null), notesForId ? `inquiry-notes-${notesForId}` : undefined);
+  useAdminBackHandler(Boolean(aiReplyDraft), () => setAiReplyDraft(null), "inquiry-ai-draft");
   const selectedDisplayProducts = useMemo(
     () => productsForInquiryDisplay(selectedInquiry),
     [selectedInquiry],
@@ -181,6 +186,7 @@ export function InquiriesClient() {
 
   const openInquiryDetail = useCallback(async (inquiry: Inquiry) => {
     setSelectedInquiry(inquiry);
+    router.replace(`/admin/inquiries?id=${inquiry.id}`);
     try {
       const res = await fetch(`/api/admin/inquiries/${inquiry.id}`, { credentials: "include" });
       const json = await res.json();
@@ -188,7 +194,7 @@ export function InquiriesClient() {
     } catch {
       /* запазваме данните от списъка */
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     const id = searchParams.get("id")?.trim();
@@ -554,10 +560,10 @@ export function InquiriesClient() {
               <span className="text-xs text-slate-400">{(inqPage - 1) * INQ_PER_PAGE + 1}–{Math.min(inqPage * INQ_PER_PAGE, inqTotal)} от {inqTotal}</span>
               <div className="flex gap-1">
                 <HoverTip tip={INQUIRY_TIPS.prevPage}>
-                  <button type="button" aria-label={INQUIRY_TIPS.prevPage} onClick={() => setInqPage(p => Math.max(1, p - 1))} disabled={inqPage === 1} className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"><ChevronLeft className="w-3.5 h-3.5" /></button>
+                  <button type="button" aria-label={INQUIRY_TIPS.prevPage} onClick={() => setInqPage(p => Math.max(1, p - 1))} disabled={inqPage === 1} className="min-h-[44px] min-w-[44px] rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40 flex items-center justify-center"><ChevronLeft className="w-3.5 h-3.5" /></button>
                 </HoverTip>
                 <HoverTip tip={INQUIRY_TIPS.nextPage}>
-                  <button type="button" aria-label={INQUIRY_TIPS.nextPage} onClick={() => setInqPage(p => p + 1)} disabled={inqPage * INQ_PER_PAGE >= inqTotal} className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"><ChevronRight className="w-3.5 h-3.5" /></button>
+                  <button type="button" aria-label={INQUIRY_TIPS.nextPage} onClick={() => setInqPage(p => p + 1)} disabled={inqPage * INQ_PER_PAGE >= inqTotal} className="min-h-[44px] min-w-[44px] rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40 flex items-center justify-center"><ChevronRight className="w-3.5 h-3.5" /></button>
                 </HoverTip>
               </div>
             </div>
@@ -579,7 +585,7 @@ export function InquiriesClient() {
           <div className="w-full max-w-4xl max-h-[96vh] md:max-h-[calc(100vh-2rem)] overflow-hidden rounded-t-3xl md:rounded-3xl border border-white/70 bg-white shadow-[0_-8px_60px_rgba(15,23,42,0.35)] md:shadow-[0_30px_90px_rgba(15,23,42,0.35)]" onClick={e => e.stopPropagation()}>
             <div className="relative border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#ffffff_42%,#f8fafc_100%)] px-6 py-5">
               <HoverTip tip={INQUIRY_TIPS.close}>
-                <button type="button" aria-label={INQUIRY_TIPS.close} onClick={closeInquiryDetail} className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white/80 text-slate-500 shadow-sm hover:bg-white hover:text-slate-900"><X className="h-4 w-4" /></button>
+                <button type="button" aria-label={INQUIRY_TIPS.close} onClick={closeInquiryDetail} className="absolute right-4 top-4 inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white/80 text-slate-500 shadow-sm hover:bg-white hover:text-slate-900"><X className="h-4 w-4" /></button>
               </HoverTip>
               <div className="flex items-center gap-3 pr-10">
                 <div className={`flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-lg ${selectedInquiry.source === "wizard" ? "bg-violet-600 shadow-violet-600/25" : "bg-brand-blue-500 shadow-brand-blue-500/25"}`}>
@@ -638,6 +644,13 @@ export function InquiriesClient() {
                     <Badge label={priorityLabel(selectedInquiry.priority).label} colorClass={priorityLabel(selectedInquiry.priority).colorClass} />
                   </div>
                 </div>
+                {/* Primary actions first — always visible without scroll on mobile */}
+                <HoverTip tip={INQUIRY_TIPS.done} className="w-full">
+                  <Button variant="primary" className="w-full justify-center gap-2" aria-label={INQUIRY_TIPS.done} onClick={() => void quickUpdate(selectedInquiry.id, { status: "done" })}><CheckCircle className="h-4 w-4" /> Приключи</Button>
+                </HoverTip>
+                <HoverTip tip={INQUIRY_TIPS.ai} className="w-full">
+                  <Button variant="secondary" className="w-full justify-center gap-2" aria-label={INQUIRY_TIPS.ai} disabled={actionBusy === `ai:${selectedInquiry.id}`} onClick={() => void generateAiReply(selectedInquiry)}><Sparkles className="h-4 w-4 text-brand-blue-500" /> AI чернова</Button>
+                </HoverTip>
                 <HoverTip tip={INQUIRY_TIPS.notes} className="w-full">
                   <Button variant="secondary" className="w-full justify-center gap-2" aria-label={INQUIRY_TIPS.notes} onClick={() => setNotesForId(selectedInquiry.id)}><StickyNote className="h-4 w-4" /> Бележки</Button>
                 </HoverTip>
@@ -650,12 +663,6 @@ export function InquiriesClient() {
                 <HoverTip tip={INQUIRY_TIPS.inspection} className="w-full">
                   <Button variant="secondary" className="w-full justify-center" aria-label={INQUIRY_TIPS.inspection} disabled={actionBusy === `work:${selectedInquiry.id}`} onClick={() => void createInspectionFromInquiry(selectedInquiry)}>Създай оглед</Button>
                 </HoverTip>
-                <HoverTip tip={INQUIRY_TIPS.ai} className="w-full">
-                  <Button variant="secondary" className="w-full justify-center gap-2" aria-label={INQUIRY_TIPS.ai} disabled={actionBusy === `ai:${selectedInquiry.id}`} onClick={() => void generateAiReply(selectedInquiry)}><Sparkles className="h-4 w-4 text-brand-blue-500" /> AI чернова</Button>
-                </HoverTip>
-                <HoverTip tip={INQUIRY_TIPS.done} className="w-full">
-                  <Button variant="primary" className="w-full justify-center gap-2" aria-label={INQUIRY_TIPS.done} onClick={() => void quickUpdate(selectedInquiry.id, { status: "done" })}><CheckCircle className="h-4 w-4" /> Приключи</Button>
-                </HoverTip>
                 <HoverTip tip={INQUIRY_TIPS.spam} className="w-full">
                   <Button variant="danger" className="w-full justify-center gap-2" aria-label={INQUIRY_TIPS.spam} onClick={() => void quickUpdate(selectedInquiry.id, { status: "spam" })}><ShieldAlert className="h-4 w-4" /> Спам</Button>
                 </HoverTip>
@@ -666,7 +673,7 @@ export function InquiriesClient() {
       )}
 
       {aiReplyDraft && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/55 p-0 md:p-4 backdrop-blur-md" onClick={() => setAiReplyDraft(null)}>
+        <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center bg-slate-950/55 p-0 md:p-4 backdrop-blur-md" onClick={() => setAiReplyDraft(null)}>
           <div className="w-full max-w-2xl max-h-[92dvh] overflow-hidden rounded-t-3xl md:rounded-3xl border border-white/70 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)] flex flex-col pb-safe md:pb-0" onClick={e => e.stopPropagation()}>
             <div className="flex justify-center pt-3 pb-1 md:hidden shrink-0">
               <div className="w-10 h-1 rounded-full bg-slate-200" />
@@ -827,7 +834,7 @@ function InquiryNotesModal({ inquiryId, initialNotes, onClose, onSave }: {
   const [text, setText] = useState(initialNotes);
   const [saving, setSaving] = useState(false);
   return (
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-end md:items-center justify-center z-50 p-0 md:p-2" onClick={onClose}>
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-end md:items-center justify-center z-[70] p-0 md:p-2" onClick={onClose}>
       <div className="w-full max-w-lg max-h-[92dvh] overflow-y-auto bg-white rounded-t-3xl md:rounded-xl shadow-xl border border-slate-200 p-4 pb-safe md:pb-4" onClick={e => e.stopPropagation()}>
         <div className="flex justify-center pb-2 md:hidden">
           <div className="w-10 h-1 rounded-full bg-slate-200" />

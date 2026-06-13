@@ -74,7 +74,9 @@ export function ServiceDetailModal({
         const res = await fetch(`/api/admin/work-items/${serviceId}`, { credentials: "include" });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || "Грешка");
-        if (!cancelled) setRow(json.data ?? null);
+        // API returns { data: { work_item, linked_sale, ... } }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if (!cancelled) setRow((json.data as any)?.work_item ?? null);
       } catch (e: unknown) {
         if (!cancelled) setError(String(e instanceof Error ? e.message : e));
       } finally {

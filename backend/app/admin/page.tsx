@@ -28,7 +28,6 @@ export default async function AdminDashboardPage() {
     overdueItems,
     failedEmails,
     callPanelItems,
-    supplierOrdersResult,
     supplierOrderCount,
   ] = await Promise.all([
     supabase.from("products").select("id", { count: "exact", head: true }),
@@ -79,24 +78,12 @@ export default async function AdminDashboardPage() {
     fetchCallFollowUpPanelItems(supabase, today),
     supabase
       .from("work_items")
-      .select(
-        `id, title, status, due_date, customer_name, customer_phone, customer_address,
-         unit_price, notes, created_at, product_id, contact_id,
-         products:product_id (id, name, model_code, brand_id, brands:brand_id (name)),
-         contacts:contact_id (id, full_name, phone)`,
-      )
-      .eq("event_code", "supplier_order")
-      .not("status", "in", '("done","cancelled")')
-      .order("supplier_order_sort_order", { ascending: true, nullsFirst: false })
-      .order("due_date", { ascending: true, nullsFirst: false })
-      .order("created_at", { ascending: false })
-      .limit(50),
-    supabase
-      .from("work_items")
       .select("id", { count: "exact", head: true })
       .eq("event_code", "supplier_order")
       .not("status", "in", '("done","cancelled")'),
   ]);
+
+  const dbError = products.error ?? inquiriesNew.error ?? workToday.error ?? workOverdue.error ?? null;
 
   const nProducts = products.count ?? 0;
   const nInquiries = inquiriesNew.count ?? 0;
@@ -110,6 +97,11 @@ export default async function AdminDashboardPage() {
 
   return (
     <div className="w-full space-y-3">
+      {dbError && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+          Грешка при зареждане на данните: {dbError.message}
+        </div>
+      )}
       {/* Operations planner — top of dashboard */}
       <WorkItemsPlanner readOnly={readOnlyDashboard} canDeleteEvents={session.role === "master_admin"} />
 
@@ -149,7 +141,7 @@ export default async function AdminDashboardPage() {
         <DashboardPanel
           title="Днес"
           description="Задачи и събития, които трябва да се обработят днес."
-          href="/admin/history"
+          href="/admin/service/tasks"
           empty="Няма задачи за днес."
           badge={nWorkToday}
           tone={nWorkToday > 0 ? "today" : "neutral"}
@@ -174,7 +166,7 @@ export default async function AdminDashboardPage() {
         <DashboardPanel
           title="Просрочени"
           description="Задачи с минала дата, които още чакат действие."
-          href="/admin/history"
+          href="/admin/service/tasks"
           empty="Няма просрочени задачи."
           badge={nWorkOverdue}
           tone={nWorkOverdue > 0 ? "danger" : "neutral"}

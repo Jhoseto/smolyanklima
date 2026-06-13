@@ -14,6 +14,7 @@ export default function NewArticlePage() {
   const [categories, setCategories] = useState<BlogCategory[]>([]);
   const [authors, setAuthors] = useState<BlogAuthor[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [slugTouched, setSlugTouched] = useState(false);
   const [seoTouched, setSeoTouched] = useState(false);
 
@@ -108,6 +109,7 @@ export default function NewArticlePage() {
 
   async function submit() {
     setError(null);
+    setSubmitting(true);
     const res = await fetch("/api/admin/articles", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -141,6 +143,7 @@ export default function NewArticlePage() {
     const json = await res.json();
     if (!res.ok) {
       setError(json.error || "Грешка при създаване");
+      setSubmitting(false);
       return;
     }
     router.push(`/admin/articles/${json.data.id}`);
@@ -243,7 +246,7 @@ export default function NewArticlePage() {
                   }}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
                 />
-                <div className="flex items-center justify-center gap-2 w-full px-4 py-2 border-2 border-dashed border-brand-blue-200 bg-brand-blue-50 text-brand-blue-500 hover:bg-brand-blue-100 hover:border-brand-blue-300 rounded-lg text-sm font-semibold transition-colors">
+                <div className="flex items-center justify-center gap-2 w-full px-4 min-h-[44px] border-2 border-dashed border-brand-blue-200 bg-brand-blue-50 text-brand-blue-500 hover:bg-brand-blue-100 hover:border-brand-blue-300 rounded-lg text-sm font-semibold transition-colors">
                   <Upload className="w-4 h-4" />
                   {uploading ? "Качване..." : "Кликни или пусни файл тук"}
                 </div>
@@ -324,9 +327,18 @@ export default function NewArticlePage() {
         </div>
       </Card>
 
-      <div className="flex justify-end">
-        <Button variant="primary" size="lg" onClick={submit} className="gap-2 shadow-sm">
-          <Save className="w-5 h-5" /> Създай статия
+      {/* Sticky save bar — always accessible on mobile */}
+      <div className="sticky bottom-16 md:bottom-0 z-30 -mx-4 md:mx-0 px-4 py-3 bg-white/95 backdrop-blur border-t border-slate-200 flex justify-end shadow-[0_-2px_8px_rgb(0,0,0,0.06)]">
+        <Button variant="primary" size="lg" onClick={submit} disabled={submitting} className="gap-2 shadow-sm">
+          {submitting ? (
+            <>
+              <Save className="w-5 h-5 animate-pulse" /> Запазване…
+            </>
+          ) : (
+            <>
+              <Save className="w-5 h-5" /> Създай статия
+            </>
+          )}
         </Button>
       </div>
     </div>

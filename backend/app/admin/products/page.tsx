@@ -2206,6 +2206,27 @@ export default function AdminProductsPage() {
           onClearAll={resetFilters}
           compact
         />
+        {/* Mobile sort controls */}
+        <div className="flex items-center gap-2">
+          <Select
+            value={`${sortBy}:${sortDir}`}
+            onChange={(e) => {
+              const [field, dir] = e.target.value.split(":");
+              setSortBy(field as SortField);
+              setSortDir(dir as SortDir);
+            }}
+            className="flex-1 !text-xs"
+          >
+            <option value="name:asc">Название А→Я</option>
+            <option value="name:desc">Название Я→А</option>
+            <option value="price:asc">Продажна ↑</option>
+            <option value="price:desc">Продажна ↓</option>
+            <option value="purchase_price:asc">Закупна ↑</option>
+            <option value="purchase_price:desc">Закупна ↓</option>
+            <option value="purchased_at:desc">Дата ↓ (нови)</option>
+            <option value="purchased_at:asc">Дата ↑ (стари)</option>
+          </Select>
+        </div>
         {loading && (
           <div className="text-center py-6 text-slate-500 text-xs">Зареждане...</div>
         )}
@@ -2223,19 +2244,21 @@ export default function AdminProductsPage() {
           >
             <div className="px-2.5 pt-2 pb-1.5 flex gap-2 items-start min-w-0">
               {canMutateProductRows && (
-                <input
-                  type="checkbox"
-                  className="mt-0.5 rounded border-slate-300 text-brand-blue-500 focus:ring-brand-blue-500 w-3.5 h-3.5 shrink-0 disabled:opacity-40"
-                  checked={selected.includes(p.id)}
-                  disabled={groupedExhausted}
-                  title={groupedExhausted ? `${groupedCount} изчерпани единици — изберете от пълния запис` : undefined}
-                  onChange={(e) =>
-                    setSelected((prev) =>
-                      e.target.checked ? [...prev, p.id] : prev.filter((x) => x !== p.id),
-                    )
-                  }
-                  aria-label="Избери за масово изтриване"
-                />
+                <label className="flex items-center justify-center min-w-[44px] min-h-[44px] -ml-2 -mt-2 cursor-pointer shrink-0">
+                  <input
+                    type="checkbox"
+                    className="rounded border-slate-300 text-brand-blue-500 focus:ring-brand-blue-500 w-4 h-4 shrink-0 disabled:opacity-40"
+                    checked={selected.includes(p.id)}
+                    disabled={groupedExhausted}
+                    title={groupedExhausted ? `${groupedCount} изчерпани единици — изберете от пълния запис` : undefined}
+                    onChange={(e) =>
+                      setSelected((prev) =>
+                        e.target.checked ? [...prev, p.id] : prev.filter((x) => x !== p.id),
+                      )
+                    }
+                    aria-label="Избери за масово изтриване"
+                  />
+                </label>
               )}
               <div className="flex-1 min-w-0">
                 <CatalogItemQuickViewButton
@@ -2440,7 +2463,7 @@ export default function AdminProductsPage() {
                     type="button"
                     disabled
                     title={saleButtonTitle(p)}
-                    className="py-2 px-0.5 text-[10px] font-bold leading-tight text-slate-400 opacity-35"
+                    className="min-h-[44px] px-0.5 text-[10px] font-bold leading-tight text-slate-400 opacity-35"
                   >
                     Продажба
                   </button>
@@ -2459,7 +2482,7 @@ export default function AdminProductsPage() {
                     }}
                     disabled={!canRecordSale(p)}
                     title={p.stock_status === "on_order" ? "Поръчай от доставчик" : saleButtonTitle(p)}
-                    className={`py-2 px-0.5 text-[10px] font-bold leading-tight transition-colors disabled:opacity-35 ${p.stock_status === "on_order" ? "text-violet-700 hover:bg-violet-50 active:bg-violet-100" : "text-slate-800 hover:bg-white active:bg-slate-100"}`}
+                    className={`min-h-[44px] px-0.5 text-[10px] font-bold leading-tight transition-colors disabled:opacity-35 ${p.stock_status === "on_order" ? "text-violet-700 hover:bg-violet-50 active:bg-violet-100" : "text-slate-800 hover:bg-white active:bg-slate-100"}`}
                   >
                     {p.stock_status === "on_order" ? "Поръчване" : "Продажба"}
                   </button>
@@ -2478,7 +2501,7 @@ export default function AdminProductsPage() {
                     onClick={() => void cancelProductReservation(p)}
                     disabled={reserveCancelBusyId === p.id}
                     title="Отмени резервацията"
-                    className="py-2 px-0.5 text-[10px] font-bold leading-tight text-sky-800 hover:bg-sky-50 active:bg-sky-100 disabled:opacity-35"
+                    className="min-h-[44px] px-0.5 text-[10px] font-bold leading-tight text-sky-800 hover:bg-sky-50 active:bg-sky-100 disabled:opacity-35"
                   >
                     Отм. рез.
                   </button>
@@ -2488,7 +2511,7 @@ export default function AdminProductsPage() {
                       type="button"
                       onClick={() => setReserveFor(p)}
                       title="Резервирай за клиент"
-                      className="py-2 px-0.5 text-[10px] font-bold leading-tight text-sky-800 hover:bg-sky-50 active:bg-sky-100"
+                      className="min-h-[44px] px-0.5 text-[10px] font-bold leading-tight text-sky-800 hover:bg-sky-50 active:bg-sky-100"
                     >
                       Резерв.
                     </button>
@@ -2525,7 +2548,7 @@ export default function AdminProductsPage() {
               <div className="border-t border-slate-100 bg-slate-50/40">
                 <Link
                   href={catalogEditHref(p)}
-                  className="block py-2 text-center text-[11px] font-bold text-brand-blue-700 hover:bg-white transition-colors"
+                  className="flex items-center justify-center min-h-[44px] text-center text-[11px] font-bold text-brand-blue-700 hover:bg-white transition-colors"
                 >
                   {isAccessoryRow(p) ? "Пълен запис на аксесоара →" : "Пълен запис на продукта →"}
                 </Link>

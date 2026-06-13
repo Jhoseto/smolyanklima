@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
@@ -8,7 +8,7 @@ import {
   ClipboardCheck, Wrench, CheckCircle, Loader2, Search, ArrowLeft, Trash2, CloudOff,
   SlidersHorizontal,
 } from "lucide-react";
-import { Select } from "../../../ui";
+import { Select, Input, Button, AdminModalBackdrop, AdminModalDragHandle, ADMIN_MODAL_PANEL } from "../../../ui";
 import { ProtocolFormWizard } from "./ProtocolFormWizard";
 import { ProtocolPreview } from "./ProtocolPreview";
 import type { AdminRole } from "@/lib/admin/db";
@@ -39,7 +39,6 @@ interface Protocol {
   pendingSync?: boolean;
 }
 
-const COMPACT_SELECT = "!py-1 !px-2 !text-xs !rounded-md min-w-0 !pr-6";
 
 const SORT_OPTIONS: Array<{ value: SortOption; label: string }> = [
   { value: "created-desc", label: "Най-нови" },
@@ -112,6 +111,7 @@ export function DocumentsClient({ role }: Props) {
   const [editId, setEditId]           = useState<string | null>(null);
   const [preview, setPreview]         = useState<Protocol | null>(null);
   const [deletingId, setDeletingId]   = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Protocol | null>(null);
   const [errorMsg, setErrorMsg]       = useState<string | null>(null);
   const online = useOnlineStatus();
   const { pendingCount, syncNow, isSyncing, pendingSampleError, lastError, refreshQueueState } = useOfflineQueue();
@@ -263,65 +263,69 @@ export function DocumentsClient({ role }: Props) {
     if (!openForm) void load(1, search, statusFilter, sort);
   };
 
-  const downloadPdf = (e: React.MouseEvent, id: string) => {
+  const downloadPdf = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    window.open(`/api/admin/service/protocols/${id}/pdf`, "_blank");
+    const url = `/api/admin/service/protocols/${id}/pdf`;
+    try {
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) { window.open(url, "_blank"); return; }
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = `protocol-${id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objectUrl);
+    } catch { window.open(url, "_blank"); }
   };
 
   // Изтрива един протокол след явно потвърждение. Само master_admin вижда
   // бутона; API също валидира ролята и връща 403 за останалите.
-  const handleDeleteOffline = async (e: React.MouseEvent, p: Protocol) => {
-    e.stopPropagation();
-    if (deletingId) return;
-    const label = p.protocol_number || "този локален протокол";
-    const ok = window.confirm(
-      `Да изтрия „${label}“ от това устройство?\n\nЗаписът е само локален — няма да се изтрие от сървъра (ако изобщо е качен).`,
-    );
-    if (!ok) return;
+  const confirmDelete = async (p: Protocol) => {
+    setDeleteTarget(null);
+    const isOfflineOnly = p.pendingSync && isLocalId(p.id);
     setDeletingId(p.id);
     setErrorMsg(null);
     try {
-      await purgeLocalDocument(p.id, "acceptance");
-      await refreshQueueState();
-      setOfflineRows((prev) => prev.filter((x) => x.id !== p.id));
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : "Грешка при изтриване на локалния запис");
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
-  const formatSyncError = (raw: string | undefined) =>
-    parseOfflineApiError(raw) ?? raw;
-
-  const handleDelete = async (e: React.MouseEvent, p: Protocol) => {
-    e.stopPropagation();
-    if (!canDelete || deletingId) return;
-    const label = p.protocol_number || "този протокол";
-    const ok = window.confirm(
-      `Да изтрия „${label}“?\n\nДействието е НЕОБРАТИМО — изтриват се и подписите и материалите към него.`,
-    );
-    if (!ok) return;
-    setDeletingId(p.id);
-    setErrorMsg(null);
-    try {
-      const res = await fetch(`/api/admin/service/protocols/${p.id}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      if (!res.ok && res.status !== 204) {
-        const json = await res.json().catch(() => ({}));
-        throw new Error((json as { error?: string }).error || "Грешка при изтриване");
+      if (isOfflineOnly) {
+        await purgeLocalDocument(p.id, "acceptance");
+        await refreshQueueState();
+        setOfflineRows((prev) => prev.filter((x) => x.id !== p.id));
+      } else {
+        const res = await fetch(`/api/admin/service/protocols/${p.id}`, {
+          method: "DELETE",
+          credentials: "include",
+        });
+        if (!res.ok && res.status !== 204) {
+          const json = await res.json().catch(() => ({}));
+          throw new Error((json as { error?: string }).error || "Грешка при изтриване");
+        }
+        setProtocols((prev) => prev.filter((x) => x.id !== p.id));
+        setTotal((t) => Math.max(0, t - 1));
+        try { await purgeLocalDocument(p.id, "acceptance"); } catch { /* best-effort */ }
       }
-      // Оптимистично махам реда от списъка и презареждам броячите.
-      setProtocols((prev) => prev.filter((x) => x.id !== p.id));
-      setTotal((t) => Math.max(0, t - 1));
-      try { await purgeLocalDocument(p.id, "acceptance"); } catch { /* best-effort */ }
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Грешка при изтриване");
     } finally {
       setDeletingId(null);
     }
+  };
+
+  const handleDeleteOffline = (e: React.MouseEvent, p: Protocol) => {
+    e.stopPropagation();
+    if (deletingId) return;
+    setDeleteTarget(p);
+  };
+
+  const formatSyncError = (raw: string | undefined) =>
+    parseOfflineApiError(raw) ?? raw;
+
+  const handleDelete = (e: React.MouseEvent, p: Protocol) => {
+    e.stopPropagation();
+    if (!canDelete || deletingId) return;
+    setDeleteTarget(p);
   };
 
   const formatDate = (d: string) =>
@@ -484,38 +488,38 @@ export function DocumentsClient({ role }: Props) {
         {/* Търсене + филтри */}
         <div className="space-y-2">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <Input
               type="search"
               value={search}
               onChange={e => handleSearch(e.target.value)}
               placeholder="Клиент, телефон, адрес, модел, №..."
-              className="w-full pl-9 pr-4 py-2 bg-slate-100 rounded-xl text-sm outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all"
+              className="pl-9"
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => setFiltersOpen(v => !v)}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600"
+              className="inline-flex items-center gap-1.5 h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 active:bg-slate-50 transition-colors"
             >
-              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <SlidersHorizontal className="w-4 h-4" />
               {filtersOpen ? "Скрий" : "Филтри"}
             </button>
             {hasActiveFilters && (
               <button
                 type="button"
                 onClick={() => patchFilters({ status: "", sort: "created-desc" })}
-                className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600"
+                className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 active:bg-slate-50 transition-colors"
               >
                 Изчисти
               </button>
             )}
             {!filtersOpen && (
-              <div className="flex flex-wrap items-center gap-1.5 min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">
                 <Select
-                  className={`w-full max-w-[7rem] sm:w-[6.5rem] ${COMPACT_SELECT}`}
+                  className="min-h-[40px] text-sm flex-1 min-w-[7rem]"
                   value={sort}
                   onChange={(e) => patchFilters({ sort: e.target.value as SortOption })}
                 >
@@ -524,7 +528,7 @@ export function DocumentsClient({ role }: Props) {
                   ))}
                 </Select>
                 <Select
-                  className={`w-full max-w-[6.5rem] sm:w-[6rem] ${COMPACT_SELECT}`}
+                  className="min-h-[40px] text-sm flex-1 min-w-[6.5rem]"
                   value={statusFilter}
                   onChange={(e) => patchFilters({ status: e.target.value as StatusFilter })}
                 >
@@ -542,7 +546,7 @@ export function DocumentsClient({ role }: Props) {
               <label className="inline-flex items-center gap-1">
                 <span className="text-[10px] font-semibold text-slate-500 whitespace-nowrap">Сортиране</span>
                 <Select
-                  className={`w-[6.5rem] ${COMPACT_SELECT}`}
+                  className="min-h-[40px] text-sm"
                   value={sort}
                   onChange={(e) => patchFilters({ sort: e.target.value as SortOption })}
                 >
@@ -551,10 +555,10 @@ export function DocumentsClient({ role }: Props) {
                   ))}
                 </Select>
               </label>
-              <label className="inline-flex items-center gap-1">
-                <span className="text-[10px] font-semibold text-slate-500 whitespace-nowrap">Статус</span>
+              <label className="inline-flex items-center gap-2">
+                <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">Статус</span>
                 <Select
-                  className={`w-[6rem] ${COMPACT_SELECT}`}
+                  className="min-h-[40px] text-sm"
                   value={statusFilter}
                   onChange={(e) => patchFilters({ status: e.target.value as StatusFilter })}
                 >
@@ -668,6 +672,44 @@ export function DocumentsClient({ role }: Props) {
           </div>
         ) : null}
       </div>
+
+      {/* ── DeleteConfirmSheet ── */}
+      <AdminModalBackdrop open={!!deleteTarget} onClose={() => setDeleteTarget(null)}>
+        <div className={`${ADMIN_MODAL_PANEL} max-w-sm`}>
+          <AdminModalDragHandle />
+          <div className="px-6 pt-4 pb-2">
+            <p className="text-base font-bold text-slate-900">
+              {deleteTarget?.pendingSync && isLocalId(deleteTarget.id)
+                ? "Изтрий локалния запис?"
+                : `Изтрий протокол ${deleteTarget?.protocol_number ?? ""}?`}
+            </p>
+            <p className="text-sm text-slate-500 mt-1">
+              {deleteTarget?.pendingSync && isLocalId(deleteTarget.id)
+                ? "Записът е само на това устройство и ще изчезне напълно."
+                : "Действието е необратимо — изтриват се и подписите, и материалите."}
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 px-6 pb-6 pt-3">
+            <Button
+              variant="primary"
+              size="lg"
+              className="w-full bg-red-600 hover:bg-red-700 shadow-red-200 border-0"
+              onClick={() => deleteTarget && confirmDelete(deleteTarget)}
+            >
+              <Trash2 className="w-4 h-4" />
+              Изтрий
+            </Button>
+            <Button
+              variant="secondary"
+              size="lg"
+              className="w-full"
+              onClick={() => setDeleteTarget(null)}
+            >
+              Отказ
+            </Button>
+          </div>
+        </div>
+      </AdminModalBackdrop>
     </div>
   );
 }
