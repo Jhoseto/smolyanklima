@@ -36,6 +36,7 @@ const UpdateSchema = z.object({
   signature_team:   z.string().optional().nullable(),
   signature_client: z.string().optional().nullable(),
   status:           z.enum(["prepared", "in_progress", "signed"]).optional(),
+  photo_urls:       z.array(z.string().url()).max(5).optional(),
 });
 
 export async function OPTIONS(req: NextRequest) {

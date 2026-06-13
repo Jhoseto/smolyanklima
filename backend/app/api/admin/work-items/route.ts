@@ -12,6 +12,7 @@ import {
 import { parseMountPhaseCsv, parseProductConditionCsv } from "@/lib/admin/salesHistoryQueryFilters";
 import { recordManualSale } from "@/lib/admin/recordManualSale";
 import { supplierFilterOrClause, normalizeSupplierKey } from "@/lib/admin/supplierNameNormalize";
+import { notifyServiceStaffNewEvent } from "@/lib/admin-web-push";
 
 const WORK_ITEM_EVENT_CODES = [
   "item_added",
@@ -568,6 +569,16 @@ export async function POST(req: NextRequest) {
       protocolWarning = message;
       console.error("[work-items POST] acceptance protocol create failed:", message);
     }
+  }
+
+  // Нотификация до сервизните техници — fire-and-forget, не блокира отговора
+  if (created.event_code) {
+    void notifyServiceStaffNewEvent({
+      eventCode: created.event_code,
+      title: (data as { title?: string }).title ?? parsed.data.title,
+      dueDate: parsed.data.dueDate,
+      customerName: parsed.data.customerName,
+    });
   }
 
   return withCors(

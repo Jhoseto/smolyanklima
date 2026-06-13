@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import {
   ChevronLeft, ChevronRight, Check, Download, Mail,
   PenLine, Trash2, X, Loader2, CheckCircle2, CloudOff, Save,
+  Camera, ImagePlus, WifiOff,
 } from "lucide-react";
 import {
   PROTOCOL_MATERIALS, PRIMARY_MATERIALS, LEFT_MATERIALS, RIGHT_MATERIALS,
@@ -46,6 +47,7 @@ interface FormData {
   cable_channels_m: string;
   accessories:      AccessoriesEntry;
   notes:            string;
+  photo_urls:       string[];
   signature_team:   string | null;
   signature_client: string | null;
   /**
@@ -73,6 +75,7 @@ const defaultForm = (): FormData => ({
   cable_channels_m: "",
   accessories:      { ...EMPTY_ACCESSORIES },
   notes:            "",
+  photo_urls:       [],
   signature_team:   null,
   signature_client: null,
   status:           "prepared",
@@ -126,14 +129,19 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
   const [pendingSync, setPendingSync] = useState(false);
   const online = useOnlineStatus();
   const { syncNow, refreshQueueState, pendingSampleError, isSyncing } = useOfflineQueue();
-  const [sigOpen, setSigOpen] = useState<"team" | "client" | null>(null);
+  const [sigOpen, setSigOpen]             = useState<"team" | "client" | null>(null);
+  const [lightboxIdx, setLightboxIdx]     = useState<number | null>(null);
+  const [sendEmail, setSendEmail]         = useState(false);
+  const [emailInput, setEmailInput]       = useState(initialData?.client_email ?? "");
+  const [sending, setSending]             = useState(false);
+  const [sent, setSent]                   = useState(false);
+  const [error, setError]                 = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors]     = useState<Record<string, string>>({});
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoError, setPhotoError]         = useState<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   useAdminBackHandler(Boolean(sigOpen), () => setSigOpen(null), "protocol-signature");
-  const [sendEmail, setSendEmail] = useState(false);
-  const [emailInput, setEmailInput] = useState(initialData?.client_email ?? "");
-  const [sending, setSending] = useState(false);
-  const [sent, setSent]      = useState(false);
-  const [error, setError]    = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  useAdminBackHandler(lightboxIdx !== null, () => setLightboxIdx(null), "protocol-lightbox");
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const persistFormRef = useRef<(data: FormData, id: string | null, showSaving?: boolean) => Promise<string | null>>(() => Promise.resolve(null));
   const onlineRef = useRef(online);
@@ -203,6 +211,7 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
       cable_channels_m: data.cable_channels_m != null ? String(data.cable_channels_m) : "",
       accessories:      (data.accessories as AccessoriesEntry) ?? { ...EMPTY_ACCESSORIES },
       notes:            (data.notes as string) ?? "",
+      photo_urls:       Array.isArray(data.photo_urls) ? (data.photo_urls as string[]) : [],
       signature_team:   (data.signature_team as string | null) ?? null,
       signature_client: (data.signature_client as string | null) ?? null,
       status:           (data.status as FormData["status"]) ?? "prepared",
@@ -300,6 +309,7 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
         cable_channels_m: data.cable_channels_m ? parseFloat(data.cable_channels_m) : 0,
         accessories:      data.accessories,
         notes:            data.notes || null,
+        photo_urls:       data.photo_urls,
         signature_team:   data.signature_team,
         signature_client: data.signature_client,
       };
@@ -441,6 +451,52 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
   };
 
   useAdminBackHandler(true, handleClose, "protocol-wizard");
+
+  // ── Качване на снимки в Cloudinary ─────────────────────────────────────────
+  const MAX_PHOTOS = 5;
+
+  const uploadPhoto = useCallback(async (file: File) => {
+    if (!savedId) return;
+    if (form.photo_urls.length >= MAX_PHOTOS) {
+      setPhotoError(`Максимум ${MAX_PHOTOS} снимки.`);
+      return;
+    }
+    setPhotoError(null);
+    setPhotoUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("kind", "protocol");
+      fd.append("slug", savedId);
+      const res = await fetch("/api/admin/uploads/image", {
+        method: "POST",
+        credentials: "include",
+        body: fd,
+      });
+      const json = await res.json() as { data?: { url: string }; error?: string };
+      if (!res.ok || !json.data?.url) {
+        setPhotoError(json.error ?? "Грешка при качване.");
+        return;
+      }
+      setForm(prev => {
+        const newUrls = [...prev.photo_urls, json.data!.url];
+        void persistFormRef.current({ ...prev, photo_urls: newUrls }, savedId, false);
+        return { ...prev, photo_urls: newUrls };
+      });
+    } catch {
+      setPhotoError("Мрежова грешка при качване на снимката.");
+    } finally {
+      setPhotoUploading(false);
+    }
+  }, [savedId, form.photo_urls.length]);
+
+  const removePhoto = useCallback((url: string) => {
+    setForm(prev => {
+      const newUrls = prev.photo_urls.filter(u => u !== url);
+      void persistFormRef.current({ ...prev, photo_urls: newUrls }, savedId, false);
+      return { ...prev, photo_urls: newUrls };
+    });
+  }, [savedId]);
 
   // Изпращане на имейл
   const doSendEmail = async () => {
@@ -842,15 +898,106 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
 
           {/* ──────────── Стъпка 6: Забележки ──────────── */}
           {step === 6 && (
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-3">Забележки</label>
-              <textarea
-                value={form.notes}
-                onChange={e => update("notes", e.target.value)}
-                placeholder="Допълнителна информация за монтажа..."
-                rows={8}
-                className="w-full text-base border-2 border-slate-200 focus:border-blue-500 rounded-xl p-4 outline-none resize-none bg-white"
-              />
+            <div className="space-y-5">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-3">Забележки</label>
+                <textarea
+                  value={form.notes}
+                  onChange={e => update("notes", e.target.value)}
+                  placeholder="Допълнителна информация за монтажа..."
+                  rows={6}
+                  className="w-full text-base border-2 border-slate-200 focus:border-blue-500 rounded-xl p-4 outline-none resize-none bg-white"
+                />
+              </div>
+
+              {/* ── Снимки към протокол ── */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+                    <Camera className="w-4 h-4 text-slate-500" />
+                    Снимки от монтажа
+                  </label>
+                  <span className="text-xs text-slate-400">{form.photo_urls.length} / {MAX_PHOTOS}</span>
+                </div>
+
+                {/* Решетка с вече качени снимки */}
+                {form.photo_urls.length > 0 ? (
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    {form.photo_urls.map((url, i) => (
+                      <div key={url} className="relative aspect-square rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={url}
+                          alt={`Снимка ${i + 1}`}
+                          className="w-full h-full object-cover cursor-pointer active:opacity-80"
+                          onClick={() => setLightboxIdx(i)}
+                        />
+                        {!isSigned && (
+                          <button
+                            type="button"
+                            onClick={() => removePhoto(url)}
+                            className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1 active:bg-black/80"
+                            aria-label="Изтрий снимка"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : isSigned ? (
+                  <p className="text-xs text-slate-400 mb-3">Няма добавени снимки към протокола.</p>
+                ) : null}
+
+                {/* Бутон за добавяне — само ако не е подписан (или ако е с права за редакция) */}
+                {!isSigned && form.photo_urls.length < MAX_PHOTOS && (
+                  <>
+                    {!savedId ? (
+                      <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                        <Save className="w-4 h-4 shrink-0" />
+                        Преминете напред или назад веднъж, за да се запише протоколът, след което можете да добавите снимки.
+                      </div>
+                    ) : !online ? (
+                      <div className="flex items-center gap-2 text-xs text-slate-600 bg-slate-100 border border-slate-200 rounded-xl px-4 py-3">
+                        <WifiOff className="w-4 h-4 shrink-0" />
+                        Снимките изискват интернет връзка.
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => photoInputRef.current?.click()}
+                        disabled={photoUploading}
+                        className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-slate-300 rounded-xl py-4 text-slate-500 text-sm active:bg-slate-50 disabled:opacity-50"
+                      >
+                        {photoUploading
+                          ? <><Loader2 className="w-4 h-4 animate-spin" /> Качва се…</>
+                          : <><ImagePlus className="w-4 h-4" /> Добави снимка</>
+                        }
+                      </button>
+                    )}
+                    {/* Без capture="environment" — позволява и камера, и галерия, и файл от PC */}
+                    <input
+                      ref={photoInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/heic,image/*"
+                      className="hidden"
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (file) void uploadPhoto(file);
+                        e.target.value = "";
+                      }}
+                    />
+                  </>
+                )}
+
+                {isSigned && !canEditSigned && form.photo_urls.length > 0 && (
+                  <p className="mt-2 text-xs text-slate-400">Подписан протокол — снимките са само за преглед.</p>
+                )}
+
+                {photoError && (
+                  <p className="mt-2 text-xs text-red-600">{photoError}</p>
+                )}
+              </div>
             </div>
           )}
 
@@ -993,6 +1140,16 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
           onClose={() => setSigOpen(null)}
         />
       )}
+
+      {/* ── Lightbox за снимки ── */}
+      {lightboxIdx !== null && form.photo_urls.length > 0 && (
+        <PhotoLightbox
+          urls={form.photo_urls}
+          index={lightboxIdx}
+          onIndexChange={setLightboxIdx}
+          onClose={() => setLightboxIdx(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1133,6 +1290,103 @@ function PrimaryMaterialsStep({
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ─── Lightbox компонент ───────────────────────────────────────────────────────
+
+function PhotoLightbox({
+  urls,
+  index,
+  onIndexChange,
+  onClose,
+}: {
+  urls: string[];
+  index: number;
+  onIndexChange: (i: number) => void;
+  onClose: () => void;
+}) {
+  const touchStartX = useRef<number | null>(null);
+  const hasPrev = index > 0;
+  const hasNext = index < urls.length - 1;
+
+  const prev = () => { if (hasPrev) onIndexChange(index - 1); };
+  const next = () => { if (hasNext) onIndexChange(index + 1); };
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0]?.clientX ?? null;
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null) return;
+    const dx = (e.changedTouches[0]?.clientX ?? 0) - touchStartX.current;
+    touchStartX.current = null;
+    if (Math.abs(dx) < 40) return;
+    if (dx < 0) next(); else prev();
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft")  prev();
+      if (e.key === "ArrowRight") next();
+      if (e.key === "Escape")     onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] bg-black/95 flex flex-col"
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+    >
+      {/* Хедър */}
+      <div className="flex items-center justify-between px-4 py-3 shrink-0">
+        <span className="text-white/60 text-sm tabular-nums">{index + 1} / {urls.length}</span>
+        <button
+          type="button"
+          onClick={onClose}
+          className="p-2 rounded-full bg-white/10 text-white active:bg-white/20"
+          aria-label="Затвори"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Снимка */}
+      <div className="flex-1 flex items-center justify-center px-2 min-h-0">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          key={urls[index]}
+          src={urls[index]}
+          alt={`Снимка ${index + 1}`}
+          className="max-w-full max-h-full object-contain rounded-lg select-none"
+          draggable={false}
+        />
+      </div>
+
+      {/* Навигация */}
+      <div className="flex items-center justify-between px-4 py-4 shrink-0">
+        <button
+          type="button"
+          onClick={prev}
+          disabled={!hasPrev}
+          className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/10 text-white text-sm font-semibold disabled:opacity-20 active:bg-white/20"
+        >
+          <ChevronLeft className="w-4 h-4" />
+          Предишна
+        </button>
+        <button
+          type="button"
+          onClick={next}
+          disabled={!hasNext}
+          className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/10 text-white text-sm font-semibold disabled:opacity-20 active:bg-white/20"
+        >
+          Следваща
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
     </div>
   );
 }

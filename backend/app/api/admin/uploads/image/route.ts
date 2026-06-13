@@ -15,7 +15,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const KINDS: CloudinaryUploadKind[] = ["product", "accessory", "blog", "staff"];
+const KINDS: CloudinaryUploadKind[] = ["product", "accessory", "blog", "staff", "protocol"];
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflight(req);
@@ -79,6 +79,27 @@ export async function POST(req: NextRequest) {
     if (exErr) return withCors(req, NextResponse.json({ error: exErr.message }, { status: 500 }));
     if (!exists) {
       return withCors(req, NextResponse.json({ error: "Служителят не е намерен" }, { status: 404 }));
+    }
+  }
+
+  if (kind === "protocol") {
+    // slug трябва да е UUID на протокола
+    const idParse = z.string().uuid().safeParse(slugRaw);
+    if (!idParse.success) {
+      return withCors(req, NextResponse.json({ error: "Невалиден протокол (UUID)" }, { status: 400 }));
+    }
+    // RLS вече ограничава service_staff само до техните протоколи.
+    // Допълнително: service_staff не могат да качват/трият снимки в подписан протокол.
+    const { data: proto, error: protoErr } = await session.db
+      .from("service_protocols")
+      .select("id, status")
+      .eq("id", slugRaw)
+      .maybeSingle();
+    if (protoErr || !proto) {
+      return withCors(req, NextResponse.json({ error: "Протоколът не е намерен или нямате достъп" }, { status: 403 }));
+    }
+    if (proto.status === "signed" && session.role === "service_staff") {
+      return withCors(req, NextResponse.json({ error: "Подписан протокол — снимките може да редактират само офис служители" }, { status: 403 }));
     }
   }
 

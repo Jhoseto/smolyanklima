@@ -1171,6 +1171,12 @@ alter table public.products
 alter table public.accessories
   add column if not exists source_url text;
 
+-- 0091 · service_protocols: photo_urls
+ALTER TABLE public.service_protocols
+  ADD COLUMN IF NOT EXISTS photo_urls TEXT[] NOT NULL DEFAULT '{}';
+COMMENT ON COLUMN public.service_protocols.photo_urls IS
+  'Cloudinary URL-и на снимки от монтажа (до 5). Папка: smolyanklima/protokoli/{id}/';
+
 -- ============================================================
 -- Край. След изпълнение:
 -- 1. Authentication → Settings → enable Email/Password sign-in
