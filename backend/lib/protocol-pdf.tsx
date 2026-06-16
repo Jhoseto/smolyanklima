@@ -7,7 +7,12 @@ import {
   Document, Page, View, Text, Image, StyleSheet, Font,
 } from "@react-pdf/renderer";
 import { ProtocolPdfBrandMark } from "@/lib/protocol-pdf-brand";
-import { PDF_LEFT_MATERIALS, PDF_RIGHT_MATERIALS, ACCESSORIES_LABELS } from "@/lib/protocol-materials";
+import {
+  PDF_LEFT_MATERIALS,
+  PDF_RIGHT_MATERIALS,
+  ACCESSORIES_LABELS,
+  resolveMaterialQty,
+} from "@/lib/protocol-materials";
 import type { AccessoriesEntry, MaterialEntry } from "@/lib/protocol-materials";
 
 const NOTO_REG =
@@ -500,7 +505,7 @@ export function ProtocolPDF({ data }: { data: ProtocolData }) {
                     {mat.name}/{mat.unit}
                   </Text>
                   <View style={s.matQtyCell}>
-                    <Text style={s.matQtyText}>{qtyCell(qtyMap[mat.id])}</Text>
+                    <Text style={s.matQtyText}>{qtyCell(resolveMaterialQty(mat.id, qtyMap))}</Text>
                   </View>
                 </View>
               );
@@ -516,7 +521,7 @@ export function ProtocolPDF({ data }: { data: ProtocolData }) {
                     {mat.name}/{mat.unit}
                   </Text>
                   <View style={s.matQtyCell}>
-                    <Text style={s.matQtyText}>{qtyCell(qtyMap[mat.id])}</Text>
+                    <Text style={s.matQtyText}>{qtyCell(resolveMaterialQty(mat.id, qtyMap))}</Text>
                   </View>
                 </View>
               );

@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import {
   PROTOCOL_MATERIALS, PRIMARY_MATERIALS, LEFT_MATERIALS, RIGHT_MATERIALS,
+  normalizeLoadedMaterials,
   MOUNT_TYPES, EMPTY_ACCESSORIES, ACCESSORIES_LABELS,
 } from "@/lib/protocol-materials";
 import type { AccessoriesEntry, MaterialEntry } from "@/lib/protocol-materials";
@@ -94,8 +95,8 @@ interface Props {
 
 const STEPS = [
   "Основна информация",
-  "Главни монтажни елементи",
   "Начин на монтаж",
+  "Главни монтажни елементи",
   "Допълнителни тръби & дюбели",
   "Допълнителни кабели & стойки",
   "Кабелни канали",
@@ -210,7 +211,9 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
       client_email:     (data.client_email as string) ?? "",
       client_phone:     (data.client_phone as string) ?? "",
       mount_types:      (data.mount_types as string[]) ?? [],
-      materials:        Object.keys(materialsMap).length ? materialsMap : defaultForm().materials,
+      materials:        Object.keys(materialsMap).length
+        ? normalizeLoadedMaterials(materialsMap)
+        : defaultForm().materials,
       cable_channels_m: data.cable_channels_m != null ? String(data.cable_channels_m) : "",
       accessories:      (data.accessories as AccessoriesEntry) ?? { ...EMPTY_ACCESSORIES },
       notes:            (data.notes as string) ?? "",
@@ -675,7 +678,7 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
       <div className="flex-1 overflow-y-auto">
         <div className="p-4 pb-24 max-w-2xl mx-auto">
 
-          {/* ──────────── Стъпка 0: Основна информация ──────────── */}
+          {/* ──────────── Стъпка 1: Основна информация ──────────── */}
           {step === 0 && (
             <div className="space-y-4">
               <Field label="Дата">
@@ -813,16 +816,8 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
             </div>
           )}
 
-          {/* ──────────── Стъпка 1: Главни монтажни елементи ──────────── */}
-          {step === 1 && (
-            <PrimaryMaterialsStep
-              values={form.materials}
-              onChange={vals => update("materials", vals)}
-            />
-          )}
-
           {/* ──────────── Стъпка 2: Начин на монтаж ──────────── */}
-          {step === 2 && (
+          {step === 1 && (
             <div className="grid grid-cols-2 gap-3">
               {MOUNT_TYPES.map(type => {
                 const active = form.mount_types.includes(type);
@@ -851,7 +846,15 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
             </div>
           )}
 
-          {/* ──────────── Стъпка 3: Допълнителни тръби & дюбели ──────────── */}
+          {/* ──────────── Стъпка 3: Главни монтажни елементи ──────────── */}
+          {step === 2 && (
+            <PrimaryMaterialsStep
+              values={form.materials}
+              onChange={vals => update("materials", vals)}
+            />
+          )}
+
+          {/* ──────────── Стъпка 4: Допълнителни тръби & дюбели ──────────── */}
           {step === 3 && (
             <MaterialStepGroup
               materials={LEFT_MATERIALS}
@@ -860,7 +863,7 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
             />
           )}
 
-          {/* ──────────── Стъпка 4: Допълнителни кабели & стойки ──────────── */}
+          {/* ──────────── Стъпка 5: Допълнителни кабели & стойки ──────────── */}
           {step === 4 && (
             <MaterialStepGroup
               materials={RIGHT_MATERIALS}
@@ -869,7 +872,7 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
             />
           )}
 
-          {/* ──────────── Стъпка 5: Кабелни канали & аксесоари ──────────── */}
+          {/* ──────────── Стъпка 6: Кабелни канали & аксесоари ──────────── */}
           {step === 5 && (
             <div className="space-y-3">
               <Field label="Кабелни канали (м)">
@@ -899,7 +902,7 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
             </div>
           )}
 
-          {/* ──────────── Стъпка 6: Забележки ──────────── */}
+          {/* ──────────── Стъпка 7: Забележки ──────────── */}
           {step === 6 && (
             <div className="space-y-5">
               <div>
@@ -1030,7 +1033,7 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
             </div>
           )}
 
-          {/* ──────────── Стъпка 7: Подписи ──────────── */}
+          {/* ──────────── Стъпка 8: Подписи ──────────── */}
           {step === 7 && (
             <div className="space-y-6">
               {form.photo_urls.length > 0 && (
@@ -1258,70 +1261,30 @@ function MaterialStepGroup({
   );
 }
 
-/** Стъпка 2 — Главни монтажни елементи, разгрупирани по категория. */
+/** Стъпка 3 — Главни монтажни елементи (25 позиции в фиксиран ред). */
 function PrimaryMaterialsStep({
   values, onChange,
 }: {
   values: Record<string, number>;
   onChange: (v: Record<string, number>) => void;
 }) {
-  const groups: { title: string; ids: string[] }[] = [
-    {
-      title: "Тръби",
-      ids: ["pri_pipe_f6", "pri_pipe_f10", "pri_pipe_f12", "pri_gofre"],
-    },
-    {
-      title: "Кабели & изолация",
-      ids: ["pri_kabel_3x15", "pri_kabel_3x25", "pri_svt_3x25", "pri_izolatsia"],
-    },
-    {
-      title: "Стойки & монтаж",
-      ids: ["pri_stoiki_4055", "pri_shaiba_f8", "pri_bolt_8x30", "pri_gaika_f8"],
-    },
-    {
-      title: "Дюбели & винтове Ф10",
-      ids: [
-        "pri_dyubel_10x80",  "pri_vint_7x80",
-        "pri_dyubel_10x100", "pri_vint_7x100",
-        "pri_dyubel_10x120", "pri_vint_7x120",
-        "pri_dyubel_10x140", "pri_vint_7x140",
-        "pri_dyubel_10x160", "pri_vint_7x160",
-      ],
-    },
-    {
-      title: "Специални дюбели",
-      ids: ["pri_dyubel_16x200", "pri_dyubel_8x60", "pri_vint_5x70"],
-    },
-  ];
-
   return (
-    <div className="space-y-4">
-      {groups.map(group => (
-        <div key={group.title}>
-          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 px-0.5">
-            {group.title}
+    <div className="rounded-xl bg-white border border-slate-100 divide-y divide-slate-100">
+      {PRIMARY_MATERIALS.map(mat => {
+        const val = values[mat.id] ?? 0;
+        return (
+          <div key={mat.id} className="flex items-center justify-between px-3 py-2.5">
+            <div className="flex-1 pr-3">
+              <p className="text-sm text-slate-800 leading-snug font-medium">{mat.name}</p>
+              <p className="text-xs text-slate-400">{mat.unit}</p>
+            </div>
+            <Stepper
+              value={val}
+              onChange={v => onChange({ ...values, [mat.id]: v })}
+            />
           </div>
-          <div className="rounded-xl bg-white border border-slate-100 divide-y divide-slate-100">
-            {group.ids.map(id => {
-              const mat = PRIMARY_MATERIALS.find(m => m.id === id);
-              if (!mat) return null;
-              const val = values[mat.id] ?? 0;
-              return (
-                <div key={mat.id} className="flex items-center justify-between px-3 py-2.5">
-                  <div className="flex-1 pr-3">
-                    <p className="text-sm text-slate-800 leading-snug font-medium">{mat.name}</p>
-                    <p className="text-xs text-slate-400">{mat.unit}</p>
-                  </div>
-                  <Stepper
-                    value={val}
-                    onChange={v => onChange({ ...values, [mat.id]: v })}
-                  />
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

@@ -8,6 +8,7 @@ import type { AdminRole } from "@/lib/admin/db";
 import {
   PDF_LEFT_MATERIALS,
   PDF_RIGHT_MATERIALS,
+  resolveMaterialQty,
   ACCESSORIES_LABELS,
   EMPTY_ACCESSORIES,
 } from "@/lib/protocol-materials";
@@ -449,8 +450,8 @@ function MaterialColumn({
   return (
     <div className="divide-y divide-black/40">
       {materials.map(mat => {
-        const q = qtyMap[mat.id];
-        const show = q != null && q > 0;
+        const q = resolveMaterialQty(mat.id, qtyMap);
+        const show = q != null;
         return (
           <div key={mat.id} className="flex min-h-[26px]">
             <div className="flex-1 px-1.5 py-1 leading-snug">

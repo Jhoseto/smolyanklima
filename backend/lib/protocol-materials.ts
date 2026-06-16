@@ -75,38 +75,84 @@ export const PDF_RIGHT_MATERIALS: ProtocolMaterial[] = PDF_MATERIALS_ORDERED
   .map(m => ({ ...m, column: "right" as const }));
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Стъпка 2 в уизарда — Главни монтажни елементи
-// Ползва ОРИГИНАЛНИТЕ ID-та за позиции вече в PDF, нови само за наистина нови.
+// Стъпка 3 в уизарда — Главни монтажни елементи (25 позиции, ред на полето)
 // ─────────────────────────────────────────────────────────────────────────────
 export const PRIMARY_MATERIALS: ProtocolMaterial[] = [
-  { id: "pipe_635",        name: "Тръба - Ф6",        unit: "м",   column: "left" },
-  { id: "pipe_952",        name: "Тръба - Ф10",       unit: "м",   column: "left" },
-  { id: "pipe_127",        name: "Тръба - Ф12",       unit: "м",   column: "left" },
-  { id: "pri_gofre",       name: "Гофре",              unit: "м",   column: "left" },
-  { id: "kabel_shvps_3x15",name: "Кабел - 3 х 1,5",  unit: "м",   column: "left" },
-  { id: "pri_kabel_3x25",  name: "Кабел - 3 х 2,5",  unit: "м",   column: "left" },
-  { id: "kabel_svt",       name: "СВТ - 3 х 2,5",    unit: "м",   column: "left" },
-  { id: "pri_izolatsia",   name: "Изолация",           unit: "м",   column: "left" },
-  { id: "stoiki_golemi",   name: "Стойки - 40/55",   unit: "бр.", column: "left" },
-  { id: "pri_shaiba_f8",   name: "Шайби - Ф8",       unit: "бр.", column: "left" },
-  { id: "pri_bolt_8x30",   name: "Болт - 8 х 30",    unit: "бр.", column: "left" },
-  { id: "pri_gaika_f8",    name: "Гайка - Ф8",       unit: "бр.", column: "left" },
-  { id: "dyubel_prp_80",   name: "Дюбел - 10 х 80",  unit: "бр.", column: "left" },
-  { id: "pri_vint_7x80",   name: "Винт - 7 х 80",    unit: "бр.", column: "left" },
-  { id: "dyubel_prp_100",  name: "Дюбел - 10 х 100", unit: "бр.", column: "left" },
-  { id: "pri_vint_7x100",  name: "Винт - 7 х 100",   unit: "бр.", column: "left" },
-  { id: "dyubel_prp_120",  name: "Дюбел - 10 х 120", unit: "бр.", column: "left" },
-  { id: "pri_vint_7x120",  name: "Винт - 7 х 120",   unit: "бр.", column: "left" },
-  { id: "dyubel_prp_140",  name: "Дюбел - 10 х 140", unit: "бр.", column: "left" },
-  { id: "pri_vint_7x140",  name: "Винт - 7 х 140",   unit: "бр.", column: "left" },
-  { id: "dyubel_prp_160",  name: "Дюбел - 10 х 160", unit: "бр.", column: "left" },
-  { id: "pri_vint_7x160",  name: "Винт - 7 х 160",   unit: "бр.", column: "left" },
-  { id: "pri_dyubel_16x200",name: "Дюбел - 16 х 200",unit: "бр.", column: "left" },
-  { id: "dyubel_trv",      name: "Дюбел - 8 х 60",   unit: "бр.", column: "left" },
-  { id: "pri_vint_5x70",   name: "Винт - 5 х 70",    unit: "бр.", column: "left" },
+  { id: "pipe_635",          name: "Тръба - Ф6",        unit: "м",   column: "left" },
+  { id: "pipe_952",          name: "Тръба - Ф10",       unit: "м",   column: "left" },
+  { id: "pipe_127",          name: "Тръба - Ф12",       unit: "м",   column: "left" },
+  { id: "pri_gofre",         name: "Гофре",             unit: "м",   column: "left" },
+  { id: "kabel_shvps_3x15",  name: "Кабел - 3 х 1,5",  unit: "м",   column: "left" },
+  { id: "pri_kabel_3x25",    name: "Кабел - 3 х 2,5",  unit: "м",   column: "left" },
+  { id: "kabel_svt",         name: "СВТ - 3 х 2,5",    unit: "м",   column: "left" },
+  { id: "pri_izolatsia",     name: "Изолация",          unit: "м",   column: "left" },
+  { id: "stoiki_golemi",     name: "Стойки - 40/55",    unit: "бр.", column: "left" },
+  { id: "pri_shaiba_f8",     name: "Шайби - Ф8",        unit: "бр.", column: "left" },
+  { id: "pri_bolt_8x30",     name: "Болт - 8 х 30",     unit: "бр.", column: "left" },
+  { id: "pri_gaika_f8",      name: "Гайка - Ф8",        unit: "бр.", column: "left" },
+  { id: "pri_dyubel_10x80",  name: "Дюбел - 10 х 80",   unit: "бр.", column: "left" },
+  { id: "pri_vint_7x80",     name: "Винт - 7 х 80",     unit: "бр.", column: "left" },
+  { id: "pri_dyubel_10x100", name: "Дюбел - 10 х 100",  unit: "бр.", column: "left" },
+  { id: "pri_vint_7x100",    name: "Винт - 7 х 100",    unit: "бр.", column: "left" },
+  { id: "pri_dyubel_10x120", name: "Дюбел - 10 х 120",  unit: "бр.", column: "left" },
+  { id: "pri_vint_7x120",    name: "Винт - 7 х 120",    unit: "бр.", column: "left" },
+  { id: "pri_dyubel_10x140", name: "Дюбел - 10 х 140",  unit: "бр.", column: "left" },
+  { id: "pri_vint_7x140",    name: "Винт - 7 х 140",    unit: "бр.", column: "left" },
+  { id: "pri_dyubel_10x160", name: "Дюбел - 10 х 160",  unit: "бр.", column: "left" },
+  { id: "pri_vint_7x160",    name: "Винт - 7 х 160",    unit: "бр.", column: "left" },
+  { id: "pri_dyubel_16x200", name: "Дюбел - 16 х 200",  unit: "бр.", column: "left" },
+  { id: "pri_dyubel_8x60",   name: "Дюбел - 8 х 60",    unit: "бр.", column: "left" },
+  { id: "pri_vint_5x70",     name: "Винт - 5 х 70",     unit: "бр.", column: "left" },
 ];
 
-/** ID-та от PRIMARY_MATERIALS, взети директно от оригиналните масиви. */
+/** PDF редове с комбиниран дюбел+винт — количеството идва от отделните pri_* полета. */
+const PDF_COMBINED_DYUBEL_SOURCES: Record<string, string[]> = {
+  dyubel_prp_80:  ["pri_dyubel_10x80",  "dyubel_prp_80"],
+  dyubel_prp_100: ["pri_dyubel_10x100", "dyubel_prp_100"],
+  dyubel_prp_120: ["pri_dyubel_10x120", "dyubel_prp_120"],
+  dyubel_prp_140: ["pri_dyubel_10x140", "dyubel_prp_140"],
+  dyubel_prp_160: ["pri_dyubel_10x160", "dyubel_prp_160"],
+  dyubel_trv:     ["pri_dyubel_8x60",   "dyubel_trv"],
+};
+
+/** Количество за PDF/преглед — обединява нови pri_* полета със стари комбинирани ID-та. */
+export function resolveMaterialQty(
+  materialId: string,
+  qtyMap: Record<string, number>,
+): number | undefined {
+  const sources = PDF_COMBINED_DYUBEL_SOURCES[materialId];
+  if (sources) {
+    for (const id of sources) {
+      const q = qtyMap[id];
+      if (q != null && q > 0) return q;
+    }
+    return undefined;
+  }
+  const q = qtyMap[materialId];
+  return q != null && q > 0 ? q : undefined;
+}
+
+/** При зареждане — комбинирани dyubel_prp_* → отделни pri_dyubel_* в стъпка 2. */
+export function normalizeLoadedMaterials(
+  materialsMap: Record<string, number>,
+): Record<string, number> {
+  const out = { ...materialsMap };
+  const legacyToPrimary: Record<string, string> = {
+    dyubel_prp_80:  "pri_dyubel_10x80",
+    dyubel_prp_100: "pri_dyubel_10x100",
+    dyubel_prp_120: "pri_dyubel_10x120",
+    dyubel_prp_140: "pri_dyubel_10x140",
+    dyubel_prp_160: "pri_dyubel_10x160",
+    dyubel_trv:     "pri_dyubel_8x60",
+  };
+  for (const [legacy, primary] of Object.entries(legacyToPrimary)) {
+    if (out[legacy] != null && out[primary] == null) out[primary] = out[legacy];
+    delete out[legacy];
+  }
+  return out;
+}
+
+/** PDF-only редове — скрити от допълнителните стъпки, qty идва от PRIMARY. */
 const PRIMARY_REUSED_IDS = new Set([
   "pipe_635", "pipe_952", "pipe_127",
   "kabel_shvps_3x15", "kabel_svt", "stoiki_golemi",
@@ -115,14 +161,14 @@ const PRIMARY_REUSED_IDS = new Set([
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Стъпка 3 в уизарда — Допълнителни тръби & дюбели (без тези вече в PRIMARY)
+// Стъпка 4 в уизарда — Допълнителни тръби & дюбели (без тези вече в PRIMARY)
 // ─────────────────────────────────────────────────────────────────────────────
 export const LEFT_MATERIALS: ProtocolMaterial[] = PDF_LEFT_MATERIALS.filter(
   m => !PRIMARY_REUSED_IDS.has(m.id),
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Стъпка 4 в уизарда — Допълнителни кабели & стойки (без тези вече в PRIMARY)
+// Стъпка 5 в уизарда — Допълнителни кабели & стойки (без тези вече в PRIMARY)
 // ─────────────────────────────────────────────────────────────────────────────
 export const RIGHT_MATERIALS: ProtocolMaterial[] = PDF_RIGHT_MATERIALS.filter(
   m => !PRIMARY_REUSED_IDS.has(m.id) && !m.id.startsWith("pri_"),
