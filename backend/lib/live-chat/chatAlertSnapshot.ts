@@ -27,19 +27,22 @@ export async function loadChatAlertSnapshot(supabase: SupabaseClient): Promise<C
 
   const lastUserByChat = new Map<string, { id: string; created_at: string }>();
   if (chatIds.length > 0) {
-    const { data: msgs, error: msgErr } = await supabase
-      .from("live_chat_messages")
-      .select("id, chat_id, created_at")
-      .in("chat_id", chatIds)
-      .eq("sender_role", "user")
-      .order("created_at", { ascending: false });
-    if (msgErr) throw msgErr;
-    for (const row of msgs ?? []) {
-      const cid = row.chat_id as string;
-      if (!lastUserByChat.has(cid)) {
-        lastUserByChat.set(cid, { id: row.id as string, created_at: row.created_at as string });
-      }
-    }
+    await Promise.all(
+      chatIds.map(async (chatId) => {
+        const { data: msg, error: msgErr } = await supabase
+          .from("live_chat_messages")
+          .select("id, created_at")
+          .eq("chat_id", chatId)
+          .eq("sender_role", "user")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (msgErr) throw msgErr;
+        if (msg) {
+          lastUserByChat.set(chatId, { id: msg.id as string, created_at: msg.created_at as string });
+        }
+      }),
+    );
   }
 
   const userMessages = openChats
