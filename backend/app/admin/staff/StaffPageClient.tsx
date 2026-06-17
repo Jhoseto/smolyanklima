@@ -520,7 +520,7 @@ export function StaffPageClient({
 
       {/* Edit modal */}
       {editMember && (
-        <div className={ADMIN_MODAL_BACKDROP} onClick={() => setEditMember(null)}>
+        <div className={ADMIN_MODAL_BACKDROP}>
           <div className={`${ADMIN_MODAL_PANEL} max-w-md`} onClick={(e) => e.stopPropagation()}>
             <AdminModalDragHandle />
             <div className="overflow-y-auto flex-1 min-h-0 p-5 space-y-4">
@@ -668,7 +668,7 @@ export function StaffPageClient({
 
       {/* Delete confirm */}
       {confirmDelete && (
-        <div className={ADMIN_MODAL_BACKDROP} onClick={() => setConfirmDelete(null)}>
+        <div className={ADMIN_MODAL_BACKDROP}>
           <div className={`${ADMIN_MODAL_PANEL} max-w-sm p-5 space-y-4`} onClick={(e) => e.stopPropagation()}>
             <AdminModalDragHandle />
             <h2 className="text-sm font-bold text-slate-800">Изтрий служител</h2>

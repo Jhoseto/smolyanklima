@@ -50,6 +50,12 @@ function isAdminArea(pathname: string): boolean {
 }
 
 export async function proxy(req: NextRequest) {
+  // Block scanners probing Cloud Run via raw IP in Host header (e.g. Host: 34.117.31.122)
+  const host = req.headers.get("host") ?? "";
+  if (/^\d+\.\d+\.\d+\.\d+(:\d+)?$/.test(host)) {
+    return new NextResponse(null, { status: 444 });
+  }
+
   const { pathname } = req.nextUrl;
 
   if (!isAdminArea(pathname) && !pathname.startsWith("/api/") && !STATIC_SEO.has(pathname)) {

@@ -28,6 +28,17 @@ const nextConfig = {
   },
   // Compress responses
   compress: true,
+  async redirects() {
+    return [
+      // Legacy OpenCart image paths — Google Image Proxy keeps hitting these
+      { source: "/image/:path*", destination: "/", permanent: true },
+      // Legacy OpenCart entry point
+      { source: "/index.php", destination: "/", permanent: true },
+      // Legacy CloudCart import slugs (--slug, ---slug) — bots only
+      { source: "/:path(--[^/]*)", destination: "/catalog", permanent: true },
+      { source: "/:path(---[^/]*)", destination: "/catalog", permanent: true },
+    ];
+  },
   async rewrites() {
     // Serve the Vite SPA (built into /public) from the same origin in production.
     // Keep backend routes working normally.

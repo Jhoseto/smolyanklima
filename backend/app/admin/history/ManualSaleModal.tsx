@@ -1,6 +1,7 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
+import { X } from "lucide-react";
 import {
   Button,
   Input,
@@ -888,12 +889,17 @@ export function ManualSaleModal({
     <AdminModalBackdrop open onClose={onClose} busy={busy} layerId="manual-sale">
       <div className={`${ADMIN_MODAL_PANEL} max-w-3xl`} onClick={(e) => e.stopPropagation()}>
         <AdminModalDragHandle />
-        <div className="border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#e6f9fd_0,#ffffff_42%,#fff3ed_100%)] px-4 py-4 md:px-6 md:py-5 shrink-0">
+        <div className="border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#e6f9fd_0,#ffffff_42%,#fff3ed_100%)] px-4 py-4 md:px-6 md:py-5 shrink-0 flex items-start justify-between gap-3">
+          <div className="min-w-0">
           <div className="text-xs font-bold uppercase tracking-[0.24em] text-brand-blue-700">Ръчна продажба</div>
           <div className="mt-1 text-lg md:text-2xl font-black leading-tight text-slate-950">Запис в историята на продажбите</div>
           <div className="mt-1 text-sm font-medium text-slate-500 hidden sm:block">
             С монтаж: продажбата е „чака монтаж“, в календара се създава насрочен монтаж. Без монтаж: продажбата е завършена веднага.
           </div>
+          </div>
+          <button type="button" onClick={onClose} disabled={busy} aria-label="Close" className="shrink-0 mt-0.5 inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white/80 text-slate-500 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-40">
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
         <div className="grid flex-1 min-h-0 grid-cols-1 gap-3 overflow-y-auto p-4 md:p-6 md:grid-cols-2">

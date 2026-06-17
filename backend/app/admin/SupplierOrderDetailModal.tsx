@@ -420,7 +420,6 @@ export function SupplierOrderDetailModal({
     <div
       className="fixed inset-0 z-[60] flex items-end md:items-center justify-center bg-slate-950/60 p-0 md:p-3 backdrop-blur-md"
       data-admin-overlay="true"
-      onClick={() => !delivering && !cancelling && onClose()}
     >
       <div
         className="flex w-full max-w-2xl flex-col overflow-y-auto overscroll-contain rounded-t-3xl md:rounded-3xl border border-white/70 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)] max-h-[92dvh] md:max-h-[calc(100vh-2rem)] pb-safe md:pb-0"

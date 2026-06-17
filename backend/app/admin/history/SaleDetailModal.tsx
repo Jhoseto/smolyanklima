@@ -366,7 +366,6 @@ export function SaleDetailModal({ saleId, onClose, onChanged }: Props) {
     <div
       className="fixed inset-0 z-[60] flex items-end md:items-center justify-center bg-slate-950/55 p-0 md:p-4 backdrop-blur-md"
       data-admin-overlay="true"
-      onClick={onClose}
     >
       <div
         className="w-full max-w-3xl max-h-[92dvh] md:max-h-[92vh] overflow-hidden rounded-t-3xl md:rounded-2xl border border-white/20 bg-white shadow-2xl flex flex-col pb-safe md:pb-0"
@@ -639,7 +638,6 @@ export function SaleDetailModal({ saleId, onClose, onChanged }: Props) {
       {confirmDelete && (
         <div
           className="fixed inset-0 z-[80] flex items-end md:items-center justify-center md:p-4 bg-slate-950/60 backdrop-blur-md"
-          onClick={() => !deleting && setConfirmDelete(false)}
         >
           <div
             className="w-full md:max-w-lg rounded-t-3xl md:rounded-3xl border border-white/70 bg-white p-6 shadow-[0_-8px_40px_rgba(15,23,42,0.25)]"

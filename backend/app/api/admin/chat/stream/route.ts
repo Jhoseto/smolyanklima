@@ -8,7 +8,7 @@ import { chatInboxSignature } from "@/lib/live-chat/chatAlertSnapshot";
 
 export const dynamic = "force-dynamic";
 
-const POLL_MS = 15_000;
+const POLL_MS = 20_000;
 
 /** GET /api/admin/chat/stream — SSE for inbox changes (new chats / status changes) */
 export async function GET(req: NextRequest) {

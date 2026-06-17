@@ -381,7 +381,7 @@ export default function EditArticlePage() {
       </div>
 
       {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/55 p-0 md:p-4 backdrop-blur-md" onClick={() => setConfirmDelete(false)}>
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/55 p-0 md:p-4 backdrop-blur-md">
           <div className="w-full max-w-lg rounded-t-3xl md:rounded-3xl border border-white/70 bg-white p-5 md:p-6 shadow-[0_30px_90px_rgba(15,23,42,0.35)] pb-safe md:pb-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-center pb-2 md:hidden">
               <div className="w-10 h-1 rounded-full bg-slate-200" />

@@ -332,6 +332,8 @@ export function WorkItemsPlanner({
   const dayButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const stripScrollLock = useRef(false);
   const contentTouchRef = useRef<{ x: number; y: number } | null>(null);
+  // Month data cache — avoids re-fetching when navigating back to an already-loaded month
+  const monthCacheRef = useRef<Map<string, WorkItem[]>>(new Map());
   const [mountDetailId, setMountDetailId] = useState<string | null>(null);
   const [supplierOrderDetailId, setSupplierOrderDetailId] = useState<string | null>(null);
 
@@ -380,6 +382,13 @@ export function WorkItemsPlanner({
   const monthTo = formatDateKey(monthEnd);
 
   async function load() {
+    const cacheKey = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}`;
+    const cached = monthCacheRef.current.get(cacheKey);
+    if (cached) {
+      setItems(cached);
+      return;
+    }
+
     setError(null);
     const perPage = 500;
     const collected: WorkItem[] = [];
@@ -406,10 +415,17 @@ export function WorkItemsPlanner({
         collected.push(...batch);
         page += 1;
       } while (collected.length < total && page <= 40);
+      monthCacheRef.current.set(cacheKey, collected);
       setItems(collected);
     } catch (e: unknown) {
       setError(String((e as Error)?.message ?? e));
     }
+  }
+
+  async function forceRefresh() {
+    const cacheKey = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}`;
+    monthCacheRef.current.delete(cacheKey);
+    await load();
   }
 
   useEffect(() => {
@@ -418,7 +434,7 @@ export function WorkItemsPlanner({
   }, [viewYear, viewMonth]);
 
   useEffect(() => {
-    const onReload = () => void load();
+    const onReload = () => void forceRefresh();
     window.addEventListener("sk-admin-calendar-reload", onReload);
     return () => window.removeEventListener("sk-admin-calendar-reload", onReload);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -642,7 +658,7 @@ export function WorkItemsPlanner({
       const ok = await createFromForm(addForm);
       if (!ok) return;
       setAddForm(createDefaultForm(selectedDate ?? ""));
-      await load();
+      await forceRefresh();
       notifyFollowUpCallsChanged();
     } finally {
       setSavingBusy(false);
@@ -720,7 +736,7 @@ export function WorkItemsPlanner({
         return;
       }
       setEditingId(null);
-      await load();
+      await forceRefresh();
       notifyFollowUpCallsChanged();
     } finally {
       setSavingBusy(false);
@@ -743,7 +759,7 @@ export function WorkItemsPlanner({
         setError((json as any).error || "Грешка при маркиране като изпълнено");
         return;
       }
-      await load();
+      await forceRefresh();
       setConfirmCompleteItem(null);
       notifyFollowUpCallsChanged();
     } finally {
@@ -771,7 +787,7 @@ export function WorkItemsPlanner({
       }
       setConfirmDeleteId(null);
       if (editingId === itemId) setEditingId(null);
-      await load();
+      await forceRefresh();
       notifyFollowUpCallsChanged();
     } finally {
       setSavingBusy(false);
@@ -1139,7 +1155,6 @@ export function WorkItemsPlanner({
       {selectedDate && (
         <div
           className="fixed inset-0 z-[60] flex items-end md:items-start justify-center md:overflow-y-auto bg-slate-900/40 md:p-4 backdrop-blur-sm"
-          onClick={() => !savingBusy && closeDayModal()}
         >
           <div
             className="w-full max-h-[92vh] md:max-h-[calc(100vh-2rem)] md:my-4 md:max-w-6xl flex flex-col overflow-hidden rounded-t-3xl md:rounded-xl border border-slate-200 bg-white shadow-[0_-8px_40px_rgba(15,23,42,0.2)] md:shadow-xl pb-safe md:pb-0"
@@ -1389,7 +1404,7 @@ export function WorkItemsPlanner({
       )}
 
       {canDeleteEvents && confirmDeleteId && (
-        <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center md:p-4 bg-slate-950/55 backdrop-blur-md" onClick={() => setConfirmDeleteId(null)}>
+        <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center md:p-4 bg-slate-950/55 backdrop-blur-md">
           <div className="w-full md:max-w-lg rounded-t-3xl md:rounded-3xl border border-white/70 bg-white p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] md:pb-6 shadow-[0_-8px_40px_rgba(15,23,42,0.25)]" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-center mb-3 md:hidden"><div className="w-10 h-1 rounded-full bg-slate-200" /></div>
             <div className="text-xl font-black text-slate-950">Изтриване на събитие</div>
@@ -1768,7 +1783,6 @@ function WorkItemCompleteConfirmModal({
   return (
     <div
       className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-950/55 p-4 backdrop-blur-md md:items-center"
-      onClick={() => !savingBusy && onCancel()}
     >
       <div
         className="w-full max-w-lg rounded-t-3xl border border-white/70 bg-white p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] md:pb-6 shadow-[0_-8px_40px_rgba(15,23,42,0.25)] md:rounded-3xl"

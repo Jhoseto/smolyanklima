@@ -566,7 +566,8 @@ export async function GET(req: NextRequest) {
     }),
   );
   if (!q?.trim()) {
-    res.headers.set("Cache-Control", "private, max-age=15, stale-while-revalidate=60");
+    // Public listing (no search query) — safe to cache at shared proxies; no auth-dependent data
+    res.headers.set("Cache-Control", "public, max-age=60, s-maxage=300, stale-while-revalidate=600");
   }
   return res;
 }

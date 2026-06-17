@@ -178,7 +178,7 @@ export function DeleteConfirmModal({
 }) {
   if (!open) return null;
   return (
-    <div className={ADMIN_MODAL_BACKDROP} onClick={onCancel}>
+    <div className={ADMIN_MODAL_BACKDROP}>
       <div className={`${ADMIN_MODAL_PANEL} max-w-sm`} onClick={(e) => e.stopPropagation()}>
         <AdminModalDragHandle />
         <div className="px-5 py-4">

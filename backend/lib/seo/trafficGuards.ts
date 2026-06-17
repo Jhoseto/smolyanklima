@@ -1,10 +1,10 @@
 /** Fast checks for scanner/exploit traffic — does not affect normal browsers. */
 
 const EXPLOIT_PATH =
-  /ajaxpro|\.ashx|wp-admin|wp-login|phpmyadmin|xmlrpc\.php|\/\.env|vendor\/phpunit|\.php\.|\/cgi-bin\//i;
+  /ajaxpro|\.ashx|wp-admin|wp-login|phpmyadmin|xmlrpc\.php|\/\.env|vendor\/phpunit|\.php\.|\/cgi-bin\/|config\.dev\.php|config\.env/i;
 
 const SECURITY_SCANNER_UA =
-  /zgrab\/|censys|xpanse|palo\s*alto|l9tcpid|l9explore|leakix|masscan|nikto|sqlmap/i;
+  /zgrab\/|censys|xpanse|palo\s*alto|l9tcpid|l9explore|leakix|masscan|nikto|sqlmap|securityaudit/i;
 
 /** SEO tools that crawl infinite ?page=&tag= variants — not in isSeoBot (no DB seo-render). */
 const AGGRESSIVE_SEO_CRAWLER_UA = /serpstatbot|serpstat\.com/i;

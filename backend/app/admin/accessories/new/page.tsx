@@ -134,7 +134,6 @@ export default function NewAccessoryPage() {
       {pendingPhotosConfirm && (
         <div
           className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4 bg-slate-950/55 backdrop-blur-md"
-          onClick={() => setPendingPhotosConfirm(null)}
         >
           <div
             className="w-full md:max-w-lg overflow-hidden rounded-t-3xl md:rounded-3xl border border-white/70 bg-white shadow-xl"

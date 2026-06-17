@@ -207,7 +207,6 @@ export function ContactHistoryModal({
     <div
       className="fixed inset-0 z-[60] flex items-end md:items-center justify-center bg-slate-950/55 p-0 md:p-4 backdrop-blur-md"
       data-admin-overlay="true"
-      onClick={onClose}
     >
       <div
         className="w-full max-w-3xl max-h-[92dvh] md:max-h-[90vh] overflow-hidden rounded-t-3xl md:rounded-2xl border border-white/20 bg-white shadow-2xl flex flex-col pb-safe md:pb-0"

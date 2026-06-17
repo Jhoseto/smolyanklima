@@ -4,14 +4,17 @@ import { useCallback, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { INQUIRIES_COUNT_CHANGED } from "@/lib/admin/inquiries-count-events";
 
-const POLL_MS = 25_000;
+// 10-minute poll — badge updates instantly via INQUIRIES_COUNT_CHANGED DOM event on
+// admin-initiated changes; this poll only catches new external submissions.
+const POLL_MS = 600_000;
 const COUNT_URL = "/api/admin/inquiries/count";
 
 type Options = { /** По подразбиране true; false за роли без „Запитвания“ (напр. service_staff). */ enabled?: boolean };
 
 /**
  * Брой нови запитвания за навигация.
- * Poll на 25s + пауза при скрит tab; без poll на /admin/inquiries (там има SSE).
+ * Poll на 10 мин + пауза при скрит tab; без poll на /admin/inquiries (там има SSE).
+ * Admin-инициирани промени → badge се обновява веднага чрез INQUIRIES_COUNT_CHANGED event.
  */
 export function useInquiriesNewCount(options?: Options): number {
   const enabled = options?.enabled !== false;

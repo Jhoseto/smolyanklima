@@ -1,6 +1,7 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
+import { X } from "lucide-react";
 import {
   Button,
   Input,
@@ -93,6 +94,7 @@ export function ProductSupplierOrderModal({
   onClose: () => void;
   onSuccess: (result: { productName: string; customerName: string; amount: number; quantity: number }) => void;
 }) {
+  const draftKey = product ? `adminDraft:supplierOrder:${product.id}` : null;
   const [form, setForm] = useState<OrderForm>(() =>
     product ? emptyFormForProduct(product) : emptyFormForProduct({ id: "", name: "", price: 0 }),
   );
@@ -102,6 +104,23 @@ export function ProductSupplierOrderModal({
   const [contactResults, setContactResults] = useState<ContactChoice[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Restore draft when modal opens; reset to defaults if no draft saved for this product
+  useEffect(() => {
+    if (!open || !draftKey || !product) return;
+    try {
+      const saved = sessionStorage.getItem(draftKey);
+      if (saved) { setForm(JSON.parse(saved) as OrderForm); return; }
+    } catch { /* ignore */ }
+    setForm(emptyFormForProduct(product));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, draftKey]);
+
+  // Auto-save draft while typing
+  useEffect(() => {
+    if (!open || !draftKey) return;
+    try { sessionStorage.setItem(draftKey, JSON.stringify(form)); } catch { /* ignore */ }
+  }, [form, open, draftKey]);
 
   useEffect(() => {
     if (!open || !product) return;
@@ -235,6 +254,7 @@ export function ProductSupplierOrderModal({
         amount: unitPrice * quantity,
         quantity,
       });
+      if (draftKey) { try { sessionStorage.removeItem(draftKey); } catch { /* ignore */ } }
       onClose();
     } catch (e: unknown) {
       setError(String(e instanceof Error ? e.message : e));
@@ -255,12 +275,17 @@ export function ProductSupplierOrderModal({
     <AdminModalBackdrop open onClose={onClose} busy={busy} layerId="product-supplier-order">
       <div className={`${ADMIN_MODAL_PANEL} max-w-3xl`} onClick={(e) => e.stopPropagation()}>
         <AdminModalDragHandle />
-        <div className="border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#ede9fe_0,#ffffff_42%,#e6f9fd_100%)] px-4 py-4 md:px-6 md:py-5 shrink-0">
+        <div className="border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#ede9fe_0,#ffffff_42%,#e6f9fd_100%)] px-4 py-4 md:px-6 md:py-5 shrink-0 flex items-start justify-between gap-3">
+          <div className="min-w-0">
           <div className="text-xs font-bold uppercase tracking-[0.24em] text-violet-700">Поръчка от доставчик</div>
           <div className="mt-1 text-lg md:text-2xl font-black leading-tight text-slate-950">{productLabel(product)}</div>
           <div className="mt-1 hidden text-sm font-medium text-slate-500 sm:block">
             Записва поръчка в статус „чака доставка“. Клиентът не е задължителен — попълнете количество, цени и доставчик.
           </div>
+          </div>
+          <button type="button" onClick={onClose} disabled={busy} aria-label="Close" className="shrink-0 mt-0.5 inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white/80 text-slate-500 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-40">
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
         <div className="grid flex-1 min-h-0 grid-cols-1 gap-3 overflow-y-auto p-4 md:p-6 md:grid-cols-2">

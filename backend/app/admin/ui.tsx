@@ -77,7 +77,6 @@ export function AdminModalBackdrop({
     <div
       className={`${ADMIN_MODAL_BACKDROP} ${className}`.trim()}
       data-admin-overlay="true"
-      onClick={() => !busy && onClose()}
     >
       {children}
     </div>

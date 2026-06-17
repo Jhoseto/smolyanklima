@@ -1334,7 +1334,6 @@ export default function AdminHistoryPage() {
       {confirm && (
         <div
           className="fixed inset-0 z-[60] flex items-end md:items-center justify-center bg-slate-950/50 p-0 md:p-4 backdrop-blur-sm"
-          onClick={closeConfirm}
         >
           <div
             className="w-full max-w-md max-h-[92dvh] overflow-y-auto rounded-t-3xl md:rounded-2xl border border-slate-200 bg-white shadow-2xl p-5 pb-safe md:pb-5"

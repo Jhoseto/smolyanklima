@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAdminBackHandler } from "@/lib/admin/useAdminBackHandler";
+import { cancelAdminBackLayer } from "@/lib/admin/adminBackStack";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   HelpRow,
@@ -122,6 +123,8 @@ export function InquiriesClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const openedFromUrlRef = useRef<string | null>(null);
+  /** True while closeInquiryDetail is in flight — blocks URL sync effect from reopening the modal. */
+  const isClosingRef = useRef(false);
   const [items, setItems] = useState<Inquiry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -135,9 +138,6 @@ export function InquiriesClient() {
   const [aiReplyDraft, setAiReplyDraft] = useState<AiReplyDraft | null>(null);
   const [selectedInquiry, setSelectedInquiry] = useState<Inquiry | null>(null);
 
-  useAdminBackHandler(Boolean(selectedInquiry) && !notesForId && !aiReplyDraft, () => setSelectedInquiry(null), "inquiry-detail");
-  useAdminBackHandler(Boolean(notesForId), () => setNotesForId(null), notesForId ? `inquiry-notes-${notesForId}` : undefined);
-  useAdminBackHandler(Boolean(aiReplyDraft), () => setAiReplyDraft(null), "inquiry-ai-draft");
   const selectedDisplayProducts = useMemo(
     () => productsForInquiryDisplay(selectedInquiry),
     [selectedInquiry],
@@ -180,13 +180,21 @@ export function InquiriesClient() {
   useEffect(() => { void load(); }, [load]);
 
   const closeInquiryDetail = useCallback(() => {
+    // Remove the back-layer BEFORE React's cleanup can run popAdminBackLayer,
+    // so that popAdminBackLayer finds idx===-1 and skips history.back().
+    // history.back() + router.replace fight each other and cause the modal to reopen.
+    cancelAdminBackLayer("inquiry-detail");
+    isClosingRef.current = true;
+    openedFromUrlRef.current = null;
     setSelectedInquiry(null);
-    if (searchParams.get("id")) router.replace("/admin/inquiries");
-  }, [router, searchParams]);
+    router.replace("/admin/inquiries", { scroll: false });
+  }, [router]);
 
   const openInquiryDetail = useCallback(async (inquiry: Inquiry) => {
+    isClosingRef.current = false;
+    openedFromUrlRef.current = inquiry.id;
     setSelectedInquiry(inquiry);
-    router.replace(`/admin/inquiries?id=${inquiry.id}`);
+    router.replace(`/admin/inquiries?id=${inquiry.id}`, { scroll: false });
     try {
       const res = await fetch(`/api/admin/inquiries/${inquiry.id}`, { credentials: "include" });
       const json = await res.json();
@@ -196,13 +204,20 @@ export function InquiriesClient() {
     }
   }, [router]);
 
+  useAdminBackHandler(Boolean(selectedInquiry) && !notesForId && !aiReplyDraft, closeInquiryDetail, "inquiry-detail");
+  useAdminBackHandler(Boolean(notesForId), () => setNotesForId(null), notesForId ? `inquiry-notes-${notesForId}` : undefined);
+  useAdminBackHandler(Boolean(aiReplyDraft), () => setAiReplyDraft(null), "inquiry-ai-draft");
+
   useEffect(() => {
     const id = searchParams.get("id")?.trim();
     if (!id) {
+      // URL is clean — safe to reset all guards
+      isClosingRef.current = false;
       openedFromUrlRef.current = null;
       return;
     }
-    if (openedFromUrlRef.current === id && selectedInquiry?.id === id) return;
+    if (isClosingRef.current) return;        // close in flight — ignore URL until it settles
+    if (openedFromUrlRef.current === id) return; // already showing this inquiry
 
     const fromList = items.find((row) => row.id === id);
     if (fromList) {
@@ -222,11 +237,46 @@ export function InquiriesClient() {
         setError(e instanceof Error ? e.message : "Грешка при зареждане на запитването");
       }
     })();
-  }, [searchParams, items, selectedInquiry?.id, openInquiryDetail]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, items]);
 
   useEffect(() => {
     let events: EventSource | null = null;
 
+    // ── Idle timeout ──────────────────────────────────────────────────────────
+    // EventSource.close() does NOT fire onerror, so we set liveConnected=false explicitly.
+    const IDLE_MS = 15 * 60 * 1000;
+    let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const disconnectEvents = () => {
+      events?.close();
+      events = null;
+      setLiveConnected(false);
+    };
+
+    const resetIdle = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        if (!document.hidden) disconnectEvents();
+      }, IDLE_MS);
+    };
+
+    // mousemove / scroll: only reset the timer, never reconnect
+    const onPassiveActivity = () => { resetIdle(); };
+
+    // click / keydown / touchstart: intentional — reconnect if disconnected, then reset timer
+    const onIntentionalAction = () => {
+      if (!events && !document.hidden) connect();
+      resetIdle();
+    };
+
+    window.addEventListener("mousemove", onPassiveActivity, { passive: true });
+    window.addEventListener("scroll", onPassiveActivity, { passive: true });
+    window.addEventListener("click", onIntentionalAction, { passive: true });
+    window.addEventListener("keydown", onIntentionalAction, { passive: true });
+    window.addEventListener("touchstart", onIntentionalAction, { passive: true });
+
+    // ── Connection helpers ────────────────────────────────────────────────────
     function connect() {
       if (typeof document !== "undefined" && document.hidden) return;
       events?.close();
@@ -259,20 +309,27 @@ export function InquiriesClient() {
     }
 
     connect();
+    resetIdle();
 
     const onVisibility = () => {
       if (document.hidden) {
-        events?.close();
-        events = null;
-        setLiveConnected(false);
+        disconnectEvents();
+        if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
       } else {
         connect();
+        resetIdle();
       }
     };
     document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
+      if (idleTimer) clearTimeout(idleTimer);
       document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("mousemove", onPassiveActivity);
+      window.removeEventListener("scroll", onPassiveActivity);
+      window.removeEventListener("click", onIntentionalAction);
+      window.removeEventListener("keydown", onIntentionalAction);
+      window.removeEventListener("touchstart", onIntentionalAction);
       events?.close();
       setLiveConnected(false);
     };
@@ -607,13 +664,22 @@ export function InquiriesClient() {
       )}
 
       {selectedInquiry && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/55 md:p-4 backdrop-blur-md" onClick={closeInquiryDetail}>
-          <div className="w-full max-w-4xl max-h-[96vh] md:max-h-[calc(100vh-2rem)] overflow-hidden rounded-t-3xl md:rounded-3xl border border-white/70 bg-white shadow-[0_-8px_60px_rgba(15,23,42,0.35)] md:shadow-[0_30px_90px_rgba(15,23,42,0.35)]" onClick={e => e.stopPropagation()}>
-            <div className="relative border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#ffffff_42%,#f8fafc_100%)] px-6 py-5">
-              <HoverTip tip={INQUIRY_TIPS.close}>
-                <button type="button" aria-label={INQUIRY_TIPS.close} onClick={closeInquiryDetail} className="absolute right-4 top-4 inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white/80 text-slate-500 shadow-sm hover:bg-white hover:text-slate-900"><X className="h-4 w-4" /></button>
-              </HoverTip>
-              <div className="flex items-center gap-3 pr-10">
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/55 md:p-4 backdrop-blur-md">
+          <div className="relative w-full max-w-4xl max-h-[96vh] md:max-h-[calc(100vh-2rem)] overflow-hidden rounded-t-3xl md:rounded-3xl border border-white/70 bg-white shadow-[0_-8px_60px_rgba(15,23,42,0.35)] md:shadow-[0_30px_90px_rgba(15,23,42,0.35)]" onClick={e => e.stopPropagation()}>
+            <button
+              type="button"
+              aria-label={INQUIRY_TIPS.close}
+              title={INQUIRY_TIPS.close}
+              onClick={(e) => {
+                e.stopPropagation();
+                closeInquiryDetail();
+              }}
+              className="absolute right-4 top-4 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-md hover:bg-slate-50 hover:text-slate-900"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <div className="border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#ffffff_42%,#f8fafc_100%)] px-6 py-5">
+              <div className="flex items-center gap-3 pr-14">
                 <div className={`flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-lg ${selectedInquiry.source === "wizard" ? "bg-violet-600 shadow-violet-600/25" : "bg-brand-blue-500 shadow-brand-blue-500/25"}`}>
                   <MessageSquare className="h-5 w-5" />
                 </div>
@@ -699,7 +765,7 @@ export function InquiriesClient() {
       )}
 
       {aiReplyDraft && (
-        <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center bg-slate-950/55 p-0 md:p-4 backdrop-blur-md" onClick={() => setAiReplyDraft(null)}>
+        <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center bg-slate-950/55 p-0 md:p-4 backdrop-blur-md">
           <div className="w-full max-w-2xl max-h-[92dvh] overflow-hidden rounded-t-3xl md:rounded-3xl border border-white/70 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)] flex flex-col pb-safe md:pb-0" onClick={e => e.stopPropagation()}>
             <div className="flex justify-center pt-3 pb-1 md:hidden shrink-0">
               <div className="w-10 h-1 rounded-full bg-slate-200" />
@@ -860,7 +926,7 @@ function InquiryNotesModal({ inquiryId, initialNotes, onClose, onSave }: {
   const [text, setText] = useState(initialNotes);
   const [saving, setSaving] = useState(false);
   return (
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-end md:items-center justify-center z-[70] p-0 md:p-2" onClick={onClose}>
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-end md:items-center justify-center z-[70] p-0 md:p-2">
       <div className="w-full max-w-lg max-h-[92dvh] overflow-y-auto bg-white rounded-t-3xl md:rounded-xl shadow-xl border border-slate-200 p-4 pb-safe md:pb-4" onClick={e => e.stopPropagation()}>
         <div className="flex justify-center pb-2 md:hidden">
           <div className="w-10 h-1 rounded-full bg-slate-200" />

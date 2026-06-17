@@ -157,7 +157,6 @@ export function FeaturedSlotModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-md"
-      onClick={onClose}
     >
       <div
         className="w-full max-w-3xl rounded-3xl bg-white shadow-2xl ring-1 ring-slate-100 overflow-hidden"

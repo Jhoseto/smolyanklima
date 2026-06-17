@@ -217,7 +217,6 @@ export function AIPhotoFinder({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/55 backdrop-blur-md"
-      onClick={() => phase !== "downloading" && onClose()}
     >
       <div
         className="w-full max-w-4xl max-h-[90vh] flex flex-col rounded-3xl border border-white/70 bg-white shadow-[0_8px_40px_rgba(15,23,42,0.3)] overflow-hidden"

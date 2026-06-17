@@ -413,7 +413,6 @@ export default function EditProductPage() {
       {!readOnly && pendingPhotosConfirm && (
         <div
           className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4 bg-slate-950/55 backdrop-blur-md"
-          onClick={() => setPendingPhotosConfirm(null)}
         >
           <div
             className="w-full md:max-w-lg overflow-hidden rounded-t-3xl md:rounded-3xl border border-white/70 bg-white shadow-[0_-8px_40px_rgba(15,23,42,0.25)]"
@@ -463,7 +462,7 @@ export default function EditProductPage() {
       )}
 
       {!readOnly && confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4 bg-slate-950/55 backdrop-blur-md" onClick={() => setConfirmDelete(false)}>
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4 bg-slate-950/55 backdrop-blur-md">
           <div className="w-full md:max-w-lg rounded-t-3xl md:rounded-3xl border border-white/70 bg-white p-6 shadow-[0_-8px_40px_rgba(15,23,42,0.25)]" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-center mb-3 md:hidden"><div className="w-10 h-1 rounded-full bg-slate-200" /></div>
             <div className="text-xl font-black text-slate-950">Изтриване на продукт</div>

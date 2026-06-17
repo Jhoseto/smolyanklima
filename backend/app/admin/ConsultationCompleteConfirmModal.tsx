@@ -65,7 +65,6 @@ export function ConsultationCompleteConfirmModal({
   return (
     <div
       className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-950/55 p-4 backdrop-blur-md md:items-center"
-      onClick={() => !savingBusy && onCancel()}
     >
       <div
         className="w-full max-w-lg rounded-t-3xl border border-white/70 bg-white p-6 shadow-[0_-8px_40px_rgba(15,23,42,0.25)] md:rounded-3xl"

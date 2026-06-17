@@ -64,7 +64,6 @@ export function ContactsNewModal({
   return (
     <div
       className="fixed inset-0 z-[60] flex items-end md:items-stretch md:justify-end bg-slate-950/50 backdrop-blur-sm"
-      onClick={onClose}
     >
       <div
         className="w-full md:w-[min(480px,100vw)] md:max-h-none max-h-[92dvh] flex flex-col bg-white md:border-l border-slate-200 shadow-2xl rounded-t-3xl md:rounded-none overflow-hidden pb-safe md:pb-0"

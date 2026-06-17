@@ -1,6 +1,7 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
+import { X } from "lucide-react";
 import {
   Button,
   Input,
@@ -70,6 +71,7 @@ export function ProductReservationModal({
   onClose: () => void;
   onSuccess: (result: { productName: string; customerName: string; amount: number }) => void;
 }) {
+  const draftKey = product ? `adminDraft:reservation:${product.id}` : null;
   const [form, setForm] = useState<ReservationForm>(() =>
     product ? emptyFormForProduct(product) : emptyFormForProduct({ id: "", name: "", price: 0 }),
   );
@@ -79,13 +81,27 @@ export function ProductReservationModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Restore draft when modal opens; reset to defaults if no draft saved for this product
   useEffect(() => {
     if (!open || !product) return;
-    setForm(emptyFormForProduct(product));
     setContactQuery("");
     setContactResults([]);
     setError(null);
-  }, [open, product?.id]);
+    if (draftKey) {
+      try {
+        const saved = sessionStorage.getItem(draftKey);
+        if (saved) { setForm(JSON.parse(saved) as ReservationForm); return; }
+      } catch { /* ignore */ }
+    }
+    setForm(emptyFormForProduct(product));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, draftKey]);
+
+  // Auto-save draft while typing
+  useEffect(() => {
+    if (!open || !draftKey) return;
+    try { sessionStorage.setItem(draftKey, JSON.stringify(form)); } catch { /* ignore */ }
+  }, [form, open, draftKey]);
 
   useEffect(() => {
     if (!open || !product) return;
@@ -191,6 +207,7 @@ export function ProductReservationModal({
         customerName: form.customerName.trim(),
         amount: unitPrice,
       });
+      if (draftKey) { try { sessionStorage.removeItem(draftKey); } catch { /* ignore */ } }
       onClose();
     } catch (e: unknown) {
       setError(String(e instanceof Error ? e.message : e));
@@ -205,12 +222,17 @@ export function ProductReservationModal({
     <AdminModalBackdrop open onClose={onClose} busy={busy} layerId="product-reservation">
       <div className={`${ADMIN_MODAL_PANEL} max-w-2xl`} onClick={(e) => e.stopPropagation()}>
         <AdminModalDragHandle />
-        <div className="border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#ffffff_42%,#f0f9ff_100%)] px-4 py-4 md:px-6 md:py-5 shrink-0">
+        <div className="border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#ffffff_42%,#f0f9ff_100%)] px-4 py-4 md:px-6 md:py-5 shrink-0 flex items-start justify-between gap-3">
+          <div className="min-w-0">
           <div className="text-xs font-bold uppercase tracking-[0.24em] text-sky-700">Резервация</div>
           <div className="mt-1 text-lg md:text-2xl font-black leading-tight text-slate-950">{productLabel(product)}</div>
           <div className="mt-1 hidden text-sm font-medium text-slate-500 sm:block">
             Запазва продукта за клиент. Статусът става „Резервиран“ — не се показва като свободен в каталога.
           </div>
+          </div>
+          <button type="button" onClick={onClose} disabled={busy} aria-label="Close" className="shrink-0 mt-0.5 inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white/80 text-slate-500 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-40">
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
         <div className="grid flex-1 min-h-0 grid-cols-1 gap-3 overflow-y-auto p-4 md:p-6 md:grid-cols-2">

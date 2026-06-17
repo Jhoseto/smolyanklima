@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useSessionDraft } from "@/lib/admin/useSessionDraft";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Card, Input, Select, Textarea, Button, Table, Th, Td, AdminContactSuggestRow, useAdminBackHandler } from "../ui";
 import { ChevronDown, ChevronUp, UserPlus, Users, Activity, FileText, Phone, Mail, MapPin, X, Truck, Plus, Trash2, Save, Pencil, Package } from "lucide-react";
@@ -281,7 +282,7 @@ function AdminContactsPageInner() {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [showNewContactModal, setShowNewContactModal] = useState(false);
-  const [newForm, setNewForm] = useState<NewContactForm>(() => emptyNewContactForm(initialKind));
+  const [newForm, setNewForm, clearNewFormDraft] = useSessionDraft<NewContactForm>("adminDraft:newContact", emptyNewContactForm(initialKind));
   // Редакция на основния профил (име, основен телефон, имейл, адрес, бележки).
   const [editingProfile, setEditingProfile] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -477,7 +478,7 @@ function AdminContactsPageInner() {
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((json as any).error || "Грешка при създаване");
       const id = (json as any).data?.id as string;
-      setNewForm(emptyNewContactForm(contactsTab));
+      clearNewFormDraft();
       setShowNewContactModal(false);
       await loadList();
       if (id) {
@@ -1247,17 +1248,13 @@ function AdminContactsPageInner() {
         form={newForm}
         creating={creating}
         onChange={setNewForm}
-        onClose={() => {
-          setShowNewContactModal(false);
-          setNewForm(emptyNewContactForm(contactsTab));
-        }}
+        onClose={() => setShowNewContactModal(false)}
         onSubmit={() => void createContact()}
       />
 
       {confirmMerge && (
         <div
           className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/55 p-0 md:p-4 backdrop-blur-md"
-          onClick={() => setConfirmMerge(false)}
         >
           <div className="w-full max-w-lg rounded-t-3xl md:rounded-3xl border border-white/70 bg-white p-5 md:p-6 shadow-[0_30px_90px_rgba(15,23,42,0.35)] pb-safe md:pb-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-center pb-2 md:hidden">
@@ -1280,7 +1277,6 @@ function AdminContactsPageInner() {
       {confirmDelete && detail && (
         <div
           className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/55 p-0 md:p-4 backdrop-blur-md"
-          onClick={() => !deleting && setConfirmDelete(false)}
         >
           <div className="w-full max-w-lg rounded-t-3xl md:rounded-3xl border border-white/70 bg-white p-5 md:p-6 shadow-[0_30px_90px_rgba(15,23,42,0.35)] pb-safe md:pb-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-center pb-2 md:hidden">

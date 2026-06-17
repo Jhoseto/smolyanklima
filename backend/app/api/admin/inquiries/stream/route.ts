@@ -6,11 +6,10 @@ export const dynamic = "force-dynamic";
 
 /**
  * Polling за нови inquiries (контактни форми). Тези не са live chat —
- * клиент попълва форма и не очаква отговор „веднага". Затова 5s е
- * напълно достатъчно.
- * Преди беше 2s → 30 заявки/мин. Сега 5s → 12/мин. Икономия ~60%.
+ * клиент попълва форма и не очаква отговор „веднага". 30s е напълно достатъчно.
+ * Преди беше 5s → 12/мин. Сега 30s → 2/мин. Икономия ~83%.
  */
-const POLL_INTERVAL_MS = 5_000;
+const POLL_INTERVAL_MS = 30_000;
 
 export async function GET(req: NextRequest) {
   const supabase = await adminDb();

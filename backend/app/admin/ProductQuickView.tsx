@@ -176,7 +176,7 @@ export function AccessoryQuickViewModal({ accessoryId, onClose }: { accessoryId:
 
   return (
     <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div className="relative w-full max-h-[93vh] md:max-h-[90vh] overflow-hidden rounded-t-3xl md:rounded-3xl bg-white shadow-[0_-8px_40px_rgba(0,0,0,0.25)] md:shadow-2xl md:w-[720px] md:mx-4">
         <div className="flex justify-center pt-3 pb-1 md:hidden">
           <div className="w-10 h-1 rounded-full bg-gray-200" />
@@ -358,7 +358,7 @@ export function ProductQuickViewModal({ productId, onClose }: { productId: strin
 
   return (
     <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       {/* Bottom sheet on mobile, centered panel on desktop */}
       <div className="relative w-full max-h-[93vh] md:max-h-[90vh] overflow-hidden rounded-t-3xl md:rounded-3xl bg-white shadow-[0_-8px_40px_rgba(0,0,0,0.25)] md:shadow-2xl md:w-[900px] md:mx-4">
         {/* Mobile drag handle */}

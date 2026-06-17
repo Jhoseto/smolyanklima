@@ -119,7 +119,7 @@ export function QueryTemplatesPanel({ onUseTemplate, draftPrompt = "" }: Props) 
       </div>
 
       {saveOpen && (
-        <div className={ADMIN_MODAL_BACKDROP} onClick={() => setSaveOpen(false)}>
+        <div className={ADMIN_MODAL_BACKDROP}>
           <div className={`${ADMIN_MODAL_PANEL} max-w-md`} onClick={(e) => e.stopPropagation()}>
             <AdminModalDragHandle />
             <div className="px-5 py-4 space-y-3">

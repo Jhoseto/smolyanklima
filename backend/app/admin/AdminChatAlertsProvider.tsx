@@ -21,6 +21,7 @@ import type { ChatAlertSnapshot } from "@/lib/live-chat/chatAlertSnapshot";
 type AdminChatAlertsContextValue = {
   streamConnected: boolean;
   waitingCount: number;
+  reconnectFailed: boolean;
   setViewingChatId: (chatId: string | null) => void;
   acknowledgeUserMessage: (chatId: string, messageId: string) => void;
   subscribeInboxChange: (cb: () => void) => () => void;
@@ -30,6 +31,10 @@ const AdminChatAlertsContext = createContext<AdminChatAlertsContextValue | null>
 
 const ALERTS_DEBOUNCE_MS = 12_000;
 const STREAM_RECONNECT_MS = 8_000;
+const MAX_RECONNECT_FAILURES = 5;
+// Disconnect SSE after 15 min of no intentional user activity (click / keydown / touchstart).
+// mousemove and scroll only reset the timer — they do NOT trigger reconnect.
+const IDLE_MS = 15 * 60 * 1000;
 
 export function useAdminChatAlerts(): AdminChatAlertsContextValue {
   const ctx = useContext(AdminChatAlertsContext);
@@ -37,6 +42,7 @@ export function useAdminChatAlerts(): AdminChatAlertsContextValue {
     return {
       streamConnected: false,
       waitingCount: 0,
+      reconnectFailed: false,
       setViewingChatId: () => {},
       acknowledgeUserMessage: () => {},
       subscribeInboxChange: () => () => {},
@@ -59,6 +65,7 @@ export function AdminChatAlertsProvider({
   const enabled = isChatOperator(role);
   const [streamConnected, setStreamConnected] = useState(false);
   const [waitingCount, setWaitingCount] = useState(0);
+  const [reconnectFailed, setReconnectFailed] = useState(false);
   const streamConnectedRef = useRef(false);
   const viewingChatIdRef = useRef<string | null>(null);
   const knownWaitingIdsRef = useRef<Set<string>>(new Set());
@@ -172,6 +179,10 @@ export function AdminChatAlertsProvider({
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let activeCtrl: AbortController | null = null;
     let connecting = false;
+    // Prevents scheduleReconnect from firing after an intentional idle disconnect
+    let intentionalDisconnect = false;
+    // Counts consecutive failed reconnect attempts for the stale-connection banner
+    let failedAttempts = 0;
 
     const setStreamState = (connected: boolean) => {
       streamConnectedRef.current = connected;
@@ -179,8 +190,10 @@ export function AdminChatAlertsProvider({
     };
 
     const scheduleReconnect = () => {
-      if (aborted || reconnectTimer || connecting) return;
+      if (aborted || reconnectTimer || connecting || intentionalDisconnect) return;
       if (typeof document !== "undefined" && document.hidden) return;
+      failedAttempts += 1;
+      if (failedAttempts >= MAX_RECONNECT_FAILURES) setReconnectFailed(true);
       reconnectTimer = setTimeout(() => {
         reconnectTimer = null;
         if (!aborted && !document.hidden) void connectStream();
@@ -203,6 +216,9 @@ export function AdminChatAlertsProvider({
           return;
         }
 
+        // Successful connection — reset failure counter and clear banner
+        failedAttempts = 0;
+        setReconnectFailed(false);
         setStreamState(true);
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
@@ -215,6 +231,10 @@ export function AdminChatAlertsProvider({
           const parts = buf.split("\n\n");
           buf = parts.pop() ?? "";
           for (const part of parts) {
+            if (part.includes("event: ready")) {
+              // Server sends this immediately on connect — refresh data after every reconnect
+              void fetchAlerts(true, { force: true });
+            }
             if (part.includes("event: changed")) {
               void fetchAlerts(true);
               notifyInboxListeners();
@@ -222,7 +242,7 @@ export function AdminChatAlertsProvider({
           }
         }
       } catch {
-        /* aborted or network */
+        /* aborted or network error */
       } finally {
         connecting = false;
         if (!aborted) {
@@ -234,7 +254,8 @@ export function AdminChatAlertsProvider({
 
     void connectStream();
 
-    const disconnectStream = () => {
+    const disconnectStream = (intentional = false) => {
+      intentionalDisconnect = intentional;
       activeCtrl?.abort();
       activeCtrl = null;
       connecting = false;
@@ -245,13 +266,53 @@ export function AdminChatAlertsProvider({
       setStreamState(false);
     };
 
+    // ── Idle timeout ──────────────────────────────────────────────────────────
+    let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const resetIdle = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      // Never auto-disconnect while a client is actively waiting
+      if (knownWaitingIdsRef.current.size > 0) return;
+      idleTimer = setTimeout(() => {
+        if (!aborted && !document.hidden) disconnectStream(true);
+      }, IDLE_MS);
+    };
+
+    // mousemove / scroll: only push back the disconnect timer, never reconnect
+    const onPassiveActivity = () => {
+      resetIdle();
+    };
+
+    // click / keydown / touchstart: intentional action — reconnect if disconnected, then reset timer
+    const onIntentionalAction = () => {
+      intentionalDisconnect = false;
+      if (!streamConnectedRef.current && !aborted && !document.hidden) {
+        void connectStream();
+      }
+      resetIdle();
+    };
+
+    window.addEventListener("mousemove", onPassiveActivity, { passive: true });
+    window.addEventListener("scroll", onPassiveActivity, { passive: true });
+    window.addEventListener("click", onIntentionalAction, { passive: true });
+    window.addEventListener("keydown", onIntentionalAction, { passive: true });
+    window.addEventListener("touchstart", onIntentionalAction, { passive: true });
+
+    // Start the initial idle timer
+    resetIdle();
+
+    // ── Visibility ────────────────────────────────────────────────────────────
     const onVisibility = () => {
       if (document.hidden) {
         disconnectStream();
+        if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
         return;
       }
+      // Tab became visible — clear intentional flag and restart idle timer
+      intentionalDisconnect = false;
       void fetchAlerts(true);
       if (!aborted) void connectStream();
+      resetIdle();
     };
     document.addEventListener("visibilitychange", onVisibility);
 
@@ -259,7 +320,13 @@ export function AdminChatAlertsProvider({
       aborted = true;
       activeCtrl?.abort();
       if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (idleTimer) clearTimeout(idleTimer);
       document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("mousemove", onPassiveActivity);
+      window.removeEventListener("scroll", onPassiveActivity);
+      window.removeEventListener("click", onIntentionalAction);
+      window.removeEventListener("keydown", onIntentionalAction);
+      window.removeEventListener("touchstart", onIntentionalAction);
       setStreamState(false);
       removeUnlock();
     };
@@ -268,10 +335,26 @@ export function AdminChatAlertsProvider({
   const value: AdminChatAlertsContextValue = {
     streamConnected,
     waitingCount,
+    reconnectFailed,
     setViewingChatId,
     acknowledgeUserMessage,
     subscribeInboxChange,
   };
 
-  return <AdminChatAlertsContext.Provider value={value}>{children}</AdminChatAlertsContext.Provider>;
+  return (
+    <AdminChatAlertsContext.Provider value={value}>
+      {reconnectFailed && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-xs text-amber-800 flex justify-between items-center">
+          <span>Връзката е прекъсната. Данните може да не са актуални.</span>
+          <button
+            onClick={() => window.location.reload()}
+            className="font-bold underline ml-4"
+          >
+            Обнови страницата
+          </button>
+        </div>
+      )}
+      {children}
+    </AdminChatAlertsContext.Provider>
+  );
 }

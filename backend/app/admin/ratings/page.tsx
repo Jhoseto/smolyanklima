@@ -231,7 +231,6 @@ function DetailModal({
   return (
     <div
       className="fixed inset-0 z-[60] flex items-end md:items-center justify-center bg-slate-950/60 md:p-4 backdrop-blur-sm"
-      onClick={onClose}
     >
       <div
         className="w-full max-w-2xl rounded-t-3xl md:rounded-3xl bg-white shadow-2xl overflow-hidden flex flex-col max-h-[90dvh] pb-safe md:pb-0"

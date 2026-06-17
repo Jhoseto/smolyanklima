@@ -142,7 +142,7 @@ export default function EditAccessoryPage() {
       </div>
 
       {pendingPhotosConfirm && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4 bg-slate-950/55" onClick={() => setPendingPhotosConfirm(null)}>
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4 bg-slate-950/55">
           <div className="w-full md:max-w-lg rounded-t-3xl md:rounded-3xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <p className="text-sm text-slate-700 mb-4">
               Имаш {pendingPhotos} неприбрани снимки. Да запазя без тях?

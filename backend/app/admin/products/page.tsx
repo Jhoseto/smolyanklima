@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -39,6 +39,7 @@ import {
   Truck,
   Bookmark,
   BookmarkX,
+  X,
 } from "lucide-react";
 import { ShareToChatModal } from "../chat/ShareToChatModal";
 import { useAdminBackHandler } from "@/lib/admin/useAdminBackHandler";
@@ -2600,7 +2601,6 @@ export default function AdminProductsPage() {
         return (
         <div
           className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/55 p-0 md:p-4 backdrop-blur-md"
-          onClick={() => !saleBusy && setSaleFor(null)}
         >
           <div
             className="w-full max-w-3xl max-h-[92dvh] md:max-h-[calc(100vh-2rem)] overflow-hidden rounded-t-3xl md:rounded-3xl border border-white/70 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)] flex flex-col"
@@ -2609,15 +2609,20 @@ export default function AdminProductsPage() {
             <div className="flex justify-center pt-3 pb-1 md:hidden shrink-0">
               <div className="w-10 h-1 rounded-full bg-slate-200" />
             </div>
-            <div className="border-b border-slate-100 px-4 py-4 md:px-6 md:py-5 shrink-0 bg-[radial-gradient(circle_at_top_left,#e6f9fd_0,#ffffff_42%,#fff3ed_100%)]">
+            <div className="border-b border-slate-100 px-4 py-4 md:px-6 md:py-5 shrink-0 flex items-start justify-between gap-3 bg-[radial-gradient(circle_at_top_left,#e6f9fd_0,#ffffff_42%,#fff3ed_100%)]">
+            <div className="min-w-0">
               <div className="text-xs font-bold uppercase tracking-[0.24em] text-brand-blue-700">Запис на продажба</div>
               <div className="mt-1 text-lg md:text-2xl font-black leading-tight text-slate-950">{saleFor.name}</div>
               <div className="mt-1 text-sm font-medium text-slate-500 hidden sm:block">
                 {withInstallation
                   ? "Контакт за сделката, дата и час за монтаж. Създава се продажба (чака монтаж) и събитие „Монтаж“ в календара."
                   : "Продажба без монтаж — записът в „Продажби“ се маркира директно като завършен, без дата в календара."}
-              </div>
             </div>
+            </div>
+            <button type="button" onClick={() => setSaleFor(null)} aria-label="Close" className="shrink-0 mt-0.5 inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white/80 text-slate-500 hover:bg-slate-50 hover:text-slate-900">
+              <X className="h-5 w-5" />
+            </button>
+              </div>
 
             <div className="grid flex-1 min-h-0 grid-cols-1 gap-3 overflow-y-auto p-4 md:p-6 md:grid-cols-2">
               <div className="col-span-full relative">
@@ -2844,7 +2849,7 @@ export default function AdminProductsPage() {
       />
 
       {saleSuccess && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/55 p-0 md:p-4 backdrop-blur-md" onClick={() => setSaleSuccess(null)}>
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/55 p-0 md:p-4 backdrop-blur-md">
           <div
             className="w-full max-w-xl max-h-[92dvh] overflow-hidden rounded-t-3xl md:rounded-3xl border border-white/70 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)] flex flex-col pb-safe md:pb-0"
             onClick={(e) => e.stopPropagation()}
@@ -2927,7 +2932,6 @@ export default function AdminProductsPage() {
       {confirmBulkDelete && (
         <div
           className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/55 p-0 md:p-4 backdrop-blur-md"
-          onClick={() => setConfirmBulkDelete(false)}
         >
           <div
             className="w-full max-w-lg max-h-[92dvh] overflow-y-auto rounded-t-3xl md:rounded-3xl bg-white p-5 md:p-6 shadow-2xl ring-1 ring-rose-100 pb-safe md:pb-6"

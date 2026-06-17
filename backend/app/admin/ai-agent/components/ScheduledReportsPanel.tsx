@@ -155,7 +155,7 @@ export function ScheduledReportsPanel({ open, onClose, templates, onOpenConversa
   if (!open) return null;
 
   return (
-    <div className={ADMIN_MODAL_BACKDROP} onClick={onClose}>
+    <div className={ADMIN_MODAL_BACKDROP}>
       <div className={`${ADMIN_MODAL_PANEL} max-w-lg max-h-[90vh] flex flex-col`} onClick={(e) => e.stopPropagation()}>
         <AdminModalDragHandle />
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">

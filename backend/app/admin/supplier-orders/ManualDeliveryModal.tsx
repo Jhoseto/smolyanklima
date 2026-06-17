@@ -1,6 +1,7 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { X } from "lucide-react";
 import {
   Button,
   Input,
@@ -696,12 +697,17 @@ export function ManualDeliveryModal({
     <AdminModalBackdrop open onClose={onClose} busy={busy} layerId="manual-delivery">
       <div className={`${ADMIN_MODAL_PANEL} max-w-3xl`} onClick={(e) => e.stopPropagation()}>
         <AdminModalDragHandle />
-        <div className="border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#ede9fe_0,#ffffff_42%,#e6f9fd_100%)] px-4 py-4 md:px-6 md:py-5 shrink-0">
+        <div className="border-b border-slate-100 bg-[radial-gradient(circle_at_top_left,#ede9fe_0,#ffffff_42%,#e6f9fd_100%)] px-4 py-4 md:px-6 md:py-5 shrink-0 flex items-start justify-between gap-3">
+          <div className="min-w-0">
           <div className="text-xs font-bold uppercase tracking-[0.24em] text-violet-700">Ръчна поръчка</div>
           <div className="mt-1 text-lg md:text-2xl font-black leading-tight text-slate-950">Запис в историята на поръчките</div>
           <div className="mt-1 hidden text-sm font-medium text-slate-500 sm:block">
             Записва поръчка в статус „чака доставка“. Сериите и фактурата се попълват при приключване на доставката.
           </div>
+          </div>
+          <button type="button" onClick={onClose} disabled={busy} aria-label="Close" className="shrink-0 mt-0.5 inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white/80 text-slate-500 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-40">
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
         <div className="grid flex-1 min-h-0 grid-cols-1 gap-3 overflow-y-auto p-4 md:p-6 md:grid-cols-2">

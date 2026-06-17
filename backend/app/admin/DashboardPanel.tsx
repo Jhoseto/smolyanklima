@@ -291,7 +291,6 @@ export function DashboardPanel({
       {selected && (
         <div
           className={ADMIN_MODAL_BACKDROP}
-          onClick={() => setSelected(null)}
         >
           <div
             className={`${ADMIN_MODAL_PANEL} max-w-xl`}

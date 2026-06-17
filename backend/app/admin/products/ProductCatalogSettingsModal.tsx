@@ -92,7 +92,6 @@ export function ProductCatalogSettingsModal({ open, onClose, onApplied, readOnly
   return (
     <div
       className="fixed inset-0 z-[80] flex items-end md:items-center justify-center bg-slate-950/50 backdrop-blur-sm p-0 md:p-4"
-      onClick={() => !saving && onClose()}
     >
       <div
         className="w-full max-h-[90vh] overflow-y-auto md:max-w-lg rounded-t-2xl md:rounded-2xl border border-slate-200 bg-white shadow-xl"

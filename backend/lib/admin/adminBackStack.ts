@@ -96,3 +96,15 @@ export function popAdminBackLayer(id: string, fromPopstate: boolean): void {
   }
   queueMicrotask(rearmTrapIfNeeded);
 }
+
+/**
+ * Премахва слой програмно (X бутон + router.replace) БЕЗ да вика history.back().
+ * Ползва се когато извикващият сам управлява URL навигацията — иначе history.back()
+ * и router.replace се бият и модалът се отваря отново.
+ */
+export function cancelAdminBackLayer(id: string): void {
+  const idx = layers.findIndex((l) => l.id === id);
+  if (idx === -1) return;
+  layers.splice(idx, 1);
+  queueMicrotask(rearmTrapIfNeeded);
+}

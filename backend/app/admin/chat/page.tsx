@@ -649,7 +649,6 @@ function AdminChatClient() {
       {confirmDeleteId && (
         <div
           className="fixed inset-0 z-[70] flex items-end md:items-center justify-center bg-slate-950/50 p-0 md:p-4 backdrop-blur-sm"
-          onClick={() => !deleting && setConfirmDeleteId(null)}
         >
           <div
             className="w-full max-w-md rounded-t-3xl md:rounded-2xl border border-slate-200 bg-white shadow-2xl p-5 pb-safe md:pb-5"

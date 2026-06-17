@@ -83,7 +83,6 @@ export function ImageLightbox({ images, index, onClose, onIndexChange }: Props) 
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/85 backdrop-blur-sm p-4 sm:p-8"
-      onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-label="Преглед на снимка"
