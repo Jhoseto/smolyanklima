@@ -13,6 +13,7 @@ import {
   writeBlobToDirectory,
 } from "@/lib/client/pickLocalFolder";
 import { previewBackupPayload, type BackupFilePreview } from "@/lib/backup/backupManifest";
+import { SchemaHealthCheck } from "./SchemaHealthCheck";
 
 const MAX_SYNC_LOG_LINES = 300;
 
@@ -240,7 +241,7 @@ const BACKUP_REMINDER_KEY = "backup.reminder_interval_days";
 const LS_LAST_BACKUP = "smolyanklima_last_full_backup_at";
 
 const TABS: { id: SettingsTab; label: string; hint: string }[] = [
-  { id: "general", label: "Общи", hint: "Общи настройки — засега празно" },
+  { id: "general", label: "Общи", hint: "Проверка на базата и системни настройки" },
   { id: "catalog", label: "Каталог", hint: "Импорт на каталози от доставчици" },
   { id: "backup", label: "Резервно копие", hint: "Пълен JSON архив на базата данни" },
 ];
@@ -1108,7 +1109,7 @@ export default function SettingsPageClient() {
         <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm font-medium">{error}</div>
       )}
 
-      {activeTab === "general" && null}
+      {activeTab === "general" && <SchemaHealthCheck />}
 
       {activeTab === "backup" && (
         <Card className="p-3 md:p-4 border-brand-blue-200 bg-gradient-to-br from-white to-brand-blue-50/40">

@@ -100,7 +100,7 @@ const EVENT_LABEL: Partial<Record<string, string>> = {
 };
 const NEXT_STATUS: Partial<Record<TaskStatus, TaskStatus>> = { planned: "in_progress", in_progress: "done" };
 const NEXT_LABEL: Partial<Record<TaskStatus, string>> = {
-  planned: "Стартирай задачата",
+  planned: "Стартирай събитието",
   in_progress: "Маркирай като изпълнено",
 };
 const NEXT_BTN: Partial<Record<TaskStatus, string>> = {
@@ -323,7 +323,7 @@ export function ServiceTasksClient({
       }
       void fetchMonth();
     } catch {
-      setError("Мрежова грешка при обновяване на задача");
+      setError("Мрежова грешка при обновяване на събитие");
     } finally { setUpdatingId(null); }
   }
 
@@ -391,7 +391,7 @@ export function ServiceTasksClient({
               {fmtFullDate(selectedKey)}
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              {dayTasks.length === 0 ? "Няма задачи" : `${dayTasks.length} задач${dayTasks.length === 1 ? "а" : "и"}`}
+              {dayTasks.length === 0 ? "Няма събития" : `${dayTasks.length} събит${dayTasks.length === 1 ? "ие" : "ия"}`}
               {pending > 0 && ` · ${pending} чакащи`}
             </p>
           </div>
@@ -406,9 +406,14 @@ export function ServiceTasksClient({
         {loading ? (
           <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-slate-300" /></div>
         ) : dayTasks.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 py-10 text-center bg-white border border-dashed border-slate-200 rounded-2xl">
+          <div className="flex flex-col items-center gap-3 py-10 text-center bg-white border border-dashed border-slate-200 rounded-2xl px-4">
             <CheckCircle2 className="w-8 h-8 text-emerald-200" />
-            <p className="text-sm font-semibold text-slate-500">Няма задачи за тази дата</p>
+            <p className="text-sm font-semibold text-slate-500">Няма събития за тази дата</p>
+            {!isMaster && (
+              <p className="text-xs text-slate-400 leading-relaxed max-w-xs">
+                Ако очаквате монтаж или сервиз — помолете офиса да ви назначи работен елемент в календара.
+              </p>
+            )}
           </div>
         ) : (
           dayTasks.map(task => (
@@ -439,9 +444,9 @@ export function ServiceTasksClient({
       <div className="hidden md:block w-full">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-xl font-bold text-slate-900">Сервизни задачи</h1>
+            <h1 className="text-xl font-bold text-slate-900">Сервизни събития</h1>
             <p className="text-sm text-slate-500 mt-0.5">
-              {isMaster ? "Всички задачи за обслужване" : `Здравей, ${userName.split(" ")[0]} — твоите задачи`}
+              {isMaster ? "Всички работни елементи за обслужване" : `Здравей, ${userName.split(" ")[0]} — твоите събития`}
             </p>
           </div>
           <button
@@ -511,7 +516,7 @@ export function ServiceTasksClient({
             {/* Today link */}
             <div className="border-t border-slate-100 px-4 py-2.5 flex items-center justify-between">
               <span className="text-xs text-slate-400">
-                {Object.values(byDay).flat().length} задачи месеца
+                {Object.values(byDay).flat().length} събития месеца
               </span>
               <button onClick={goToday} className="text-xs font-bold text-brand-blue-500 hover:text-brand-blue-700">
                 Към днес →
@@ -536,10 +541,10 @@ export function ServiceTasksClient({
           <div className="flex items-center justify-between px-4 pt-3 pb-1">
             <div>
               <p className="text-[11px] text-slate-400 font-medium">
-                {isMaster ? "Сервизни задачи" : `Здравей, ${userName.split(" ")[0]}`}
+                {isMaster ? "Сервизни събития" : `Здравей, ${userName.split(" ")[0]}`}
               </p>
               {pending > 0 && (
-                <p className="text-xs font-bold text-amber-600">{pending} чакащи задачи</p>
+                <p className="text-xs font-bold text-amber-600">{pending} чакащи събития</p>
               )}
             </div>
             <button

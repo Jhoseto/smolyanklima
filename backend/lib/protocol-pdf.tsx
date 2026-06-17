@@ -362,6 +362,39 @@ const s = StyleSheet.create({
     textAlign: "center",
     lineHeight: 1.35,
   },
+
+  photosPage: {
+    fontFamily: FONT,
+    fontSize: 8,
+    paddingTop: PAGE_PAD_TOP,
+    paddingBottom: PAGE_PAD_BOTTOM,
+    paddingHorizontal: PAGE_PAD_H,
+    color: C.ink,
+  },
+  photosTitle: {
+    fontSize: 10,
+    fontWeight: "bold",
+    marginBottom: 10,
+    borderBottomWidth: W.rule,
+    borderBottomColor: C.line,
+    paddingBottom: 6,
+  },
+  photosGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  photoCell: {
+    width: "48%",
+    marginBottom: 8,
+  },
+  photoImg: {
+    width: "100%",
+    height: 180,
+    objectFit: "cover",
+    borderWidth: W.thin,
+    borderColor: C.line,
+  },
 });
 
 export interface ProtocolData {
@@ -382,6 +415,7 @@ export interface ProtocolData {
   notes?: string | null;
   signature_team?: string | null;
   signature_client?: string | null;
+  photo_urls?: string[] | null;
 }
 
 const MOUNT_GRID = [
@@ -416,6 +450,7 @@ export function ProtocolPDF({ data }: { data: ProtocolData }) {
 
   const cableSecondRowKeys = ["outer_corner", "inner_corner", "angle_out", "connector"] as const;
   const cableThirdRowKeys = ["inner_cap", "outer_cap", "end_cap", "holder"] as const;
+  const photoUrls = (data.photo_urls ?? []).filter(u => typeof u === "string" && u.trim());
 
   return (
     <Document>
@@ -596,6 +631,24 @@ export function ProtocolPDF({ data }: { data: ProtocolData }) {
         </View>
 
       </Page>
+
+      {photoUrls.length > 0 && (
+        <Page size="A4" style={s.photosPage}>
+          <Text style={s.photosTitle}>Снимки от монтажа</Text>
+          <View style={s.photosGrid}>
+            {photoUrls.map((url, i) => (
+              <View key={`${url}-${i}`} style={s.photoCell}>
+                <Image src={url} style={s.photoImg} />
+              </View>
+            ))}
+          </View>
+          <View style={s.footerFixed} fixed>
+            <Text style={s.footerTxt}>
+              Смолян Клима ЕООД, ЕИК: BG 204223522 гр. Смолян ул. Елица № 36 Тел: 0888 58 58 16
+            </Text>
+          </View>
+        </Page>
+      )}
     </Document>
   );
 }

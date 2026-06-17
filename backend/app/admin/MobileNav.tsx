@@ -30,7 +30,8 @@ export function MobileNav({
   avatarUrl: string | null;
 }) {
   const initial = (userName || "?").trim().charAt(0).toUpperCase() || "?";
-  const profileInBottomBar = role === "service_staff" || role === "office_staff";
+  const profileInBottomBar =
+    role === "service_staff" || role === "office_staff" || role === "master_admin";
   const primaryLinks = getMobilePrimaryLinks(role);
   // service_staff has no drawer — all links fit in bottom bar
   const drawerSections: AdminNavSectionDef[] =
@@ -48,7 +49,9 @@ export function MobileNav({
     return () => { document.body.style.overflow = ""; };
   }, [drawerOpen]);
 
-  const inquiriesNewCount = useInquiriesNewCount();
+  const inquiriesNewCount = useInquiriesNewCount({
+    enabled: role === "master_admin" || role === "office_staff",
+  });
   const { waitingCount: chatWaitingCount } = useAdminChatAlerts();
   const { expand } = useAdminNavSections();
 

@@ -48,7 +48,7 @@ const INQUIRY_TIPS = {
   notes: "Вътрешни бележки — клиентът не ги вижда",
   inProgress: "Маркирай като „В работа“",
   contact: "Създай CRM контакт с планирано обаждане",
-  inspection: "Създай задача за оглед в календара",
+  inspection: "Създай събитие за оглед в календара",
   ai: "Генерирай AI чернова за отговор",
   done: "Приключи — запитването е обработено",
   spam: "Маркирай като спам",
@@ -225,31 +225,57 @@ export function InquiriesClient() {
   }, [searchParams, items, selectedInquiry?.id, openInquiryDetail]);
 
   useEffect(() => {
-    const events = new EventSource("/api/admin/inquiries/stream");
+    let events: EventSource | null = null;
 
-    function parseNewCount(data: string): number | undefined {
-      try {
-        const payload = JSON.parse(data) as { newCount?: number };
-        return typeof payload.newCount === "number" ? payload.newCount : undefined;
-      } catch {
-        return undefined;
-      }
+    function connect() {
+      if (typeof document !== "undefined" && document.hidden) return;
+      events?.close();
+      events = new EventSource("/api/admin/inquiries/stream");
+      wireEvents(events);
     }
 
-    events.addEventListener("ready", (ev) => {
-      setLiveConnected(true);
-      const newCount = parseNewCount((ev as MessageEvent).data);
-      notifyInquiriesChanged(parseNewCount((ev as MessageEvent).data));
-    });
-    events.addEventListener("changed", (ev) => {
-      setLiveConnected(true);
-      setLastLiveUpdate(new Date().toLocaleTimeString("bg-BG", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
-      const newCount = parseNewCount((ev as MessageEvent).data);
-      notifyInquiriesChanged(newCount);
-      void load({ silent: true });
-    });
-    events.onerror = () => setLiveConnected(false);
-    return () => { events.close(); setLiveConnected(false); };
+    function wireEvents(es: EventSource) {
+      function parseNewCount(data: string): number | undefined {
+        try {
+          const payload = JSON.parse(data) as { newCount?: number };
+          return typeof payload.newCount === "number" ? payload.newCount : undefined;
+        } catch {
+          return undefined;
+        }
+      }
+
+      es.addEventListener("ready", (ev) => {
+        setLiveConnected(true);
+        notifyInquiriesChanged(parseNewCount((ev as MessageEvent).data));
+      });
+      es.addEventListener("changed", (ev) => {
+        setLiveConnected(true);
+        setLastLiveUpdate(new Date().toLocaleTimeString("bg-BG", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+        const newCount = parseNewCount((ev as MessageEvent).data);
+        notifyInquiriesChanged(newCount);
+        void load({ silent: true });
+      });
+      es.onerror = () => setLiveConnected(false);
+    }
+
+    connect();
+
+    const onVisibility = () => {
+      if (document.hidden) {
+        events?.close();
+        events = null;
+        setLiveConnected(false);
+      } else {
+        connect();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      events?.close();
+      setLiveConnected(false);
+    };
   }, [load]);
 
   async function quickUpdate(id: string, patch: { status?: string; priority?: string; adminNotes?: string | null }) {
@@ -325,10 +351,10 @@ export function InquiriesClient() {
         }),
       });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((json as Record<string, string>).error || "Грешка при създаване на задача");
+      if (!res.ok) throw new Error((json as Record<string, string>).error || "Грешка при създаване на събитие");
       await quickUpdate(inquiry.id, {
         status: "in_progress",
-        adminNotes: appendNote(inquiry.admin_notes, "Създадена задача за оглед/услуга."),
+        adminNotes: appendNote(inquiry.admin_notes, "Създадено събитие за оглед/услуга."),
       });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Грешка");

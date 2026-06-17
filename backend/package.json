@@ -13,7 +13,10 @@
     "reclassify:accessories": "tsx scripts/reclassify-bulclima-accessories.ts",
     "catalog:images": "node scripts/sync-ddg-images.mjs",
     "catalog:images:stale": "node scripts/sync-ddg-images.mjs --only-stale",
-    "icons:generate": "tsx scripts/generate-public-icons.ts"
+    "icons:generate": "tsx scripts/generate-public-icons.ts",
+    "verify:protocol-materials": "tsx scripts/verify-protocol-materials.ts",
+    "verify:protocol-finalize": "tsx scripts/verify-protocol-finalize-flow.ts",
+    "verify:pwa-smoke": "tsx scripts/verify-pwa-smoke.ts"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.5.1",

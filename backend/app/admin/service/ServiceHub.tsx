@@ -4,8 +4,7 @@ import Link from "next/link";
 import { CalendarClock, FolderOpen, ChevronRight } from "lucide-react";
 
 /**
- * Избор между задачи (календар) и документи (протоколи).
- * Master: основно от мобилното таб „Сервиз“; офис: и от десктоп линк „Модули сервиз“.
+ * Избор между календар (събития) и документи (протоколи).
  */
 export function ServiceHub() {
   return (
@@ -23,8 +22,8 @@ export function ServiceHub() {
           <CalendarClock className="w-6 h-6" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="font-bold text-slate-900">Задачи</div>
-          <div className="text-xs text-slate-500 mt-0.5">Календар и сервизни позиции</div>
+          <div className="font-bold text-slate-900">Календар</div>
+          <div className="text-xs text-slate-500 mt-0.5">Работни елементи и събития</div>
         </div>
         <ChevronRight className="w-5 h-5 text-slate-300 shrink-0" />
       </Link>
@@ -38,7 +37,7 @@ export function ServiceHub() {
         </div>
         <div className="flex-1 min-w-0">
           <div className="font-bold text-slate-900">Документи</div>
-          <div className="text-xs text-slate-500 mt-0.5">Приемно-предавателни протоколи</div>
+          <div className="text-xs text-slate-500 mt-0.5">Приемно-предавателни и сервизни протоколи</div>
         </div>
         <ChevronRight className="w-5 h-5 text-slate-300 shrink-0" />
       </Link>

@@ -166,7 +166,12 @@ function AdminChatClient() {
 
   useEffect(() => {
     const onVisibility = () => {
-      if (document.visibilityState === "visible") setSseVersion(v => v + 1);
+      if (document.visibilityState === "hidden") {
+        msgAbortRef.current?.abort();
+        setMsgConnected(false);
+        return;
+      }
+      setSseVersion(v => v + 1);
     };
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);

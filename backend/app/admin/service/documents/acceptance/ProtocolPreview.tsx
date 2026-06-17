@@ -1,7 +1,13 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { X, Pencil, Download, Loader2, Mail, PlayCircle } from "lucide-react";
+import { X, Pencil, Download, Loader2, Mail, PlayCircle, Share2 } from "lucide-react";
+import {
+  fetchProtocolPdfBlob,
+  protocolPdfFilename,
+  shareProtocolPdf,
+  downloadProtocolPdfBlob,
+} from "@/lib/protocol-pdf-share";
 import { Logo } from "@/app/admin/ui/Logo";
 import { useAdminBackHandler } from "@/app/admin/ui";
 import type { AdminRole } from "@/lib/admin/db";
@@ -88,6 +94,8 @@ export function ProtocolPreview({
   const [emailTo, setEmailTo] = useState("");
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailFeedback, setEmailFeedback] = useState<{ ok: boolean; text: string } | null>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfFeedback, setPdfFeedback] = useState<string | null>(null);
 
   useAdminBackHandler(true, onClose, `protocol-preview-${protocolId}`);
 
@@ -144,6 +152,37 @@ export function ProtocolPreview({
   const cableChannelsM = Number(row?.cable_channels_m ?? acc.cable_channels_m ?? 0);
 
   const mountSet = useMemo(() => new Set(row?.mount_types ?? []), [row?.mount_types]);
+
+  async function downloadPdfFile() {
+    setPdfBusy(true);
+    setPdfFeedback(null);
+    try {
+      const blob = await fetchProtocolPdfBlob(protocolId);
+      downloadProtocolPdfBlob(blob, protocolPdfFilename(row?.protocol_number ?? protocolNumber, protocolId));
+    } catch {
+      window.open(pdfUrl, "_blank");
+    } finally {
+      setPdfBusy(false);
+    }
+  }
+
+  async function sharePdfFile() {
+    setPdfBusy(true);
+    setPdfFeedback(null);
+    try {
+      const blob = await fetchProtocolPdfBlob(protocolId);
+      const result = await shareProtocolPdf(
+        blob,
+        protocolPdfFilename(row?.protocol_number ?? protocolNumber, protocolId),
+      );
+      setPdfFeedback(result === "shared" ? "PDF е споделен." : "PDF е свален на устройството.");
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
+      setPdfFeedback(e instanceof Error ? e.message : "Грешка при споделяне");
+    } finally {
+      setPdfBusy(false);
+    }
+  }
 
   async function sendProtocolEmail() {
     const trimmed = emailTo.trim();
@@ -207,28 +246,26 @@ export function ProtocolPreview({
               </p>
             </div>
             {isFinished && (
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    const res = await fetch(pdfUrl, { credentials: "include" });
-                    if (!res.ok) { window.open(pdfUrl, "_blank"); return; }
-                    const blob = await res.blob();
-                    const objectUrl = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = objectUrl;
-                    a.download = `protocol.pdf`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(objectUrl);
-                  } catch { window.open(pdfUrl, "_blank"); }
-                }}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900 shrink-0"
-              >
-                <Download className="w-4 h-4" />
-                PDF
-              </button>
+              <>
+                <button
+                  type="button"
+                  disabled={pdfBusy}
+                  onClick={() => void sharePdfFile()}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 disabled:bg-slate-400 text-white text-sm font-semibold hover:bg-blue-700 shrink-0"
+                >
+                  {pdfBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
+                  Сподели
+                </button>
+                <button
+                  type="button"
+                  disabled={pdfBusy}
+                  onClick={() => void downloadPdfFile()}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900 shrink-0"
+                >
+                  <Download className="w-4 h-4" />
+                  PDF
+                </button>
+              </>
             )}
             {canContinue && (
               <button
@@ -251,6 +288,11 @@ export function ProtocolPreview({
               </button>
             )}
           </div>
+          {pdfFeedback && (
+            <p className="px-3 pb-2 sm:px-4 text-xs font-medium text-emerald-700" role="status">
+              {pdfFeedback}
+            </p>
+          )}
           {!loading && !loadErr && row ? (
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 px-3 pb-3 sm:px-4 sm:pb-3 pt-0 border-t border-slate-100">
               <label className="sr-only" htmlFor={`proto-email-${protocolId}`}>

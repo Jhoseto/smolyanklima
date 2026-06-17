@@ -1,5 +1,5 @@
 import { adminSession } from "@/lib/admin/db";
-import { EmailOutboxDrain } from "./EmailOutboxDrain";
+import { EmailOutboxStatus } from "./EmailOutboxStatus";
 import { SectionTitle, Card } from "./ui";
 import { DashboardPanel } from "./DashboardPanel";
 import { CallFollowUpsPanel } from "./CallFollowUpsPanel";
@@ -147,9 +147,9 @@ export default async function AdminDashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 items-stretch">
         <DashboardPanel
           title="Днес"
-          description="Задачи и събития, които трябва да се обработят днес."
+          description="Работни елементи и събития за днес."
           href="/admin/service/tasks"
-          empty="Няма задачи за днес."
+          empty="Няма събития за днес."
           badge={nWorkToday}
           tone={nWorkToday > 0 ? "today" : "neutral"}
           readOnly={readOnlyDashboard}
@@ -158,7 +158,7 @@ export default async function AdminDashboardPage() {
             meta: [eventLabel(item.event_code), item.customer_name, item.customer_phone].filter(Boolean).join(" · "),
             detail: {
               title: item.title,
-              subtitle: "Задача за днес",
+              subtitle: "Събитие за днес",
               fields: [
                 { label: "Тип", value: eventLabel(item.event_code) },
                 { label: "Статус", value: workStatusLabel(item.status) },
@@ -172,9 +172,9 @@ export default async function AdminDashboardPage() {
         />
         <DashboardPanel
           title="Просрочени"
-          description="Задачи с минала дата, които още чакат действие."
+          description="Събития с минала дата, които още чакат действие."
           href="/admin/service/tasks"
-          empty="Няма просрочени задачи."
+          empty="Няма просрочени събития."
           badge={nWorkOverdue}
           tone={nWorkOverdue > 0 ? "danger" : "neutral"}
           readOnly={readOnlyDashboard}
@@ -183,7 +183,7 @@ export default async function AdminDashboardPage() {
             meta: [formatBgDate(item.due_date), item.customer_name, item.customer_phone].filter(Boolean).join(" · "),
             detail: {
               title: item.title,
-              subtitle: "Просрочена задача",
+              subtitle: "Просрочено събитие",
               fields: [
                 { label: "Тип", value: eventLabel(item.event_code) },
                 { label: "Статус", value: workStatusLabel(item.status) },
@@ -231,15 +231,7 @@ export default async function AdminDashboardPage() {
 
       {!readOnlyDashboard && (nOutbox > 0 || nFailedEmails > 0) && (
         <Card className="p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <div className="text-sm font-bold text-slate-900">Email outbox</div>
-              <div className="text-sm text-slate-500">
-                Pending: {nOutbox} · Failed: {nFailedEmails}
-              </div>
-            </div>
-            <EmailOutboxDrain pendingCount={nOutbox} />
-          </div>
+          <EmailOutboxStatus pendingCount={nOutbox} failedCount={nFailedEmails} />
           {(failedEmails.data ?? []).length > 0 && (
             <div className="mt-3 grid gap-2">
               {(failedEmails.data ?? []).map((email) => (

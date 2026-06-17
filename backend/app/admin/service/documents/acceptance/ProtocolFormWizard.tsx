@@ -30,6 +30,7 @@ import {
 } from "@/lib/protocol-contact-validation";
 import { SignatureDisplay } from "./SignatureDisplay";
 import { ProtocolPhotosGallery } from "./ProtocolPhotosGallery";
+import { ProtocolPdfFinalView } from "./ProtocolPdfFinalView";
 import { parseOfflineApiError } from "@/lib/offline/acceptancePayload";
 
 // ─── Типове ──────────────────────────────────────────────────────────────────
@@ -122,6 +123,8 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
   const [step, setStep]     = useState(0);
   const [form, setForm]     = useState<FormData>({ ...defaultForm(), ...initialData });
   const [saving, setSaving] = useState(false);
+  const [showFinalView, setShowFinalView] = useState(false);
+  const [finalProtocolId, setFinalProtocolId] = useState<string | null>(null);
   // savedId може да е серверен UUID или offline-generated "local-..." UUID
   // (когато протоколът е създаден без мрежа). При възстановяване на мрежа,
   // sync engine-ът мапва local-id → server-id зад кулисите.
@@ -198,6 +201,9 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
         if (m?.id && typeof m.qty === "number") materialsMap[m.id] = m.qty;
       }
     }
+    const normalizedMaterials = Object.keys(materialsMap).length
+      ? normalizeLoadedMaterials(materialsMap)
+      : defaultForm().materials;
     const nextForm: FormData = {
       ...defaultForm(),
       work_item_id:     (data.work_item_id as string | null) ?? null,
@@ -211,9 +217,7 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
       client_email:     (data.client_email as string) ?? "",
       client_phone:     (data.client_phone as string) ?? "",
       mount_types:      (data.mount_types as string[]) ?? [],
-      materials:        Object.keys(materialsMap).length
-        ? normalizeLoadedMaterials(materialsMap)
-        : defaultForm().materials,
+      materials:        normalizedMaterials,
       cable_channels_m: data.cable_channels_m != null ? String(data.cable_channels_m) : "",
       accessories:      (data.accessories as AccessoriesEntry) ?? { ...EMPTY_ACCESSORIES },
       notes:            (data.notes as string) ?? "",
@@ -401,12 +405,54 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
 
   persistFormRef.current = persistForm;
 
+  const resolveServerProtocolId = async (currentId: string | null): Promise<string | null> => {
+    if (!currentId) return null;
+    if (!isLocalId(currentId)) return currentId;
+    if (onlineRef.current) {
+      await syncNow();
+      await refreshQueueState();
+    }
+    const sid = await resolveServerId(currentId);
+    if (sid) {
+      setSavedId(sid);
+      setPendingSync(false);
+      return sid;
+    }
+    return null;
+  };
+
   // Финализиране + подписи: backend-ът ще зададе status="signed" автоматично,
   // ако и двата подписа (екип + клиент) са налични в текущия запис.
   const finalize = async () => {
+    const hasBothSignatures =
+      Boolean(form.signature_team?.trim()) && Boolean(form.signature_client?.trim());
+    if (!hasBothSignatures) {
+      setError("Добавете и двата подписа преди финализиране.");
+      return;
+    }
     clearAutoSaveTimer();
-    const id = await persistForm(form, savedId, true);
-    if (id) setSavedId(id);
+    setError(null);
+    setSaving(true);
+    try {
+      const id = await persistForm(form, savedId, true);
+      if (!id) return;
+      setSavedId(id);
+      onSaved(id);
+
+      const serverId = await resolveServerProtocolId(id);
+      if (!serverId) {
+        setError("Протоколът е запазен, но PDF изисква интернет връзка. Опитайте отново след синхронизация.");
+        return;
+      }
+
+      setForm(prev => (
+        prev.status === "signed" ? prev : { ...prev, status: "signed" }
+      ));
+      setFinalProtocolId(serverId);
+      setShowFinalView(true);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const clearAutoSaveTimer = () => {
@@ -560,23 +606,11 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
   // master_admin и office_staff могат да коригират дори подписан протокол.
   // service_staff виждат подписания протокол като read-only.
   const canEditSigned = role === "master_admin" || role === "office_staff";
-  const isSigned = (form.status === "signed" || bothSigned) && !canEditSigned;
+  const isSigned = form.status === "signed" && !canEditSigned;
   isSignedRef.current = isSigned;
 
   const resolvePdfEmailId = async (): Promise<string | null> => {
-    if (!savedId) return null;
-    if (!isLocalId(savedId)) return savedId;
-    if (onlineRef.current) {
-      await syncNow();
-      await refreshQueueState();
-    }
-    const sid = await resolveServerId(savedId);
-    if (sid) {
-      setSavedId(sid);
-      setPendingSync(false);
-      return sid;
-    }
-    return null;
+    return resolveServerProtocolId(savedId);
   };
 
   const validateStep0 = useCallback((data: FormData): Record<string, string> => {
@@ -601,6 +635,21 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
     setError(null);
     setStep((s) => s + 1);
   };
+
+  const handleFinalDone = () => {
+    setShowFinalView(false);
+    onClose();
+  };
+
+  if (showFinalView && finalProtocolId) {
+    return (
+      <ProtocolPdfFinalView
+        protocolId={finalProtocolId}
+        clientLabel={form.client_name || undefined}
+        onDone={handleFinalDone}
+      />
+    );
+  }
 
   // ─── Рендер стъпка ────────────────────────────────────────────────────────
 
@@ -1052,8 +1101,8 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
                 onClear={() => update("signature_client", null)}
               />
 
-              {/* Действия след подписване */}
-              {isSigned && savedId && (
+              {/* Действия за вече финализиран протокол (при повторно отваряне) */}
+              {form.status === "signed" && savedId && (
                 <div className="space-y-3 pt-4 border-t border-slate-200">
                   <button
                     onClick={() => void downloadPdf()}
@@ -1140,14 +1189,16 @@ export function ProtocolFormWizard({ protocolId, initialData, role, onClose, onS
           {isLastStep ? (
             <button
               onClick={finalize}
-              disabled={saving || isSigned}
+              disabled={saving || form.status === "signed" || !bothSigned}
               className="flex items-center gap-2 bg-green-600 disabled:bg-slate-300 text-white px-5 h-12 rounded-xl font-bold text-sm active:bg-green-700 shrink-0 shadow-sm shadow-green-200 transition-colors"
             >
               {saving
                 ? <><Loader2 className="w-5 h-5 animate-spin" /> Запазва се…</>
-                : isSigned
+                : form.status === "signed"
                   ? <><CheckCircle2 className="w-5 h-5" /> Подписан</>
-                  : <><Check className="w-5 h-5" /> Финализирай</>
+                  : !bothSigned
+                    ? <>Финализирай</>
+                    : <><Check className="w-5 h-5" /> Финализирай</>
               }
             </button>
           ) : (

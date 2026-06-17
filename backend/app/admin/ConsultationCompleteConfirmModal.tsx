@@ -32,9 +32,9 @@ function buildCopy(preview: ConsultationCompletePreview) {
 
   if (preview.kind === "task") {
     return {
-      title: "Завършване на задача",
-      description: `Ще маркирате задачата „${preview.title}“ с ${contactLine} на ${when} като завършена. Свързаното CRM follow-up се нулира.`,
-      eventLabel: "Задача",
+      title: "Завършване на събитие",
+      description: `Ще маркирате събитието „${preview.title}“ с ${contactLine} на ${when} като завършено. Свързаното CRM follow-up се нулира.`,
+      eventLabel: "Събитие",
       confirmLabel: "Завърши",
     };
   }

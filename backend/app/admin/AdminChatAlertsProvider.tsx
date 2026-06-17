@@ -180,14 +180,16 @@ export function AdminChatAlertsProvider({
 
     const scheduleReconnect = () => {
       if (aborted || reconnectTimer || connecting) return;
+      if (typeof document !== "undefined" && document.hidden) return;
       reconnectTimer = setTimeout(() => {
         reconnectTimer = null;
-        if (!aborted) void connectStream();
+        if (!aborted && !document.hidden) void connectStream();
       }, STREAM_RECONNECT_MS);
     };
 
     const connectStream = async () => {
       if (aborted || connecting) return;
+      if (typeof document !== "undefined" && document.hidden) return;
       connecting = true;
       activeCtrl?.abort();
       activeCtrl = new AbortController();
@@ -232,8 +234,24 @@ export function AdminChatAlertsProvider({
 
     void connectStream();
 
+    const disconnectStream = () => {
+      activeCtrl?.abort();
+      activeCtrl = null;
+      connecting = false;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      setStreamState(false);
+    };
+
     const onVisibility = () => {
-      if (!document.hidden && !aborted) void fetchAlerts(true);
+      if (document.hidden) {
+        disconnectStream();
+        return;
+      }
+      void fetchAlerts(true);
+      if (!aborted) void connectStream();
     };
     document.addEventListener("visibilitychange", onVisibility);
 

@@ -184,6 +184,7 @@ export function getMobilePrimaryLinks(role: AdminRole): AdminNavLinkDef[] {
       Icon: Headphones,
     },
     { href: "/admin/inquiries", label: "Запитвания", iconKey: "inquiries", Icon: MessageSquare },
+    PROFILE_LINK,
   ];
 }
 

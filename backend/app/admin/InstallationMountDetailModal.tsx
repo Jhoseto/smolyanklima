@@ -212,7 +212,7 @@ export function InstallationMountDetailModal({ workItemId, readOnly = false, onC
                     <div className="font-semibold text-slate-900">{row.due_date ? new Date(row.due_date).toLocaleDateString("bg-BG") : "—"}</div>
                   </div>
                   <div>
-                    <div className="text-[10px] font-bold text-slate-500 uppercase">Статус задача</div>
+                    <div className="text-[10px] font-bold text-slate-500 uppercase">Статус събитие</div>
                     <div className="font-semibold text-slate-900 capitalize">{row.status}</div>
                   </div>
                   <div>

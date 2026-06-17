@@ -7,11 +7,14 @@ import { INQUIRIES_COUNT_CHANGED } from "@/lib/admin/inquiries-count-events";
 const POLL_MS = 25_000;
 const COUNT_URL = "/api/admin/inquiries/count";
 
+type Options = { /** По подразбиране true; false за роли без „Запитвания“ (напр. service_staff). */ enabled?: boolean };
+
 /**
  * Брой нови запитвания за навигация.
  * Poll на 25s + пауза при скрит tab; без poll на /admin/inquiries (там има SSE).
  */
-export function useInquiriesNewCount(): number {
+export function useInquiriesNewCount(options?: Options): number {
+  const enabled = options?.enabled !== false;
   const pathname = usePathname();
   const onInquiriesPage =
     pathname === "/admin/inquiries" || pathname.startsWith("/admin/inquiries/");
@@ -25,7 +28,7 @@ export function useInquiriesNewCount(): number {
   );
 
   useEffect(() => {
-    if (onInquiriesPage) {
+    if (!enabled || onInquiriesPage) {
       setCount(0);
       return;
     }
@@ -88,7 +91,7 @@ export function useInquiriesNewCount(): number {
         document.removeEventListener(INQUIRIES_COUNT_CHANGED, onCountEvent);
       }
     };
-  }, [onInquiriesPage, applyCount]);
+  }, [enabled, onInquiriesPage, applyCount]);
 
   return count;
 }

@@ -1041,8 +1041,12 @@ export function WorkItemsPlanner({
 
               {mobileDayItems.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500">
-                  Няма събития за избрания ден.
-                  {!readOnly && (
+                  <p>Няма събития за избрания ден.</p>
+                  {readOnly ? (
+                    <p className="mt-2 text-xs text-slate-400 leading-relaxed">
+                      Събитията се добавят от офиса. Протоколите са в меню „Документи“.
+                    </p>
+                  ) : (
                     <button
                       type="button"
                       onClick={() => openDay(mobileSelectedKey)}
@@ -1082,8 +1086,13 @@ export function WorkItemsPlanner({
         ) : (
           <div className="space-y-3 px-3 py-3">
             {agendaItems.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-500">
-                Няма събития за {title}.
+              <div className="rounded-2xl border border-dashed border-slate-200 py-10 px-4 text-center text-sm text-slate-500">
+                <p>Няма събития за {title}.</p>
+                {readOnly && (
+                  <p className="mt-2 text-xs text-slate-400 leading-relaxed">
+                    Събитията се добавят от офиса. Протоколите са в меню „Документи“.
+                  </p>
+                )}
               </div>
             ) : (
               agendaDates.map((dateKey) => {
