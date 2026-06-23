@@ -65,6 +65,14 @@ const EnvSchemaBase = z.object({
   RESEND_API_KEY: z.string().min(10).optional(),
   /** Public backend URL for links in emails (e.g. newsletter confirm). */
   APP_URL: z.string().url().optional(),
+  /** GitHub webhook HMAC secret for push events. */
+  GITHUB_WEBHOOK_SECRET: z.string().min(16).optional(),
+  /** GitHub PAT — optional for public repo (higher API rate limit + file stats). */
+  GITHUB_TOKEN: z.string().min(10).optional(),
+  /** GitHub repo as owner/name */
+  GITHUB_REPO: z.string().regex(/^[^/]+\/[^/]+$/).optional(),
+  /** Cheapest Gemini model for changelog summaries (falls back to GEMINI_MODEL). */
+  GEMINI_CHANGELOG_MODEL: z.string().min(1).optional(),
 });
 
 const EnvSchema = EnvSchemaBase.superRefine((env, ctx) => {
@@ -121,6 +129,10 @@ export function getEnv() {
     NOTIFY_EMAIL_FROM: process.env.NOTIFY_EMAIL_FROM,
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     APP_URL: process.env.APP_URL,
+    GITHUB_WEBHOOK_SECRET: emptyToUndefined(process.env.GITHUB_WEBHOOK_SECRET),
+    GITHUB_TOKEN: emptyToUndefined(process.env.GITHUB_TOKEN),
+    GITHUB_REPO: emptyToUndefined(process.env.GITHUB_REPO),
+    GEMINI_CHANGELOG_MODEL: emptyToUndefined(process.env.GEMINI_CHANGELOG_MODEL),
   });
   if (!parsed.success) {
     throw new Error(`Invalid environment variables: ${parsed.error.message}`);

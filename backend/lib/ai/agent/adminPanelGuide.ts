@@ -26,6 +26,7 @@ URL база: /admin (backend Next.js app, порт 3001 в dev).
 | Отчети → Оценки | /admin/ratings | Рейтинги на продукти от клиенти |
 | Отчети → Активност | /admin/activity | Одит лог — кой какво е правил в admin |
 | Админ → Персонал | /admin/staff | Admin потребители и роли |
+| Админ → За приложението | /admin/about | Changelog от GitHub main (Jhoseto/smolyanklima) — автоматично зареждане, бутон „Обнови“ за нови commit-и, AI описание на български |
 | Админ → Настройки | /admin/settings | Системни настройки, sync на каталози (Bulclima, Climacom…) |
 | Офис → AI Agent | /admin/ai-agent | AI чат за офис (без история на разговори) |
 | Админ → AI Agent | /admin/ai-agent | AI чат с история, търсене, шаблони, scheduled reports (master_admin) |

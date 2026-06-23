@@ -14,7 +14,8 @@ export type AdminNavIconKey =
   | "activity"
   | "tasks"
   | "staff"
-  | "settings";
+  | "settings"
+  | "about";
 
 type NavIconStyle = { box: string; icon: string };
 
@@ -35,6 +36,7 @@ export const ADMIN_NAV_ICON_STYLES: Record<AdminNavIconKey, NavIconStyle> = {
   tasks: { box: "bg-brand-blue-100", icon: "text-brand-blue-700" },
   staff: { box: "bg-brand-blue-100", icon: "text-brand-blue-700" },
   settings: { box: "bg-slate-100", icon: "text-slate-500" },
+  about: { box: "bg-brand-blue-50", icon: "text-brand-blue-600" },
 };
 
 export function adminNavIconClass(

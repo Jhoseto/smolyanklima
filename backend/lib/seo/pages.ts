@@ -55,7 +55,7 @@ export const STATIC_PAGES: Record<string, SeoPage> = {
   },
   '/za-nas': {
     title: 'За нас — Смолян Клима | 25+ години опит',
-    description: 'Семеен бизнес с над 3000 монтажа в Смолян, Рудозем, Мадан и Родопите.',
+    description: 'Семеен бизнес с над 10000 монтажа в Смолян и региона.',
     keywords: [...REGION_KW],
     canonicalPath: '/za-nas',
     ogImage: OG,

@@ -3,7 +3,7 @@ import { motion, useInView, animate } from 'motion/react';
 import { Award, Clock, ThumbsUp, Users } from 'lucide-react';
 
 const stats = [
-  { icon: Award, value: 3000, suffix: "+", label: "Монтирани климатика" },
+  { icon: Award, value: 10000, suffix: "+", label: "Монтирани климатика" },
   { icon: Clock, value: 25, suffix: "+", label: "Години опит" },
   { icon: ThumbsUp, value: 98, suffix: "%", label: "Доволни клиенти" },
   { icon: Users, value: 48, suffix: "ч", label: "Макс. до монтажа" }

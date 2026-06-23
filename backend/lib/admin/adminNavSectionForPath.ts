@@ -35,7 +35,9 @@ export function adminNavSectionForPath(pathname: string, role: AdminRole): Admin
     pathname === "/admin/staff" ||
     pathname.startsWith("/admin/staff/") ||
     pathname === "/admin/settings" ||
-    pathname.startsWith("/admin/settings/")
+    pathname.startsWith("/admin/settings/") ||
+    pathname === "/admin/about" ||
+    pathname.startsWith("/admin/about/")
   ) {
     return "admin";
   }

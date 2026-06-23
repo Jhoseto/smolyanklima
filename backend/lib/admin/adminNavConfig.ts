@@ -14,6 +14,7 @@ import {
   Headphones,
   MessageSquare,
   UserCircle,
+  Info,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { AdminRole } from "@/lib/admin/db";
@@ -137,8 +138,23 @@ export function getAdminNavSections(role: AdminRole): AdminNavSectionDef[] {
     if (role === "master_admin") {
       adminLinks.push(
         { href: "/admin/settings", label: "Настройки", iconKey: "settings", Icon: Settings },
+        {
+          href: "/admin/about",
+          label: "За приложението",
+          shortLabel: "Приложение",
+          iconKey: "about",
+          Icon: Info,
+        },
         { href: "/admin/ai-agent", label: "СК Help Agent", iconKey: "ai-agent", Icon: Bot },
       );
+    } else {
+      adminLinks.push({
+        href: "/admin/about",
+        label: "За приложението",
+        shortLabel: "Приложение",
+        iconKey: "about",
+        Icon: Info,
+      });
     }
 
     sections.push({
