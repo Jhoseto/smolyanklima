@@ -67,6 +67,9 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
   const [showConsent, setShowConsent] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const lastAiMessageRef = useRef<HTMLDivElement>(null);
+  const prevLoadingRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const widgetRef = useRef<HTMLDivElement>(null);
   const consentStorageKeyRef = useRef('ai_chat_privacy_consent_v1');
@@ -134,10 +137,23 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
     return () => window.removeEventListener('sk-consent-updated', onConsentUpdate);
   }, [siteFunctionalConsent]);
 
-  // Auto-scroll to bottom
+  // Auto-scroll: при завършен отговор скролирай до началото на последното AI съобщение
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, typingIndicator]);
+    const wasLoading = prevLoadingRef.current;
+    prevLoadingRef.current = isLoading;
+
+    if (wasLoading && !isLoading) {
+      setTimeout(() => {
+        const el = lastAiMessageRef.current;
+        const container = messagesContainerRef.current;
+        if (!el || !container) return;
+        const elRect = el.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        const scrollTo = container.scrollTop + (elRect.top - containerRect.top);
+        container.scrollTo({ top: Math.max(0, scrollTo), behavior: 'smooth' });
+      }, 80);
+    }
+  }, [isLoading]);
 
   // Отваряне от родител (херо CTA и др.) — само при нова стойност на openSignal
   useEffect(() => {
@@ -502,6 +518,7 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
 
             {/* Messages Area */}
             <div
+              ref={messagesContainerRef}
               style={{
                 flex: 1,
                 overflowY: 'auto',
@@ -512,9 +529,12 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
                 gap: 14,
               }}
             >
-              {displayMessages.map((message, index) => (
+              {(() => {
+                const lastAiIdx = [...displayMessages].map((m, i) => ({ m, i })).reverse().find(({ m }) => m.role === 'assistant')?.i ?? -1;
+                return displayMessages.map((message, index) => (
                 <motion.div
                   key={message.id}
+                  ref={index === lastAiIdx ? lastAiMessageRef : undefined}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
@@ -525,7 +545,8 @@ export const AIChatWidget: React.FC<AIChatWidgetProps> = ({
                     accentColor={accentColor}
                   />
                 </motion.div>
-              ))}
+              ));
+              })()}
 
               {/* Typing Indicator */}
               {typingIndicator?.visible && (

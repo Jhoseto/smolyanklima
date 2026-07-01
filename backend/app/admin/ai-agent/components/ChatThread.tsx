@@ -34,12 +34,27 @@ export function ChatThread({
   onRetry,
   onRegenerate,
 }: Props) {
-  const endRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const startRef = useRef<HTMLDivElement>(null);
+  const prevSendingRef = useRef(false);
   const lastAssistantId = [...messages].reverse().find((m) => m.role === "assistant")?.id;
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length, sending, progressMessage, streamPreview, error]);
+    const wasSending = prevSendingRef.current;
+    prevSendingRef.current = sending;
+
+    if (wasSending && !sending) {
+      setTimeout(() => {
+        const el = startRef.current;
+        const container = containerRef.current;
+        if (!el || !container) return;
+        const elRect = el.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        const scrollTo = container.scrollTop + (elRect.top - containerRect.top);
+        container.scrollTo({ top: Math.max(0, scrollTo), behavior: "smooth" });
+      }, 80);
+    }
+  }, [sending]);
 
   async function copyMessage(msg: ThreadMessage) {
     const text = messageCopyText(msg);
@@ -55,7 +70,7 @@ export function ChatThread({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4 bg-gradient-to-b from-slate-50/50 to-white">
+    <div ref={containerRef} className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4 bg-gradient-to-b from-slate-50/50 to-white">
       {messages.length === 0 && !sending && (
         <div className="flex flex-col items-center justify-center gap-3 py-16 text-center px-6">
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-blue-100 to-violet-100 flex items-center justify-center">
@@ -74,7 +89,11 @@ export function ChatThread({
         const isUser = msg.role === "user";
         const isLastAssistant = msg.id === lastAssistantId;
         return (
-          <div key={msg.id} className={`flex gap-2.5 ${isUser ? "justify-end" : "justify-start"}`}>
+          <div
+            key={msg.id}
+            ref={!isUser && isLastAssistant ? startRef : undefined}
+            className={`flex gap-2.5 ${isUser ? "justify-end" : "justify-start"}`}
+          >
             {!isUser && (
               <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-blue-500 to-violet-600 flex items-center justify-center shrink-0 mt-0.5">
                 <Bot className="w-4 h-4 text-white" />
@@ -163,7 +182,6 @@ export function ChatThread({
         </div>
       )}
 
-      <div ref={endRef} />
     </div>
   );
 }
