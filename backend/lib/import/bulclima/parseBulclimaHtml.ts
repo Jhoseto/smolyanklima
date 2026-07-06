@@ -858,17 +858,51 @@ function typeHintFromCategorySlug(slug: string | null): string | null {
   return null;
 }
 
-function typeHintFromProductText(name: string, description: string | null): string | null {
-  const hay = `${name} ${description ?? ""}`;
-  if (/мульти|multisplit|мултисплит/i.test(hay)) return "Мулти";
-  if (/колон/i.test(hay)) return "Колонен";
-  if (/подов|таванно[\s-]*подов/i.test(hay)) return "Подов";
-  // Касетъчен преди „таван“ — и двата се монтират на тавана, но са различни системи.
-  if (/касет|4[\s-]*посоч|four[\s-]*way/i.test(hay)) return "Касетъчен";
-  if (/таван/i.test(hay)) return "Таван";
-  if (/дизайнерск/i.test(hay)) return "Дизайн";
-  if (/стенен|стенни/i.test(hay)) return "Стенен";
+function categorySlugFromTypeHint(typeHint: string): string | null {
+  if (typeHint === "Подов") return "floor";
+  if (typeHint === "Колонен") return "column";
+  if (typeHint === "Касетъчен") return "cassette";
+  if (typeHint === "Таван") return "ceiling";
+  if (typeHint === "Мулти") return "multi";
+  if (typeHint === "Стенен" || typeHint === "Дизайн") return "wall";
   return null;
+}
+
+/** Cyrillic-safe word boundary (JS \\b does not work for Bulgarian). */
+const CYR_WORD = String.raw`(?:^|[^\p{L}])`;
+const CYR_WORD_END = String.raw`(?:[^\p{L}]|$)`;
+
+function typeHintFromName(name: string): string | null {
+  if (/мульти|multisplit|мултисплит/i.test(name)) return "Мулти";
+  if (/колон/i.test(name)) return "Колонен";
+  if (new RegExp(`${CYR_WORD}подов(?:и|ен)?${CYR_WORD_END}`, "iu").test(name) || /таванно[\s-]*подов/i.test(name)) {
+    return "Подов";
+  }
+  if (/касет|4[\s-]*посоч|four[\s-]*way/i.test(name)) return "Касетъчен";
+  if (/таван/i.test(name)) return "Таван";
+  if (/дизайнерск/i.test(name)) return "Дизайн";
+  if (/стенен|стенни/i.test(name)) return "Стенен";
+  return null;
+}
+
+function typeHintFromDescription(description: string): string | null {
+  if (/мульти|multisplit|мултисплит/i.test(description)) return "Мулти";
+  if (/колон/i.test(description)) return "Колонен";
+  if (
+    new RegExp(`${CYR_WORD}подов(?:и|ен)?${CYR_WORD_END}`, "iu").test(description) ||
+    /таванно[\s-]*подов/i.test(description)
+  ) {
+    return "Подов";
+  }
+  if (/касет|4[\s-]*посоч|four[\s-]*way/i.test(description)) return "Касетъчен";
+  if (/таван/i.test(description)) return "Таван";
+  if (/дизайнерск/i.test(description)) return "Дизайн";
+  if (/стенен|стенни/i.test(description)) return "Стенен";
+  return null;
+}
+
+function typeHintFromProductText(name: string, description: string | null): string | null {
+  return typeHintFromName(name) ?? (description ? typeHintFromDescription(description) : null);
 }
 
 export function resolveBulclimaProductClassification(
@@ -878,32 +912,30 @@ export function resolveBulclimaProductClassification(
   description: string | null,
   listingCategoryPath?: string | null,
 ): { categorySlug: string | null; typeHint: string } {
-  const pathCandidates = [
-    extractBulclimaKlimaticiCategoryPath(html),
-    listingCategoryPath,
-    (() => {
-      try {
-        return new URL(sourceUrl).pathname;
-      } catch {
-        return sourceUrl;
-      }
-    })(),
-  ].filter((p): p is string => Boolean(p?.trim()));
+  const listingSlug = listingCategoryPath
+    ? categorySlugFromKlimaticiPath(listingCategoryPath)
+    : null;
+  const breadcrumbPath = extractBulclimaKlimaticiCategoryPath(html);
+  const breadcrumbSlug = breadcrumbPath ? categorySlugFromKlimaticiPath(breadcrumbPath) : null;
+  const urlSlug = categorySlugFromUrl(sourceUrl);
 
-  let categorySlug = pickCategorySlug(pathCandidates.map((path) => categorySlugFromKlimaticiPath(path)));
+  // Listing path from sync crawl is authoritative (stenni / kolonni / multi-split).
+  let categorySlug =
+    listingSlug ?? pickCategorySlug([breadcrumbSlug, urlSlug].filter(Boolean)) ?? null;
 
+  const nameHint = typeHintFromName(name);
   const typeHint =
-    typeHintFromProductText(name, description) ??
+    nameHint ??
+    (description ? typeHintFromDescription(description) : null) ??
     typeHintFromCategorySlug(categorySlug) ??
     "Стенен";
 
-  if (!categorySlug) {
-    if (typeHint === "Подов") categorySlug = "floor";
-    else if (typeHint === "Колонен") categorySlug = "column";
-    else if (typeHint === "Касетъчен") categorySlug = "cassette";
-    else if (typeHint === "Таван") categorySlug = "ceiling";
-    else if (typeHint === "Мулти") categorySlug = "multi";
-    else categorySlug = "wall";
+  if (nameHint) {
+    categorySlug = categorySlugFromTypeHint(nameHint) ?? categorySlug;
+  } else if (!categorySlug) {
+    categorySlug = categorySlugFromTypeHint(typeHint) ?? "wall";
+  } else if (listingSlug && categorySlug !== listingSlug) {
+    categorySlug = listingSlug;
   }
 
   return { categorySlug, typeHint };
