@@ -39,6 +39,13 @@ type CondexProgressView = {
   startedAt: number;
 };
 
+type BulclimaProgressView = {
+  phase: "crawl" | "import";
+  message?: string;
+  current: number;
+  total: number;
+};
+
 function formatSyncEta(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds <= 0) return "изчислява се…";
   if (seconds < 45) return `~${Math.max(1, Math.ceil(seconds))} сек`;
@@ -307,7 +314,7 @@ export default function SettingsPageClient() {
   const [lastBackupAt, setLastBackupAt] = useState<string | null>(null);
   const [bulclimaSyncing, setBulclimaSyncing] = useState(false);
   const [reclassifying, setReclassifying] = useState(false);
-  const [bulclimaProgress, setBulclimaProgress] = useState<{ current: number; total: number } | null>(null);
+  const [bulclimaProgress, setBulclimaProgress] = useState<BulclimaProgressView | null>(null);
   const [bulclimaLog, setBulclimaLog] = useState<string[]>([]);
   const bulclimaLogContainerRef = useRef<HTMLDivElement>(null);
   const [bulclimaStatus, setBulclimaStatus] = useState<{
@@ -370,13 +377,20 @@ export default function SettingsPageClient() {
   function handleBulclimaProgress(ev: BulclimaSyncProgressEvent) {
     const ts = new Date().toLocaleTimeString("bg-BG");
     appendBulclimaLog(`[${ts}] ${ev.message}`);
-    if (ev.total != null && ev.total > 0) {
+    if (ev.phase === "import" && ev.total != null && ev.total > 0) {
       setBulclimaProgress({
+        phase: "import",
+        message: ev.message,
         current: ev.current ?? 0,
         total: ev.total,
       });
-    } else if (ev.phase === "crawl") {
-      setBulclimaProgress(null);
+    } else if (ev.phase === "crawl" || ev.phase === "start") {
+      setBulclimaProgress((prev) => ({
+        phase: "crawl",
+        message: ev.message,
+        current: prev?.current ?? 0,
+        total: prev?.total ?? 0,
+      }));
     }
   }
 
@@ -766,7 +780,8 @@ export default function SettingsPageClient() {
     setBulclimaSyncing(true);
     setError(null);
     setBulclimaLog([]);
-    setBulclimaProgress(null);
+    setBulclimaProgress({ phase: "crawl", message: "Свързване със сървъра…", current: 0, total: 0 });
+    appendBulclimaLog(`[${new Date().toLocaleTimeString("bg-BG")}] Старт — очакване на поток от сървъра…`);
     try {
       const res = await fetch("/api/admin/catalog/sync-bulclima?stream=1", {
         method: "POST",
@@ -1469,7 +1484,7 @@ export default function SettingsPageClient() {
             <div className="min-w-0 flex-1">
               <div className="text-sm font-black text-slate-900 tracking-tight">Каталог от Булклима</div>
               <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                Синхронизира <strong>стенни климатици</strong> и{" "}
+                Синхронизира <strong>стенни</strong>, <strong>колонни</strong> и{" "}
                 <strong>мултисплит системи</strong> от{" "}
                 <a href="https://bulclima.com/products/klimatici/stenni-klimatici" className="underline" target="_blank" rel="noreferrer">
                   bulclima.com
@@ -1520,7 +1535,23 @@ export default function SettingsPageClient() {
 
           {(bulclimaSyncing || bulclimaLog.length > 0) && (
             <div className="mt-4 space-y-2 border-t border-orange-200/60 pt-4">
-              {bulclimaProgress && bulclimaProgress.total > 0 && (
+              {bulclimaProgress?.phase === "crawl" && (
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[10px] font-bold text-slate-600">
+                    <span>Обхождане на bulclima.com</span>
+                    <span className="text-orange-700">може да отнеме няколко минути</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-orange-100 overflow-hidden">
+                    <div className="h-full w-1/3 bg-orange-400 animate-pulse rounded-full" />
+                  </div>
+                  {bulclimaProgress.message && (
+                    <p className="text-[10px] text-slate-500 truncate" title={bulclimaProgress.message}>
+                      {bulclimaProgress.message}
+                    </p>
+                  )}
+                </div>
+              )}
+              {bulclimaProgress?.phase === "import" && bulclimaProgress.total > 0 && (
                 <div className="space-y-1">
                   <div className="flex justify-between text-[10px] font-bold text-slate-600">
                     <span>Импорт на продукти</span>

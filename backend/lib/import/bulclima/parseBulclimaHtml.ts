@@ -1048,7 +1048,7 @@ export function parseBulclimaProductPage(
 
 export const BULCLIMA_KLIMA_ROOT = "https://bulclima.com/products/klimatici";
 
-/** Категории за синхронизация (по заявка: стенни + мултисплит). */
+/** Категории за синхронизация: стенни + мултисплит + колонни. */
 export const BULCLIMA_DEFAULT_SYNC_LISTING_URLS = [
   "https://bulclima.com/products/klimatici/stenni-klimatici",
   "https://bulclima.com/products/klimatici/multi-split-sistemi",

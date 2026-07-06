@@ -4,19 +4,9 @@ import { adminSession, requireRole } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { runCondexCatalogSync, type CondexSyncProgressEvent } from "@/lib/import/condex/syncCondexCatalog";
+import { createSseResponse } from "@/lib/http/sseStream";
 
 export const maxDuration = 300;
-
-const SSE_HEADERS = {
-  "Content-Type": "text/event-stream; charset=utf-8",
-  "Cache-Control": "no-cache, no-transform",
-  Connection: "keep-alive",
-  "X-Accel-Buffering": "no",
-} as const;
-
-function sseEncode(event: string, data: unknown): Uint8Array {
-  return new TextEncoder().encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-}
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflight(req);
@@ -76,48 +66,34 @@ export async function POST(req: NextRequest) {
   const supabase = createSupabaseAdminClient();
 
   if (stream) {
-    const streamBody = new ReadableStream<Uint8Array>({
-      async start(controller) {
-        const send = (event: string, data: unknown) => {
-          try {
-            controller.enqueue(sseEncode(event, data));
-          } catch {
-            /* client disconnected */
-          }
-        };
+    return createSseResponse(async (send) => {
+      try {
+        const summary = await runCondexCatalogSync(supabase, {
+          limit,
+          onProgress: (ev: CondexSyncProgressEvent) => send("progress", ev),
+        });
 
-        try {
-          const summary = await runCondexCatalogSync(supabase, {
-            limit,
-            onProgress: (ev: CondexSyncProgressEvent) => send("progress", ev),
-          });
+        await logAdminActivity({
+          action: "catalog.condex_sync",
+          entityType: "product_catalog_settings",
+          entityId: null,
+          details: summary,
+        });
 
-          await logAdminActivity({
-            action: "catalog.condex_sync",
-            entityType: "product_catalog_settings",
-            entityId: null,
-            details: summary,
-          });
-
-          send("done", { data: summary });
-        } catch (e: unknown) {
-          const message = e instanceof Error ? e.message : String(e);
-          await supabase.from("product_catalog_settings").upsert(
-            {
-              id: 1,
-              condex_last_sync_status: "error",
-              condex_last_sync_summary: { error: message },
-            },
-            { onConflict: "id" },
-          );
-          send("error", { error: message });
-        } finally {
-          controller.close();
-        }
-      },
+        send("done", { data: summary });
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        await supabase.from("product_catalog_settings").upsert(
+          {
+            id: 1,
+            condex_last_sync_status: "error",
+            condex_last_sync_summary: { error: message },
+          },
+          { onConflict: "id" },
+        );
+        send("error", { error: message });
+      }
     });
-
-    return new Response(streamBody, { headers: SSE_HEADERS });
   }
 
   try {
