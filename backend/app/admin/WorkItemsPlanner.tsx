@@ -272,25 +272,17 @@ function ServicePriceField({
   );
 }
 
-const BG_CALENDAR_MONTHS = [
-  "Януари",
-  "Февруари",
-  "Март",
-  "Април",
-  "Май",
-  "Юни",
-  "Юли",
-  "Август",
-  "Септември",
-  "Октомври",
-  "Ноември",
-  "Декември",
-] as const;
+import {
+  BG_MONTHS_LONG as BG_CALENDAR_MONTHS,
+  formatBgMonthYear,
+  formatBgNumericDate,
+  formatBgWeekdayDayMonth,
+  formatBgWeekdayShortDayMonthYear,
+} from "@/lib/admin/bgDateFormat";
 
-function calendarYearOptions(selectedYear: number): number[] {
-  const current = new Date().getFullYear();
-  const min = Math.min(current - 3, selectedYear);
-  const max = Math.max(current + 2, selectedYear);
+function calendarYearOptions(selectedYear: number, currentYear: number): number[] {
+  const min = Math.min(currentYear - 3, selectedYear);
+  const max = Math.max(currentYear + 2, selectedYear);
   const years: number[] = [];
   for (let y = min; y <= max; y++) years.push(y);
   return years;
@@ -347,16 +339,14 @@ export function WorkItemsPlanner({
     supplierOrderDetailId ? `planner-supplier-${supplierOrderDetailId}` : undefined,
   );
 
-  // Lazy useState (not useMemo) so SSR and client reuse the same snapshot during hydration.
+  // Lazy useState (not useMemo/render-time Date) — SSR snapshot reused on hydration.
   const [todayKey] = useState(() => formatDateKey(new Date()));
+  const [anchorYear] = useState(() => new Date().getFullYear());
 
   const monthStart = useMemo(() => new Date(viewYear, viewMonth, 1), [viewYear, viewMonth]);
   const monthEnd = useMemo(() => new Date(viewYear, viewMonth + 1, 0), [viewYear, viewMonth]);
-  const title = useMemo(
-    () => monthStart.toLocaleDateString("bg-BG", { month: "long", year: "numeric" }),
-    [monthStart],
-  );
-  const yearOptions = useMemo(() => calendarYearOptions(viewYear), [viewYear]);
+  const title = formatBgMonthYear(viewYear, viewMonth);
+  const yearOptions = useMemo(() => calendarYearOptions(viewYear, anchorYear), [viewYear, anchorYear]);
 
   function shiftViewMonth(delta: number) {
     const d = new Date(viewYear, viewMonth + delta, 1);
@@ -1041,11 +1031,7 @@ export function WorkItemsPlanner({
             >
               <div>
                 <h3 className="text-sm font-bold capitalize text-slate-900">
-                  {new Date(`${mobileSelectedKey}T00:00:00`).toLocaleDateString("bg-BG", {
-                    weekday: "long",
-                    day: "numeric",
-                    month: "long",
-                  })}
+                  {formatBgWeekdayDayMonth(mobileSelectedKey)}
                   {mobileSelectedKey === todayKey ? " · Днес" : ""}
                 </h3>
                 <p className="mt-0.5 text-xs text-slate-500">
@@ -1113,7 +1099,6 @@ export function WorkItemsPlanner({
             ) : (
               agendaDates.map((dateKey) => {
                 const dayEvts = agendaByDate.get(dateKey) ?? [];
-                const d = new Date(`${dateKey}T00:00:00`);
                 const isToday = dateKey === todayKey;
                 return (
                   <div key={dateKey}>
@@ -1125,7 +1110,7 @@ export function WorkItemsPlanner({
                       }}
                       className={`mb-2 w-full text-left px-1 text-xs font-bold ${isToday ? "text-brand-blue-700" : "text-slate-500"}`}
                     >
-                      {d.toLocaleDateString("bg-BG", { weekday: "long", day: "numeric", month: "long" })}
+                      {formatBgWeekdayDayMonth(dateKey)}
                       {isToday && " · Днес"}
                     </button>
                     <div className="space-y-2">
@@ -1167,12 +1152,7 @@ export function WorkItemsPlanner({
             <header className="flex shrink-0 flex-wrap items-start justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 md:px-5 md:py-4">
               <div className="min-w-0">
                 <h2 className="text-base md:text-xl font-semibold text-slate-900 leading-tight">
-                  {new Date(`${selectedDate}T00:00:00`).toLocaleDateString("bg-BG", {
-                    weekday: "short",
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                  })}
+                  {formatBgWeekdayShortDayMonthYear(selectedDate)}
                 </h2>
                 <p className="mt-0.5 text-xs md:text-sm text-slate-500">
                   {selectedItems.length} {selectedItems.length === 1 ? "събитие" : "събития"}
@@ -1699,7 +1679,7 @@ function completeActionLabel(eventCode: EventCode | null | undefined, done: bool
 
 function formatDueDateBg(due: string | null | undefined): string {
   if (!due) return "без дата";
-  return new Date(`${String(due).slice(0, 10)}T00:00:00`).toLocaleDateString("bg-BG");
+  return formatBgNumericDate(due);
 }
 
 function completeConfirmContent(item: WorkItem): {
