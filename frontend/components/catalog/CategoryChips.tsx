@@ -1,5 +1,4 @@
 import React, { useRef } from 'react';
-import { motion } from 'motion/react';
 import { LayoutGrid, Layers, Home, Building2, ArrowDown, ArrowUpFromLine, Columns } from 'lucide-react';
 import { CATEGORIES } from '../../data/productService';
 
@@ -75,8 +74,8 @@ export const CategoryChips = ({ selected, onChange, counts, compact = false }: C
                 </span>
               )}
               {isActive && !compact && (
-                <motion.div
-                  layoutId="category-indicator"
+                <span
+                  aria-hidden
                   className="absolute -bottom-1 left-4 right-4 h-0.5 bg-white/60 rounded-full"
                 />
               )}

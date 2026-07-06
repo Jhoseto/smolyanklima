@@ -250,12 +250,11 @@ export function ServiceTasksClient({
 }: {
   userId: string; userName: string; role: string;
 }) {
-  const todayKey = toKey(new Date());
-
+  const [todayKey] = useState(() => toKey(new Date()));
   const [selectedKey, setSelectedKey] = useState(todayKey);
-  const [weekAnchor, setWeekAnchor] = useState(new Date());
-  const [calYear, setCalYear] = useState(new Date().getFullYear());
-  const [calMonth, setCalMonth] = useState(new Date().getMonth());
+  const [weekAnchor, setWeekAnchor] = useState(() => new Date());
+  const [calYear, setCalYear] = useState(() => new Date().getFullYear());
+  const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

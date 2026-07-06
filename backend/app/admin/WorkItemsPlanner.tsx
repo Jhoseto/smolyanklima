@@ -347,8 +347,8 @@ export function WorkItemsPlanner({
     supplierOrderDetailId ? `planner-supplier-${supplierOrderDetailId}` : undefined,
   );
 
-  // Precomputed once per render cycle — avoids calling formatDateKey(new Date()) inside every calendar cell
-  const todayKey = useMemo(() => formatDateKey(new Date()), []);
+  // Lazy useState (not useMemo) so SSR and client reuse the same snapshot during hydration.
+  const [todayKey] = useState(() => formatDateKey(new Date()));
 
   const monthStart = useMemo(() => new Date(viewYear, viewMonth, 1), [viewYear, viewMonth]);
   const monthEnd = useMemo(() => new Date(viewYear, viewMonth + 1, 0), [viewYear, viewMonth]);
