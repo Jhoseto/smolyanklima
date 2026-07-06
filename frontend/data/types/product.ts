@@ -200,6 +200,8 @@ export function parseSortOption(raw: string | null | undefined): SortOption {
 export interface CategoryMeta {
   id: string;
   label: string;
+  /** Кратък текст в catalog chip bar */
+  shortLabel?: string;
   icon: string;       // Lucide icon name
   accentColor: string;
   types: string[];    // Which `type` values belong here

@@ -115,14 +115,14 @@ export const SearchSortBar = ({
           </div>
         </div>
 
-        {/* Row 2: Категории (flex-1) + сортиране вдясно */}
-        <div className="flex items-center gap-3 mt-2.5 pt-2.5 border-t border-gray-100/70">
+        {/* Row 2: категории + сортиране */}
+        <div className="flex items-center gap-2.5 mt-2.5 pt-2.5 border-t border-gray-100/70">
           <div className="flex-1 min-w-0">{categoryChipsSlot}</div>
-          <div className="relative shrink-0 flex-1 sm:flex-none sm:w-auto sm:min-w-[9.5rem] lg:min-w-[10.5rem] max-w-[11rem] sm:max-w-none">
+          <div className="relative shrink-0 w-[9.25rem] sm:w-[10rem]">
             <select
               value={sortBy}
               onChange={(e) => onSortChange(e.target.value as SortOption)}
-              className="w-full appearance-none pl-2.5 pr-7 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs leading-tight text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#00B4D8]/30 focus:border-[#00B4D8] cursor-pointer transition-all"
+              className="w-full appearance-none pl-2.5 pr-7 py-2 bg-slate-50/90 border border-slate-200/80 rounded-xl text-xs leading-tight text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#00B4D8]/25 focus:border-[#00B4D8] cursor-pointer transition-all"
             >
               {sortOptions.map(opt => (
                 <option key={opt.value} value={opt.value}>

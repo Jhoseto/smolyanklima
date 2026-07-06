@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import { LayoutGrid, Layers, Home, Building2, ArrowDown, ArrowUpFromLine, Columns } from 'lucide-react';
 import { CATEGORIES } from '../../data/productService';
 
@@ -16,60 +16,72 @@ interface CategoryChipsProps {
   selected: string;
   onChange: (id: string) => void;
   counts: Record<string, number>;
-  /** Компактен ред в search bar */
+  /** Един ред в search bar — равномерно разпределение, multi по-широк */
   compact?: boolean;
 }
 
+function chipFlexClass(id: string, compact: boolean): string {
+  if (!compact) return 'shrink-0';
+  if (id === 'multi') return 'flex-[1.65] min-w-[9.25rem]';
+  return 'flex-1 min-w-0 basis-0';
+}
+
 export const CategoryChips = ({ selected, onChange, counts, compact = false }: CategoryChipsProps) => {
-  const scrollRef = useRef<HTMLDivElement>(null);
-
   return (
-    <div className="relative min-w-0 flex-1">
-      <div className={`absolute right-0 top-0 bottom-0 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none ${compact ? 'w-4' : 'w-6'}`} />
-
+    <div className="w-full min-w-0">
       <div
-        ref={scrollRef}
-        className={`flex w-full min-w-0 flex-nowrap gap-2 overflow-x-auto scrollbar-hide ${
-          compact ? 'gap-1.5 pb-0.5' : 'px-2 pb-1'
-        }`}
-        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        className={
+          compact
+            ? 'flex w-full min-w-0 flex-wrap items-stretch gap-1.5 lg:flex-nowrap lg:gap-2'
+            : 'flex w-full min-w-0 flex-nowrap gap-2 overflow-x-auto scrollbar-hide px-2 pb-1'
+        }
+        style={compact ? undefined : { scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       >
         {CATEGORIES.map((cat) => {
           const isActive = selected === cat.id;
           const count = counts[cat.id] ?? 0;
-          const isAll = cat.id === 'all';
+          const chipLabel = compact
+            ? (cat.id === 'multi' ? cat.label : (cat.shortLabel ?? cat.label))
+            : cat.label;
 
           return (
             <button
               key={cat.id}
               type="button"
+              title={compact && cat.shortLabel && cat.id !== 'multi' ? cat.label : undefined}
               onClick={() => onChange(cat.id)}
               className={`
-                relative flex items-center justify-center border transition-all duration-200
+                group relative inline-flex items-center justify-center border transition-all duration-200
+                ${chipFlexClass(cat.id, compact)}
                 ${compact
-                  ? isAll
-                    ? 'shrink-0 gap-0.5 px-1.5 sm:px-2 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold whitespace-nowrap [&_svg]:w-3.5 [&_svg]:h-3.5'
-                    : 'shrink-0 gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold whitespace-nowrap [&_svg]:w-3.5 [&_svg]:h-3.5 [&_svg]:shrink-0'
-                  : 'shrink-0 gap-2 px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap [&_svg]:w-4 [&_svg]:h-4'
+                  ? 'gap-1.5 px-2.5 py-2 rounded-xl text-xs sm:text-[13px] font-medium tracking-tight whitespace-nowrap [&_svg]:w-3.5 [&_svg]:h-3.5 [&_svg]:shrink-0'
+                  : 'gap-2 px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap [&_svg]:w-4 [&_svg]:h-4'
                 }
                 ${isActive
-                  ? 'text-white border-transparent shadow-sm'
-                  : 'text-gray-600 bg-gray-50 border-gray-200 hover:border-gray-300 hover:bg-white'
+                  ? 'text-white border-transparent shadow-md shadow-orange-500/20'
+                  : 'text-slate-700 bg-slate-50/90 border-slate-200/80 hover:bg-white hover:border-slate-300 hover:shadow-sm'
                 }
               `}
               style={isActive ? {
-                background: 'linear-gradient(135deg, #FF4D00, #FF2A4D)',
-                boxShadow: compact ? undefined : '0 4px 15px rgba(255, 77, 0, 0.3)',
+                background: 'linear-gradient(135deg, #FF4D00 0%, #FF5533 45%, #FF2A4D 100%)',
+                boxShadow: compact ? undefined : '0 4px 15px rgba(255, 77, 0, 0.28)',
               } : {}}
             >
-              <span className={`shrink-0 ${isActive ? 'text-white' : ''}`} style={!isActive ? { color: cat.accentColor } : {}}>
+              <span
+                className={`shrink-0 transition-colors ${isActive ? 'text-white' : 'opacity-90 group-hover:opacity-100'}`}
+                style={!isActive ? { color: cat.accentColor } : {}}
+              >
                 {ICON_MAP[cat.icon]}
               </span>
-              <span>{cat.label}</span>
+              <span>{chipLabel}</span>
               {count > 0 && (
-                <span className={`font-bold rounded-full shrink-0 ${
-                  compact ? 'text-[10px] px-1' : 'text-[10px] px-1.5 py-0.5'
-                } ${isActive ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                <span
+                  className={`tabular-nums leading-none shrink-0 ${
+                    compact
+                      ? `text-[11px] font-semibold ${isActive ? 'text-white/90' : 'text-slate-400'}`
+                      : `text-[10px] font-bold rounded-full px-1.5 py-0.5 ${isActive ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'}`
+                  }`}
+                >
                   {count}
                 </span>
               )}

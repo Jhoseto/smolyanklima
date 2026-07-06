@@ -552,6 +552,7 @@ export const CATEGORIES: CategoryMeta[] = [
   {
     id: 'wall',
     label: 'Стенни климатици',
+    shortLabel: 'Стенни',
     icon: 'Home',
     accentColor: '#FF4D00',
     types: ['Стенен климатик', 'Дизайнерски климатик'],
@@ -566,6 +567,7 @@ export const CATEGORIES: CategoryMeta[] = [
   {
     id: 'cassette',
     label: 'Касетни климатици',
+    shortLabel: 'Касетни',
     icon: 'Building2',
     accentColor: '#7C3AED',
     types: ['Касетъчен климатик'],
@@ -573,6 +575,7 @@ export const CATEGORIES: CategoryMeta[] = [
   {
     id: 'floor',
     label: 'Подови климатици',
+    shortLabel: 'Подови',
     icon: 'ArrowDown',
     accentColor: '#0D9488',
     types: ['Подов климатик'],
@@ -580,6 +583,7 @@ export const CATEGORIES: CategoryMeta[] = [
   {
     id: 'column',
     label: 'Колонни климатици',
+    shortLabel: 'Колонни',
     icon: 'Columns',
     accentColor: '#6366F1',
     types: ['Колонен климатик'],
@@ -587,6 +591,7 @@ export const CATEGORIES: CategoryMeta[] = [
   {
     id: 'ceiling',
     label: 'Таванни климатици',
+    shortLabel: 'Таванни',
     icon: 'ArrowUpFromLine',
     accentColor: '#0891B2',
     types: ['Таванен климатик'],
