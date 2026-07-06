@@ -6,10 +6,11 @@ export const CATEGORY_TYPE_FALLBACK: Record<string, string[]> = {
   multi: ["Мулти-сплит система"],
   cassette: ["Касетъчен климатик"],
   floor: ["Подов климатик"],
+  column: ["Колонен климатик"],
   ceiling: ["Таванен климатик"],
 };
 
-export const CATALOG_CATEGORY_SLUGS = ["all", "wall", "multi", "cassette", "floor", "ceiling"] as const;
+export const CATALOG_CATEGORY_SLUGS = ["all", "wall", "multi", "cassette", "floor", "column", "ceiling"] as const;
 
 type DedupRow = {
   id: string;

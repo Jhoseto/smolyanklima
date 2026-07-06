@@ -66,6 +66,7 @@ export function calcInstallCost(
 ): number {
   const base = product.type?.includes('Мулти') ? 250
     : product.type?.includes('Касетъ') || product.type?.includes('Таван') ? 350
+    : product.type?.includes('Колон') ? 250
     : product.type?.includes('Подов') ? 200
     : 150;
   const floorExtra = FLOOR_EXTRA[floor ?? 'ground'] ?? 0;
@@ -240,7 +241,7 @@ function buildUserProfile(answers: WizardAnswers): UserProfile {
 type FilterMode = 'strict' | 'relaxed' | 'fallback';
 
 function isCommercialType(type: string): boolean {
-  return /касет|таван|подов|канал/i.test(type.toLowerCase());
+  return /касет|таван|подов|канал|колон/i.test(type.toLowerCase());
 }
 
 function isResidentialWallType(type: string): boolean {

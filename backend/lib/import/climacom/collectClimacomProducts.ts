@@ -8,6 +8,7 @@ export const CLIMACOM_CLIMATE_CATEGORY_SLUGS = [
   "multisplit-sistemi",
   "chetiristruini-kaseti",      // 4-stream cassette
   "ednostruyna-kaseta-mlz-kp",  // 1-stream cassette MLZ-KP
+  "kolonen-tip",                // PSA-M column units (Standard + Power Inverter)
 ] as const;
 
 /** Wi‑Fi модули, дистанционни управления и аксесоари. */

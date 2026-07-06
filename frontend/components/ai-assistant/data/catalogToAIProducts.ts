@@ -9,6 +9,7 @@ const typeToRoom: Record<string, RoomType[]> = {
   'Мулти-сплит система': ['living', 'office'],
   'Касетъчен климатик': ['office'],
   'Подов климатик': ['living', 'office'],
+  'Колонен климатик': ['office', 'other'],
   'Таванен климатик': ['office'],
 };
 

@@ -1,19 +1,24 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router-dom';
-import { Phone, ArrowRight, Zap, ShieldCheck, BadgeCheck, Smartphone, Download, X } from 'lucide-react';
-import { COMPANY_TEL_HREF } from '../../data/legal/company';
+import { ClipboardPen, ArrowRight, Zap, ShieldCheck, BadgeCheck, Smartphone, Download, X } from 'lucide-react';
 import { BrandsSection } from './BrandsSection';
 import { usePWAInstall } from '../../lib/usePWAInstall';
 import { HeroImageRotator } from './HeroImageRotator';
 import { PWAInstallGuideModal } from '../pwa/PWAInstallGuideModal';
+import { useServiceRequestModal } from '../../context/ServiceRequestModalContext';
 
-export interface HeroSectionProps {
-  /** Отваря прозореца на AI асистента (напр. от бутона „Безплатна консултация“) */
-  onFreeConsultationClick?: () => void;
-}
+export const HeroSection = () => {
+  const { open: openServiceRequest } = useServiceRequestModal();
 
-export const HeroSection = ({ onFreeConsultationClick }: HeroSectionProps) => {
+  const handleServiceRequestClick = () => {
+    const contactEl = document.getElementById('contact');
+    if (contactEl) {
+      contactEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    openServiceRequest();
+  };
   const {
     showHeroBanner,
     heroUsesChromiumPrompt,
@@ -116,33 +121,23 @@ export const HeroSection = ({ onFreeConsultationClick }: HeroSectionProps) => {
             </p>
 
             {/* Buttons */}
-            <div className="flex flex-wrap items-center gap-4 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4 w-full max-w-[560px]">
               <Link 
                 to="/catalog"
-                className="h-14 px-8 rounded-full bg-gradient-to-r from-[#FF5722] to-[#FF2A4D] text-white font-bold text-lg flex items-center gap-2 hover:shadow-lg hover:shadow-red-500/30 hover:scale-[1.02] transition-all"
+                className="inline-flex h-14 w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#FF5722] to-[#FF2A4D] px-8 text-lg font-bold leading-none text-white whitespace-nowrap transition-all hover:scale-[1.02] hover:shadow-lg hover:shadow-red-500/30"
               >
                 Разгледай каталога
-                <ArrowRight className="w-5 h-5" />
+                <ArrowRight className="w-5 h-5 shrink-0" />
               </Link>
 
-              {onFreeConsultationClick ? (
-                <button
-                  type="button"
-                  onClick={onFreeConsultationClick}
-                  className="h-14 px-8 rounded-full bg-transparent border border-gray-200 text-[#111827] font-bold text-lg flex items-center gap-2 hover:bg-gray-50 active:scale-95 transition-all"
-                >
-                  <Phone className="w-5 h-5 text-[#00B4D8]" />
-                  Безплатна консултация
-                </button>
-              ) : (
-                <a
-                  href={COMPANY_TEL_HREF}
-                  className="h-14 px-8 rounded-full bg-transparent border border-gray-200 text-[#111827] font-bold text-lg flex items-center gap-2 hover:bg-gray-50 active:scale-95 transition-all"
-                >
-                  <Phone className="w-5 h-5 text-[#00B4D8]" />
-                  Безплатна консултация
-                </a>
-              )}
+              <button
+                type="button"
+                onClick={handleServiceRequestClick}
+                className="inline-flex h-14 w-full cursor-pointer items-center justify-center gap-2 rounded-full border-2 border-gray-300 bg-transparent px-8 text-lg font-bold leading-none text-[#111827] whitespace-nowrap transition-all hover:scale-[1.02] hover:border-[#00B4D8] hover:bg-white/40 active:scale-[0.98]"
+              >
+                <ClipboardPen className="w-5 h-5 shrink-0 text-[#00B4D8]" strokeWidth={2} />
+                Заяви услуга
+              </button>
             </div>
 
           </div>

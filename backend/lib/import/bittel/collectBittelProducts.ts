@@ -4,6 +4,7 @@ import { fetchBittelHtml, BITTEL_BASE_URL } from "./parseBittelProduct";
 export const BITTEL_LISTING_ROOTS = [
   { url: `${BITTEL_BASE_URL}/c/klimatici/invertorni-klimatici`, path: "/c/klimatici/invertorni-klimatici" },
   { url: `${BITTEL_BASE_URL}/c/klimatici/invertorni-multisplit-sistemi`, path: "/c/klimatici/invertorni-multisplit-sistemi" },
+  { url: `${BITTEL_BASE_URL}/c/klimatici/profesionalni/kolonni-klimatici`, path: "/c/klimatici/profesionalni/kolonni-klimatici" },
   { url: `${BITTEL_BASE_URL}/c/klimatici/aksesoari`, path: "/c/klimatici/aksesoari" },
 ] as const;
 

@@ -2,7 +2,7 @@ import type { BittelParsedProduct } from "./parseBittelProduct";
 export { resolveBittelProductClassification as resolveBittelCategoryAndType } from "./parseBittelProduct";
 
 /** Листинг пътища от bittel.bg за климатична техника. */
-const CLIMATE_LISTING_PATH = /\/c\/klimatici\/invertorni-klimatici|\/c\/klimatici\/invertorni-multisplit-sistemi/i;
+const CLIMATE_LISTING_PATH = /\/c\/klimatici\/invertorni-klimatici|\/c\/klimatici\/invertorni-multisplit-sistemi|\/c\/klimatici\/profesionalni\/kolonni-klimatici/i;
 const MULTISPLIT_LISTING_PATH = /\/c\/klimatici\/invertorni-multisplit-sistemi/i;
 const ACCESSORY_LISTING_PATH = /\/c\/klimatici\/aksesoari/i;
 

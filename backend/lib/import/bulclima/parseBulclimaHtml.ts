@@ -807,6 +807,7 @@ export function extractBulclimaBrandHint(html: string): string | null {
 export function categorySlugFromKlimaticiPath(path: string): string | null {
   const p = path.toLowerCase();
   if (p.includes("multi-split") || p.includes("multisplit") || p.includes("multi-split-sistemi")) return "multi";
+  if (p.includes("kolon")) return "column";
   if (p.includes("podovi")) return "floor";
   if (p.includes("kasetuch") || p.includes("kasset") || p.includes("kaset")) return "cassette";
   if (p.includes("tavan")) return "ceiling";
@@ -834,7 +835,7 @@ export function extractBulclimaKlimaticiCategoryPath(html: string): string | nul
   return deepest;
 }
 
-const KLIMA_CATEGORY_PRIORITY = ["floor", "cassette", "ceiling", "multi", "wall"] as const;
+const KLIMA_CATEGORY_PRIORITY = ["floor", "column", "cassette", "ceiling", "multi", "wall"] as const;
 
 function pickCategorySlug(slugs: Iterable<string | null>): string | null {
   const found = new Set<string>();
@@ -849,6 +850,7 @@ function pickCategorySlug(slugs: Iterable<string | null>): string | null {
 
 function typeHintFromCategorySlug(slug: string | null): string | null {
   if (slug === "floor") return "Подов";
+  if (slug === "column") return "Колонен";
   if (slug === "cassette") return "Касетъчен";
   if (slug === "ceiling") return "Таван";
   if (slug === "multi") return "Мулти";
@@ -859,6 +861,7 @@ function typeHintFromCategorySlug(slug: string | null): string | null {
 function typeHintFromProductText(name: string, description: string | null): string | null {
   const hay = `${name} ${description ?? ""}`;
   if (/мульти|multisplit|мултисплит/i.test(hay)) return "Мулти";
+  if (/колон/i.test(hay)) return "Колонен";
   if (/подов|таванно[\s-]*подов/i.test(hay)) return "Подов";
   // Касетъчен преди „таван“ — и двата се монтират на тавана, но са различни системи.
   if (/касет|4[\s-]*посоч|four[\s-]*way/i.test(hay)) return "Касетъчен";
@@ -896,6 +899,7 @@ export function resolveBulclimaProductClassification(
 
   if (!categorySlug) {
     if (typeHint === "Подов") categorySlug = "floor";
+    else if (typeHint === "Колонен") categorySlug = "column";
     else if (typeHint === "Касетъчен") categorySlug = "cassette";
     else if (typeHint === "Таван") categorySlug = "ceiling";
     else if (typeHint === "Мулти") categorySlug = "multi";
@@ -911,6 +915,7 @@ function listingCategorySpecificity(path: string | null): number {
   if (p === "/products/klimatici" || /\/klimatici\/?$/.test(p)) return 1;
   if (
     p.includes("podovi") ||
+    p.includes("kolonni") ||
     p.includes("stenni") ||
     p.includes("kaset") ||
     p.includes("tavan") ||
@@ -1047,6 +1052,7 @@ export const BULCLIMA_KLIMA_ROOT = "https://bulclima.com/products/klimatici";
 export const BULCLIMA_DEFAULT_SYNC_LISTING_URLS = [
   "https://bulclima.com/products/klimatici/stenni-klimatici",
   "https://bulclima.com/products/klimatici/multi-split-sistemi",
+  "https://bulclima.com/products/klimatici/kolonni-klimatici",
 ] as const;
 
 /**
@@ -1057,13 +1063,14 @@ const ALLOWED_CATEGORY_PATTERNS = [
   /multi-split/i,
   /multisplit/i,
   /podovi/i,
+  /kolonni/i,
   /tavann/i,
   /kaset/i,
 ];
 
 export function isAllowedBulclimaCategoryPath(path: string): boolean {
   const p = path.toLowerCase();
-  if (/kanalni|kolonni|mobilni|wi-fi-i-aksesoari/i.test(p)) return false;
+  if (/kanalni|mobilni|wi-fi-i-aksesoari/i.test(p)) return false;
   return ALLOWED_CATEGORY_PATTERNS.some((re) => re.test(p));
 }
 

@@ -59,7 +59,7 @@ const HomePage = ({ onOpenAssistantChat }: { onOpenAssistantChat?: () => void })
       <section className="relative min-h-[100dvh] overflow-hidden">
         <HeroBackground />
         <div className="relative z-10 flex min-h-[100dvh] flex-col">
-          <HeroSection onFreeConsultationClick={onOpenAssistantChat} />
+          <HeroSection />
         </div>
       </section>
       

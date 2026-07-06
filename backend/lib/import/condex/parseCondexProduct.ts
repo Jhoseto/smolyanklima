@@ -89,7 +89,9 @@ export function extractCondexModelCode(name: string): string | null {
   }
   const kit = name.match(/\b(FDTC\d+[A-Z0-9]*)\s*\/\s*(SRC[\w*-]+)/i);
   if (kit) return `${kit[1]!.toUpperCase()}/${kit[2]!.replace(/\*/g, "").toUpperCase()}`;
-  const compact = name.match(/\b(FDTC|SRK|SRC|SRR|SRF|SCM)([A-Z0-9][\w*-]*)/i);
+  const fdfKit = name.match(/\b(FDF[\w*-]+)\s*\/\s*(FDC[\w*-]+)/i);
+  if (fdfKit) return `${fdfKit[1]!.replace(/\s+/g, "").toUpperCase()}/${fdfKit[2]!.replace(/\s+/g, "").replace(/\*/g, "").toUpperCase()}`;
+  const compact = name.match(/\b(FDTC|FDF|FDC|SRK|SRC|SRR|SRF|SCM)([A-Z0-9][\w*-]*)/i);
   if (compact) return `${compact[1]!.toUpperCase()}${compact[2]!.replace(/\*/g, "").toUpperCase()}`;
   return extractModelCode(name);
 }
@@ -502,6 +504,7 @@ export function extractCondexCategoryPaths(html: string): string[] {
 export function categorySlugFromCondexPath(path: string): string | null {
   const p = path.toLowerCase();
   if (p.includes("multi-split") || p.includes("vatreshni-tela") || p.includes("vanshni-tela")) return "multi";
+  if (p.includes("kolonni") || p.includes("fdf")) return "column";
   if (p.includes("srf") || p.includes("podov")) return "floor";
   if (p.includes("fdtc") || p.includes("kaset")) return "cassette";
   if (p.includes("srr") || p.includes("kanalen") || p.includes("slim")) return "ceiling";
@@ -520,7 +523,7 @@ export function categorySlugFromCondexPath(path: string): string | null {
   return null;
 }
 
-const KLIMA_CATEGORY_PRIORITY = ["floor", "cassette", "ceiling", "multi", "wall"] as const;
+const KLIMA_CATEGORY_PRIORITY = ["floor", "column", "cassette", "ceiling", "multi", "wall"] as const;
 
 function pickCategorySlug(slugs: Iterable<string | null>): string | null {
   const found = new Set<string>();
@@ -535,6 +538,7 @@ function pickCategorySlug(slugs: Iterable<string | null>): string | null {
 
 function typeHintFromCategorySlug(slug: string | null): string | null {
   if (slug === "floor") return "Подов";
+  if (slug === "column") return "Колонен";
   if (slug === "cassette") return "Касетъчен";
   if (slug === "ceiling") return "Таван";
   if (slug === "multi") return "Мулти";
@@ -545,6 +549,7 @@ function typeHintFromCategorySlug(slug: string | null): string | null {
 function typeHintFromProductText(name: string, description: string | null): string | null {
   const hay = `${name} ${description ?? ""}`;
   if (/мульти|multisplit|мултисплит|multi[\s-]*split/i.test(hay)) return "Мулти";
+  if (/\bfdf\b|\bfdf\s+\d/i.test(hay) || /колон/i.test(hay)) return "Колонен";
   if (/\bfdtc\b|касет/i.test(hay)) return "Касетъчен";
   if (/\bsrr\b|канален|каналн/i.test(hay)) return "Таван";
   if (/\bsrf\b|подов/i.test(hay)) return "Подов";
@@ -580,6 +585,7 @@ export function resolveCondexProductClassification(
 
   if (!categorySlug) {
     if (typeHint === "Подов") categorySlug = "floor";
+    else if (typeHint === "Колонен") categorySlug = "column";
     else if (typeHint === "Касетъчен") categorySlug = "cassette";
     else if (typeHint === "Таван") categorySlug = "ceiling";
     else if (typeHint === "Мулти") categorySlug = "multi";

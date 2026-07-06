@@ -576,6 +576,9 @@ function resolveBittelProductClassification(
   if (/multisplit|мулти[\s-]*сплит|\/c\/klimatici\/invertorni-multisplit/i.test(hay)) {
     return { categorySlug: "multi", typeHint: "Мулти" };
   }
+  if (/колон/i.test(hay)) {
+    return { categorySlug: "column", typeHint: "Колонен" };
+  }
   if (/подов\s+тип|floor/i.test(name)) {
     return { categorySlug: "floor", typeHint: "Подов" };
   }

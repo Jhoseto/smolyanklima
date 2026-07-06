@@ -10,6 +10,7 @@ export const CONDEX_DEFAULT_SYNC_LISTING_URLS = [
   "https://condex.bg/products/seria-premium-zs/",
   "https://condex.bg/products/smart-plus/",
   "https://condex.bg/products/seria-standart-zsp/",
+  "https://condex.bg/products/kolonni-modeli/",
 ] as const;
 
 /** Серии от RAC hub (за дома и офиса) + multi-split поддърво. */
@@ -200,6 +201,8 @@ function listingCategorySpecificity(path: string | null): number {
     p.includes("smart-plus") ||
     p.includes("srr") ||
     p.includes("fdtc") ||
+    p.includes("kolonni") ||
+    p.includes("fdf") ||
     p.includes("multi-split") ||
     p.includes("vatreshni") ||
     p.includes("vanshni")

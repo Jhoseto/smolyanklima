@@ -163,7 +163,7 @@ export function pickCatalogImageUrl(urls: string[]): string {
 
 function resolveProductCategory(type: string): string {
   const t = type.toLowerCase();
-  if (t.includes('касет') || t.includes('таван') || t.includes('подов') || t.includes('канал')) {
+  if (t.includes('касет') || t.includes('таван') || t.includes('подов') || t.includes('канал') || t.includes('колон')) {
     return 'Търговски';
   }
   if (t.includes('мулти')) return 'Къща';
@@ -576,6 +576,13 @@ export const CATEGORIES: CategoryMeta[] = [
     icon: 'ArrowDown',
     accentColor: '#0D9488',
     types: ['Подов климатик'],
+  },
+  {
+    id: 'column',
+    label: 'Колонни климатици',
+    icon: 'Columns',
+    accentColor: '#6366F1',
+    types: ['Колонен климатик'],
   },
   {
     id: 'ceiling',

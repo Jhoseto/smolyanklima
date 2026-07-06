@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { motion } from 'motion/react';
-import { LayoutGrid, Layers, Home, Building2, ArrowDown, Briefcase } from 'lucide-react';
+import { LayoutGrid, Layers, Home, Building2, ArrowDown, ArrowUpFromLine, Columns } from 'lucide-react';
 import { CATEGORIES } from '../../data/productService';
 
 const ICON_MAP: Record<string, React.ReactNode> = {
@@ -9,7 +9,8 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   Layers: <Layers className="w-4 h-4" />,
   Building2: <Building2 className="w-4 h-4" />,
   ArrowDown: <ArrowDown className="w-4 h-4" />,
-  Briefcase: <Briefcase className="w-4 h-4" />,
+  Columns: <Columns className="w-4 h-4" />,
+  ArrowUpFromLine: <ArrowUpFromLine className="w-4 h-4" />,
 };
 
 interface CategoryChipsProps {
