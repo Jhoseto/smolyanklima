@@ -199,7 +199,7 @@ function customerStatusLabel(status: ContactRow["customer_status"]): string {
   return "Нов клиент";
 }
 
-import { canonicalPhoneDigits, phoneDigitsOnly } from "@/lib/admin/phoneSearchPattern";
+import { canonicalPhoneDigits, extractBgMobileCore, phoneDigitsOnly } from "@/lib/admin/phoneSearchPattern";
 
 function normalizeEmail(input: string | null | undefined): string {
   return String(input ?? "").trim().toLowerCase();
@@ -222,13 +222,16 @@ function highlightMatch(text: string, query: string): ReactNode {
   }
 
   const qDigits = phoneDigitsOnly(q);
-  if (qDigits.length >= 3) {
-    const rawDigits = phoneDigitsOnly(raw);
+  if (qDigits.length >= 4) {
+    const qCore = extractBgMobileCore(q);
+    const rawCore = extractBgMobileCore(raw);
     const qCanon = canonicalPhoneDigits(q);
     const rawCanon = canonicalPhoneDigits(raw);
     const phoneMatch =
-      (qCanon.length >= 3 && rawCanon.includes(qCanon)) ||
-      (qDigits.length >= 3 && rawDigits.includes(qDigits));
+      (qCore.length >= 4 && rawCore.includes(qCore)) ||
+      (qCore.length >= 4 && qCore.includes(rawCore)) ||
+      (qCanon.length >= 4 && rawCanon.includes(qCanon)) ||
+      (qDigits.length >= 4 && phoneDigitsOnly(raw).includes(qDigits));
     if (phoneMatch) {
       return <mark className="bg-yellow-200/90 text-slate-900 rounded px-0.5 not-italic">{raw}</mark>;
     }

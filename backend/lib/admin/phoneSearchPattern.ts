@@ -29,6 +29,22 @@ export function canonicalPhoneDigits(raw: string | null | undefined): string {
   return digits;
 }
 
+/** 9-цифрен абонатен номер без 0 / 359 (или по-късък при частично търсене). */
+export function extractBgMobileCore(raw: string): string {
+  const digits = phoneDigitsOnly(raw);
+  if (!digits) return "";
+
+  let core = digits;
+  if (digits.startsWith("359") && digits.length > 3) {
+    core = digits.slice(3);
+  } else if (digits.startsWith("0") && digits.length > 1) {
+    core = digits.slice(1);
+  }
+
+  if (core.length > 9) core = core.slice(0, 9);
+  return core;
+}
+
 /** Варианти на цифров низ за ILIKE — 0… и 359… за BG номера. */
 export function bgPhoneSearchDigitVariants(raw: string): string[] {
   const digits = phoneDigitsOnly(raw);
@@ -36,6 +52,18 @@ export function bgPhoneSearchDigitVariants(raw: string): string[] {
 
   const out = new Set<string>();
   out.add(digits);
+
+  const core = extractBgMobileCore(raw);
+  if (core.length >= 4) {
+    out.add(core);
+    if (core.length >= 9) {
+      out.add(`0${core.slice(0, 9)}`);
+      out.add(`359${core.slice(0, 9)}`);
+    } else {
+      out.add(`0${core}`);
+      out.add(`359${core}`);
+    }
+  }
 
   if (digits.startsWith("359") && digits.length > 3) {
     const after = digits.slice(3);
@@ -91,11 +119,11 @@ export function serialCompactIlikePatterns(raw: string): string[] {
   return [containsIlikePattern(compact)];
 }
 
-/** Търсене прилича на телефон (само цифри/+, интервали), не сериен № с букви. */
+/** Търсене прилича на телефон (цифри/+/интервали), не сериен № с букви. */
 export function queryLooksLikePhone(raw: string): boolean {
   const trimmed = raw.trim();
   if (!trimmed || /[a-zA-Z]/.test(trimmed)) return false;
-  return phoneDigitsOnly(trimmed).length >= 6;
+  return phoneDigitsOnly(trimmed).length >= 4;
 }
 
 /** ILIKE шаблон: същите цифри подред, с произволни интервали/тирета/+359/0. */
@@ -104,10 +132,25 @@ export function phoneFlexibleIlikePattern(raw: string): string | null {
   return patterns[0] ?? null;
 }
 
-/** Всички ILIKE варианти (0… и 359…) — за OR търсене. */
+/** Всички ILIKE варианти (0…, 359… и абонатно ядро) — за OR търсене. */
 export function phoneFlexibleIlikePatterns(raw: string): string[] {
   const variants = bgPhoneSearchDigitVariants(raw);
-  if (!variants.length) return [];
+  const core = extractBgMobileCore(raw);
+  if (!variants.length && core.length < 4) return [];
+
+  const seen = new Set<string>();
+  const patterns: string[] = [];
+
+  const push = (digitStr: string) => {
+    if (digitStr.length < 4) return;
+    const p = digitsToFlexiblePattern(digitStr);
+    if (seen.has(p)) return;
+    seen.add(p);
+    patterns.push(p);
+  };
+
+  // Ядро без префикс — намира и 0887…, и +359 887…, независимо от интервалите
+  if (core.length >= 4) push(core);
 
   const ordered = [
     ...variants.filter((v) => v.startsWith("0") && v.length >= 10),
@@ -116,15 +159,7 @@ export function phoneFlexibleIlikePatterns(raw: string): string[] {
     ...variants.filter((v) => !v.startsWith("0") && !v.startsWith("359")),
   ];
 
-  const seen = new Set<string>();
-  const patterns: string[] = [];
-  for (const v of ordered) {
-    const p = digitsToFlexiblePattern(v);
-    if (!seen.has(p)) {
-      seen.add(p);
-      patterns.push(p);
-    }
-  }
+  for (const v of ordered) push(v);
   return patterns;
 }
 
