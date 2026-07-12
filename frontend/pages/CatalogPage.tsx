@@ -28,7 +28,7 @@ import {
 import { getAllAccessories } from '../data/accessoryService';
 import { postPublicInquiry } from '../data/postInquiry';
 import type { CatalogProduct, SortOption } from '../data/types/product';
-import { DEFAULT_CATALOG_SORT, parseSortOption, ACCESSORY_SORT_OPTIONS, isClimateOnlySort } from '../data/types/product';
+import { DEFAULT_CATALOG_SORT, DEFAULT_CATALOG_CATEGORY, parseSortOption, ACCESSORY_SORT_OPTIONS, isClimateOnlySort } from '../data/types/product';
 import { SiteSeo } from '../components/seo/SiteSeo';
 import { PAGE_SEO } from '../lib/seo/config';
 import { breadcrumbSchema, localBusinessSchema } from '../lib/seo/jsonLd';
@@ -156,7 +156,7 @@ const CatalogPage = () => {
   const [climateBtuOptions, setClimateBtuOptions] = useState<Array<{ btu: number; productCount: number }>>([]);
 
   const [search, setSearch] = useState(searchParams.get('q') || '');
-  const [category, setCategory] = useState(searchParams.get('cat') || 'all');
+  const [category, setCategory] = useState(() => searchParams.get('cat') || DEFAULT_CATALOG_CATEGORY);
   const [brands, setBrands] = useState<string[]>(searchParams.get('b')?.split(',').filter(Boolean) || []);
   const [btus, setBtus] = useState<number[]>(() => {
     const raw = searchParams.get('btu')?.split(',').filter(Boolean) ?? [];
@@ -558,7 +558,7 @@ const CatalogPage = () => {
     if (activeTab === 'accessories') params.set('tab', 'accessories');
     if (activeTab === 'climate' && effectiveCondition === 'used') params.set('cond', 'used');
     if (search) params.set('q', search);
-    if (category !== 'all') params.set('cat', category);
+    if (category !== DEFAULT_CATALOG_CATEGORY) params.set('cat', category);
     if (brands.length) params.set('b', brands.join(','));
     if (activeTab === 'climate' && btus.length) params.set('btu', btus.join(','));
     if (activeTab === 'climate' && energyClasses.length) params.set('e', energyClasses.join(','));
@@ -644,7 +644,7 @@ const CatalogPage = () => {
   // ── Handlers ────────────────────────────
   const resetAllFilters = useCallback(() => {
     setSearch('');
-    setCategory('all');
+    setCategory(activeTab === 'climate' ? DEFAULT_CATALOG_CATEGORY : 'all');
     setSelectedConditions([...DEFAULT_CLIMATE_CONDITIONS]);
     setBrands([]);
     setBtus([]);
@@ -653,13 +653,13 @@ const CatalogPage = () => {
     setPriceRange([effectivePriceMin, effectivePriceMax]);
     setSortBy(DEFAULT_CATALOG_SORT);
     setPage(1);
-  }, [effectivePriceMin, effectivePriceMax]);
+  }, [activeTab, effectivePriceMin, effectivePriceMax]);
 
   const handleTabChange = useCallback((tab: CatalogTab) => {
     const nextMin = tab === 'climate' ? priceMin : accessoryPriceMin;
     const nextMax = tab === 'climate' ? priceMax : accessoryPriceMax;
     setActiveTab(tab);
-    setCategory('all');
+    setCategory(tab === 'climate' ? DEFAULT_CATALOG_CATEGORY : 'all');
     setSelectedConditions(tab === 'climate' ? [...DEFAULT_CLIMATE_CONDITIONS] : []);
     setBrands([]);
     setBtus([]);

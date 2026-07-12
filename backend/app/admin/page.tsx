@@ -3,7 +3,7 @@ import { EmailOutboxStatus } from "./EmailOutboxStatus";
 import { SectionTitle, Card } from "./ui";
 import { DashboardPanel } from "./DashboardPanel";
 import { CallFollowUpsPanel } from "./CallFollowUpsPanel";
-import { WorkItemsPlanner } from "./WorkItemsPlanner";
+import { DashboardPlannerMount } from "./DashboardPlannerMount";
 import { SupplierOrdersPanel } from "./SupplierOrdersPanel";
 import { fetchCallFollowUpPanelItems } from "@/lib/admin/call-follow-up-items";
 import { inquiryServiceTypeLabel } from "@/lib/inquiry/serviceTypeLabels";
@@ -106,7 +106,7 @@ export default async function AdminDashboardPage() {
         </div>
       )}
       {/* Operations planner — top of dashboard */}
-      <WorkItemsPlanner readOnly={readOnlyDashboard} canDeleteEvents={session.role === "master_admin"} />
+      <DashboardPlannerMount readOnly={readOnlyDashboard} canDeleteEvents={session.role === "master_admin"} />
 
       <div>
         <h1 className="text-lg md:text-xl font-bold text-slate-900 mb-0.5 leading-tight">

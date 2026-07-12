@@ -566,8 +566,8 @@ export const CATEGORIES: CategoryMeta[] = [
   },
   {
     id: 'cassette',
-    label: 'Касетни климатици',
-    shortLabel: 'Касетни',
+    label: 'Касетъчни климатици',
+    shortLabel: 'Касетъчни',
     icon: 'Building2',
     accentColor: '#7C3AED',
     types: ['Касетъчен климатик'],

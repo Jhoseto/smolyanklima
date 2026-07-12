@@ -342,7 +342,13 @@ export function ServiceTasksClient({
       return newAnchor;
     });
   }
-  function goToday()  { setWeekAnchor(new Date()); setSelectedKey(todayKey); }
+  function goToday() {
+    const t = new Date();
+    setWeekAnchor(t);
+    setSelectedKey(toKey(t));
+    setCalYear(t.getFullYear());
+    setCalMonth(t.getMonth());
+  }
 
   function prevMonth() {
     const newMonth = calMonth === 0 ? 11 : calMonth - 1;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Card, Button, Select, Input, Textarea, AdminContactMetaLine, AdminPhoneLink, AdminFieldValue } from "./ui";
 import { ContactPersonPicker } from "./ContactPersonPicker";
 import { InstallationMountDetailModal } from "./InstallationMountDetailModal";
@@ -319,10 +319,15 @@ export function WorkItemsPlanner({
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmCompleteItem, setConfirmCompleteItem] = useState<WorkItem | null>(null);
   const [displayMode, setDisplayMode] = useState<"day" | "month">("day");
-  const [mobileSelectedKey, setMobileSelectedKey] = useState(() => formatDateKey(new Date()));
+  /** null = показвай днешния ден (не се пази между refresh/отваряния). */
+  const [userPickedDayKey, setUserPickedDayKey] = useState<string | null>(null);
   const dayStripRef = useRef<HTMLDivElement>(null);
   const dayButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const stripScrollLock = useRef(false);
+  const scrollRequestIdRef = useRef(0);
+  /** Само при ръчен плъзгане по лентата — иначе scroll събитията презаписват „днес“ при load/refresh. */
+  const stripScrollFromUserRef = useRef(false);
+  const itemsLayoutSyncedRef = useRef(false);
   const contentTouchRef = useRef<{ x: number; y: number } | null>(null);
   // Month data cache — avoids re-fetching when navigating back to an already-loaded month
   const monthCacheRef = useRef<Map<string, WorkItem[]>>(new Map());
@@ -339,9 +344,10 @@ export function WorkItemsPlanner({
     supplierOrderDetailId ? `planner-supplier-${supplierOrderDetailId}` : undefined,
   );
 
-  // Lazy useState (not useMemo/render-time Date) — SSR snapshot reused on hydration.
-  const [todayKey] = useState(() => formatDateKey(new Date()));
+  // Frozen at hydration for SSR; applyTodayView() обновява на клиента.
+  const [todayKey, setTodayKey] = useState(() => formatDateKey(new Date()));
   const [anchorYear] = useState(() => new Date().getFullYear());
+  const mobileSelectedKey = userPickedDayKey ?? todayKey;
 
   const monthStart = useMemo(() => new Date(viewYear, viewMonth, 1), [viewYear, viewMonth]);
   const monthEnd = useMemo(() => new Date(viewYear, viewMonth + 1, 0), [viewYear, viewMonth]);
@@ -349,6 +355,7 @@ export function WorkItemsPlanner({
   const yearOptions = useMemo(() => calendarYearOptions(viewYear, anchorYear), [viewYear, anchorYear]);
 
   function shiftViewMonth(delta: number) {
+    stripScrollFromUserRef.current = false;
     const d = new Date(viewYear, viewMonth + delta, 1);
     setViewYear(d.getFullYear());
     setViewMonth(d.getMonth());
@@ -356,16 +363,10 @@ export function WorkItemsPlanner({
     const selDate = new Date(`${mobileSelectedKey}T00:00:00`);
     if (selDate.getFullYear() !== d.getFullYear() || selDate.getMonth() !== d.getMonth()) {
       const clampedDay = Math.min(selDate.getDate(), new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate());
-      setMobileSelectedKey(
+      setUserPickedDayKey(
         `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(clampedDay).padStart(2, "0")}`
       );
     }
-  }
-
-  function resetCalendarToToday() {
-    const t = new Date();
-    setViewYear(t.getFullYear());
-    setViewMonth(t.getMonth());
   }
 
   const monthFrom = formatDateKey(monthStart);
@@ -507,23 +508,108 @@ export function WorkItemsPlanner({
     setViewMonth((m) => (m === d.getMonth() ? m : d.getMonth()));
   }, [mobileSelectedKey]);
 
-  function scrollDayIntoView(key: string, smooth = true) {
+  function scrollDayStripToKey(key: string): boolean {
+    const container = dayStripRef.current;
     const el = dayButtonRefs.current.get(key);
-    if (!el || !dayStripRef.current) return;
-    stripScrollLock.current = true;
-    el.scrollIntoView({ inline: "center", block: "nearest", behavior: smooth ? "smooth" : "auto" });
-    window.setTimeout(() => {
-      stripScrollLock.current = false;
-    }, smooth ? 350 : 50);
+    if (!container || !el) return false;
+    const targetLeft = el.offsetLeft - (container.clientWidth - el.offsetWidth) / 2;
+    container.scrollTo({ left: Math.max(0, targetLeft), behavior: "auto" });
+    return true;
   }
 
-  useEffect(() => {
-    scrollDayIntoView(mobileSelectedKey);
+  function scheduleScrollToDay(key: string, onComplete?: () => void) {
+    const requestId = ++scrollRequestIdRef.current;
+    stripScrollLock.current = true;
+
+    const finish = () => {
+      window.setTimeout(() => {
+        stripScrollLock.current = false;
+        onComplete?.();
+      }, 150);
+    };
+
+    const attempt = (n: number) => {
+      if (scrollRequestIdRef.current !== requestId) return;
+      if (scrollDayStripToKey(key)) {
+        finish();
+        return;
+      }
+      if (n >= 20) {
+        finish();
+        return;
+      }
+      window.requestAnimationFrame(() => {
+        window.setTimeout(() => attempt(n + 1), n < 6 ? 0 : 40);
+      });
+    };
+
+    attempt(0);
+  }
+
+  function applyTodayView() {
+    const t = new Date();
+    const key = formatDateKey(t);
+    stripScrollFromUserRef.current = false;
+    itemsLayoutSyncedRef.current = false;
+    scrollRequestIdRef.current += 1;
+    setUserPickedDayKey(null);
+    setTodayKey(key);
+    setViewYear(t.getFullYear());
+    setViewMonth(t.getMonth());
+    setDisplayMode("day");
+    scheduleScrollToDay(key);
+    window.setTimeout(() => scheduleScrollToDay(key), 120);
+    window.setTimeout(() => scheduleScrollToDay(key), 350);
+    window.setTimeout(() => scheduleScrollToDay(key), 700);
+  }
+
+  useLayoutEffect(() => {
+    applyTodayView();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mobileSelectedKey, mobileScrollDays.length]);
+  }, []);
+
+  useEffect(() => {
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) applyTodayView();
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (itemsLayoutSyncedRef.current || stripScrollFromUserRef.current) return;
+    itemsLayoutSyncedRef.current = true;
+    scheduleScrollToDay(mobileSelectedKey);
+    window.setTimeout(() => scheduleScrollToDay(mobileSelectedKey), 200);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
+
+  useEffect(() => {
+    if (userPickedDayKey !== null || stripScrollFromUserRef.current) return;
+    const el = dayStripRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      if (stripScrollFromUserRef.current || userPickedDayKey !== null) return;
+      scheduleScrollToDay(todayKey);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userPickedDayKey, todayKey, viewYear, viewMonth]);
+
+  useEffect(() => {
+    if (stripScrollFromUserRef.current || userPickedDayKey !== null) return;
+    scheduleScrollToDay(todayKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mobileSelectedKey, viewYear, viewMonth, userPickedDayKey, todayKey]);
+
+  function markStripUserScroll() {
+    stripScrollFromUserRef.current = true;
+  }
 
   function handleDayStripScroll() {
-    if (stripScrollLock.current) return;
+    if (!stripScrollFromUserRef.current || stripScrollLock.current) return;
     const container = dayStripRef.current;
     if (!container) return;
     const centerX = container.scrollLeft + container.clientWidth / 2;
@@ -538,12 +624,14 @@ export function WorkItemsPlanner({
       }
     }
     if (bestKey && bestKey !== mobileSelectedKey) {
-      setMobileSelectedKey(bestKey);
+      setUserPickedDayKey(bestKey);
     }
   }
 
   function shiftMobileDay(delta: number) {
-    setMobileSelectedKey((prev) => formatDateKey(addDays(new Date(`${prev}T12:00:00`), delta)));
+    stripScrollFromUserRef.current = false;
+    const base = userPickedDayKey ?? todayKey;
+    setUserPickedDayKey(formatDateKey(addDays(new Date(`${base}T12:00:00`), delta)));
   }
 
   function onMobileContentTouchStart(e: React.TouchEvent) {
@@ -657,16 +745,14 @@ export function WorkItemsPlanner({
 
   function openDay(dateKey: string) {
     setSelectedDate(dateKey);
-    setMobileSelectedKey(dateKey);
+    setUserPickedDayKey(dateKey);
     setAddForm(createDefaultForm(dateKey));
     setEditingId(null);
     setEditForm(createDefaultForm(dateKey));
   }
 
   function goMobileToday() {
-    const key = formatDateKey(new Date());
-    setMobileSelectedKey(key);
-    resetCalendarToToday();
+    applyTodayView();
   }
 
   function closeDayModal() {
@@ -813,12 +899,13 @@ export function WorkItemsPlanner({
             <Select
               value={String(viewMonth)}
               onChange={(e) => {
+                stripScrollFromUserRef.current = false;
                 const newMonth = Number(e.target.value);
                 setViewMonth(newMonth);
                 const selDate = new Date(`${mobileSelectedKey}T12:00:00`);
                 if (selDate.getMonth() !== newMonth) {
                   const clampedDay = Math.min(selDate.getDate(), new Date(viewYear, newMonth + 1, 0).getDate());
-                  setMobileSelectedKey(`${viewYear}-${String(newMonth + 1).padStart(2, "0")}-${String(clampedDay).padStart(2, "0")}`);
+                  setUserPickedDayKey(`${viewYear}-${String(newMonth + 1).padStart(2, "0")}-${String(clampedDay).padStart(2, "0")}`);
                 }
               }}
               className="!w-full min-w-0 !py-2 !px-2 !text-xs font-semibold capitalize md:!w-auto md:min-w-[7.75rem]"
@@ -833,12 +920,13 @@ export function WorkItemsPlanner({
             <Select
               value={String(viewYear)}
               onChange={(e) => {
+                stripScrollFromUserRef.current = false;
                 const newYear = Number(e.target.value);
                 setViewYear(newYear);
                 const selDate = new Date(`${mobileSelectedKey}T12:00:00`);
                 if (selDate.getFullYear() !== newYear) {
                   const clampedDay = Math.min(selDate.getDate(), new Date(newYear, viewMonth + 1, 0).getDate());
-                  setMobileSelectedKey(`${newYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(clampedDay).padStart(2, "0")}`);
+                  setUserPickedDayKey(`${newYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(clampedDay).padStart(2, "0")}`);
                 }
               }}
               className="!w-auto min-w-[5.25rem] !py-2 !px-2 !text-xs font-semibold"
@@ -968,7 +1056,10 @@ export function WorkItemsPlanner({
               <div
                 ref={dayStripRef}
                 onScroll={handleDayStripScroll}
-                className="flex gap-1.5 overflow-x-auto scrollbar-hide py-1 snap-x snap-mandatory touch-pan-x overscroll-x-contain"
+                onTouchStart={markStripUserScroll}
+                onPointerDown={markStripUserScroll}
+                onWheel={markStripUserScroll}
+                className="flex gap-1.5 overflow-x-auto scrollbar-hide py-1 snap-x snap-mandatory touch-pan-x overscroll-x-contain [overflow-anchor:none]"
                 aria-label="Избор на ден — плъзнете наляво или надясно"
               >
                 {mobileScrollDays.map((day) => {
@@ -984,7 +1075,11 @@ export function WorkItemsPlanner({
                         else dayButtonRefs.current.delete(dateKey);
                       }}
                       type="button"
-                      onClick={() => setMobileSelectedKey(dateKey)}
+                      onClick={() => {
+                        stripScrollFromUserRef.current = false;
+                        setUserPickedDayKey(dateKey);
+                        scheduleScrollToDay(dateKey);
+                      }}
                       className={`flex h-[4.25rem] min-w-[3rem] shrink-0 snap-center flex-col items-center justify-center rounded-2xl px-2 transition-all ${
                         isSelected
                           ? "bg-brand-blue-500 text-white shadow-md shadow-brand-blue-200"
@@ -1105,7 +1200,7 @@ export function WorkItemsPlanner({
                     <button
                       type="button"
                       onClick={() => {
-                        setMobileSelectedKey(dateKey);
+                        setUserPickedDayKey(dateKey);
                         setDisplayMode("day");
                       }}
                       className={`mb-2 w-full text-left px-1 text-xs font-bold ${isToday ? "text-brand-blue-700" : "text-slate-500"}`}

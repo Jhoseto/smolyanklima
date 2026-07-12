@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { Star, Check, ChevronRight, Heart, Share2 } from 'lucide-react';
@@ -49,10 +49,31 @@ export const ProductCard = ({
   viewMode = 'grid',
 }: ProductCardProps) => {
   const [imgError, setImgError] = useState(false);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const [isTitleTruncated, setIsTitleTruncated] = useState(false);
+  const isList = viewMode === 'list';
+
+  const checkTitleTruncation = useCallback(() => {
+    const el = titleRef.current;
+    if (!el) return;
+    setIsTitleTruncated(el.scrollHeight > el.clientHeight + 1);
+  }, []);
 
   useEffect(() => {
     setImgError(false);
   }, [product.id, product.image]);
+
+  useLayoutEffect(() => {
+    checkTitleTruncation();
+  }, [product.model, product.id, isList, highlight, checkTitleTruncation]);
+
+  useEffect(() => {
+    const el = titleRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(checkTitleTruncation);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [product.model, product.id, isList, checkTitleTruncation]);
 
   // Детерминистични психо-тригери базирани на ID
   const hash = product.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
@@ -65,7 +86,6 @@ export const ProductCard = ({
     null
   ];
   const urgency = urgencyTypes[hash % urgencyTypes.length];
-  const isList = viewMode === 'list';
 
   return (
     <motion.div
@@ -115,9 +135,31 @@ export const ProductCard = ({
         {/* Basic Info */}
         <div className={`${isList ? 'flex-1 min-w-0' : 'mb-3'}`}>
           <p className="text-[10px] font-bold text-[#00B4D8] uppercase tracking-wider mb-0.5">{product.brand}</p>
-          <h3 className={`${isList ? 'text-[1.1rem]' : 'text-[0.95rem]'} font-bold text-gray-900 leading-tight mb-0.5 line-clamp-2`}>
-            <HighlightText text={product.model} highlight={highlight} />
-          </h3>
+          <div className="relative group/title">
+            {isTitleTruncated && (
+              <div
+                role="tooltip"
+                className="pointer-events-none absolute left-0 top-full z-30 mt-2 max-w-[min(280px,90vw)] opacity-0 transition-all duration-200 group-hover/title:opacity-100 group-hover/title:translate-y-0 translate-y-0.5 max-md:hidden"
+              >
+                <div
+                  className="absolute -top-1 left-4 h-2 w-2 rotate-45 border-l border-t border-[#00B4D8]/25 bg-white"
+                  aria-hidden
+                />
+                <div className="relative overflow-hidden rounded-xl border border-[#00B4D8]/20 bg-white px-3 py-2 shadow-lg shadow-[#00B4D8]/10">
+                  <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-[#00B4D8] via-[#0077B6] to-[#FF4D00]" />
+                  <p className="text-xs font-semibold leading-snug text-slate-800 pt-0.5 sm:text-[13px]">
+                    {product.name}
+                  </p>
+                </div>
+              </div>
+            )}
+            <h3
+              ref={titleRef}
+              className={`${isList ? 'text-[1.1rem]' : 'text-[0.95rem]'} font-bold text-gray-900 leading-tight mb-0.5 line-clamp-2`}
+            >
+              <HighlightText text={product.model} highlight={highlight} />
+            </h3>
+          </div>
           <p className="text-[10px] text-gray-500">{product.type}</p>
           
           {isList && (

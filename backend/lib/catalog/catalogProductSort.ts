@@ -21,7 +21,7 @@ export const CATALOG_SORT_VALUES = [
 
 export type CatalogSortValue = (typeof CATALOG_SORT_VALUES)[number];
 
-export const DEFAULT_CATALOG_SORT: CatalogSortValue = "seer-desc";
+export const DEFAULT_CATALOG_SORT: CatalogSortValue = "price-asc";
 
 export type CatalogRepresentativeRow = {
   id: string;

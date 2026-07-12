@@ -157,7 +157,10 @@ export type SortOption =
   | 'energy-class'
   | 'noise-asc';
 
-export const DEFAULT_CATALOG_SORT: SortOption = 'seer-desc';
+export const DEFAULT_CATALOG_SORT: SortOption = 'price-asc';
+
+/** Подразбирана категория в публичния каталог (климатици). */
+export const DEFAULT_CATALOG_CATEGORY = 'wall';
 
 export const ACCESSORY_SORT_OPTIONS: SortOption[] = [
   'recommended',

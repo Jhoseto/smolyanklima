@@ -7,7 +7,7 @@ values
   ('all', 'Всички', 'LayoutGrid', '#6B7280', 0, true),
   ('wall', 'Стенни климатици', 'Home', '#FF4D00', 10, true),
   ('multi', 'Мулти-сплит системи', 'Layers', '#00B4D8', 20, true),
-  ('cassette', 'Касетни климатици', 'Building2', '#7C3AED', 30, true),
+  ('cassette', 'Касетъчни климатици', 'Building2', '#7C3AED', 30, true),
   ('floor', 'Подови климатици', 'ArrowDown', '#0D9488', 40, true),
   ('column', 'Колонни климатици', 'Columns', '#6366F1', 45, true),
   ('ceiling', 'Таванни климатици', 'ArrowUpFromLine', '#0891B2', 50, true)
