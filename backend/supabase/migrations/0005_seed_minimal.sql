@@ -28,7 +28,7 @@ on conflict (slug) do nothing;
 -- Minimal settings placeholders
 insert into public.settings (key, value, description)
 values
-  ('company_phone', '0888 58 58 16', 'Primary phone number'),
+  ('company_phone', '0878 58 16 16', 'Primary phone number'),
   ('company_email', 'smolyanklima@gmail.com', 'Primary email'),
   ('company_address', 'ул. Наталия 19, Смолян', 'Office address'),
   ('working_hours', 'Пон-Пет: 09:00-18:00; Съб: 10:00-14:00', 'Working hours')

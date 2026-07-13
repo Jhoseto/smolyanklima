@@ -626,7 +626,7 @@ export function ProtocolPDF({ data }: { data: ProtocolData }) {
 
         <View style={s.footerFixed} fixed>
           <Text style={s.footerTxt}>
-            Смолян Клима ЕООД, ЕИК: BG 204223522 гр. Смолян ул. Елица № 36 Тел: 0888 58 58 16
+            Смолян Клима ЕООД, ЕИК: BG 204223522 гр. Смолян ул. Елица № 36 Тел: 0878 58 16 16
           </Text>
         </View>
 
@@ -644,7 +644,7 @@ export function ProtocolPDF({ data }: { data: ProtocolData }) {
           </View>
           <View style={s.footerFixed} fixed>
             <Text style={s.footerTxt}>
-              Смолян Клима ЕООД, ЕИК: BG 204223522 гр. Смолян ул. Елица № 36 Тел: 0888 58 58 16
+              Смолян Клима ЕООД, ЕИК: BG 204223522 гр. Смолян ул. Елица № 36 Тел: 0878 58 16 16
             </Text>
           </View>
         </Page>

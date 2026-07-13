@@ -4,6 +4,6 @@ export const LEGAL_COMPANY = {
   tradeAddress: 'гр. Смолян, ул. „Наталия" № 19, кв. Райково',
   postalCode: '4700',
   email: 'smolyanklima@gmail.com',
-  phone: '0888 58 58 16',
-  phoneE164: '+359888585816',
+  phone: '0878 58 16 16',
+  phoneE164: '+359878581616',
 } as const;

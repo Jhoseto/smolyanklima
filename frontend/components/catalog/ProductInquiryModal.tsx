@@ -230,7 +230,7 @@ export function ProductInquiryModal({ product, onClose, onSuccess, onError }: Pr
                       autoComplete="tel"
                       value={phone}
                       onChange={(e) => setPhone(sanitizePhoneInput(e.target.value))}
-                      placeholder="0888585816 или +359888585816"
+                      placeholder="0878581616 или +359878581616"
                       aria-invalid={Boolean(phoneErr)}
                       className={`w-full rounded-xl border bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:ring-2 ${
                         phoneErr

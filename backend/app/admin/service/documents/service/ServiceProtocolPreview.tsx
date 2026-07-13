@@ -375,7 +375,7 @@ export function ServiceProtocolPreview({
                 </div>
 
                 <p className="text-center text-[10px] text-slate-500 pt-4 border-t border-slate-200 leading-relaxed">
-                  Смолян Клима ЕООД, ЕИК: BG 204223522 гр. Смолян ул. Елица № 36 Тел: 0888 58 58 16
+                  Смолян Клима ЕООД, ЕИК: BG 204223522 гр. Смолян ул. Елица № 36 Тел: 0878 58 16 16
                 </p>
               </div>
             </div>

@@ -369,7 +369,7 @@ export function RepairProtocolPDF({ data }: { data: RepairProtocolData }) {
         </View>
 
         <Text style={s.footer}>
-          Смолян Клима ЕООД · ЕИК: BG 204223522 · гр. Смолян, ул. Елица № 36 · Тел: 0888 58 58 16
+          Смолян Клима ЕООД · ЕИК: BG 204223522 · гр. Смолян, ул. Елица № 36 · Тел: 0878 58 16 16
         </Text>
       </Page>
     </Document>

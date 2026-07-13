@@ -30,8 +30,8 @@ export const LEGAL_COMPANY = {
   privacyContactName: 'Костадин Георгиев',
 
   email: 'smolyanklima@gmail.com',
-  phone: '0888 58 58 16',
-  phoneE164: '+359888585816',
+  phone: '0878 58 16 16',
+  phoneE164: '+359878581616',
 
   /** Дата на последна актуализация на правните документи (политика, общи условия) */
   effectiveDate: '10 юни 2026 г.',

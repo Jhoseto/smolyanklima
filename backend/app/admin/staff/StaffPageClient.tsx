@@ -313,7 +313,7 @@ export function StaffPageClient({
                   type="tel"
                   value={addPhone}
                   onChange={e => setAddPhone(e.target.value)}
-                  placeholder="+359 888 585 816"
+                  placeholder="+359 878 581 616"
                   autoComplete="off"
                   className="pl-8"
                 />
@@ -609,7 +609,7 @@ export function StaffPageClient({
                     type="tel"
                     value={editPhone}
                     onChange={e => setEditPhone(e.target.value)}
-                    placeholder="+359 888 585 816"
+                    placeholder="+359 878 581 616"
                     autoComplete="off"
                     className="pl-8"
                   />

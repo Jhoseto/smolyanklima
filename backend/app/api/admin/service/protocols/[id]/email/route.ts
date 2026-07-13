@@ -93,7 +93,7 @@ export async function POST(
         </p>
         <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />
         <p style="font-size:13px;color:#6b7280;margin:0;line-height:1.45;">
-          Смолян Клима ЕООД · гр. Смолян, ул. Елица № 36 · Тел: 0888 58 58 16
+          Смолян Клима ЕООД · гр. Смолян, ул. Елица № 36 · Тел: 0878 58 16 16
         </p>
       </div>
     `,

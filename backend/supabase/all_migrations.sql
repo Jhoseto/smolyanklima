@@ -400,7 +400,7 @@ insert into public.features (slug, name) values
 on conflict (slug) do nothing;
 
 insert into public.settings (key, value, description) values
-  ('company_phone',   '0888 58 58 16',                          'Primary phone number'),
+  ('company_phone',   '0878 58 16 16',                          'Primary phone number'),
   ('company_email',   'smolyanklima@gmail.com',                 'Primary email'),
   ('company_address', 'ул. Наталия 19, Смолян',                 'Office address'),
   ('working_hours',   'Пон-Пет: 09:00-18:00; Съб: 10:00-14:00','Working hours')
@@ -905,7 +905,7 @@ insert into public.chat_canned_responses (shortcut, content, sort_order) values
   ('hello',   'Здравейте! Как мога да Ви помогна днес?', 1),
   ('wait',    'Моля, изчакайте момент. Ще проверя информацията за Вас.', 2),
   ('offer',   'Ще Ви подготвя индивидуална оферта. Можете ли да споделите размера на помещението (кв.м)?', 3),
-  ('install', 'Монтажът включва инсталация, пълнеж с фреон и пуск в действие. Свържете се на 0888 58 58 16 за насрочване.', 4),
+  ('install', 'Монтажът включва инсталация, пълнеж с фреон и пуск в действие. Свържете се на 0878 58 16 16 за насрочване.', 4),
   ('thanks',  'Благодаря, че се обърнахте към нас! Ако имате още въпроси, не се колебайте да пишете.', 5),
   ('price',   'Цените зависят от мощността и марката. Изпратете ни площта на помещението и ще Ви дадем точна цена.', 6)
 on conflict do nothing;

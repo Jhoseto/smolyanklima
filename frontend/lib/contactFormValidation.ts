@@ -59,7 +59,7 @@ export function contactNameErrorMessage(name: string): string | null {
 export function contactPhoneErrorMessage(phone: string): string | null {
   if (!phone.trim()) return 'Моля, въведете телефон.';
   if (!isValidContactPhone(phone)) {
-    return 'Въведете валиден телефон (напр. 0888585816 или +359888585816).';
+    return 'Въведете валиден телефон (напр. 0878581616 или +359878581616).';
   }
   return null;
 }

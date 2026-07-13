@@ -471,9 +471,9 @@ export function useAIChat(options: UseAIChatOptions): UseAIChatReturn {
 
     } catch (err) {
       if (err && typeof err === 'object' && 'code' in err && err.code === 'RATE_LIMIT_EXCEEDED') {
-        setError('Надвишили сте дневния лимит за съобщения. Моля, опитайте отново утре или се свържете с нас на телефон: 0888 58 58 16');
+        setError('Надвишили сте дневния лимит за съобщения. Моля, опитайте отново утре или се свържете с нас на телефон: 0878 58 16 16');
       } else {
-        setError('Възникна грешка. Моля, опитайте отново или се свържете с нас на телефон: 0888 58 58 16');
+        setError('Възникна грешка. Моля, опитайте отново или се свържете с нас на телефон: 0878 58 16 16');
       }
     } finally {
       setIsLoading(false);

@@ -76,7 +76,7 @@ export default async function LoginPage({
               type="text"
               required
               autoComplete="username"
-              placeholder="0888 58 58 16 или admin@example.com"
+              placeholder="0878 58 16 16 или admin@example.com"
               className="login-input"
             />
           </label>
