@@ -130,7 +130,7 @@ export function ProfilePushNotifications() {
                         : "text-slate-600 font-semibold"
                   }
                 >
-                  {STATUS_LABEL[status === "loading" ? "off" : status]}
+                  {STATUS_LABEL[status]}
                 </span>
                 {status === "denied" ? " · настройки на телефона" : null}
                 {status === "unsupported" ? " · браузър/PWA" : null}
