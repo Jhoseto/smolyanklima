@@ -77,7 +77,15 @@ export function AdminPushBanner({ role }: { role: AdminRole }) {
     setDismissed(true);
   }, []);
 
-  if (dismissed || status === "loading" || status === "unsupported" || status === "on") return null;
+  if (
+    dismissed ||
+    status === "loading" ||
+    status === "unsupported" ||
+    status === "unconfigured" ||
+    status === "on"
+  ) {
+    return null;
+  }
 
   const borderCls = isBlue ? "border-blue-200" : "border-amber-200";
   const bgCls = isBlue ? "bg-blue-50/95" : "bg-amber-50/95";

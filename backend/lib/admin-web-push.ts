@@ -3,9 +3,18 @@ import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 let vapidConfigured = false;
 
+/** Публичният VAPID ключ — runtime env (Cloud Run secrets), не само build-time NEXT_PUBLIC. */
+export function getVapidPublicKey(): string | undefined {
+  return (
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim() ||
+    process.env.VAPID_PUBLIC_KEY?.trim() ||
+    undefined
+  );
+}
+
 function ensureVapid(): boolean {
   if (vapidConfigured) return true;
-  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim();
+  const publicKey = getVapidPublicKey();
   const privateKey = process.env.VAPID_PRIVATE_KEY?.trim();
   const subject = process.env.VAPID_SUBJECT?.trim() || "mailto:support@smolyanklima.com";
   if (!publicKey || !privateKey) return false;

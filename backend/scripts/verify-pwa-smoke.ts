@@ -40,8 +40,10 @@ const pushClient = read("app/admin/pushClient.ts");
 assert("Push client registers SW", pushClient.includes("sw-admin.js"));
 assert("Profile push controls exist", existsSync(join(ROOT, "app/admin/profile/ProfilePushNotifications.tsx")));
 assert("Push test API exists", existsSync(join(ROOT, "app/api/admin/push/test/route.ts")));
+assert("Push vapid API exists", existsSync(join(ROOT, "app/api/admin/push/vapid/route.ts")));
 assert("notifyServiceStaffNewEvent in web-push", read("lib/admin-web-push.ts").includes("notifyServiceStaffNewEvent"));
 assert("sendTestPushToAdmin in web-push", read("lib/admin-web-push.ts").includes("sendTestPushToAdmin"));
+assert("getVapidPublicKey in web-push", read("lib/admin-web-push.ts").includes("getVapidPublicKey"));
 
 // Mobile nav for service_staff
 const nav = read("lib/admin/adminNavConfig.ts");

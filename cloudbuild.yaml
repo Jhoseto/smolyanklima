@@ -14,6 +14,9 @@
 #   при нужда: _REGION, _SERVICE
 #
 # Secret Manager (задължителни за deploy): SUPABASE_*, GEMINI_API_KEY, CLOUDINARY_URL
+# Web Push (PWA): сложи като обикновени Environment variables в Cloud Run (не Secret Manager):
+#   NEXT_PUBLIC_VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY
+#   (по избор VAPID_SUBJECT=mailto:office@smolyanklima.bg)
 # Опционално за email: създай secret RESEND_API_KEY и добави ръчно в Cloud Run или разшири този файл с --set-secrets.
 ##############################################################
 
@@ -74,8 +77,9 @@ steps:
       - --max-instances=2
       - --concurrency=80
       - --quiet
-      - --set-env-vars=NODE_ENV=production,FRONTEND_ORIGIN=$_PUBLIC_URL,APP_URL=$_PUBLIC_URL,NEXT_PUBLIC_SITE_ORIGIN=$_PUBLIC_URL,GOOGLE_SITE_VERIFICATION=$_GOOGLE_SITE_VERIFICATION
-      - --set-secrets=SUPABASE_URL=SUPABASE_URL:latest,SUPABASE_ANON_KEY=SUPABASE_ANON_KEY:latest,SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest,GEMINI_API_KEY=GEMINI_API_KEY:latest,CLOUDINARY_URL=CLOUDINARY_URL:latest
+      # update-* запазва ръчно добавени vars (напр. VAPID_*), set-* би ги изтрил
+      - --update-env-vars=NODE_ENV=production,FRONTEND_ORIGIN=$_PUBLIC_URL,APP_URL=$_PUBLIC_URL,NEXT_PUBLIC_SITE_ORIGIN=$_PUBLIC_URL,GOOGLE_SITE_VERIFICATION=$_GOOGLE_SITE_VERIFICATION
+      - --update-secrets=SUPABASE_URL=SUPABASE_URL:latest,SUPABASE_ANON_KEY=SUPABASE_ANON_KEY:latest,SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest,GEMINI_API_KEY=GEMINI_API_KEY:latest,CLOUDINARY_URL=CLOUDINARY_URL:latest
 
 images:
   - gcr.io/$PROJECT_ID/$_SERVICE:$COMMIT_SHA

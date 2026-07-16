@@ -17,6 +17,7 @@ const STATUS_LABEL: Record<Exclude<AdminPushStatus, "loading">, string> = {
   off: "Изключени",
   denied: "Блокирани",
   unsupported: "Недостъпни",
+  unconfigured: "Няма VAPID",
 };
 
 /**
@@ -98,13 +99,14 @@ export function ProfilePushNotifications() {
 
   const canToggle = status === "on" || status === "off";
   const isOn = status === "on";
+  const isBroken = status === "denied" || status === "unconfigured" || status === "unsupported";
 
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5">
       <div className="flex items-center gap-2 min-h-[36px]">
         <div
           className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center ${
-            isOn ? "bg-emerald-100 text-emerald-700" : status === "denied" ? "bg-red-100 text-red-600" : "bg-slate-200 text-slate-600"
+            isOn ? "bg-emerald-100 text-emerald-700" : isBroken ? "bg-red-100 text-red-600" : "bg-slate-200 text-slate-600"
           }`}
         >
           {status === "loading" || busy ? (
@@ -134,6 +136,7 @@ export function ProfilePushNotifications() {
                 </span>
                 {status === "denied" ? " · настройки на телефона" : null}
                 {status === "unsupported" ? " · браузър/PWA" : null}
+                {status === "unconfigured" ? " · липсва в Cloud Run" : null}
               </>
             )}
           </p>
