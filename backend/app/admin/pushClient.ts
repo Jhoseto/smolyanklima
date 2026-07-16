@@ -37,10 +37,10 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return outputArray;
 }
 
-/** Chrome/Android понякога чупят subscribe ако се подаде Uint8Array view — ползваме чист ArrayBuffer. */
-function vapidApplicationServerKey(base64String: string): BufferSource {
+/** Чист Uint8Array за applicationServerKey (избягва SharedArrayBuffer typing + Chrome quirks). */
+function vapidApplicationServerKey(base64String: string): Uint8Array {
   const bytes = urlBase64ToUint8Array(base64String);
-  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  return bytes.slice();
 }
 
 function browserSupportsPush(): boolean {
