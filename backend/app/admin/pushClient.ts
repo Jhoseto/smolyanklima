@@ -37,10 +37,12 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return outputArray;
 }
 
-/** Чист Uint8Array за applicationServerKey (избягва SharedArrayBuffer typing + Chrome quirks). */
-function vapidApplicationServerKey(base64String: string): Uint8Array {
+/** Чист ArrayBuffer за applicationServerKey (TS 5.x / DOM lib не харесва Uint8Array<ArrayBufferLike>). */
+function vapidApplicationServerKey(base64String: string): ArrayBuffer {
   const bytes = urlBase64ToUint8Array(base64String);
-  return bytes.slice();
+  const copy = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(copy).set(bytes);
+  return copy;
 }
 
 function browserSupportsPush(): boolean {
