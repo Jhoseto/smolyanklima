@@ -58,20 +58,39 @@ export async function getAdminPushStatus(): Promise<AdminPushStatus> {
   }
 }
 
-export async function enableAdminPush(): Promise<"on" | "denied"> {
+async function saveSubscriptionToServer(sub: PushSubscription): Promise<void> {
+  const body = sub.toJSON();
+  if (!body.endpoint || !body.keys?.p256dh || !body.keys?.auth) {
+    throw new Error("Невалиден push абонамент от браузъра.");
+  }
+  const res = await fetch("/api/admin/push/subscribe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      endpoint: body.endpoint,
+      keys: { p256dh: body.keys.p256dh, auth: body.keys.auth },
+    }),
+  });
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    throw new Error((json as { error?: string }).error ?? "Неуспешен запис на абонамента.");
+  }
+}
+
+/** Създава/обновява локален абонамент и го записва в базата. */
+export async function ensureAdminPushSaved(): Promise<PushSubscription> {
   const vapidPublic = vapidPublicKey();
   if (!vapidPublic || !isAdminPushSupported()) {
     throw new Error("Известията не се поддържат на това устройство.");
   }
-
-  const perm = await Notification.requestPermission();
-  if (perm !== "granted") {
-    notifyPushChanged("denied");
-    return "denied";
+  if (Notification.permission !== "granted") {
+    throw new Error("Разрешете известията в браузъра, после включете отново.");
   }
 
   const reg = await navigator.serviceWorker.register("/admin/sw-admin.js", { scope: "/admin/" });
   await reg.update();
+  await navigator.serviceWorker.ready;
 
   let sub = await reg.pushManager.getSubscription();
   if (!sub) {
@@ -82,15 +101,22 @@ export async function enableAdminPush(): Promise<"on" | "denied"> {
     });
   }
 
-  const body = sub.toJSON();
-  const res = await fetch("/api/admin/push/subscribe", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error("Неуспешен запис на абонамента.");
+  await saveSubscriptionToServer(sub);
+  return sub;
+}
 
+export async function enableAdminPush(): Promise<"on" | "denied"> {
+  if (!isAdminPushSupported()) {
+    throw new Error("Известията не се поддържат на това устройство.");
+  }
+
+  const perm = await Notification.requestPermission();
+  if (perm !== "granted") {
+    notifyPushChanged("denied");
+    return "denied";
+  }
+
+  await ensureAdminPushSaved();
   notifyPushChanged("on");
   return "on";
 }
@@ -115,6 +141,9 @@ export async function disableAdminPush(): Promise<void> {
 }
 
 export async function sendAdminPushTest(): Promise<void> {
+  // Локалният SW може да има subscription без ред в DB — синхронизираме преди теста.
+  await ensureAdminPushSaved();
+
   const res = await fetch("/api/admin/push/test", {
     method: "POST",
     credentials: "include",
