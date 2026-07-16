@@ -14,8 +14,8 @@ const DISMISS_KEY = "admin-push-banner-dismiss";
 
 const PUSH_CONTENT: Record<string, { title: string; body: string; color: string }> = {
   default: {
-    title: "Известия за жива връзка",
-    body: "При затворено приложение ще получавате сигнал при нов чат или съобщение от клиент (Android препоръчително). Можете да ги управлявате и от Профил.",
+    title: "Известия: чат и заявки",
+    body: "Сигнал при нова жива връзка и при нова заявка — дори при затворено приложение. Управление и от Профил.",
     color: "amber",
   },
   service_staff: {
@@ -33,6 +33,7 @@ const PUSH_CONTENT: Record<string, { title: string; body: string; color: string 
 export function AdminPushBanner({ role }: { role: AdminRole }) {
   const [status, setStatus] = useState<AdminPushStatus>("loading");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
   const content = PUSH_CONTENT[role] ?? PUSH_CONTENT.default;
@@ -58,10 +59,13 @@ export function AdminPushBanner({ role }: { role: AdminRole }) {
   const subscribe = useCallback(async () => {
     if (busy) return;
     setBusy(true);
+    setError(null);
     try {
       const result = await enableAdminPush();
       setStatus(result === "on" ? "on" : "denied");
-    } catch {
+      if (result === "denied") setError("Разрешението е отказано в настройките на телефона.");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Неуспешно включване.");
       await refresh();
     } finally {
       setBusy(false);
@@ -95,28 +99,31 @@ export function AdminPushBanner({ role }: { role: AdminRole }) {
   const btnCls = isBlue ? "bg-blue-600" : "bg-amber-600";
 
   return (
-    <div className={`shrink-0 mx-3 mt-2 mb-1 rounded-2xl border ${borderCls} ${bgCls} px-3 py-2.5 flex items-start gap-2 shadow-sm`}>
-      <button
-        type="button"
-        onClick={dismiss}
-        className={`order-last p-1 rounded-lg ${dismissCls} shrink-0`}
-        aria-label="Скрий"
-      >
-        <X className="w-4 h-4" />
-      </button>
-      <div className="flex-1 min-w-0">
-        <p className={`text-xs font-bold ${titleCls} leading-tight`}>{content.title}</p>
-        <p className={`text-[11px] ${bodyCls} mt-0.5 leading-snug`}>{content.body}</p>
+    <div className={`shrink-0 mx-3 mt-2 mb-1 rounded-2xl border ${borderCls} ${bgCls} px-3 py-2.5 flex flex-col gap-1.5 shadow-sm`}>
+      <div className="flex items-start gap-2">
+        <button
+          type="button"
+          onClick={dismiss}
+          className={`order-last p-1 rounded-lg ${dismissCls} shrink-0`}
+          aria-label="Скрий"
+        >
+          <X className="w-4 h-4" />
+        </button>
+        <div className="flex-1 min-w-0">
+          <p className={`text-xs font-bold ${titleCls} leading-tight`}>{content.title}</p>
+          <p className={`text-[11px] ${bodyCls} mt-0.5 leading-snug`}>{content.body}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void subscribe()}
+          disabled={busy || status === "denied"}
+          className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl ${btnCls} text-white text-xs font-bold disabled:opacity-50`}
+        >
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : status === "denied" ? <BellOff className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
+          {status === "denied" ? "Блокирани" : "Включи"}
+        </button>
       </div>
-      <button
-        type="button"
-        onClick={() => void subscribe()}
-        disabled={busy || status === "denied"}
-        className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl ${btnCls} text-white text-xs font-bold disabled:opacity-50`}
-      >
-        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : status === "denied" ? <BellOff className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
-        {status === "denied" ? "Блокирани" : "Включи"}
-      </button>
+      {error && <p className="text-[11px] font-medium text-red-700 leading-snug px-0.5">{error}</p>}
     </div>
   );
 }

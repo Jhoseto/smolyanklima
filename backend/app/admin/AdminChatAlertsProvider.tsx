@@ -169,9 +169,8 @@ export function AdminChatAlertsProvider({
 
     const removeUnlock = installAdminChatAudioUnlock();
 
-    if ("Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission();
-    }
+    // НЕ викай Notification.requestPermission() тук — без user gesture чупи
+    // Web Push enable на мобилен PWA (диалогът се блокира / второто викане виси).
 
     void fetchAlerts(false, { force: true });
 

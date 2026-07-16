@@ -81,12 +81,13 @@ export function playNewMessageSound() {
 
 export function requestChatBrowserNotification(title: string, body: string) {
   if (typeof window === "undefined" || !("Notification" in window)) return;
+  // Само ако вече е разрешено — без requestPermission (конфликт с PWA Web Push).
   if (Notification.permission === "granted") {
-    new Notification(title, { body, icon: "/icon-192.png" });
-  } else if (Notification.permission === "default") {
-    Notification.requestPermission().then((p) => {
-      if (p === "granted") new Notification(title, { body, icon: "/icon-192.png" });
-    });
+    try {
+      new Notification(title, { body, icon: "/icon-192.png" });
+    } catch {
+      /* ignore */
+    }
   }
 }
 

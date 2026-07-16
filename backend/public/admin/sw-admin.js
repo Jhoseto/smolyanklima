@@ -16,6 +16,16 @@ const SK_OFFLINE_DB_VERSION = 1;
 const SK_SYNC_TAG = "sk-admin-mutation-sync";
 const SK_MAX_RETRIES = 5;
 
+/* ───────────── Activate веднага (иначе новият SW чака затворени табове) ───────────── */
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(self.skipWaiting());
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
 /* ───────────── Push известия ───────────── */
 
 self.addEventListener("push", (event) => {
@@ -40,9 +50,19 @@ self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const url = event.notification.data?.url || "/admin/chat";
   event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (clientList) => {
       for (const c of clientList) {
-        if (c.url.includes("/admin") && "focus" in c) return c.focus();
+        if (c.url.includes("/admin") && "focus" in c) {
+          await c.focus();
+          if (typeof c.navigate === "function") {
+            try {
+              await c.navigate(url);
+            } catch {
+              /* navigate не се поддържа навсякъде */
+            }
+          }
+          return;
+        }
       }
       if (self.clients.openWindow) return self.clients.openWindow(url);
     }),

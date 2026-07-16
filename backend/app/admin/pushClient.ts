@@ -65,9 +65,12 @@ function isStandalonePwa(): boolean {
   return window.matchMedia("(display-mode: standalone)").matches || nav.standalone === true;
 }
 
-/** Зарежда VAPID public key от сървъра (Cloud Run secrets), с fallback към build-time NEXT_PUBLIC. */
+/** Зарежда VAPID public key от сървъра (Cloud Run env), с fallback към build-time NEXT_PUBLIC. */
 export async function resolveVapidPublicKey(): Promise<string | null> {
-  if (cachedVapidPublic !== undefined) return cachedVapidPublic;
+  // Кешираме само успешен ключ — null не се кешира, за да може retry след deploy на env.
+  if (typeof cachedVapidPublic === "string" && cachedVapidPublic.length > 0) {
+    return cachedVapidPublic;
+  }
 
   const fromBuild = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim();
   if (fromBuild) {
@@ -77,19 +80,16 @@ export async function resolveVapidPublicKey(): Promise<string | null> {
 
   try {
     const res = await withTimeout(
-      fetch("/api/admin/push/vapid", { credentials: "include" }),
+      fetch("/api/admin/push/vapid", { credentials: "include", cache: "no-store" }),
       10000,
       "Сървърът не отговори за push настройките.",
     );
-    if (!res.ok) {
-      cachedVapidPublic = null;
-      return null;
-    }
+    if (!res.ok) return null;
     const json = (await res.json()) as { publicKey?: string | null; configured?: boolean };
-    cachedVapidPublic = json.publicKey?.trim() || null;
-    return cachedVapidPublic;
+    const key = json.publicKey?.trim() || null;
+    if (key) cachedVapidPublic = key;
+    return key;
   } catch {
-    cachedVapidPublic = null;
     return null;
   }
 }
@@ -117,17 +117,15 @@ async function getAdminServiceWorker(): Promise<ServiceWorkerRegistration | null
 async function waitForActiveWorker(reg: ServiceWorkerRegistration, ms = 12000): Promise<void> {
   if (reg.active) return;
 
+  const sw = reg.installing || reg.waiting;
+  if (!sw) {
+    // Без installing/waiting и без active — регистрацията е счупена (често 404 на SW файла).
+    throw new Error("Service worker не е активен. Преинсталирайте PWA или опитайте пак след deploy.");
+  }
+  if (sw.state === "activated") return;
+
   await withTimeout(
     new Promise<void>((resolve, reject) => {
-      const sw = reg.installing || reg.waiting;
-      if (!sw) {
-        void navigator.serviceWorker.ready.then(() => resolve()).catch(reject);
-        return;
-      }
-      if (sw.state === "activated") {
-        resolve();
-        return;
-      }
       const onChange = () => {
         if (sw.state === "activated") {
           sw.removeEventListener("statechange", onChange);
@@ -140,11 +138,28 @@ async function waitForActiveWorker(reg: ServiceWorkerRegistration, ms = 12000): 
       sw.addEventListener("statechange", onChange);
     }),
     ms,
-    "Service worker не се активира. Затвори и отвори приложението отново.",
+    "Service worker не се активира. Затвори напълно приложението и го отвори отново.",
   );
 }
 
+async function assertAdminSwScriptAvailable(): Promise<void> {
+  const res = await withTimeout(
+    fetch("/admin/sw-admin.js", { method: "GET", cache: "no-store" }),
+    10000,
+    "Не може да се зареди service worker файлът.",
+  );
+  if (!res.ok) {
+    throw new Error(`Липсва /admin/sw-admin.js (HTTP ${res.status}). Нужен е нов deploy на Docker image.`);
+  }
+  const ct = res.headers.get("content-type") || "";
+  if (ct.includes("text/html")) {
+    throw new Error("Service worker се връща като HTML вместо JS — проверете deploy/CDN.");
+  }
+}
+
 async function getOrRegisterAdminSw(): Promise<ServiceWorkerRegistration> {
+  await assertAdminSwScriptAvailable();
+
   let reg = await getAdminServiceWorker();
   if (!reg) {
     reg = await withTimeout(

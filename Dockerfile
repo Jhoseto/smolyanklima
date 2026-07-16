@@ -52,6 +52,8 @@ COPY --chown=nextjs:nodejs public/robots.txt public/llms.txt ./public/
 COPY --chown=nextjs:nodejs public/favicon.ico public/favicon-16x16.png public/favicon-32x32.png \
   public/apple-touch-icon.png public/icon-192.png public/icon-512.png public/icon.svg ./public/
 COPY --chown=nextjs:nodejs backend/public/manifest.webmanifest ./public/manifest.webmanifest
+# КРИТИЧНО: Vite dist трие admin SW — без него PWA push на телефона не работи
+COPY --chown=nextjs:nodejs backend/public/admin ./public/admin
 
 USER nextjs
 EXPOSE 8080

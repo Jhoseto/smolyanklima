@@ -79,6 +79,44 @@ export async function notifyAdminsLiveChat(opts: {
   await sendToRows(rows as unknown as PushRow[], payload);
 }
 
+/**
+ * Web Push при нова/обновена клиентска заявка (контактна форма, продукт, AI…).
+ * Само master_admin и office_staff.
+ */
+export async function notifyAdminsNewInquiry(opts: {
+  customerName: string;
+  customerPhone?: string | null;
+  productName?: string | null;
+  source?: string | null;
+  inquiryId: string;
+  merged?: boolean;
+}): Promise<void> {
+  if (!ensureVapid()) return;
+
+  const supabase = createSupabaseServiceRoleClient();
+  const { data: rows, error } = await supabase
+    .from("admin_web_push_subscriptions")
+    .select("id, endpoint, p256dh, auth, admin_user_id!inner(role)")
+    .in("admin_user_id.role", ["master_admin", "office_staff"]);
+
+  if (error || !rows?.length) return;
+
+  const bits = [opts.customerPhone?.trim(), opts.productName?.trim(), opts.source?.trim()].filter(
+    Boolean,
+  );
+  const title = opts.merged ? "Обновена заявка" : "Нова заявка";
+  const body = [opts.customerName.trim(), ...bits].filter(Boolean).join(" · ") || "Клиентско запитване";
+
+  const payload = JSON.stringify({
+    title: `📩 ${title}`,
+    body,
+    url: `/admin/inquiries?id=${encodeURIComponent(opts.inquiryId)}`,
+    tag: `sk-inquiry-${opts.inquiryId}`,
+  });
+
+  await sendToRows(rows as unknown as PushRow[], payload);
+}
+
 /** Кодове на сервизни събития, за които уведомяваме сервизните техници. */
 const SERVICE_EVENT_CODES = new Set([
   "service_installation",

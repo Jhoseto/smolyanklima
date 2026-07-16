@@ -6,7 +6,6 @@ import {
   ADMIN_PUSH_CHANGED_EVENT,
   disableAdminPush,
   enableAdminPush,
-  ensureAdminPushSaved,
   getAdminPushStatus,
   sendAdminPushTest,
   type AdminPushStatus,
@@ -46,14 +45,6 @@ export function ProfilePushNotifications() {
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [refresh]);
-
-  // Ако браузърът вече има subscription, но DB няма ред — записваме тихо при отворен профил.
-  useEffect(() => {
-    if (status !== "on") return;
-    void ensureAdminPushSaved().catch(() => {
-      /* ignore — бутонът Тест ще покаже грешката */
-    });
-  }, [status]);
 
   useEffect(() => {
     if (!msg) return;

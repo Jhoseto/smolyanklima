@@ -8,6 +8,7 @@ import { sendResendEmail } from "@/lib/email/resend";
 import { buildProductInquiryMessage } from "@/lib/inquiry/inquiryMessage";
 import { attachProductsToInquiries } from "@/lib/inquiry/inquiryProducts";
 import { submitPublicInquiry } from "@/lib/inquiry/submitPublicInquiry";
+import { notifyAdminsNewInquiry } from "@/lib/admin-web-push";
 
 const BodySchema = z
   .object({
@@ -79,12 +80,24 @@ export async function POST(req: NextRequest) {
     /* не блокираме успешното запитване */
   }
 
+  const productNames =
+    enriched?.products?.map((p) => p.product_name) ??
+    (parsed.data.productName ? [parsed.data.productName] : []);
+  const primaryProduct = productNames[0] ?? parsed.data.productName ?? null;
+
+  // Web Push към офиса (PWA) — най-важното известие след чата
+  void notifyAdminsNewInquiry({
+    customerName: parsed.data.customerName,
+    customerPhone: parsed.data.customerPhone,
+    productName: primaryProduct,
+    source: parsed.data.source,
+    inquiryId: result.id,
+    merged: result.merged,
+  }).catch(() => {});
+
   try {
     const env = getEnv();
     if (env.NOTIFY_EMAIL_TO && env.NOTIFY_EMAIL_FROM) {
-      const productNames =
-        enriched?.products?.map((p) => p.product_name) ??
-        (parsed.data.productName ? [parsed.data.productName] : []);
       const lines = [
         `<p><strong>Ново запитване</strong> (${parsed.data.source})${result.merged ? " — добавен модел към съществуващ клиент" : ""}</p>`,
         `<p>Име: ${escapeHtml(parsed.data.customerName)}<br/>Телефон: ${escapeHtml(parsed.data.customerPhone)}</p>`,

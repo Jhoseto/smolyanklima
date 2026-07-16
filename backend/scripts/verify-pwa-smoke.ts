@@ -22,7 +22,10 @@ function assert(name: string, ok: boolean, detail?: string) {
 // Service worker
 assert("sw-admin.js exists", existsSync(join(ROOT, "public/admin/sw-admin.js")));
 const sw = read("public/admin/sw-admin.js");
-assert("SW registers offline fetch handling", /fetch|offline/i.test(sw));
+assert("SW has push listener", sw.includes('addEventListener("push"'));
+assert("SW skipWaiting on install", sw.includes("skipWaiting"));
+const dockerfile = readFileSync(join(ROOT, "..", "Dockerfile"), "utf8");
+assert("Dockerfile restores admin SW after Vite public overwrite", dockerfile.includes("backend/public/admin"));
 
 // Offline bootstrap
 const offlineBoot = read("app/admin/OfflineBootstrap.tsx");
@@ -42,6 +45,8 @@ assert("Profile push controls exist", existsSync(join(ROOT, "app/admin/profile/P
 assert("Push test API exists", existsSync(join(ROOT, "app/api/admin/push/test/route.ts")));
 assert("Push vapid API exists", existsSync(join(ROOT, "app/api/admin/push/vapid/route.ts")));
 assert("notifyServiceStaffNewEvent in web-push", read("lib/admin-web-push.ts").includes("notifyServiceStaffNewEvent"));
+assert("notifyAdminsNewInquiry in web-push", read("lib/admin-web-push.ts").includes("notifyAdminsNewInquiry"));
+assert("inquiries API sends push", read("app/api/inquiries/route.ts").includes("notifyAdminsNewInquiry"));
 assert("sendTestPushToAdmin in web-push", read("lib/admin-web-push.ts").includes("sendTestPushToAdmin"));
 assert("getVapidPublicKey in web-push", read("lib/admin-web-push.ts").includes("getVapidPublicKey"));
 

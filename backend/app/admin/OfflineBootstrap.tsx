@@ -67,7 +67,8 @@ export function OfflineBootstrap({ children }: { children: ReactNode }) {
     (async () => {
       try {
         const reg = await navigator.serviceWorker.register("/admin/sw-admin.js", { scope: "/admin/" });
-        await reg.update().catch(() => { /* ignore */ });
+        // Не await-вай update() — на мобилен PWA promise-ът често виси завинаги.
+        void reg.update().catch(() => {});
 
         // Background Sync API — Android Chrome автоматично flush-ва когато мрежата се върне,
         // дори когато приложението е затворено. Safari/Firefox: fallback от страницата
