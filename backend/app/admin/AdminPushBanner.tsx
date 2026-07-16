@@ -3,27 +3,24 @@
 import { useCallback, useEffect, useState } from "react";
 import { Bell, BellOff, Loader2, X } from "lucide-react";
 import type { AdminRole } from "@/lib/admin/db";
+import {
+  ADMIN_PUSH_CHANGED_EVENT,
+  enableAdminPush,
+  getAdminPushStatus,
+  type AdminPushStatus,
+} from "./pushClient";
 
 const DISMISS_KEY = "admin-push-banner-dismiss";
-
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
-  return outputArray;
-}
 
 const PUSH_CONTENT: Record<string, { title: string; body: string; color: string }> = {
   default: {
     title: "Известия за жива връзка",
-    body: "При затворено приложение ще получавате сигнал при нов чат или съобщение от клиент (Android препоръчително).",
+    body: "При затворено приложение ще получавате сигнал при нов чат или съобщение от клиент (Android препоръчително). Можете да ги управлявате и от Профил.",
     color: "amber",
   },
   service_staff: {
     title: "Известия за нови задания",
-    body: "При ново сервизно събитие ще получите сигнал на телефона дори при затворено приложение.",
+    body: "При ново сервизно събитие ще получите сигнал на телефона дори при затворено приложение. Управление и от Профил.",
     color: "blue",
   },
 };
@@ -34,12 +31,17 @@ const PUSH_CONTENT: Record<string, { title: string; body: string; color: string 
  * - service_staff: за нови сервизни задания от офиса
  */
 export function AdminPushBanner({ role }: { role: AdminRole }) {
-  const vapidPublic = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim();
-  const [state, setState] = useState<"idle" | "ready" | "subscribed" | "denied" | "busy" | "unsupported">("idle");
+  const [status, setStatus] = useState<AdminPushStatus>("loading");
+  const [busy, setBusy] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
   const content = PUSH_CONTENT[role] ?? PUSH_CONTENT.default;
   const isBlue = content.color === "blue";
+
+  const refresh = useCallback(async () => {
+    const next = await getAdminPushStatus();
+    setStatus(next);
+  }, []);
 
   useEffect(() => {
     try {
@@ -47,55 +49,24 @@ export function AdminPushBanner({ role }: { role: AdminRole }) {
     } catch {
       /* ignore */
     }
-    if (!vapidPublic || !("serviceWorker" in navigator) || !("PushManager" in window)) {
-      setState("unsupported");
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const regs = await navigator.serviceWorker.getRegistrations();
-        const reg = regs.find((r) => r.scope.includes(`${window.location.origin}/admin`));
-        const sub = await reg?.pushManager.getSubscription();
-        if (!cancelled) setState(sub ? "subscribed" : "ready");
-      } catch {
-        if (!cancelled) setState("ready");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [vapidPublic, role]);
+    void refresh();
+    const onChanged = () => void refresh();
+    window.addEventListener(ADMIN_PUSH_CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(ADMIN_PUSH_CHANGED_EVENT, onChanged);
+  }, [refresh]);
 
   const subscribe = useCallback(async () => {
-    if (!vapidPublic || state === "busy") return;
-    setState("busy");
+    if (busy) return;
+    setBusy(true);
     try {
-      const perm = await Notification.requestPermission();
-      if (perm !== "granted") {
-        setState("denied");
-        return;
-      }
-      const reg = await navigator.serviceWorker.register("/admin/sw-admin.js", { scope: "/admin/" });
-      await reg.update();
-      const key = new Uint8Array(urlBase64ToUint8Array(vapidPublic));
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: key as BufferSource,
-      });
-      const body = sub.toJSON();
-      const res = await fetch("/api/admin/push/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error("save failed");
-      setState("subscribed");
+      const result = await enableAdminPush();
+      setStatus(result === "on" ? "on" : "denied");
     } catch {
-      setState("ready");
+      await refresh();
+    } finally {
+      setBusy(false);
     }
-  }, [vapidPublic, state]);
+  }, [busy, refresh]);
 
   const dismiss = useCallback(() => {
     try {
@@ -106,15 +77,14 @@ export function AdminPushBanner({ role }: { role: AdminRole }) {
     setDismissed(true);
   }, []);
 
-  if (!vapidPublic || dismissed || state === "unsupported") return null;
-  if (state === "subscribed") return null;
+  if (dismissed || status === "loading" || status === "unsupported" || status === "on") return null;
 
-  const borderCls  = isBlue ? "border-blue-200"   : "border-amber-200";
-  const bgCls      = isBlue ? "bg-blue-50/95"      : "bg-amber-50/95";
-  const titleCls   = isBlue ? "text-blue-900"      : "text-amber-900";
-  const bodyCls    = isBlue ? "text-blue-800/90"   : "text-amber-800/90";
-  const dismissCls = isBlue ? "text-blue-700/60 hover:bg-blue-100"  : "text-amber-700/60 hover:bg-amber-100";
-  const btnCls     = isBlue ? "bg-blue-600"        : "bg-amber-600";
+  const borderCls = isBlue ? "border-blue-200" : "border-amber-200";
+  const bgCls = isBlue ? "bg-blue-50/95" : "bg-amber-50/95";
+  const titleCls = isBlue ? "text-blue-900" : "text-amber-900";
+  const bodyCls = isBlue ? "text-blue-800/90" : "text-amber-800/90";
+  const dismissCls = isBlue ? "text-blue-700/60 hover:bg-blue-100" : "text-amber-700/60 hover:bg-amber-100";
+  const btnCls = isBlue ? "bg-blue-600" : "bg-amber-600";
 
   return (
     <div className={`shrink-0 mx-3 mt-2 mb-1 rounded-2xl border ${borderCls} ${bgCls} px-3 py-2.5 flex items-start gap-2 shadow-sm`}>
@@ -132,12 +102,12 @@ export function AdminPushBanner({ role }: { role: AdminRole }) {
       </div>
       <button
         type="button"
-        onClick={subscribe}
-        disabled={state === "busy" || state === "denied"}
+        onClick={() => void subscribe()}
+        disabled={busy || status === "denied"}
         className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl ${btnCls} text-white text-xs font-bold disabled:opacity-50`}
       >
-        {state === "busy" ? <Loader2 className="w-4 h-4 animate-spin" /> : state === "denied" ? <BellOff className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
-        {state === "denied" ? "Блокирани" : "Включи"}
+        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : status === "denied" ? <BellOff className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
+        {status === "denied" ? "Блокирани" : "Включи"}
       </button>
     </div>
   );

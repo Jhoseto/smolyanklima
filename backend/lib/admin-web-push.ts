@@ -115,3 +115,31 @@ export async function notifyServiceStaffNewEvent(opts: {
 
   await sendToRows(rows as unknown as PushRow[], payload);
 }
+
+/**
+ * Тестово Web Push само до абонаментите на конкретния админ.
+ */
+export async function sendTestPushToAdmin(adminUserId: string): Promise<{ sent: number }> {
+  if (!ensureVapid()) {
+    throw new Error("VAPID_NOT_CONFIGURED");
+  }
+
+  const supabase = createSupabaseServiceRoleClient();
+  const { data: rows, error } = await supabase
+    .from("admin_web_push_subscriptions")
+    .select("id, endpoint, p256dh, auth")
+    .eq("admin_user_id", adminUserId);
+
+  if (error) throw new Error(error.message);
+  if (!rows?.length) return { sent: 0 };
+
+  const payload = JSON.stringify({
+    title: "Смолян Клима — тест",
+    body: "Известията работят. Можете да затворите това съобщение.",
+    url: "/admin/profile",
+    tag: "sk-admin-push-test",
+  });
+
+  await sendToRows(rows as PushRow[], payload);
+  return { sent: rows.length };
+}

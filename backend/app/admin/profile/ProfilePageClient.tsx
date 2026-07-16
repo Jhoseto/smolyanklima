@@ -6,6 +6,7 @@ import { Loader2, ImagePlus, Trash2, Save, LogOut, KeyRound } from "lucide-react
 import { logoutAction } from "@/app/login/actions";
 import { Button, Card, Input, SectionTitle } from "../ui";
 import { StaffAvatarCropModal } from "../staff/StaffAvatarCropModal";
+import { ProfilePushNotifications } from "./ProfilePushNotifications";
 
 type AdminRole = "master_admin" | "office_staff" | "service_staff";
 
@@ -279,6 +280,8 @@ export function ProfilePageClient() {
           <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Телефон</span>
           <Input value={phone} onChange={(e) => setPhone(e.target.value)} className="mt-1" inputMode="tel" autoComplete="tel" placeholder="За вход и връзка" />
         </label>
+
+        <ProfilePushNotifications />
 
         <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 space-y-1 text-sm">
           <div className="flex justify-between gap-2">

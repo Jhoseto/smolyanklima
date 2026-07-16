@@ -35,9 +35,13 @@ assert("ProtocolFormWizard uses offlineSend", wizard.includes("offlineSend"));
 
 // Push notifications
 assert("AdminPushBanner exists", existsSync(join(ROOT, "app/admin/AdminPushBanner.tsx")));
-const pushBanner = read("app/admin/AdminPushBanner.tsx");
-assert("Push banner registers SW", pushBanner.includes("sw-admin.js"));
+assert("pushClient exists", existsSync(join(ROOT, "app/admin/pushClient.ts")));
+const pushClient = read("app/admin/pushClient.ts");
+assert("Push client registers SW", pushClient.includes("sw-admin.js"));
+assert("Profile push controls exist", existsSync(join(ROOT, "app/admin/profile/ProfilePushNotifications.tsx")));
+assert("Push test API exists", existsSync(join(ROOT, "app/api/admin/push/test/route.ts")));
 assert("notifyServiceStaffNewEvent in web-push", read("lib/admin-web-push.ts").includes("notifyServiceStaffNewEvent"));
+assert("sendTestPushToAdmin in web-push", read("lib/admin-web-push.ts").includes("sendTestPushToAdmin"));
 
 // Mobile nav for service_staff
 const nav = read("lib/admin/adminNavConfig.ts");
