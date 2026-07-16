@@ -57,12 +57,16 @@ export function ProfilePushNotifications() {
 
   useEffect(() => {
     if (!msg) return;
-    const t = setTimeout(() => setMsg(null), 2800);
+    // По-дълго на грешки — на телефон трябва време за четене
+    const ms = /закъсня|грешка|неуспеш|разреш|iphone|сървър/i.test(msg) ? 6000 : 2800;
+    const t = setTimeout(() => setMsg(null), ms);
     return () => clearTimeout(t);
   }, [msg]);
 
   const toggle = async () => {
-    if (busy || status === "loading" || status === "unsupported" || status === "denied") return;
+    if (busy || status === "loading" || status === "unsupported" || status === "denied" || status === "unconfigured") {
+      return;
+    }
     setBusy(true);
     setMsg(null);
     try {
@@ -135,7 +139,7 @@ export function ProfilePushNotifications() {
                   {STATUS_LABEL[status]}
                 </span>
                 {status === "denied" ? " · настройки на телефона" : null}
-                {status === "unsupported" ? " · браузър/PWA" : null}
+                {status === "unsupported" ? " · нужен Chrome/Android PWA или iOS Home Screen" : null}
                 {status === "unconfigured" ? " · липсва в Cloud Run" : null}
               </>
             )}
