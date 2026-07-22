@@ -11,6 +11,7 @@ import {
   OFFER_SELECT,
   mapItemInputToDb,
   type OfferItemInput,
+  type OfferItemRow,
 } from "@/lib/offers/offerTypes";
 
 const SpecSchema = z.object({
@@ -205,13 +206,13 @@ export async function POST(req: NextRequest) {
   }
 
   const itemRows = items.map((item, idx) => mapItemInputToDb(item, offer.id as string, idx));
-  let insertedItems: Awaited<ReturnType<typeof supabase.from>>["data"] = [];
+  let insertedItems: OfferItemRow[] = [];
   if (itemRows.length > 0) {
     const { data, error: itemsErr } = await supabase
       .from("service_offer_items")
       .insert(itemRows)
       .select(OFFER_ITEM_SELECT);
-    insertedItems = data;
+    insertedItems = (data ?? []) as OfferItemRow[];
 
     if (itemsErr) {
       await supabase.from("service_offers").delete().eq("id", offer.id);
