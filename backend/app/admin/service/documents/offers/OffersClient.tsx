@@ -12,7 +12,7 @@ import {
   OfferEditor, emptyOfferEditor, offerToEditor, editorToPayload, validateOfferEditor, type OfferEditorValue,
 } from "./OfferEditor";
 import { formatOfferMoney } from "@/lib/offers/calcTotals";
-import { getPublicFrontendOriginFromEnv } from "@/lib/publicCatalogUrl";
+import { publicOfferPageUrl } from "@/lib/publicCatalogUrl";
 
 type OfferListRow = {
   id: string;
@@ -37,7 +37,7 @@ function fmtDate(v: string | null): string {
 }
 
 function publicOfferUrl(token: string): string {
-  return `${getPublicFrontendOriginFromEnv()}/oferta/${token}`;
+  return publicOfferPageUrl(token);
 }
 
 export function OffersClient() {
@@ -312,7 +312,7 @@ export function OffersClient() {
           onClick={editorMode === "edit" && !saving ? () => setEditorOpen(false) : undefined}
         >
           <div
-            className={`${ADMIN_MODAL_PANEL} md:max-w-2xl md:h-[90vh]`}
+            className={`${ADMIN_MODAL_PANEL} md:max-w-none md:w-[min(96vw,1400px)] md:h-[92vh]`}
             onClick={(e) => e.stopPropagation()}
           >
             <AdminModalDragHandle />

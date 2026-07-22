@@ -4,7 +4,7 @@ import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
 import { isPostgrestMissingRelation } from "@/lib/admin/pgMissingColumn";
-import { calcOfferTotals } from "@/lib/offers/calcTotals";
+import { calcOfferTotals, mapOfferItemsForCalc } from "@/lib/offers/calcTotals";
 import { DEFAULT_OFFER_INTRO, DEFAULT_OFFER_TERMS } from "@/lib/company/companyInfo";
 import {
   OFFER_ITEM_SELECT,
@@ -13,6 +13,7 @@ import {
   type OfferItemInput,
   type OfferItemRow,
 } from "@/lib/offers/offerTypes";
+import { normalizeOfferTermsNote } from "@/lib/offers/normalizeOfferTermsNote";
 
 const SpecSchema = z.object({
   label: z.string().max(200),
@@ -35,6 +36,7 @@ const ItemSchema = z.object({
   unitPrice: z.coerce.number().min(0),
   installPrice: z.union([z.coerce.number().min(0), z.literal(""), z.null()]).optional().nullable()
     .transform((v) => (v === "" || v === null || v === undefined ? null : v)),
+  tradeDiscountPercent: z.coerce.number().min(0).max(100).optional().default(0),
   lineNote: z.string().max(2000).optional().nullable(),
   sortOrder: z.coerce.number().int().optional(),
 });
@@ -148,11 +150,7 @@ export async function POST(req: NextRequest) {
   const items = body.items as OfferItemInput[];
 
   const totals = calcOfferTotals({
-    items: items.map((i) => ({
-      quantity: i.quantity,
-      unit_price: i.unitPrice,
-      install_price: i.installPrice,
-    })),
+    items: mapOfferItemsForCalc(items),
     vatRate: body.vatRate,
     pricesIncludeVat: body.pricesIncludeVat,
     discountTotal: body.discountTotal,
@@ -180,7 +178,7 @@ export async function POST(req: NextRequest) {
     title: body.title?.trim() || null,
     object_note: body.objectNote?.trim() || null,
     intro_note: body.introNote?.trim() || DEFAULT_OFFER_INTRO,
-    terms_note: body.termsNote?.trim() || DEFAULT_OFFER_TERMS,
+    terms_note: normalizeOfferTermsNote(body.termsNote?.trim() || DEFAULT_OFFER_TERMS),
     valid_until: body.validUntil?.trim() || null,
     vat_rate: body.vatRate,
     prices_include_vat: body.pricesIncludeVat,

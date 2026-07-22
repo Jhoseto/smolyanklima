@@ -5,8 +5,8 @@
 export const LEGAL_COMPANY = {
   legalName: 'Смолян Клима ЕООД',
   tradeName: 'Смолян Клима',
-  website: 'smolyanklima.bg',
-  websiteUrl: 'https://smolyanklima.bg',
+  website: 'smolyanklima.com',
+  websiteUrl: 'https://smolyanklima.com',
 
   /** ЕИК по Търговски регистър */
   eik: '204223522',

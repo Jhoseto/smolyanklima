@@ -3,6 +3,13 @@ import { useParams, Link } from 'react-router-dom';
 import { Phone, MapPin, Calendar, Clock, ShieldCheck, Truck, BadgeCheck, CheckCircle2, FileText, ChevronRight } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { SiteSeo } from '../components/seo/SiteSeo';
+import { splitOfferTermsEmphasis } from '../lib/offerTermsDisplay';
+import {
+  effectiveUnitPrice,
+  formatTradeDiscountPercent,
+  lineTotal as calcOfferLineTotal,
+  TRADE_DISCOUNT_LABEL,
+} from '../lib/offerCalc';
 
 type Spec = { label: string; value: string };
 
@@ -20,6 +27,7 @@ type OfferItem = {
   quantity: number;
   unit_price: number;
   install_price: number | null;
+  trade_discount_percent?: number | null;
   line_note: string | null;
 };
 
@@ -74,7 +82,20 @@ function fmtDate(v: string | null) {
 }
 
 function lineTotal(it: OfferItem) {
-  return Number(it.quantity) * (Number(it.unit_price) + (Number(it.install_price) || 0));
+  return calcOfferLineTotal({
+    quantity: Number(it.quantity) || 0,
+    unit_price: Number(it.unit_price) || 0,
+    install_price: it.install_price,
+    trade_discount_percent: it.trade_discount_percent,
+  });
+}
+
+function unitAfterTradeDiscount(it: OfferItem) {
+  return effectiveUnitPrice({
+    quantity: 1,
+    unit_price: Number(it.unit_price) || 0,
+    trade_discount_percent: it.trade_discount_percent,
+  });
 }
 
 function displayName(it: OfferItem) {
@@ -351,7 +372,7 @@ export default function OfferViewPage() {
                         </div>
 
                         {/* Price breakdown */}
-                        <div className="mt-5 grid grid-cols-2 gap-3 border-t border-gray-100 pt-4 sm:grid-cols-4">
+                        <div className="mt-5 grid grid-cols-2 gap-3 border-t border-gray-100 pt-4 sm:grid-cols-3 lg:grid-cols-6">
                           <div className="rounded-xl bg-[#F8FAFC] px-3 py-2">
                             <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Бройки</div>
                             <div className="font-bold text-gray-900">{it.quantity}</div>
@@ -360,13 +381,23 @@ export default function OfferViewPage() {
                             <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Ед. цена</div>
                             <div className="font-bold text-gray-900">{money(it.unit_price, data.currency)}</div>
                           </div>
+                          <div className="rounded-xl bg-[#F8FAFC] px-3 py-2">
+                            <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400">{TRADE_DISCOUNT_LABEL}</div>
+                            <div className="font-bold text-gray-900">{formatTradeDiscountPercent(it.trade_discount_percent)}</div>
+                          </div>
+                          {Number(it.trade_discount_percent) > 0 && (
+                            <div className="rounded-xl bg-[#F8FAFC] px-3 py-2">
+                              <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400">След {TRADE_DISCOUNT_LABEL.toLowerCase()}</div>
+                              <div className="font-bold text-gray-900">{money(unitAfterTradeDiscount(it), data.currency)}</div>
+                            </div>
+                          )}
                           {it.install_price != null && (
                             <div className="rounded-xl bg-[#F8FAFC] px-3 py-2">
                               <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Монтаж</div>
                               <div className="font-bold text-gray-900">{money(it.install_price, data.currency)}</div>
                             </div>
                           )}
-                          <div className="rounded-xl bg-[#FFF5ED] px-3 py-2">
+                          <div className="rounded-xl bg-[#FFF5ED] px-3 py-2 col-span-2 sm:col-span-1 lg:col-span-1">
                             <div className="text-[10px] font-bold uppercase tracking-wide text-[#FF4D00]">Общо</div>
                             <div className="font-bold text-[#FF4D00]">{money(lineTotal(it), data.currency)}</div>
                           </div>
@@ -378,13 +409,62 @@ export default function OfferViewPage() {
               );
             })}
 
-            {/* Terms */}
-            {data.terms_note && (
-              <section className="mt-8 rounded-3xl border border-gray-100 bg-white p-6 sm:p-8 shadow-sm">
-                <h2 className="font-outfit text-lg font-black mb-4">Условия на офертата</h2>
-                <div className="whitespace-pre-line text-sm leading-relaxed text-gray-600">{data.terms_note}</div>
+            {/* Full price table */}
+            {data.items.length > 0 && (
+              <section className="mt-8 overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
+                <div className="border-b border-gray-100 bg-[#FFF5ED] px-6 py-4">
+                  <h2 className="font-outfit text-lg font-black text-[#FF4D00]">Ценова таблица</h2>
+                </div>
+                <div className="overflow-x-auto p-4 sm:p-6">
+                  <table className="w-full min-w-[640px] text-sm">
+                    <thead>
+                      <tr className="text-left text-[10px] font-bold uppercase tracking-wide text-gray-400">
+                        <th className="pb-3 pr-3">Артикул</th>
+                        <th className="pb-3 pr-3 text-right">Бр.</th>
+                        <th className="pb-3 pr-3 text-right">Ед. цена</th>
+                        <th className="pb-3 pr-3 text-center">{TRADE_DISCOUNT_LABEL}</th>
+                        <th className="pb-3 pr-3 text-right">Монтаж</th>
+                        <th className="pb-3 text-right">Общо</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {data.items.map((it) => (
+                        <tr key={`table-${it.id}`}>
+                          <td className="py-3 pr-3 font-semibold text-gray-900">{displayName(it)}</td>
+                          <td className="py-3 pr-3 text-right tabular-nums text-gray-600">{it.quantity}</td>
+                          <td className="py-3 pr-3 text-right tabular-nums text-gray-900">{money(it.unit_price, data.currency)}</td>
+                          <td className="py-3 pr-3 text-center tabular-nums font-semibold text-gray-700">
+                            {formatTradeDiscountPercent(it.trade_discount_percent)}
+                          </td>
+                          <td className="py-3 pr-3 text-right tabular-nums text-gray-600">
+                            {it.install_price != null ? money(it.install_price, data.currency) : '—'}
+                          </td>
+                          <td className="py-3 text-right font-bold tabular-nums text-[#FF4D00]">
+                            {money(lineTotal(it), data.currency)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </section>
             )}
+
+            {/* Terms */}
+            {data.terms_note && (() => {
+              const { body, emphasis } = splitOfferTermsEmphasis(data.terms_note);
+              return (
+                <section className="mt-8 rounded-3xl border border-gray-100 bg-white p-6 sm:p-8 shadow-sm">
+                  <h2 className="font-outfit text-lg font-black mb-4">Условия на офертата</h2>
+                  {body ? (
+                    <div className="whitespace-pre-line text-sm leading-relaxed text-gray-600">{body}</div>
+                  ) : null}
+                  {emphasis ? (
+                    <p className="mt-4 whitespace-pre-line text-sm font-bold leading-relaxed text-gray-900">{emphasis}</p>
+                  ) : null}
+                </section>
+              );
+            })()}
           </section>
 
           {/* Sticky summary */}
@@ -449,11 +529,12 @@ export default function OfferViewPage() {
             <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
               <h3 className="font-outfit text-sm font-black uppercase tracking-wide text-gray-900 mb-3">Ценова таблица</h3>
               <div className="overflow-x-auto -mx-1">
-                <table className="w-full min-w-[300px] text-xs">
+                <table className="w-full min-w-[320px] text-xs">
                   <thead>
                     <tr className="text-[10px] font-bold uppercase tracking-wide text-gray-400">
                       <th className="pb-2 text-left">Артикул</th>
                       <th className="pb-2 text-right">Бр.</th>
+                      <th className="pb-2 text-center">{TRADE_DISCOUNT_LABEL}</th>
                       <th className="pb-2 text-right">Общо</th>
                     </tr>
                   </thead>
@@ -462,6 +543,9 @@ export default function OfferViewPage() {
                       <tr key={`sum-${it.id}`}>
                         <td className="py-2 font-semibold text-gray-900">{displayName(it)}</td>
                         <td className="py-2 text-right tabular-nums text-gray-500">{it.quantity}</td>
+                        <td className="py-2 text-center tabular-nums text-gray-500">
+                          {formatTradeDiscountPercent(it.trade_discount_percent)}
+                        </td>
                         <td className="py-2 text-right font-bold tabular-nums text-[#FF4D00]">
                           {money(lineTotal(it), data.currency)}
                         </td>

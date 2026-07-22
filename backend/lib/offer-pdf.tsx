@@ -3,12 +3,15 @@
  * Цени само в евро (EUR). Без letterSpacing (бърка кирилица в react-pdf).
  */
 import React from "react";
-import { Document, Page, View, Text, StyleSheet, Font, Link } from "@react-pdf/renderer";
+import { Document, Page, View, Text, StyleSheet, Font, Link, Image } from "@react-pdf/renderer";
 import { ProtocolPdfBrandMark } from "@/lib/protocol-pdf-brand";
 import { COMPANY_INFO } from "@/lib/company/companyInfo";
 import type { OfferItemRow, OfferRow } from "@/lib/offers/offerTypes";
+import type { OfferItemPdfRow } from "@/lib/offers/offerPdfImages";
 import type { OfferSpecRow } from "@/lib/offers/buildSpecsFromProduct";
+import { lineTotal as calcOfferLineTotal, effectiveUnitPrice, lineTradeDiscountAmount, totalTradeDiscountAmount, formatTradeDiscountWithAmount, TRADE_DISCOUNT_LABEL } from "@/lib/offers/calcTotals";
 import { sanitizeOfferDescription } from "@/lib/offers/sanitizeOfferDescription";
+import { splitOfferTermsEmphasis } from "@/lib/offers/formatOfferTermsDisplay";
 
 const NOTO_REG =
   "https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSans/NotoSans-Regular.ttf";
@@ -40,7 +43,7 @@ const s = StyleSheet.create({
     fontFamily: "NotoSans",
     fontSize: 8.5,
     paddingTop: 18,
-    paddingBottom: 28,
+    paddingBottom: 36,
     paddingHorizontal: 22,
     color: C.ink,
     lineHeight: 1.25,
@@ -102,6 +105,7 @@ const s = StyleSheet.create({
   intro: { fontSize: 7.5, color: C.muted, marginBottom: 4, lineHeight: 1.35 },
 
   terms: { fontSize: 7, color: C.muted, lineHeight: 1.35 },
+  termsEmphasis: { fontSize: 7, fontWeight: 700, color: C.ink, lineHeight: 1.35, marginTop: 4 },
 
   ctaBanner: {
     marginTop: 10,
@@ -136,6 +140,24 @@ const s = StyleSheet.create({
   },
   ctaPhoneText: { fontSize: 10, fontWeight: 700, color: C.white },
 
+  signOff: {
+    marginTop: 48,
+    marginBottom: 36,
+    paddingTop: 8,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "flex-end",
+    gap: 6,
+  },
+  signOffLabel: { fontSize: 8.5, color: C.ink },
+  signOffLine: {
+    width: 140,
+    borderBottomWidth: 0.5,
+    borderBottomColor: C.muted,
+    marginBottom: 2,
+  },
+  signOffName: { fontSize: 8.5, fontWeight: 700, color: C.ink },
+
   groupLabel: {
     fontSize: 7.5,
     fontWeight: 700,
@@ -153,6 +175,30 @@ const s = StyleSheet.create({
     paddingHorizontal: 7,
     marginBottom: 5,
     backgroundColor: C.white,
+  },
+  itemCardRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  itemImageWrap: {
+    width: 76,
+    height: 76,
+    borderRadius: 4,
+    borderWidth: 0.5,
+    borderColor: C.line,
+    backgroundColor: "#F8FAFC",
+    flexShrink: 0,
+    overflow: "hidden",
+  },
+  itemImage: {
+    width: 76,
+    height: 76,
+    objectFit: "contain",
+  },
+  itemBody: {
+    flex: 1,
+    minWidth: 0,
   },
   itemHead: {
     flexDirection: "row",
@@ -184,6 +230,7 @@ const s = StyleSheet.create({
 
   tableHeader: {
     flexDirection: "row",
+    alignItems: "flex-start",
     backgroundColor: C.ink,
     paddingVertical: 4,
     paddingHorizontal: 5,
@@ -192,18 +239,23 @@ const s = StyleSheet.create({
   },
   tableRow: {
     flexDirection: "row",
-    paddingVertical: 3,
+    alignItems: "flex-start",
+    paddingVertical: 4,
     paddingHorizontal: 5,
     borderBottomWidth: 0.5,
     borderBottomColor: C.line,
   },
-  th: { fontSize: 6.5, fontWeight: 700, color: C.white, textTransform: "uppercase" },
-  td: { fontSize: 7.5, color: C.ink },
-  colName: { width: "48%" },
-  colQty: { width: "10%", textAlign: "center" },
-  colUnit: { width: "14%", textAlign: "right" },
-  colInstall: { width: "14%", textAlign: "right" },
-  colTotal: { width: "14%", textAlign: "right" },
+  th: { fontSize: 6.5, fontWeight: 700, color: C.white, textTransform: "uppercase", lineHeight: 1.25 },
+  td: { fontSize: 7, color: C.ink, lineHeight: 1.3 },
+  tdBold: { fontSize: 7, fontWeight: 700, color: C.ink, lineHeight: 1.3 },
+  colName: { width: "40%", paddingRight: 6 },
+  colQty: { width: "5%" },
+  colUnit: { width: "12%" },
+  colTo: { width: "18%" },
+  colInstall: { width: "11%" },
+  colTotal: { width: "14%" },
+  cellRight: { alignItems: "flex-end" },
+  cellCenter: { alignItems: "center" },
 
   totalsWrap: {
     marginTop: 6,
@@ -211,7 +263,7 @@ const s = StyleSheet.create({
     justifyContent: "flex-end",
   },
   totalsBox: {
-    width: 200,
+    width: 240,
     borderRadius: 4,
     overflow: "hidden",
     borderWidth: 1,
@@ -272,10 +324,23 @@ function eur(n: number): string {
 }
 
 function itemLineTotal(item: OfferItemRow): number {
-  const qty = Number(item.quantity) || 0;
-  const unit = Number(item.unit_price) || 0;
-  const install = Number(item.install_price) || 0;
-  return qty * (unit + install);
+  return calcOfferLineTotal({
+    quantity: Number(item.quantity) || 0,
+    unit_price: Number(item.unit_price) || 0,
+    install_price: item.install_price,
+    trade_discount_percent: item.trade_discount_percent,
+  });
+}
+
+function itemEffectiveUnitEur(item: OfferItemRow, currency: string): number {
+  return toEur(
+    effectiveUnitPrice({
+      quantity: 1,
+      unit_price: Number(item.unit_price) || 0,
+      trade_discount_percent: item.trade_discount_percent,
+    }),
+    currency,
+  );
 }
 
 function itemDisplayName(item: OfferItemRow): string {
@@ -283,18 +348,36 @@ function itemDisplayName(item: OfferItemRow): string {
   return parts.join(" ") || item.name;
 }
 
-function clip(text: string | null | undefined, max: number): string {
-  const t = (text || "").trim();
-  if (t.length <= max) return t;
-  return `${t.slice(0, max - 1)}…`;
+function itemToCalcLine(item: OfferItemRow) {
+  return {
+    quantity: Number(item.quantity) || 0,
+    unit_price: Number(item.unit_price) || 0,
+    install_price: item.install_price,
+    trade_discount_percent: item.trade_discount_percent,
+  };
 }
 
-export function OfferPDF({ data }: { data: OfferRow & { items: OfferItemRow[] } }) {
+function pdfTradeDiscountLabel(item: OfferItemRow, currency: string): string {
+  const line = itemToCalcLine(item);
+  const amount = toEur(lineTradeDiscountAmount(line), currency);
+  return formatTradeDiscountWithAmount(item.trade_discount_percent, amount, currency);
+}
+
+function offerItemPdfImageSrc(item: OfferItemPdfRow): string | null {
+  const src = (item.pdf_image_src ?? "").trim();
+  return src || null;
+}
+
+export function OfferPDF({ data }: { data: OfferRow & { items: OfferItemPdfRow[] } }) {
   const items = data.items ?? [];
   const currency = data.currency || "EUR";
   let lastGroup: string | null = null;
 
   const finalEur = toEur(Number(data.total_incl_vat), currency);
+  const tradeDiscountTotalEur = toEur(
+    totalTradeDiscountAmount(items.map(itemToCalcLine)),
+    currency,
+  );
 
   return (
     <Document>
@@ -348,12 +431,22 @@ export function OfferPDF({ data }: { data: OfferRow & { items: OfferItemRow[] } 
           const specs = (Array.isArray(item.specs) ? item.specs : []) as OfferSpecRow[];
           const lineEur = toEur(itemLineTotal(item), currency);
           const unitEur = toEur(Number(item.unit_price), currency);
+          const unitAfterToEur = itemEffectiveUnitEur(item, currency);
           const installEur = item.install_price != null ? toEur(Number(item.install_price), currency) : null;
+          const toLabel = pdfTradeDiscountLabel(item, currency);
+          const imageSrc = offerItemPdfImageSrc(item);
 
           return (
             <View key={item.id}>
               {showGroup ? <Text style={s.groupLabel}>{item.group_label}</Text> : null}
               <View style={s.itemCard}>
+                <View style={s.itemCardRow}>
+                  {imageSrc ? (
+                    <View style={s.itemImageWrap}>
+                      <Image src={imageSrc} style={s.itemImage} />
+                    </View>
+                  ) : null}
+                  <View style={s.itemBody}>
                 <View style={s.itemHead}>
                   <Text style={s.itemTitle}>{itemDisplayName(item)}</Text>
                   <Text style={s.itemPrice}>{eur(lineEur)}</Text>
@@ -381,6 +474,16 @@ export function OfferPDF({ data }: { data: OfferRow & { items: OfferItemRow[] } 
                     <Text style={{ fontSize: 6, color: C.muted, textTransform: "uppercase" }}>Ед. цена</Text>
                     <Text style={{ fontSize: 8, fontWeight: 700 }}>{eur(unitEur)}</Text>
                   </View>
+                  <View style={{ flex: 1, minWidth: 56 }}>
+                    <Text style={{ fontSize: 6, color: C.muted, textTransform: "uppercase" }}>{TRADE_DISCOUNT_LABEL}</Text>
+                    <Text style={{ fontSize: 8, fontWeight: 700 }}>{toLabel}</Text>
+                  </View>
+                  {Number(item.trade_discount_percent) > 0 ? (
+                    <View style={{ flex: 1, minWidth: 80 }}>
+                      <Text style={{ fontSize: 6, color: C.muted, textTransform: "uppercase" }}>След {TRADE_DISCOUNT_LABEL.toLowerCase()}</Text>
+                      <Text style={{ fontSize: 8, fontWeight: 700 }}>{eur(unitAfterToEur)}</Text>
+                    </View>
+                  ) : null}
                   {installEur != null && (
                     <View style={{ flex: 1, minWidth: 80 }}>
                       <Text style={{ fontSize: 6, color: C.muted, textTransform: "uppercase" }}>Монтаж</Text>
@@ -392,6 +495,8 @@ export function OfferPDF({ data }: { data: OfferRow & { items: OfferItemRow[] } 
                     <Text style={{ fontSize: 8, fontWeight: 700, color: C.orange }}>{eur(lineEur)}</Text>
                   </View>
                 </View>
+                  </View>
+                </View>
               </View>
             </View>
           );
@@ -401,23 +506,49 @@ export function OfferPDF({ data }: { data: OfferRow & { items: OfferItemRow[] } 
           <Text style={s.sectionTitle}>Ценова таблица</Text>
         </View>
         <View style={s.tableHeader}>
-          <Text style={[s.th, s.colName]}>Артикул</Text>
-          <Text style={[s.th, s.colQty]}>Бр.</Text>
-          <Text style={[s.th, s.colUnit]}>Ед. цена</Text>
-          <Text style={[s.th, s.colInstall]}>Монтаж</Text>
-          <Text style={[s.th, s.colTotal]}>Общо</Text>
+          <View style={s.colName}>
+            <Text style={s.th}>Артикул</Text>
+          </View>
+          <View style={[s.colQty, s.cellCenter]}>
+            <Text style={[s.th, { textAlign: "center" }]}>Бр.</Text>
+          </View>
+          <View style={[s.colUnit, s.cellRight]}>
+            <Text style={[s.th, { textAlign: "right" }]}>Ед. цена</Text>
+          </View>
+          <View style={[s.colTo, s.cellCenter]}>
+            <Text style={[s.th, { textAlign: "center", fontSize: 5.5, lineHeight: 1.2 }]}>{TRADE_DISCOUNT_LABEL}</Text>
+          </View>
+          <View style={[s.colInstall, s.cellRight]}>
+            <Text style={[s.th, { textAlign: "right" }]}>Монтаж</Text>
+          </View>
+          <View style={[s.colTotal, s.cellRight]}>
+            <Text style={[s.th, { textAlign: "right" }]}>Общо</Text>
+          </View>
         </View>
         {items.map((item) => (
           <View key={`t-${item.id}`} style={s.tableRow}>
-            <Text style={[s.td, s.colName]}>{clip(itemDisplayName(item), 48)}</Text>
-            <Text style={[s.td, s.colQty]}>{item.quantity}</Text>
-            <Text style={[s.td, s.colUnit]}>{eur(toEur(Number(item.unit_price), currency))}</Text>
-            <Text style={[s.td, s.colInstall]}>
-              {item.install_price != null ? eur(toEur(Number(item.install_price), currency)) : "—"}
-            </Text>
-            <Text style={[s.td, s.colTotal, { fontWeight: 700 }]}>
-              {eur(toEur(itemLineTotal(item), currency))}
-            </Text>
+            <View style={s.colName}>
+              <Text style={s.td}>{itemDisplayName(item)}</Text>
+            </View>
+            <View style={[s.colQty, s.cellCenter]}>
+              <Text style={[s.tdBold, { textAlign: "center" }]}>{item.quantity}</Text>
+            </View>
+            <View style={[s.colUnit, s.cellRight]}>
+              <Text style={[s.td, { textAlign: "right" }]}>{eur(toEur(Number(item.unit_price), currency))}</Text>
+            </View>
+            <View style={[s.colTo, s.cellCenter]}>
+              <Text style={[s.td, { textAlign: "center", fontSize: 6.5 }]}>{pdfTradeDiscountLabel(item, currency)}</Text>
+            </View>
+            <View style={[s.colInstall, s.cellRight]}>
+              <Text style={[s.td, { textAlign: "right" }]}>
+                {item.install_price != null ? eur(toEur(Number(item.install_price), currency)) : "—"}
+              </Text>
+            </View>
+            <View style={[s.colTotal, s.cellRight]}>
+              <Text style={[s.tdBold, { textAlign: "right" }]}>
+                {eur(toEur(itemLineTotal(item), currency))}
+              </Text>
+            </View>
           </View>
         ))}
 
@@ -437,6 +568,12 @@ export function OfferPDF({ data }: { data: OfferRow & { items: OfferItemRow[] } 
               <Text style={s.totalLabel}>ДДС ({data.vat_rate}%)</Text>
               <Text style={s.totalValue}>{eur(toEur(Number(data.vat_amount), currency))}</Text>
             </View>
+            {tradeDiscountTotalEur > 0 ? (
+              <View style={s.totalRow}>
+                <Text style={s.totalLabel}>Обща {TRADE_DISCOUNT_LABEL.toLowerCase()}</Text>
+                <Text style={[s.totalValue, { color: C.orange }]}>{eur(tradeDiscountTotalEur)}</Text>
+              </View>
+            ) : null}
             <View style={s.grandRow}>
               <Text style={s.grandLabel}>Крайна цена</Text>
               <Text style={s.grandValue}>{eur(finalEur)}</Text>
@@ -444,14 +581,18 @@ export function OfferPDF({ data }: { data: OfferRow & { items: OfferItemRow[] } 
           </View>
         </View>
 
-        {data.terms_note ? (
-          <>
-            <View style={[s.sectionBar, { marginTop: 8 }]}>
-              <Text style={s.sectionTitle}>Условия</Text>
-            </View>
-            <Text style={s.terms}>{data.terms_note}</Text>
-          </>
-        ) : null}
+        {data.terms_note ? (() => {
+          const { body, emphasis } = splitOfferTermsEmphasis(data.terms_note);
+          return (
+            <>
+              <View style={[s.sectionBar, { marginTop: 8 }]}>
+                <Text style={s.sectionTitle}>Условия</Text>
+              </View>
+              {body ? <Text style={s.terms}>{body}</Text> : null}
+              {emphasis ? <Text style={s.termsEmphasis}>{emphasis}</Text> : null}
+            </>
+          );
+        })() : null}
 
         <View style={s.ctaBanner}>
           <Text style={s.ctaTitle}>Готови сме да монтираме</Text>
@@ -464,6 +605,12 @@ export function OfferPDF({ data }: { data: OfferRow & { items: OfferItemRow[] } 
               <Text style={s.ctaPhoneText}>Потвърди офертата · {COMPANY_INFO.phone}</Text>
             </View>
           </Link>
+        </View>
+
+        <View style={s.signOff}>
+          <Text style={s.signOffLabel}>С Уважение:</Text>
+          <View style={s.signOffLine} />
+          <Text style={s.signOffName}>{COMPANY_INFO.offerSignatory}</Text>
         </View>
 
         <View style={s.footer} fixed>

@@ -5,6 +5,8 @@ import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
 import { OfferPDF, offerPdfContentDisposition } from "@/lib/offer-pdf";
 import { OFFER_ITEM_SELECT, OFFER_SELECT, type OfferItemRow, type OfferRow } from "@/lib/offers/offerTypes";
+import { enrichOfferItemsForPdf } from "@/lib/offers/offerPdfImages";
+import { normalizeOfferTermsNote } from "@/lib/offers/normalizeOfferTermsNote";
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflight(req);
@@ -35,7 +37,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       .eq("offer_id", id)
       .order("sort_order", { ascending: true });
 
-    const payload = { ...(data as OfferRow), items: (items ?? []) as OfferItemRow[] };
+    const rawItems = (items ?? []) as OfferItemRow[];
+    const pdfItems = await enrichOfferItemsForPdf(session.db, rawItems);
+    const payload = {
+      ...(data as OfferRow),
+      terms_note: normalizeOfferTermsNote(data.terms_note),
+      items: pdfItems,
+    };
 
     const pdfBuffer = await renderToBuffer(
       React.createElement(OfferPDF, { data: payload }) as Parameters<typeof renderToBuffer>[0],

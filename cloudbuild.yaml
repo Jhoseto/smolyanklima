@@ -42,6 +42,8 @@ steps:
       - build
       - --build-arg
       - VITE_GOOGLE_SITE_VERIFICATION=$_GOOGLE_SITE_VERIFICATION
+      - --build-arg
+      - NEXT_PUBLIC_SITE_ORIGIN=$_PUBLIC_URL
       - -t
       - gcr.io/$PROJECT_ID/$_SERVICE:$COMMIT_SHA
       - -t

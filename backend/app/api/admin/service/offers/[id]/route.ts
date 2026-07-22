@@ -4,13 +4,14 @@ import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
 import { isPostgrestMissingRelation } from "@/lib/admin/pgMissingColumn";
-import { calcOfferTotals } from "@/lib/offers/calcTotals";
+import { calcOfferTotals, mapOfferItemsForCalc } from "@/lib/offers/calcTotals";
 import {
   OFFER_ITEM_SELECT,
   OFFER_SELECT,
   mapItemInputToDb,
   type OfferItemInput,
 } from "@/lib/offers/offerTypes";
+import { normalizeOfferTermsNote } from "@/lib/offers/normalizeOfferTermsNote";
 
 const SpecSchema = z.object({
   label: z.string().max(200),
@@ -33,6 +34,7 @@ const ItemSchema = z.object({
   unitPrice: z.coerce.number().min(0),
   installPrice: z.union([z.coerce.number().min(0), z.literal(""), z.null()]).optional().nullable()
     .transform((v) => (v === "" || v === null || v === undefined ? null : v)),
+  tradeDiscountPercent: z.coerce.number().min(0).max(100).optional().default(0),
   lineNote: z.string().max(2000).optional().nullable(),
   sortOrder: z.coerce.number().int().optional(),
 });
@@ -91,7 +93,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     .eq("offer_id", id)
     .order("sort_order", { ascending: true });
 
-  return withCors(req, NextResponse.json({ data: { ...data, items: items ?? [] } }));
+  return withCors(req, NextResponse.json({
+    data: {
+      ...data,
+      terms_note: normalizeOfferTermsNote(data.terms_note),
+      items: items ?? [],
+    },
+  }));
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -133,13 +141,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   } else {
     const { data: currentItems } = await supabase
       .from("service_offer_items")
-      .select("quantity,unit_price,install_price")
+      .select("quantity,unit_price,install_price,trade_discount_percent")
       .eq("offer_id", id);
     itemsForCalc = (currentItems ?? []).map((r) => ({
       name: "x",
       quantity: Number(r.quantity),
       unitPrice: Number(r.unit_price),
       installPrice: r.install_price != null ? Number(r.install_price) : null,
+      tradeDiscountPercent: Number(r.trade_discount_percent) || 0,
     }));
   }
 
@@ -148,11 +157,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const discountTotal = body.discountTotal ?? Number(existing.discount_total);
 
   const totals = calcOfferTotals({
-    items: (itemsForCalc ?? []).map((i) => ({
-      quantity: i.quantity,
-      unit_price: i.unitPrice,
-      install_price: i.installPrice,
-    })),
+    items: mapOfferItemsForCalc(itemsForCalc ?? []),
     vatRate,
     pricesIncludeVat,
     discountTotal,
@@ -172,7 +177,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if ("title" in body) payload.title = body.title?.trim() || null;
   if ("objectNote" in body) payload.object_note = body.objectNote?.trim() || null;
   if ("introNote" in body) payload.intro_note = body.introNote?.trim() || null;
-  if ("termsNote" in body) payload.terms_note = body.termsNote?.trim() || null;
+  if ("termsNote" in body) payload.terms_note = normalizeOfferTermsNote(body.termsNote?.trim() || null);
   if ("validUntil" in body) payload.valid_until = body.validUntil?.trim() || null;
   if ("vatRate" in body && body.vatRate != null) payload.vat_rate = body.vatRate;
   if ("pricesIncludeVat" in body && body.pricesIncludeVat != null) payload.prices_include_vat = body.pricesIncludeVat;

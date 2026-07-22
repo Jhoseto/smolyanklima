@@ -1,7 +1,16 @@
+import { COMPANY_INFO } from "@/lib/company/companyInfo";
+
 function normalizeOrigin(raw: string): string {
   const trimmed = raw.trim().replace(/\/$/, "");
-  if (!trimmed) return "http://localhost:3000";
+  if (!trimmed) return defaultPublicFrontendOrigin();
   return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
+function defaultPublicFrontendOrigin(): string {
+  if (process.env.NODE_ENV === "production") {
+    return COMPANY_INFO.websiteUrl.replace(/\/$/, "");
+  }
+  return "http://localhost:3000";
 }
 
 /** Origin от env (build / server). */
@@ -9,9 +18,9 @@ export function getPublicFrontendOriginFromEnv(): string {
   const raw =
     process.env.NEXT_PUBLIC_SITE_ORIGIN ??
     process.env.NEXT_PUBLIC_FRONTEND_ORIGIN ??
-    process.env.FRONTEND_ORIGIN ??
-    "http://localhost:3000";
-  return normalizeOrigin(raw);
+    process.env.FRONTEND_ORIGIN;
+  if (raw?.trim()) return normalizeOrigin(raw);
+  return defaultPublicFrontendOrigin();
 }
 
 /**
@@ -33,8 +42,17 @@ export function publicCatalogPath(): string {
   return "/catalog";
 }
 
+export function publicOfferPagePath(token: string): string {
+  return `/oferta/${encodeURIComponent(token.trim())}`;
+}
+
 export function publicCatalogUrl(): string {
   return `${resolvePublicFrontendOrigin()}${publicCatalogPath()}`;
+}
+
+/** Пълен URL на публичната оферта (клиентски сайт). */
+export function publicOfferPageUrl(token: string): string {
+  return `${resolvePublicFrontendOrigin()}${publicOfferPagePath(token)}`;
 }
 
 /** Пълен URL на публичната продуктова страница (клиентски сайт). */

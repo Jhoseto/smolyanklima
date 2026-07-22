@@ -1,5 +1,6 @@
 import type { OfferSpecRow } from "@/lib/offers/buildSpecsFromProduct";
 import { sanitizeOfferDescription } from "@/lib/offers/sanitizeOfferDescription";
+import { parseTradeDiscountPercent } from "@/lib/offers/calcTotals";
 
 export type OfferStatus = "draft" | "sent" | "accepted" | "rejected";
 export type OfferItemKind = "product" | "installation" | "custom";
@@ -19,6 +20,7 @@ export type OfferItemInput = {
   quantity: number;
   unitPrice: number;
   installPrice?: number | null;
+  tradeDiscountPercent?: number | null;
   lineNote?: string | null;
   sortOrder?: number;
 };
@@ -39,6 +41,7 @@ export type OfferItemRow = {
   quantity: number;
   unit_price: number;
   install_price: number | null;
+  trade_discount_percent: number;
   line_note: string | null;
   sort_order: number;
 };
@@ -79,7 +82,7 @@ export const OFFER_SELECT =
   "id,offer_number,status,contact_id,client_name,client_phone,client_email,client_address,title,object_note,intro_note,terms_note,valid_until,vat_rate,prices_include_vat,discount_total,currency,subtotal,base_excl_vat,vat_amount,total_incl_vat,public_token,public_enabled,created_by,created_at,updated_at,sent_at,accepted_at";
 
 export const OFFER_ITEM_SELECT =
-  "id,offer_id,product_id,kind,name,brand_name,type_name,model_code,image_url,description,specs,group_label,quantity,unit_price,install_price,line_note,sort_order";
+  "id,offer_id,product_id,kind,name,brand_name,type_name,model_code,image_url,description,specs,group_label,quantity,unit_price,install_price,trade_discount_percent,line_note,sort_order";
 
 export function mapItemInputToDb(item: OfferItemInput, offerId: string, sortOrder: number) {
   return {
@@ -97,6 +100,7 @@ export function mapItemInputToDb(item: OfferItemInput, offerId: string, sortOrde
     quantity: Number(item.quantity) || 1,
     unit_price: Number(item.unitPrice) || 0,
     install_price: item.installPrice == null || item.installPrice === ("" as unknown) ? null : Number(item.installPrice),
+    trade_discount_percent: parseTradeDiscountPercent(item.tradeDiscountPercent),
     line_note: item.lineNote?.trim() || null,
     sort_order: item.sortOrder ?? sortOrder,
   };

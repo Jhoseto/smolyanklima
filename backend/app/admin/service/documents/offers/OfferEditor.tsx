@@ -5,9 +5,10 @@ import { Plus, Trash2, GripVertical, X, Minus } from "lucide-react";
 import { Button, Input, Textarea } from "../../../ui";
 import { ContactAutocomplete, type ContactSuggestion } from "../acceptance/ContactAutocomplete";
 import { CatalogProductAutocomplete, type CatalogProductPick } from "./CatalogProductAutocomplete";
-import { calcOfferTotals, formatOfferMoney } from "@/lib/offers/calcTotals";
+import { calcOfferTotals, effectiveUnitPrice, formatOfferMoney, formatTradeDiscountPercent, lineTotal as calcLineTotal, TRADE_DISCOUNT_LABEL } from "@/lib/offers/calcTotals";
 import { DEFAULT_OFFER_INTRO, DEFAULT_OFFER_TERMS } from "@/lib/company/companyInfo";
 import { sanitizeOfferDescription } from "@/lib/offers/sanitizeOfferDescription";
+import { normalizeOfferTermsNote } from "@/lib/offers/normalizeOfferTermsNote";
 import type { OfferSpecRow } from "@/lib/offers/buildSpecsFromProduct";
 
 export type EditorItem = {
@@ -24,6 +25,7 @@ export type EditorItem = {
   groupLabel: string;
   quantity: string;
   unitPrice: string;
+  tradeDiscountPercent: string;
   installPrice: string;
   lineNote: string;
 };
@@ -41,7 +43,6 @@ export type OfferEditorValue = {
   validUntil: string;
   vatRate: string;
   pricesIncludeVat: boolean;
-  discountTotal: string;
   items: EditorItem[];
 };
 
@@ -54,11 +55,13 @@ function uid() {
   return `tmp-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function itemLineTotal(it: Pick<EditorItem, "quantity" | "unitPrice" | "installPrice">): number {
-  const qty = parseItemQty(it.quantity);
-  const unit = Number(it.unitPrice) || 0;
-  const install = it.installPrice.trim() === "" ? 0 : Number(it.installPrice) || 0;
-  return qty * (unit + install);
+function itemLineTotal(it: Pick<EditorItem, "quantity" | "unitPrice" | "tradeDiscountPercent" | "installPrice">): number {
+  return calcLineTotal({
+    quantity: parseItemQty(it.quantity),
+    unit_price: Number(it.unitPrice) || 0,
+    trade_discount_percent: Number(it.tradeDiscountPercent) || 0,
+    install_price: it.installPrice.trim() === "" ? null : Number(it.installPrice),
+  });
 }
 
 export function emptyOfferEditor(): OfferEditorValue {
@@ -77,7 +80,6 @@ export function emptyOfferEditor(): OfferEditorValue {
     validUntil: until.toISOString().slice(0, 10),
     vatRate: "20",
     pricesIncludeVat: true,
-    discountTotal: "0",
     items: [],
   };
 }
@@ -95,7 +97,6 @@ export function offerToEditor(data: {
   valid_until?: string | null;
   vat_rate?: number;
   prices_include_vat?: boolean;
-  discount_total?: number;
   items?: Array<{
     id: string;
     product_id?: string | null;
@@ -111,6 +112,7 @@ export function offerToEditor(data: {
     quantity: number;
     unit_price: number;
     install_price?: number | null;
+    trade_discount_percent?: number | null;
     line_note?: string | null;
   }>;
 }): OfferEditorValue {
@@ -123,11 +125,10 @@ export function offerToEditor(data: {
     title: data.title ?? "",
     objectNote: data.object_note ?? "",
     introNote: data.intro_note ?? DEFAULT_OFFER_INTRO,
-    termsNote: data.terms_note ?? DEFAULT_OFFER_TERMS,
+    termsNote: normalizeOfferTermsNote(data.terms_note) ?? DEFAULT_OFFER_TERMS,
     validUntil: data.valid_until ?? "",
     vatRate: String(data.vat_rate ?? 20),
     pricesIncludeVat: data.prices_include_vat !== false,
-    discountTotal: String(data.discount_total ?? 0),
     items: (data.items ?? []).map((it) => ({
       key: it.id,
       productId: it.product_id ?? null,
@@ -142,6 +143,7 @@ export function offerToEditor(data: {
       groupLabel: it.group_label ?? "",
       quantity: String(Math.max(1, Math.floor(Number(it.quantity) || 1))),
       unitPrice: String(it.unit_price),
+      tradeDiscountPercent: String(it.trade_discount_percent ?? 0),
       installPrice: it.install_price != null ? String(it.install_price) : "",
       lineNote: it.line_note ?? "",
     })),
@@ -162,7 +164,7 @@ export function editorToPayload(v: OfferEditorValue) {
     validUntil: v.validUntil.trim() || null,
     vatRate: Number(v.vatRate) || 20,
     pricesIncludeVat: v.pricesIncludeVat,
-    discountTotal: Number(v.discountTotal) || 0,
+    discountTotal: 0,
     items: v.items.map((it, idx) => ({
       productId: it.productId,
       kind: it.kind,
@@ -176,6 +178,7 @@ export function editorToPayload(v: OfferEditorValue) {
       groupLabel: it.groupLabel.trim() || null,
       quantity: Math.max(1, Math.floor(Number(it.quantity) || 1)),
       unitPrice: Number(it.unitPrice) || 0,
+      tradeDiscountPercent: Math.min(100, Math.max(0, Number(it.tradeDiscountPercent) || 0)),
       installPrice: it.installPrice.trim() === "" ? null : Number(it.installPrice),
       lineNote: it.lineNote.trim() || null,
       sortOrder: idx,
@@ -200,7 +203,6 @@ type Props = {
 };
 
 export function OfferEditor({ value, onChange, onClose, onSave, saving, error, mode }: Props) {
-  const [catalogQty, setCatalogQty] = useState("1");
   const set = <K extends keyof OfferEditorValue>(key: K, val: OfferEditorValue[K]) =>
     onChange({ ...value, [key]: val });
 
@@ -228,39 +230,13 @@ export function OfferEditor({ value, onChange, onClose, onSave, saving, error, m
       description: p.description ?? "",
       specs: p.specs,
       groupLabel: "",
-      quantity: String(parseItemQty(catalogQty)),
+      quantity: "1",
       unitPrice: String(p.unitPrice),
+      tradeDiscountPercent: "0",
       installPrice: String(p.installPrice),
       lineNote: "",
     };
     onChange({ ...value, items: [item, ...value.items] });
-    setCatalogQty("1");
-  };
-
-  const addCustom = () => {
-    onChange({
-      ...value,
-      items: [
-        {
-          key: uid(),
-          productId: null,
-          kind: "custom",
-          name: "",
-          brandName: "",
-          typeName: "",
-          modelCode: "",
-          imageUrl: "",
-          description: "",
-          specs: [],
-          groupLabel: "",
-          quantity: "1",
-          unitPrice: "0",
-          installPrice: "",
-          lineNote: "",
-        },
-        ...value.items,
-      ],
-    });
   };
 
   const totals = useMemo(
@@ -269,13 +245,14 @@ export function OfferEditor({ value, onChange, onClose, onSave, saving, error, m
         items: value.items.map((it) => ({
           quantity: parseItemQty(it.quantity),
           unit_price: Number(it.unitPrice) || 0,
+          trade_discount_percent: Number(it.tradeDiscountPercent) || 0,
           install_price: it.installPrice.trim() === "" ? null : Number(it.installPrice),
         })),
         vatRate: Number(value.vatRate) || 20,
         pricesIncludeVat: value.pricesIncludeVat,
-        discountTotal: Number(value.discountTotal) || 0,
+        discountTotal: 0,
       }),
-    [value.items, value.vatRate, value.pricesIncludeVat, value.discountTotal],
+    [value.items, value.vatRate, value.pricesIncludeVat],
   );
 
   const canSave = value.clientName.trim().length > 0 && value.clientPhone.trim().length > 0;
@@ -294,13 +271,14 @@ export function OfferEditor({ value, onChange, onClose, onSave, saving, error, m
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto space-y-5 px-4 py-4 md:px-5">
+      <div className="flex-1 overflow-y-auto space-y-5 px-4 py-4 md:px-6 lg:px-8">
         {error && (
           <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-medium text-red-700">{error}</div>
         )}
 
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
         {/* Клиент */}
-        <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+        <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 lg:p-5">
           <h3 className="text-[11px] font-bold uppercase tracking-wide text-brand-blue-700">Клиент</h3>
           <ContactAutocomplete
             label="Име *"
@@ -338,7 +316,7 @@ export function OfferEditor({ value, onChange, onClose, onSave, saving, error, m
         </section>
 
         {/* Заглавие / обект */}
-        <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+        <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 lg:p-5">
           <h3 className="text-[11px] font-bold uppercase tracking-wide text-brand-blue-700">Оферта</h3>
           <label className="block">
             <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-500">Заглавие</span>
@@ -363,25 +341,12 @@ export function OfferEditor({ value, onChange, onClose, onSave, saving, error, m
             </label>
           </div>
         </section>
+        </div>
 
         {/* Артикули */}
-        <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="text-[11px] font-bold uppercase tracking-wide text-brand-blue-700">Климатици</h3>
-            <Button type="button" variant="secondary" size="sm" onClick={addCustom} className="gap-1 text-xs">
-              <Plus className="h-3.5 w-3.5" />
-              Свободен ред
-            </Button>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-            <div className="min-w-0 flex-1">
-              <CatalogProductAutocomplete onPick={addFromCatalog} />
-            </div>
-            <label className="block w-full shrink-0 sm:w-28">
-              <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-500">Бройки</span>
-              <QuantityStepper value={catalogQty} onChange={setCatalogQty} />
-            </label>
-          </div>
+        <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 lg:p-5">
+          <h3 className="text-[11px] font-bold uppercase tracking-wide text-brand-blue-700">Климатици</h3>
+          <CatalogProductAutocomplete onPick={addFromCatalog} />
 
           {value.items.length === 0 && (
             <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 py-8 text-center text-sm text-slate-500">
@@ -399,19 +364,16 @@ export function OfferEditor({ value, onChange, onClose, onSave, saving, error, m
           ))}
         </section>
 
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.2fr_1fr]">
         {/* Цени / ДДС */}
-        <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+        <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 lg:p-5">
           <h3 className="text-[11px] font-bold uppercase tracking-wide text-brand-blue-700">Суми и ДДС</h3>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="block">
               <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-500">ДДС %</span>
               <Input type="number" min={0} max={100} value={value.vatRate} onChange={(e) => set("vatRate", e.target.value)} />
             </label>
-            <label className="block">
-              <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-500">Отстъпка €</span>
-              <Input type="number" min={0} step="0.01" value={value.discountTotal} onChange={(e) => set("discountTotal", e.target.value)} />
-            </label>
-            <label className="col-span-2 flex items-end gap-2 pb-2">
+            <label className="flex items-end gap-2 pb-2">
               <input
                 type="checkbox"
                 checked={value.pricesIncludeVat}
@@ -423,9 +385,6 @@ export function OfferEditor({ value, onChange, onClose, onSave, saving, error, m
           </div>
           <div className="rounded-xl bg-gradient-to-br from-[#F0F9FF] to-[#FFF5ED] p-4 space-y-1.5">
             <div className="flex justify-between text-sm"><span className="text-slate-500">Междинна</span><span className="font-bold tabular-nums">{formatOfferMoney(totals.subtotal)}</span></div>
-            {totals.discount > 0 && (
-              <div className="flex justify-between text-sm"><span className="text-slate-500">Отстъпка</span><span className="font-bold tabular-nums text-red-600">−{formatOfferMoney(totals.discount)}</span></div>
-            )}
             <div className="flex justify-between text-sm"><span className="text-slate-500">Без ДДС</span><span className="font-bold tabular-nums">{formatOfferMoney(totals.base_excl_vat)}</span></div>
             <div className="flex justify-between text-sm"><span className="text-slate-500">ДДС</span><span className="font-bold tabular-nums">{formatOfferMoney(totals.vat_amount)}</span></div>
             <div className="flex justify-between border-t border-brand-orange-200/60 pt-2 text-base">
@@ -435,10 +394,11 @@ export function OfferEditor({ value, onChange, onClose, onSave, saving, error, m
           </div>
         </section>
 
-        <section className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4">
+        <section className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4 lg:p-5">
           <h3 className="text-[11px] font-bold uppercase tracking-wide text-brand-blue-700">Условия за монтаж</h3>
-          <Textarea value={value.termsNote} onChange={(e) => set("termsNote", e.target.value)} rows={18} />
+          <Textarea value={value.termsNote} onChange={(e) => set("termsNote", e.target.value)} rows={18} className="min-h-[320px]" />
         </section>
+        </div>
       </div>
 
       <div className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-4 py-3 md:px-5">
@@ -554,18 +514,41 @@ function ItemCard({
         className="text-xs"
       />
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         <label className="block">
           <span className="mb-0.5 block text-[10px] font-bold text-slate-500">Цена € (ед.)</span>
           <Input type="number" min={0} step="0.01" value={item.unitPrice} onChange={(e) => onChange({ unitPrice: e.target.value })} />
         </label>
         <label className="block">
+          <span className="mb-0.5 block text-[10px] font-bold text-slate-500">{TRADE_DISCOUNT_LABEL} %</span>
+          <Input
+            type="number"
+            min={0}
+            max={100}
+            step="0.01"
+            value={item.tradeDiscountPercent}
+            onChange={(e) => onChange({ tradeDiscountPercent: e.target.value })}
+          />
+        </label>
+        <label className="block">
           <span className="mb-0.5 block text-[10px] font-bold text-slate-500">Монтаж € (ед.)</span>
           <Input type="number" min={0} step="0.01" value={item.installPrice} onChange={(e) => onChange({ installPrice: e.target.value })} />
         </label>
-        <div className="col-span-2 flex items-end justify-between rounded-xl bg-[#FFF5ED] px-3 py-2 sm:col-span-1">
-          <span className="text-[10px] font-bold uppercase tracking-wide text-brand-orange-600">Общо ред</span>
-          <span className="font-black tabular-nums text-brand-orange-600">{formatOfferMoney(lineTotal)}</span>
+        <div className="col-span-2 flex flex-col justify-end rounded-xl bg-slate-100 px-3 py-2 sm:col-span-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+            След {TRADE_DISCOUNT_LABEL.toLowerCase()}: {formatOfferMoney(
+              effectiveUnitPrice({
+                quantity: 1,
+                unit_price: Number(item.unitPrice) || 0,
+                trade_discount_percent: Number(item.tradeDiscountPercent) || 0,
+              }),
+            )}
+            {Number(item.tradeDiscountPercent) > 0 ? ` (${formatTradeDiscountPercent(Number(item.tradeDiscountPercent))})` : ""}
+          </div>
+          <div className="mt-1 flex items-center justify-between gap-3 sm:mt-0">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-brand-orange-600">Общо ред</span>
+            <span className="font-black tabular-nums text-brand-orange-600">{formatOfferMoney(lineTotal)}</span>
+          </div>
         </div>
       </div>
 

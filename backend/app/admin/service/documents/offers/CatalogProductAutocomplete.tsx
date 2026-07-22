@@ -144,7 +144,7 @@ export function CatalogProductAutocomplete({ onPick, disabled }: Props) {
           disabled={disabled || fetchingDetail}
           onChange={(e) => handleInput(e.target.value)}
           onFocus={() => query && results.length > 0 && setOpen(true)}
-          placeholder="Търси климатик от публичния каталог…"
+          placeholder="Търси и добави климатик от публичния каталог…"
           autoComplete="off"
           className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-10 text-sm font-medium text-slate-900 outline-none focus:border-brand-orange-500 focus:ring-2 focus:ring-brand-orange-500/20 disabled:opacity-50"
         />

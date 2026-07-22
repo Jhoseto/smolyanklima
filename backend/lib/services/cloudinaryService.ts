@@ -12,6 +12,9 @@ const CLOUDINARY_UPLOAD_MARKER = "/image/upload/";
 /** Редът на трансформациите след upload/ — формат + качество (препоръка Cloudinary). */
 const WEB_AUTO_TRANSFORM = "f_auto,q_auto";
 
+/** JPEG + ширина за react-pdf (не поддържа надеждно WebP/AVIF от f_auto). */
+const PDF_TRANSFORM = "f_jpg,q_auto,w_400";
+
 export type CloudinaryUploadKind = "product" | "accessory" | "blog" | "staff" | "protocol";
 
 export type CloudinaryCredentials = {
@@ -109,6 +112,27 @@ export function withCloudinaryWebOptimization(url: string | null | undefined): s
   const prefix = url.slice(0, idx + CLOUDINARY_UPLOAD_MARKER.length);
   const rest = url.slice(idx + CLOUDINARY_UPLOAD_MARKER.length);
   return `${prefix}${WEB_AUTO_TRANSFORM}/${rest}`;
+}
+
+/** Cloudinary URL за PDF — принудително JPEG вместо f_auto (WebP/AVIF). */
+export function withCloudinaryPdfFormat(url: string | null | undefined): string {
+  if (url == null || url === "") return url ?? "";
+  if (!url.includes("res.cloudinary.com")) return url;
+  const lower = url.toLowerCase();
+  if (!lower.includes(CLOUDINARY_UPLOAD_MARKER)) return url;
+  if (/\/f_jpg,q_auto,w_400\//i.test(url)) return url;
+
+  if (/\/f_auto,q_auto\//i.test(url)) {
+    return url.replace(/\/f_auto,q_auto\//i, `/${PDF_TRANSFORM}/`);
+  }
+  if (/\/q_auto,f_auto\//i.test(url)) {
+    return url.replace(/\/q_auto,f_auto\//i, `/${PDF_TRANSFORM}/`);
+  }
+
+  const idx = url.indexOf(CLOUDINARY_UPLOAD_MARKER);
+  const prefix = url.slice(0, idx + CLOUDINARY_UPLOAD_MARKER.length);
+  const rest = url.slice(idx + CLOUDINARY_UPLOAD_MARKER.length);
+  return `${prefix}${PDF_TRANSFORM}/${rest}`;
 }
 
 export function optimizeImageRowUrls<T extends { url: string }>(rows: T[] | null | undefined): T[] {

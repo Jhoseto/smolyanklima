@@ -5,8 +5,8 @@
 export const COMPANY_INFO = {
   legalName: "Смолян Клима ЕООД",
   tradeName: "Смолян Клима",
-  website: "smolyanklima.bg",
-  websiteUrl: "https://smolyanklima.bg",
+  website: "smolyanklima.com",
+  websiteUrl: "https://smolyanklima.com",
   eik: "204223522",
   vatNumber: "BG204223522",
   registeredOffice: 'гр. Смолян, ул. „Елица" № 36',
@@ -16,6 +16,8 @@ export const COMPANY_INFO = {
   email: "smolyanklima@gmail.com",
   phone: "0878 58 16 16",
   phoneE164: "+359878581616",
+  /** Подпис в PDF оферти. */
+  offerSignatory: "Костадин Георгиев",
 } as const;
 
 export const COMPANY_TEL_HREF = `tel:${COMPANY_INFO.phoneE164}`;
@@ -69,4 +71,4 @@ export const DEFAULT_OFFER_TERMS = `Услугата „стандартен м�
 • Работа по външната фасада на сгради на височина над 3 m и/или работа със скеле и/или вишка;
 • Изпълнение на друг вид закрепване на телата на системата освен стандартното;
 • Транспортни разходи извън Смолян (максимален район на обслужване до 50 km) и синя-зелена зона в Смолян;
-• Всички услуги и материали по точка 2 се заплащат допълнително от клиента по ценоразпис на сервиза.`;
+• Всички услуги и материали извън стандартния монтаж се заплащат допълнително от клиента по ценоразпис на сервиза.`;

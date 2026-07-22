@@ -26,12 +26,14 @@ WORKDIR /app
 RUN apk add --no-cache libc6-compat
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+ARG NEXT_PUBLIC_SITE_ORIGIN=https://smolyanklima.com
 COPY --from=backend_deps /app/node_modules ./node_modules
 COPY backend ./
 ENV SUPABASE_URL=https://example.supabase.co \
     SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSJ9.placeholder \
     SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSJ9.placeholder \
-    FRONTEND_ORIGIN=http://localhost:3000 \
+    FRONTEND_ORIGIN=${NEXT_PUBLIC_SITE_ORIGIN} \
+    NEXT_PUBLIC_SITE_ORIGIN=${NEXT_PUBLIC_SITE_ORIGIN} \
     GEMINI_API_KEY=placeholder-key-32chars-minimum-xx
 RUN npm run build
 

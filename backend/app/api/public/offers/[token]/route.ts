@@ -3,6 +3,7 @@ import { corsPreflight, withCors } from "@/lib/http/cors";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { OFFER_ITEM_SELECT, OFFER_SELECT } from "@/lib/offers/offerTypes";
 import { sanitizeOfferDescription } from "@/lib/offers/sanitizeOfferDescription";
+import { normalizeOfferTermsNote } from "@/lib/offers/normalizeOfferTermsNote";
 import { COMPANY_INFO } from "@/lib/company/companyInfo";
 
 export async function OPTIONS(req: NextRequest) {
@@ -40,7 +41,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     title: data.title,
     object_note: data.object_note,
     intro_note: data.intro_note,
-    terms_note: data.terms_note,
+    terms_note: normalizeOfferTermsNote(data.terms_note),
     valid_until: data.valid_until,
     vat_rate: data.vat_rate,
     prices_include_vat: data.prices_include_vat,
@@ -65,6 +66,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       quantity: it.quantity,
       unit_price: it.unit_price,
       install_price: it.install_price,
+      trade_discount_percent: it.trade_discount_percent ?? 0,
       line_note: it.line_note,
       sort_order: it.sort_order,
     })),
