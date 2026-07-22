@@ -46,6 +46,7 @@ const CookiePolicyPage = lazy(() => import('./pages/CookiePolicyPage'));
 const TermsPage = lazy(() => import('./pages/TermsPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const RegionalLandingPage = lazy(() => import('./pages/RegionalLandingPage'));
+const OfferViewPage = lazy(() => import('./pages/OfferViewPage'));
 
 // ── Главна страница ──────────────────────────────────
 const HomePage = ({ onOpenAssistantChat }: { onOpenAssistantChat?: () => void }) => (
@@ -259,6 +260,7 @@ function App() {
           <Route path="/politika-za-poveritelnost" element={<PageTransition><PrivacyPolicyPage /></PageTransition>} />
           <Route path="/biskvitki" element={<PageTransition><CookiePolicyPage /></PageTransition>} />
           <Route path="/obshti-usloviya" element={<PageTransition><TermsPage /></PageTransition>} />
+          <Route path="/oferta/:token" element={<PageTransition><OfferViewPage /></PageTransition>} />
           <Route path="/klimatik-smolyan" element={<PageTransition><RegionalLandingPage slug="smolyan" /></PageTransition>} />
           <Route path="/klimatik-rudozem" element={<PageTransition><RegionalLandingPage slug="rudozem" /></PageTransition>} />
           <Route path="/klimatik-madan" element={<PageTransition><RegionalLandingPage slug="madan" /></PageTransition>} />

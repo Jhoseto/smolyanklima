@@ -114,7 +114,7 @@ export const DOCUMENT_HUB_KINDS: DocKind[] = [
     icon: FileText,
     href: "/admin/service/documents/offers",
     tone: "amber",
-    enabled: false,
+    enabled: true,
   },
   {
     id: "invoices",

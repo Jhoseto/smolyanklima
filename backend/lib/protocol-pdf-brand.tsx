@@ -32,10 +32,10 @@ export function ProtocolPdfBrandMark() {
         <Path d="M 37.4 53 A 13 13 0 0 0 62.6 53 Z" fill="url(#pdfSkBlue)" />
       </Svg>
       <View style={{ flexDirection: "row", alignItems: "baseline" }}>
-        <Text style={{ fontFamily: "NotoSans", fontSize: 12.5, fontWeight: "bold", color: "#FF4D00" }}>
+        <Text style={{ fontFamily: "NotoSans", fontSize: 12.5, fontWeight: 700, color: "#FF4D00" }}>
           СМОЛЯН
         </Text>
-        <Text style={{ fontFamily: "NotoSans", fontSize: 12.5, fontWeight: "bold", color: "#0077B6" }}>
+        <Text style={{ fontFamily: "NotoSans", fontSize: 12.5, fontWeight: 700, color: "#0077B6" }}>
           КЛИМА
         </Text>
       </View>
