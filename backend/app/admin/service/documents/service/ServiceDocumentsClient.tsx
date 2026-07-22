@@ -333,7 +333,6 @@ export function ServiceDocumentsClient({ role }: Props) {
 
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-slate-50">
-      {/* ── Хедър ── */}
       <div className="bg-white border-b border-slate-200 px-4 py-4 sticky top-0 z-10 safe-top">
         <div className="flex items-center justify-between mb-3 gap-2">
           <div className="flex items-center gap-2 min-w-0">

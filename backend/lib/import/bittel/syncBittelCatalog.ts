@@ -146,7 +146,19 @@ async function findExistingProduct(
   brandId: string,
   modelCode: string | null,
   name: string,
+  sourceUrl?: string | null,
 ): Promise<{ id: string } | null> {
+  // Stable match: same Bittel product URL
+  if (sourceUrl) {
+    const { data } = await supabase
+      .from("products")
+      .select("id")
+      .eq("source_url", sourceUrl)
+      .limit(1)
+      .maybeSingle();
+    if (data?.id) return data as { id: string };
+  }
+
   if (modelCode) {
     const { data } = await supabase
       .from("products")
@@ -203,7 +215,7 @@ async function upsertOne(
   const typeId = resolveTypeId(refs, effectiveTypeHint);
   const categoryId = effectiveCategorySlug ? (refs.categoryBySlug.get(effectiveCategorySlug) ?? null) : null;
 
-  const existing = await findExistingProduct(supabase, brandId, item.modelCode, item.name);
+  const existing = await findExistingProduct(supabase, brandId, item.modelCode, item.name, item.sourceUrl);
   const baseSlug = slugifyBg(item.modelCode ?? item.name);
   const slug = existing?.id ? undefined : await uniqueSlug(supabase, baseSlug);
 
@@ -317,9 +329,12 @@ export async function runBittelCatalogSync(
   });
 
   summary.productUrls = entries.length;
+  const importDelay = Number(process.env.BITTEL_IMPORT_DELAY_MS) || 120;
+  const concurrency = Math.max(1, Math.min(8, Number(process.env.BITTEL_IMPORT_CONCURRENCY) || 4));
+
   emitBittelProgress(onProgress, {
     phase: "import",
-    message: `Намерени ${entries.length} продукта — започва импорт…`,
+    message: `Намерени ${entries.length} продукта — импорт с ${concurrency} паралелни заявки…`,
     discovered: entries.length,
     current: 0,
     total: entries.length,
@@ -328,17 +343,17 @@ export async function runBittelCatalogSync(
     skipped: 0,
   });
 
-  const importDelay = Number(process.env.BITTEL_IMPORT_DELAY_MS) || 600;
+  let completed = 0;
 
-  for (let i = 0; i < entries.length; i++) {
-    const { url, listingCategoryPath } = entries[i]!;
-    const current = i + 1;
+  async function importOne(index: number): Promise<void> {
+    const { url, listingCategoryPath } = entries[index]!;
+    const current = index + 1;
     try {
       emitBittelProgress(onProgress, {
         phase: "import",
         message: `Зареждане ${current}/${entries.length}: ${url}`,
         discovered: entries.length,
-        current,
+        current: completed,
         total: entries.length,
         created: summary.created,
         updated: summary.updated,
@@ -355,7 +370,7 @@ export async function runBittelCatalogSync(
           phase: "import",
           message: `Пропуснат (няма цена/име): ${url}`,
           discovered: entries.length,
-          current,
+          current: completed + 1,
           total: entries.length,
           created: summary.created,
           updated: summary.updated,
@@ -363,7 +378,7 @@ export async function runBittelCatalogSync(
           url,
           result: "skipped",
         });
-        continue;
+        return;
       }
 
       const catalogKind = classifyBittelCatalogItem(parsed, url, listingCategoryPath);
@@ -378,7 +393,13 @@ export async function runBittelCatalogSync(
           kindLabel = "аксесоар (марка?)";
           summary.skipped++;
         } else {
-          const misplaced = await findExistingProduct(supabase, brandId, parsed.modelCode, parsed.name);
+          const misplaced = await findExistingProduct(
+            supabase,
+            brandId,
+            parsed.modelCode,
+            parsed.name,
+            parsed.sourceUrl,
+          );
           if (misplaced) {
             await supabase.from("products").delete().eq("id", misplaced.id);
           }
@@ -396,7 +417,7 @@ export async function runBittelCatalogSync(
         phase: "import",
         message: `${result === "created" ? "Нов" : result === "updated" ? "Обновен" : "Пропуснат"} (${kindLabel}): ${parsed.name} · ${parsed.imageUrls.length} снимки`,
         discovered: entries.length,
-        current,
+        current: completed + 1,
         total: entries.length,
         created: summary.created,
         updated: summary.updated,
@@ -413,17 +434,32 @@ export async function runBittelCatalogSync(
         phase: "import",
         message: `Грешка: ${url} — ${errMsg}`,
         discovered: entries.length,
-        current,
+        current: completed + 1,
         total: entries.length,
         created: summary.created,
         updated: summary.updated,
         skipped: summary.skipped,
         url,
       });
+    } finally {
+      completed++;
+      if (importDelay > 0) {
+        await new Promise((r) => setTimeout(r, importDelay));
+      }
     }
-
-    await new Promise((r) => setTimeout(r, importDelay));
   }
+
+  // Worker pool — 4 parallel product pages (vs 1 before).
+  let nextIndex = 0;
+  async function worker(): Promise<void> {
+    while (nextIndex < entries.length) {
+      const i = nextIndex++;
+      await importOne(i);
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, entries.length) }, () => worker()),
+  );
 
   if (refs.supplierId && syncedProductIds.length) {
     try {

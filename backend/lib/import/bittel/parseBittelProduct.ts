@@ -41,9 +41,12 @@ export type BittelParsedProduct = {
 };
 
 const FETCH_HEADERS = {
-  "User-Agent": "SmolyanKlimaCatalogSync/1.0 (+https://smolyanklima.com)",
-  Accept: "text/html,application/xhtml+xml",
+  // Browser-like UA: some Bittel product pages return empty body for custom agents.
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
   "Accept-Language": "bg,en;q=0.8",
+  "Accept-Encoding": "identity",
   "Cache-Control": "no-cache",
 };
 
@@ -62,8 +65,21 @@ function decodeHtml(s: string): string {
     .replace(/&amp;/g, "&")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&ndash;/g, "–")
+    .replace(/&mdash;/g, "—")
+    .replace(/&deg;/g, "°")
+    .replace(/&bull;/g, "•")
     .replace(/&#8211;/g, "–")
     .replace(/&#8212;/g, "—")
+    .replace(/&#(\d+);/g, (_, n) => {
+      const code = Number(n);
+      return Number.isFinite(code) ? String.fromCharCode(code) : _;
+    })
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => {
+      const code = parseInt(n, 16);
+      return Number.isFinite(code) ? String.fromCharCode(code) : _;
+    })
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/\s+/g, " ")
@@ -100,13 +116,21 @@ function parseNominalKw(raw: string | undefined): number | null {
   return null;
 }
 
-/** "43 / - / 27 / 20 dB (A)" → 20 (min = silent mode) */
+/**
+ * "43 / - / 27 / 20 dB (A)" → 20 (quiet / night mode).
+ * Bittel order is typically max / nom / quiet / night — prefer the quietest
+ * available value; ignore dashes.
+ */
 function parseNoiseDb(raw: string | undefined): number | null {
   if (!raw) return null;
   const parts = raw
     .replace(/dB.*$/i, "")
     .split("/")
-    .map((p) => parseNum(p.replace(/[^\d.,\-]/g, "").trim()))
+    .map((p) => {
+      const t = p.replace(/[^\d.,\-]/g, "").trim();
+      if (!t || t === "-" || t === "–") return null;
+      return parseNum(t);
+    })
     .filter((n): n is number => n != null && n > 0);
   if (!parts.length) return null;
   return Math.min(...parts);
@@ -272,12 +296,20 @@ export function extractBittelProductSpecs(html: string): BittelParsedProduct["sp
     }
   }
 
-  // Refrigerant
+  // Refrigerant — keep only the gas code (R-32 / R410A / …)
   const refRaw =
     rowValue(general, "хладилен агент") ??
     rowValue(general, "refrigerant") ??
     html.match(/\b(R-?32|R-?410A|R-?290)\b/i)?.[1];
-  const refrigerant = refRaw ? refRaw.replace(/\s/g, "").toUpperCase() : null;
+  let refrigerant: string | null = null;
+  if (refRaw) {
+    const gas = String(refRaw).match(/\b(R-?\d{2,3}[A-Z]?)\b/i)?.[1];
+    refrigerant = (gas ?? String(refRaw)).replace(/\s/g, "").toUpperCase().replace(/^R(\d)/, "R-$1");
+    // Normalize R32 → R-32, keep R-32 / R410A variants tidy
+    if (/^R\d/i.test(refrigerant) && !refrigerant.includes("-")) {
+      refrigerant = refrigerant.replace(/^R/i, "R-");
+    }
+  }
 
   // Wi-Fi
   const wifiRaw =
@@ -397,93 +429,154 @@ export function extractBittelProductImageUrls(html: string): string[] {
  */
 export function extractBittelDescription(html: string): string | null {
   const descTabIdx = html.indexOf('id="tab-description"');
-  if (descTabIdx < 0) return null;
 
-  // Limit to 25000 chars of the description tab content
-  const descHtml = html.slice(descTabIdx, descTabIdx + 25000);
+  if (descTabIdx >= 0) {
+    // Limit to 25000 chars of the description tab content
+    const descHtml = html.slice(descTabIdx, descTabIdx + 25000);
 
-  // Find the inner text container
-  const textDivM = descHtml.match(
-    /itemprop="description"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/i,
-  );
-  const contentHtml = textDivM ? textDivM[1]! : descHtml.slice(0, 20000);
+    // Find the inner text container
+    const textDivM = descHtml.match(
+      /itemprop="description"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/i,
+    );
+    const contentHtml = textDivM ? textDivM[1]! : descHtml.slice(0, 20000);
 
-  const parts: string[] = [];
-  const seen = new Set<string>();
+    const parts: string[] = [];
+    const seen = new Set<string>();
 
-  const addPart = (text: string) => {
-    const t = text.trim();
-    if (t && t.length > 4 && !seen.has(t)) {
-      seen.add(t);
-      parts.push(t);
+    const addPart = (text: string) => {
+      const t = text.trim();
+      if (t && t.length > 4 && !seen.has(t)) {
+        seen.add(t);
+        parts.push(t);
+      }
+    };
+
+    // Each feature block: <div class="text-part"><span>HEADING</span><p>TEXT</p></div>
+    const blockRe = /<div[^>]*class="text-part"[^>]*>([\s\S]*?)<\/div>/gi;
+    let block: RegExpExecArray | null;
+    while ((block = blockRe.exec(contentHtml)) !== null) {
+      const blockHtml = block[1]!;
+      // Orange heading in <span style="...color...">
+      const spanM = blockHtml.match(/<span[^>]*>([\s\S]*?)<\/span>/i);
+      if (spanM) addPart(stripHtmlToText(spanM[1]!));
+      // Body paragraphs
+      const pRe = /<p[^>]*>([\s\S]*?)<\/p>/gi;
+      let pm: RegExpExecArray | null;
+      while ((pm = pRe.exec(blockHtml)) !== null) {
+        addPart(stripHtmlToText(pm[1]!));
+      }
     }
-  };
 
-  // Each feature block: <div class="text-part"><span>HEADING</span><p>TEXT</p></div>
-  const blockRe = /<div[^>]*class="text-part"[^>]*>([\s\S]*?)<\/div>/gi;
-  let block: RegExpExecArray | null;
-  while ((block = blockRe.exec(contentHtml)) !== null) {
-    const blockHtml = block[1]!;
-    // Orange heading in <span style="...color...">
-    const spanM = blockHtml.match(/<span[^>]*>([\s\S]*?)<\/span>/i);
-    if (spanM) addPart(stripHtmlToText(spanM[1]!));
-    // Body paragraphs
-    const pRe = /<p[^>]*>([\s\S]*?)<\/p>/gi;
-    let pm: RegExpExecArray | null;
-    while ((pm = pRe.exec(blockHtml)) !== null) {
-      addPart(stripHtmlToText(pm[1]!));
+    // Fallback: extract all <p> from the content section
+    if (!parts.length) {
+      const pRe = /<p[^>]*>([\s\S]*?)<\/p>/gi;
+      let pm: RegExpExecArray | null;
+      while ((pm = pRe.exec(contentHtml)) !== null) {
+        addPart(stripHtmlToText(pm[1]!));
+      }
     }
+
+    if (parts.length) return parts.join("\n\n").slice(0, 5000);
   }
 
-  // Fallback: extract all <p> from the content section
-  if (!parts.length) {
-    const pRe = /<p[^>]*>([\s\S]*?)<\/p>/gi;
-    let pm: RegExpExecArray | null;
-    while ((pm = pRe.exec(contentHtml)) !== null) {
-      addPart(stripHtmlToText(pm[1]!));
-    }
+  // Many Bittel ACs have only a specifications tab — use meta description.
+  const metaDesc =
+    html.match(/property=["']og:description["'][^>]*content=["']([^"']+)["']/i)?.[1] ??
+    html.match(/name=["']description["'][^>]*content=["']([^"']+)["']/i)?.[1];
+  if (metaDesc) {
+    const t = decodeHtml(metaDesc);
+    if (t.length > 20) return t.slice(0, 5000);
   }
 
-  if (!parts.length) return null;
-  return parts.join("\n\n").slice(0, 5000);
+  return null;
+}
+
+/** Compact spaced model fragments: "SRK 20 ZT-WF" → "SRK20ZT-WF" */
+function compactModelToken(raw: string): string {
+  return raw.replace(/\s+/g, "").toUpperCase();
 }
 
 /** Extract model code from product name.
  * Examples:
  * "Инверторен климатик Daikin Sensira FTXF35F + RXF35F" → "FTXF35F+RXF35F"
- * "LG мулти сплит система RM3U19.U24 + RMN09.NSJ" → "RM3U19.U24+RMN09.NSJ"
- * "Zewnętrzne тяло AUX AM2-H18/4DR3HA" → "AM2-H18/4DR3HA"
+ * "Toshiba … RAS-B10P2KVSG-E + RAS-10P2AVSG-E" → "RAS-B10P2KVSG-E+RAS-10P2AVSG-E"
+ * "Mitsubishi … SRK 20 ZT-WF + SRC 20 ZT-W" → "SRK20ZT-WF+SRC20ZT-W"
+ * "Nippon KFR 12DC ION NORDIC" → "KFR12DC"
+ * "Nippon NPC 12F-PRO NORDIC" → "NPC12F-PRO"
+ * "Nippon NPC-24T-PRO NORDIC" → "NPC-24T-PRO"
  */
 export function extractBittelModelCode(name: string): string | null {
-  // Full kit: "FTXF35F + RXF35F" or "FTXF35F+RXF35F"
-  const kitMatch = name.match(/\b([A-Z][A-Z0-9]{2,}[0-9][A-Z0-9]*(?:[./][A-Z0-9]+)*)\s*\+\s*([A-Z][A-Z0-9]{2,}[0-9][A-Z0-9]*(?:[./][A-Z0-9]+)*)\b/);
-  if (kitMatch) return `${kitMatch[1]!}+${kitMatch[2]!}`;
+  // MHI spaced kit: "SRK 20 ZT-WF + SRC 20 ZT-W"
+  const mhiKit = name.match(
+    /\b((?:SRK|SRC|SRR|SRF|SCM)\s+\d{1,3}\s+[A-Z][A-Z0-9-]*)\s*\+\s*((?:SRK|SRC|SRR|SRF|SCM)\s+\d{1,3}\s+[A-Z][A-Z0-9-]*)\b/i,
+  );
+  if (mhiKit) {
+    return `${compactModelToken(mhiKit[1]!)}+${compactModelToken(mhiKit[2]!)}`;
+  }
 
-  // Multi-unit system: "RM3U19.U24 + RMN09.NSJ + ..."
-  const multiMatch = name.match(/\b([A-Z][A-Z0-9]{2,}[0-9][\w.]*(?:\s*\+\s*[A-Z][A-Z0-9]{2,}[\w.]+){1,4})/);
-  if (multiMatch) return multiMatch[1]!.replace(/\s*\+\s*/g, "+");
+  // Dashed / solid kit: "RAS-B10P2KVSG-E + RAS-10P2AVSG-E" or "FTXF35F + RXF35F"
+  const kitMatch = name.match(
+    /\b([A-Z]{2,}[A-Z0-9./-]*\d[A-Z0-9./-]*)\s*\+\s*([A-Z]{2,}[A-Z0-9./-]*\d[A-Z0-9./-]*)\b/i,
+  );
+  if (kitMatch) {
+    return `${kitMatch[1]!.toUpperCase()}+${kitMatch[2]!.toUpperCase()}`;
+  }
 
-  // Single model code — covers both:
-  //   "FTXF35F" / "BRP069B45" — letters then digit then more chars
-  //   "NPC-24T-PRO" / "AM2-H18/4DR3HA" — letters, optional dash, digit, chars
-  const single = name.match(/\b([A-Z]{2,}[-]?[A-Z0-9]*[0-9][A-Z0-9]*[-\w./]+)\b/);
-  if (single?.[1] && single[1]!.length >= 5) return single[1]!;
+  // Multi-unit system with several "+": "RM3U19.U24 + RMN09.NSJ + …"
+  const multiMatch = name.match(
+    /\b([A-Z]{2,}[A-Z0-9./-]*\d[A-Z0-9./-]*(?:\s*\+\s*[A-Z]{2,}[A-Z0-9./-]*\d[A-Z0-9./-]*){1,4})\b/i,
+  );
+  if (multiMatch) return multiMatch[1]!.replace(/\s*\+\s*/g, "+").toUpperCase();
+
+  // Nippon / spaced single: "KFR 12DC", "NPC 12F-PRO", "NPC-24T-PRO"
+  const nippon = name.match(/\b((?:KFR|NPC|NTC|NPD)\s*-?\s*\d{1,3}[A-Z0-9-]*)\b/i);
+  if (nippon) return compactModelToken(nippon[1]!);
+
+  // MHI single outdoor/indoor: "SRK 35 ZT-WFB"
+  const mhiSingle = name.match(/\b((?:SRK|SRC|SRR|SRF|SCM)\s+\d{1,3}\s+[A-Z][A-Z0-9-]*)\b/i);
+  if (mhiSingle) return compactModelToken(mhiSingle[1]!);
+
+  // Slash kits without spaces: "ASW-H09B5C4/JOR3DI-C3"
+  const slash = name.match(/\b([A-Z]{2,}[A-Z0-9-]{2,})\s*\/\s*([A-Z]{2,}[A-Z0-9-]{2,})\b/i);
+  if (slash) return `${slash[1]!.toUpperCase()}/${slash[2]!.toUpperCase()}`;
+
+  // Solid single model: "FTXF35F", "NPC-24T-PRO", "GWH12AGCXB-K6DNA1A"
+  const single = name.match(/\b([A-Z]{2,}[-]?[A-Z0-9]*\d[A-Z0-9]*[-\w./]*)\b/);
+  if (single?.[1] && single[1]!.length >= 5) return single[1]!.toUpperCase();
 
   return null;
 }
 
 /** Extract brand name from product name using known brand list */
 export function extractBittelBrandName(name: string): string {
+  // Prefer shared aliases so we don't create duplicate brands
+  // ("Mitsubishi Heavy" vs "Mitsubishi Heavy Industries").
+  const fromShared = resolveBrandName(name);
+  if (fromShared) return fromShared;
+
   const known = [
-    "Daikin", "Mitsubishi Electric", "Mitsubishi Heavy Industries",
-    "LG", "Toshiba", "Gree", "AUX", "Nippon", "TechPoint", "TECHPOINT",
-    "Hitachi", "Fujitsu", "Samsung", "Haier", "TCL", "Bosch", "Panasonic",
+    "Daikin",
+    "Mitsubishi Electric",
+    "Mitsubishi Heavy",
+    "LG",
+    "Toshiba",
+    "Gree",
+    "AUX",
+    "Nippon",
+    "TechPoint",
+    "Hitachi",
+    "Fujitsu",
+    "Samsung",
+    "Haier",
+    "TCL",
+    "Bosch",
+    "Panasonic",
   ];
   for (const b of known) {
-    if (new RegExp(`\\b${b}\\b`, "i").test(name)) return b;
+    if (new RegExp(`\\b${b.replace(/\s+/g, "\\s+")}\\b`, "i").test(name)) return b;
   }
-  // Try resolveBrandName from shared utility
-  return resolveBrandName(name) ?? "Неизвестна марка";
+  if (/mitsubishi\s+heavy/i.test(name)) return "Mitsubishi Heavy";
+  return "Неизвестна марка";
 }
 
 export function parseBittelProductPage(
@@ -491,12 +584,15 @@ export function parseBittelProductPage(
   sourceUrl: string,
   listingCategoryPath?: string | null,
 ): BittelParsedProduct | null {
-  // Extract name
-  const h1 = html.match(/<h1[^>]*itemprop=["']name["'][^>]*>([\s\S]*?)<\/h1>/i) ??
-             html.match(/<h1[^>]*class=["'][^"']*product[_-]?name[^"']*["'][^>]*>([\s\S]*?)<\/h1>/i) ??
-             html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+  // Extract name — Bittel often uses <h1 data-meta="…"> without itemprop
+  const h1 =
+    html.match(/<h1[^>]*itemprop=["']name["'][^>]*>([\s\S]*?)<\/h1>/i) ??
+    html.match(/<h1[^>]*data-meta=["']([^"']+)["'][^>]*>/i) ??
+    html.match(/<h1[^>]*class=["'][^"']*product[_-]?name[^"']*["'][^>]*>([\s\S]*?)<\/h1>/i) ??
+    html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
   const ogTitle = html.match(/property=["']og:title["'][^>]*content=["']([^"']+)["']/i);
-  const name = decodeHtml((h1?.[1] ?? ogTitle?.[1] ?? "").replace(/<[^>]+>/g, ""));
+  const nameRaw = h1?.[1] ?? ogTitle?.[1] ?? "";
+  const name = decodeHtml(nameRaw.replace(/<[^>]+>/g, ""));
   if (!name || name.length < 3) return null;
 
   // Extract price in EUR — "1063.00 € | 2079.05 лв."

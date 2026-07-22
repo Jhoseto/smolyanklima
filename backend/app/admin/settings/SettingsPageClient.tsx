@@ -26,7 +26,9 @@ const ALL_CATALOG_SYNC_STEPS = [
 
 /** Очакван брой Condex продукти (за crawl прогрес преди финален брой). */
 const CONDEX_ESTIMATED_PRODUCTS = 95;
-const CONDEX_CRAWL_PERCENT = 28;
+/** ~267 инверторни + ~64 мулти + ~18 колонни + аксесоари. */
+const BITTEL_ESTIMATED_PRODUCTS = 350;
+const CATALOG_CRAWL_PERCENT = 28;
 
 type CondexProgressView = {
   phase: "crawl" | "import" | "done";
@@ -37,6 +39,8 @@ type CondexProgressView = {
   updated: number;
   skipped: number;
   startedAt: number;
+  /** Последно съобщение от SSE — показва се под прогрес бара. */
+  message?: string;
 };
 
 type BulclimaProgressView = {
@@ -54,44 +58,63 @@ function formatSyncEta(seconds: number): string {
   return s > 0 ? `~${m} мин ${s} сек` : `~${m} мин`;
 }
 
-function condexOverallPercent(p: CondexProgressView, now = Date.now()): number {
+function catalogOverallPercent(
+  p: CondexProgressView,
+  estimatedProducts: number,
+  now = Date.now(),
+): number {
   if (p.phase === "done") return 100;
   if (p.phase === "import" && p.total > 0) {
-    const tail = 100 - CONDEX_CRAWL_PERCENT;
-    return CONDEX_CRAWL_PERCENT + Math.round((p.current / p.total) * tail);
+    const tail = 100 - CATALOG_CRAWL_PERCENT;
+    return CATALOG_CRAWL_PERCENT + Math.round((p.current / p.total) * tail);
   }
   if (p.phase === "crawl") {
     const fromCount =
       p.discovered > 0
-        ? Math.round((p.discovered / CONDEX_ESTIMATED_PRODUCTS) * CONDEX_CRAWL_PERCENT)
+        ? Math.round((p.discovered / Math.max(1, estimatedProducts)) * CATALOG_CRAWL_PERCENT)
         : 0;
     const elapsedSec = (now - p.startedAt) / 1000;
-    const fromTime = Math.round((elapsedSec / 240) * CONDEX_CRAWL_PERCENT);
-    return Math.min(CONDEX_CRAWL_PERCENT, Math.max(4, fromCount, fromTime));
+    const fromTime = Math.round((elapsedSec / 240) * CATALOG_CRAWL_PERCENT);
+    return Math.min(CATALOG_CRAWL_PERCENT, Math.max(4, fromCount, fromTime));
   }
   return 4;
 }
 
-function condexEtaSeconds(p: CondexProgressView, now = Date.now()): number | null {
-  const pct = condexOverallPercent(p, now);
+function catalogEtaSeconds(
+  p: CondexProgressView,
+  estimatedProducts: number,
+  now = Date.now(),
+): number | null {
+  const pct = catalogOverallPercent(p, estimatedProducts, now);
   const elapsed = (now - p.startedAt) / 1000;
   if (pct < 4 || elapsed < 3) return null;
   return ((100 - pct) / pct) * elapsed;
 }
 
-function CondexSyncProgressBar({
+function CatalogSyncProgressBar({
   progress,
   syncing,
   nowMs,
+  siteLabel,
+  estimatedProducts,
 }: {
   progress: CondexProgressView;
   syncing: boolean;
   nowMs: number;
+  siteLabel: string;
+  estimatedProducts: number;
 }) {
-  const pct = condexOverallPercent(progress, nowMs);
-  const eta = syncing && progress.phase !== "done" ? condexEtaSeconds(progress, nowMs) : null;
+  const pct = catalogOverallPercent(progress, estimatedProducts, nowMs);
+  const eta =
+    syncing && progress.phase !== "done"
+      ? catalogEtaSeconds(progress, estimatedProducts, nowMs)
+      : null;
   const phaseLabel =
-    progress.phase === "done" ? "Готово" : progress.phase === "crawl" ? "Обхождане на condex.bg" : "Импорт в каталога";
+    progress.phase === "done"
+      ? "Готово"
+      : progress.phase === "crawl"
+        ? `Обхождане на ${siteLabel}`
+        : "Импорт в каталога";
   const detail =
     progress.phase === "crawl"
       ? `Намерени ${progress.discovered} продукта`
@@ -102,9 +125,17 @@ function CondexSyncProgressBar({
   return (
     <div className="rounded-xl border-2 border-sky-200 bg-gradient-to-br from-sky-50 to-white p-4 shadow-sm space-y-3">
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0 flex-1">
           <div className="text-xs font-black uppercase tracking-wide text-sky-800">{phaseLabel}</div>
           <div className="text-sm font-semibold text-slate-800 mt-0.5">{detail}</div>
+          {progress.message && progress.phase !== "done" && (
+            <p
+              className="mt-1.5 text-[11px] leading-snug text-slate-600 break-all line-clamp-2"
+              title={progress.message}
+            >
+              {progress.message}
+            </p>
+          )}
         </div>
         <div className="text-right shrink-0">
           <div className="text-2xl font-black text-sky-700 tabular-nums">{pct}%</div>
@@ -116,7 +147,7 @@ function CondexSyncProgressBar({
         </div>
       </div>
       <div className="h-3 rounded-full bg-sky-100 overflow-hidden ring-1 ring-sky-200/80">
-        {syncing && progress.phase === "crawl" && pct < CONDEX_CRAWL_PERCENT ? (
+        {syncing && progress.phase === "crawl" && pct < CATALOG_CRAWL_PERCENT ? (
           <div
             className="h-full bg-sky-500 transition-all duration-500 ease-out"
             style={{ width: `${Math.max(pct, 4)}%` }}
@@ -420,7 +451,8 @@ export default function SettingsPageClient() {
 
   function handleCondexProgress(ev: CondexSyncProgressEvent) {
     const ts = new Date().toLocaleTimeString("bg-BG");
-    appendCondexLog(`[${ts}] ${ev.message}`);
+    const msg = ev.message?.trim() || "";
+    if (msg) appendCondexLog(`[${ts}] ${msg}`);
     setCondexProgress((prev) => {
       const startedAt = prev?.startedAt ?? Date.now();
       const base = {
@@ -431,11 +463,12 @@ export default function SettingsPageClient() {
         updated: ev.updated ?? prev?.updated ?? 0,
         skipped: ev.skipped ?? prev?.skipped ?? 0,
         startedAt,
+        message: msg || prev?.message,
       };
       if (ev.phase === "done") {
         return {
           ...base,
-          phase: "done",
+          phase: "done" as const,
           discovered: ev.discovered ?? base.total ?? base.discovered,
           current: ev.total ?? base.current,
           total: ev.total ?? base.total,
@@ -444,7 +477,7 @@ export default function SettingsPageClient() {
       if (ev.phase === "import" || (ev.total != null && ev.total > 0)) {
         return {
           ...base,
-          phase: "import",
+          phase: "import" as const,
           discovered: ev.discovered ?? ev.total ?? base.discovered,
           current: ev.current ?? base.current,
           total: ev.total ?? base.total,
@@ -452,7 +485,7 @@ export default function SettingsPageClient() {
       }
       return {
         ...base,
-        phase: "crawl",
+        phase: "crawl" as const,
         discovered: ev.discovered ?? ev.current ?? base.discovered,
         current: ev.discovered ?? ev.current ?? base.current,
         total: 0,
@@ -469,7 +502,8 @@ export default function SettingsPageClient() {
 
   function handleBittelProgress(ev: BittelSyncProgressEvent) {
     const ts = new Date().toLocaleTimeString("bg-BG");
-    appendBittelLog(`[${ts}] ${ev.message}`);
+    const msg = ev.message?.trim() || "";
+    if (msg) appendBittelLog(`[${ts}] ${msg}`);
     setBittelProgress((prev) => {
       const startedAt = prev?.startedAt ?? Date.now();
       const base = {
@@ -480,6 +514,7 @@ export default function SettingsPageClient() {
         updated: ev.updated ?? prev?.updated ?? 0,
         skipped: ev.skipped ?? prev?.skipped ?? 0,
         startedAt,
+        message: msg || prev?.message,
       };
       if (ev.phase === "done") {
         return { ...base, phase: "done" as const, current: ev.total ?? base.current, total: ev.total ?? base.total };
@@ -735,8 +770,9 @@ export default function SettingsPageClient() {
   async function syncBittelCatalog(): Promise<boolean> {
     setBittelSyncing(true);
     setError(null);
-    setBittelLog([]);
     const startedAt = Date.now();
+    const ts = new Date().toLocaleTimeString("bg-BG");
+    setBittelLog([`[${ts}] Старт на синхронизация с bittel.bg…`]);
     setBittelNowMs(startedAt);
     setBittelProgress({
       phase: "crawl",
@@ -747,6 +783,7 @@ export default function SettingsPageClient() {
       updated: 0,
       skipped: 0,
       startedAt,
+      message: "Старт на синхронизация с bittel.bg…",
     });
     try {
       const res = await fetch("/api/admin/catalog/sync-bittel?stream=1", {
@@ -768,7 +805,9 @@ export default function SettingsPageClient() {
       await loadBittelStatus();
       return true;
     } catch (e: unknown) {
-      setError(String(e instanceof Error ? e.message : e));
+      const msg = String(e instanceof Error ? e.message : e);
+      setError(msg);
+      appendBittelLog(`Грешка: ${msg}`);
       return false;
     } finally {
       setBittelSyncing(false);
@@ -910,7 +949,14 @@ export default function SettingsPageClient() {
   useEffect(() => {
     if (!bittelSyncing) return;
     const id = window.setInterval(() => setBittelNowMs(Date.now()), 1000);
-    return () => window.clearInterval(id);
+    // След mount на конзолата — скролваме я в изглед
+    const t = window.setTimeout(() => {
+      bittelLogContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 80);
+    return () => {
+      window.clearInterval(id);
+      window.clearTimeout(t);
+    };
   }, [bittelSyncing]);
 
   useEffect(() => {
@@ -1683,10 +1729,12 @@ export default function SettingsPageClient() {
           </p>
           {condexProgress && (condexSyncing || condexProgress.phase === "done") && (
             <div className="mt-4">
-              <CondexSyncProgressBar
+              <CatalogSyncProgressBar
                 progress={condexProgress}
                 syncing={condexSyncing}
                 nowMs={condexNowMs}
+                siteLabel="condex.bg"
+                estimatedProducts={CONDEX_ESTIMATED_PRODUCTS}
               />
             </div>
           )}
@@ -1734,26 +1782,55 @@ export default function SettingsPageClient() {
             Обнови каталог от Биттел
           </Button>
           <p className="text-[10px] text-slate-500 mt-2">
-            Пълен обхват: ~255 климатика + ~64 мулти-сплит + аксесоари. Може да отнеме 20–35 минути.
+            Пълен обхват: ~267 инверторни + ~64 мулти-сплит + ~18 колонни + аксесоари. Обикновено 8–15 минути.
           </p>
-          {bittelProgress && (bittelSyncing || bittelProgress.phase === "done") && (
-            <div className="mt-4">
-              <CondexSyncProgressBar
-                progress={bittelProgress}
-                syncing={bittelSyncing}
-                nowMs={bittelNowMs}
-              />
-            </div>
-          )}
-          {(bittelSyncing || bittelLog.length > 0) && (
-            <div className="mt-4 space-y-2 border-t border-emerald-200/60 pt-4">
-              <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Дневник</div>
-              <div ref={bittelLogContainerRef} className="max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-slate-900/95 p-2 font-mono text-[10px] text-slate-100">
-                {bittelLog.map((line, i) => (
-                  <div key={`b-${i}`} className="whitespace-pre-wrap break-all py-0.5">
-                    {line}
+          {(bittelSyncing || bittelProgress || bittelLog.length > 0) && (
+            <div className="mt-4 space-y-3 border-t border-emerald-200/60 pt-4">
+              {bittelProgress && (bittelSyncing || bittelProgress.phase === "done") && (
+                <CatalogSyncProgressBar
+                  progress={bittelProgress}
+                  syncing={bittelSyncing}
+                  nowMs={bittelNowMs}
+                  siteLabel="bittel.bg"
+                  estimatedProducts={BITTEL_ESTIMATED_PRODUCTS}
+                />
+              )}
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+                  Дневник / конзола
+                </div>
+                <div className="text-[10px] text-slate-500 tabular-nums">
+                  {bittelLog.length > 0 ? `${bittelLog.length} реда` : bittelSyncing ? "чакане…" : ""}
+                </div>
+              </div>
+              <div
+                ref={bittelLogContainerRef}
+                className="h-64 max-h-[40vh] overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 p-3 font-mono text-[11px] leading-relaxed text-emerald-100 shadow-inner"
+              >
+                {bittelLog.length === 0 ? (
+                  <div className="text-slate-400">
+                    {bittelSyncing
+                      ? "Очакване на събития от bittel.bg…"
+                      : "Няма записи. Стартирайте синхронизацията."}
                   </div>
-                ))}
+                ) : (
+                  bittelLog.map((line, i) => (
+                    <div
+                      key={`b-${i}`}
+                      className={`whitespace-pre-wrap break-all py-0.5 ${
+                        /грешка|error/i.test(line)
+                          ? "text-red-300"
+                          : /нов\b/i.test(line)
+                            ? "text-emerald-300"
+                            : /обновен/i.test(line)
+                              ? "text-sky-300"
+                              : "text-slate-100"
+                      }`}
+                    >
+                      {line}
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           )}
