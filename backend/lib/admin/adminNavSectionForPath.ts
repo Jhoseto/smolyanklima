@@ -10,12 +10,12 @@ export function adminNavSectionForPath(pathname: string, role: AdminRole): Admin
     pathname.startsWith("/admin/chat/") ||
     pathname === "/admin/inquiries" ||
     pathname.startsWith("/admin/inquiries/") ||
-    pathname === "/admin/articles" ||
-    pathname.startsWith("/admin/articles/") ||
     pathname === "/admin/history" ||
     pathname.startsWith("/admin/history/") ||
     pathname === "/admin/supplier-orders" ||
-    pathname.startsWith("/admin/supplier-orders/")
+    pathname.startsWith("/admin/supplier-orders/") ||
+    pathname === "/admin/containers" ||
+    pathname.startsWith("/admin/containers/")
   ) {
     return "office";
   }
@@ -34,6 +34,8 @@ export function adminNavSectionForPath(pathname: string, role: AdminRole): Admin
   if (
     pathname === "/admin/staff" ||
     pathname.startsWith("/admin/staff/") ||
+    pathname === "/admin/articles" ||
+    pathname.startsWith("/admin/articles/") ||
     pathname === "/admin/settings" ||
     pathname.startsWith("/admin/settings/") ||
     pathname === "/admin/about" ||

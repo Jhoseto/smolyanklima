@@ -53,7 +53,7 @@ export default async function AdminDashboardPage() {
       .select("id,customer_name,customer_phone,service_type,created_at")
       .eq("status", "new")
       .order("created_at", { ascending: false })
-      .limit(5),
+      .limit(100),
     supabase
       .from("work_items")
       .select("id,title,status,priority,event_code,customer_name,customer_phone,due_date")
@@ -62,7 +62,7 @@ export default async function AdminDashboardPage() {
       .neq("event_code", "supplier_order")
       .order("priority", { ascending: false })
       .order("created_at", { ascending: false })
-      .limit(6),
+      .limit(100),
     supabase
       .from("work_items")
       .select("id,title,status,priority,event_code,customer_name,customer_phone,due_date")
@@ -70,7 +70,7 @@ export default async function AdminDashboardPage() {
       .in("status", ["planned", "in_progress"])
       .neq("event_code", "supplier_order")
       .order("due_date", { ascending: true })
-      .limit(6),
+      .limit(100),
     supabase
       .from("email_outbox")
       .select("id,to_email,subject,last_error,created_at")
@@ -106,7 +106,9 @@ export default async function AdminDashboardPage() {
         </div>
       )}
       {/* Operations planner — top of dashboard */}
-      <DashboardPlannerMount readOnly={readOnlyDashboard} canDeleteEvents={session.role === "master_admin"} />
+      <div id="dashboard-planner">
+        <DashboardPlannerMount readOnly={readOnlyDashboard} canDeleteEvents={session.role === "master_admin"} />
+      </div>
 
       <div>
         <h1 className="text-lg md:text-xl font-bold text-slate-900 mb-0.5 leading-tight">
@@ -148,12 +150,13 @@ export default async function AdminDashboardPage() {
         <DashboardPanel
           title="Днес"
           description="Работни елементи и събития за днес."
-          href="/admin/service/tasks"
+          href="/admin#dashboard-planner"
           empty="Няма събития за днес."
           badge={nWorkToday}
           tone={nWorkToday > 0 ? "today" : "neutral"}
           readOnly={readOnlyDashboard}
           items={(todaysItems.data ?? []).map((item) => ({
+            id: item.id,
             title: item.title,
             meta: [eventLabel(item.event_code), item.customer_name, item.customer_phone].filter(Boolean).join(" · "),
             detail: {
@@ -173,12 +176,13 @@ export default async function AdminDashboardPage() {
         <DashboardPanel
           title="Просрочени"
           description="Събития с минала дата, които още чакат действие."
-          href="/admin/service/tasks"
+          href="/admin#dashboard-planner"
           empty="Няма просрочени събития."
           badge={nWorkOverdue}
           tone={nWorkOverdue > 0 ? "danger" : "neutral"}
           readOnly={readOnlyDashboard}
           items={(overdueItems.data ?? []).map((item) => ({
+            id: item.id,
             title: item.title,
             meta: [formatBgDate(item.due_date), item.customer_name, item.customer_phone].filter(Boolean).join(" · "),
             detail: {
@@ -205,8 +209,10 @@ export default async function AdminDashboardPage() {
             tone={nInquiries > 0 ? "info" : "neutral"}
             readOnly={false}
             items={(latestInquiries.data ?? []).map((item) => ({
+              id: item.id,
               title: item.customer_name,
               meta: [item.customer_phone, inquiryServiceTypeLabel(item.service_type), formatBgDateTime(item.created_at)].filter(Boolean).join(" · "),
+              inquiryId: item.id,
               detail: {
                 title: item.customer_name,
                 subtitle: "Ново клиентско запитване",
@@ -214,7 +220,7 @@ export default async function AdminDashboardPage() {
                   { label: "Телефон", value: item.customer_phone },
                   { label: "Тип заявка", value: inquiryServiceTypeLabel(item.service_type) },
                   { label: "Получено", value: formatBgDateTime(item.created_at) },
-                  { label: "Следващо действие", value: "Отвори всички заявки, прегледай съобщението и маркирай като В работа / Контакт / Оглед." },
+                  { label: "Следващо действие", value: "Отвори заявката, прегледай съобщението и маркирай като В работа / Контакт / Оглед." },
                 ],
               },
             }))}

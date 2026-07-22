@@ -29,6 +29,7 @@ import {
 } from "@/lib/admin/productOnOrderInstancePut";
 import { enforceStockStatusAfterSale } from "@/lib/admin/productSaleStock";
 import { replaceProductImages, upsertProductSpecs, type ImageInput, type SpecsInput } from "@/lib/admin/syncProductChildren";
+import { resolveFallbackBrandId, resolveFallbackTypeId } from "@/lib/admin/productFallbackRefs";
 
 const SpecsSchema = z.object({
   btu: z.number().int().positive().nullable().optional(),
@@ -63,6 +64,8 @@ const MAX_IMAGES = 4;
 // Включваме `model_code` (миграция 0038). Колоната е по избор —
 // при липсваща се прави fallback към варианти без нея.
 const ADMIN_PRODUCT_DETAIL_SELECT_WITH_LOCATION =
+  "id,slug,name,model_code,brand_id,type_id,product_condition,container_id,description,internal_note,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,show_in_public_catalog,stock_status,stock_location,stock_quantity,sold_quantity,product_region,supplier_order_work_item_id";
+const ADMIN_PRODUCT_DETAIL_SELECT_NO_CONTAINER =
   "id,slug,name,model_code,brand_id,type_id,product_condition,description,internal_note,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,show_in_public_catalog,stock_status,stock_location,stock_quantity,sold_quantity,product_region,supplier_order_work_item_id";
 const ADMIN_PRODUCT_DETAIL_SELECT_BASE =
   "id,slug,name,model_code,brand_id,type_id,product_condition,description,internal_note,price,price_with_mount,indoor_unit_serial,outdoor_unit_serial,supplier_id,purchased_at,supplier_invoice_number,purchase_price,is_featured,show_in_public_catalog,stock_status,stock_quantity,sold_quantity,product_region,supplier_order_work_item_id";
@@ -81,8 +84,12 @@ const UpdateSchema = z
   name: z.string().min(2).max(200).optional(),
   /** Кратък/технически модел (напр. „FTXA50AW“). */
   modelCode: z.string().max(120).optional().nullable(),
-  brandId: z.string().uuid().optional(),
-  typeId: z.string().uuid().optional(),
+  // По избор — празен низ означава „без избрана марка/тип“ и се разрешава
+  // чрез placeholder „Неизвестна марка“/„Неизвестен тип“ (виж по-долу).
+  brandId: z.union([z.string().uuid(), z.literal("")]).optional(),
+  typeId: z.union([z.string().uuid(), z.literal("")]).optional(),
+  // Контейнер (пратка втора употреба) — само за productCondition = "used".
+  containerId: z.union([z.string().uuid(), z.literal("")]).optional().nullable(),
   productCondition: z.enum(["new", "used"]).optional(),
   description: z.string().max(5000).optional().nullable(),
   internalNote: z.string().max(5000).optional().nullable(),
@@ -131,6 +138,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     .select(ADMIN_PRODUCT_DETAIL_SELECT_WITH_LOCATION)
     .eq("id", id)
     .maybeSingle();
+  if (error && isPostgrestMissingColumn(error, "container_id")) {
+    ({ data: row, error } = await supabase.from("products").select(ADMIN_PRODUCT_DETAIL_SELECT_NO_CONTAINER).eq("id", id).maybeSingle());
+  }
   if (error && isPostgrestMissingColumn(error, "stock_location")) {
     ({ data: row, error } = await supabase.from("products").select(ADMIN_PRODUCT_DETAIL_SELECT_BASE).eq("id", id).maybeSingle());
   }
@@ -151,11 +161,13 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   if (!row) return withCors(req, NextResponse.json({ error: "Not found" }, { status: 404 }));
 
   const env = getEnv();
-  const [specsRes, imagesRes, brandRes, typeRes] = await Promise.all([
+  const containerId = (row as { container_id?: string | null }).container_id;
+  const [specsRes, imagesRes, brandRes, typeRes, containerRes] = await Promise.all([
     supabase.from("product_specs").select("*").eq("product_id", id).maybeSingle(),
     supabase.from("product_images").select("id,url,sort_order,is_main").eq("product_id", id).order("sort_order", { ascending: true }),
     row.brand_id ? supabase.from("brands").select("id,name").eq("id", row.brand_id).maybeSingle() : Promise.resolve({ data: null, error: null } as any),
     row.type_id ? supabase.from("product_types").select("id,name").eq("id", row.type_id).maybeSingle() : Promise.resolve({ data: null, error: null } as any),
+    containerId ? supabase.from("containers").select("id,name").eq("id", containerId).maybeSingle() : Promise.resolve({ data: null, error: null } as any),
   ]);
   if (specsRes.error) return withCors(req, NextResponse.json({ error: specsRes.error.message }, { status: 500 }));
   if (imagesRes.error) return withCors(req, NextResponse.json({ error: imagesRes.error.message }, { status: 500 }));
@@ -172,6 +184,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
         product_region: normalizeProductRegion((row as { product_region?: unknown }).product_region),
         brands: brandRes.data ?? null,
         product_types: typeRes.data ?? null,
+        container: containerRes.data ?? null,
         product_specs: specsRes.data ?? null,
         product_images: (imagesRes.data ?? []).map((image) => ({
           ...image,
@@ -216,8 +229,13 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     const mc = parsed.data.modelCode === null ? null : String(parsed.data.modelCode).trim();
     patch.model_code = mc && mc.length > 0 ? mc : null;
   }
-  if (parsed.data.brandId !== undefined) patch.brand_id = parsed.data.brandId;
-  if (parsed.data.typeId !== undefined) patch.type_id = parsed.data.typeId;
+  if (parsed.data.brandId !== undefined) {
+    patch.brand_id = parsed.data.brandId || (await resolveFallbackBrandId(supabase, null));
+  }
+  if (parsed.data.typeId !== undefined) {
+    patch.type_id = parsed.data.typeId || (await resolveFallbackTypeId(supabase, null));
+  }
+  if (parsed.data.containerId !== undefined) patch.container_id = parsed.data.containerId || null;
   if (parsed.data.productCondition !== undefined) patch.product_condition = parsed.data.productCondition;
   if (parsed.data.description !== undefined) patch.description = parsed.data.description;
   if (parsed.data.internalNote !== undefined) patch.internal_note = parsed.data.internalNote?.trim() || null;
@@ -444,6 +462,11 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       const { internal_note: _omitIn, ...patchRest5 } = patch;
       ({ data, error } = await supabase.from("products").update(patchRest5).eq("id", id).select("id,slug").maybeSingle());
       delete patch.internal_note;
+    }
+    if (error && isPostgrestMissingColumn(error, "container_id") && "container_id" in patch) {
+      const { container_id: _omitCid, ...patchRest6 } = patch;
+      ({ data, error } = await supabase.from("products").update(patchRest6).eq("id", id).select("id,slug").maybeSingle());
+      delete patch.container_id;
     }
     if (error) {
       console.error("[admin/products][PUT] products.update failed", { id, patch, ...formatSupabaseError(error) });

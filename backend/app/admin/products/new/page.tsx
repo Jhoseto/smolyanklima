@@ -9,12 +9,14 @@ import { Save } from "lucide-react";
 type Brand = { id: string; name: string };
 type ProductType = { id: string; name: string };
 type SupplierRow = { id: string; full_name: string };
+type ContainerRow = { id: string; name: string };
 
 export default function NewProductPage() {
   const router = useRouter();
   const [brands, setBrands] = useState<Brand[]>([]);
   const [types, setTypes] = useState<ProductType[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierRow[]>([]);
+  const [containers, setContainers] = useState<ContainerRow[]>([]);
   const [canEditPrice, setCanEditPrice] = useState(true);
   const [canEditStockLocation, setCanEditStockLocation] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,6 +27,7 @@ export default function NewProductPage() {
   // проверява тази стойност и показва confirm dialog преди да продължи.
   const [pendingPhotos, setPendingPhotos] = useState(0);
   const [pendingPhotosConfirm, setPendingPhotosConfirm] = useState<null | { proceed: () => void }>(null);
+  const [highlightRequired, setHighlightRequired] = useState(false);
 
   useEffect(() => {
     if (!toast) return;
@@ -34,16 +37,18 @@ export default function NewProductPage() {
 
   useEffect(() => {
     (async () => {
-      const [bRes, tRes, wRes, sRes] = await Promise.all([
+      const [bRes, tRes, wRes, sRes, cRes] = await Promise.all([
         fetch("/api/admin/meta/brands", { credentials: "include" }),
         fetch("/api/admin/meta/product-types", { credentials: "include" }),
         fetch("/api/admin/whoami", { credentials: "include" }),
         fetch("/api/admin/contacts?kind=supplier&perPage=200", { credentials: "include" }),
+        fetch("/api/admin/containers?perPage=200", { credentials: "include" }),
       ]);
       const b = await bRes.json();
       const t = await tRes.json();
       const w = await wRes.json();
       const s = await sRes.json();
+      const c = await cRes.json().catch(() => ({}));
       setBrands(b.data ?? []);
       setTypes(t.data ?? []);
       setSuppliers(
@@ -51,6 +56,9 @@ export default function NewProductPage() {
           id: row.id,
           full_name: row.full_name,
         })),
+      );
+      setContainers(
+        ((c as { data?: { id: string; name: string }[] }).data ?? []).map((row) => ({ id: row.id, name: row.name })),
       );
       const role = (w.data?.admin?.role as string) ?? "master_admin";
       setCanEditPrice(role === "master_admin" || role === "service_staff");
@@ -106,8 +114,15 @@ export default function NewProductPage() {
     }
   }
 
-  // Wrapper за save бутона — ако има неприбрани снимки, иска потвърждение.
+  // Wrapper за save бутона — валидира задължителните полета (Име + Модел),
+  // после ако има неприбрани снимки, иска потвърждение.
   function submit() {
+    if (!form.name.trim() || !form.modelCode.trim()) {
+      setHighlightRequired(true);
+      setError("Попълнете задължителните полета: Име и Модел.");
+      return;
+    }
+    setHighlightRequired(false);
     if (pendingPhotos > 0) {
       setPendingPhotosConfirm({ proceed: () => void doSubmit() });
       return;
@@ -149,6 +164,7 @@ export default function NewProductPage() {
           brands={brands}
           types={types}
           suppliers={suppliers}
+          containers={containers}
           form={form}
           setForm={setForm}
           canEditPrice={canEditPrice}
@@ -156,6 +172,7 @@ export default function NewProductPage() {
           canEditProductRegion={canEditStockLocation}
           autoPriceWithMountFromCatalog
           onPendingPhotosChange={setPendingPhotos}
+          highlightRequired={highlightRequired}
         />
       </Card>
 

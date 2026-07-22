@@ -15,6 +15,7 @@ import { listAdminAccessories, listAdminCatalogMerged } from "@/lib/admin/adminC
 import { applyAdminProductListChipFilters, parseProductListChipFilters } from "@/lib/admin/productListQueryFilters";
 import { CATALOG_VISIBLE_PRODUCTS_OR_FILTER } from "@/lib/admin/productCatalogDisplay";
 import { applyAdminProductSearchFilter } from "@/lib/admin/productSearchFilter";
+import { resolveFallbackBrandId, resolveFallbackTypeId } from "@/lib/admin/productFallbackRefs";
 
 const SpecsSchema = z.object({
   btu: z.number().int().positive().nullable().optional(),
@@ -88,6 +89,8 @@ const QuerySchema = z.object({
   typeId: z.string().uuid().optional(),
   // Доставчик (контакт от тип supplier) — за бърз филтър по доставчик.
   supplierId: z.string().uuid().optional(),
+  // Контейнер (пратка втора употреба) — за филтър от екрана „Контейнери“.
+  containerId: z.string().uuid().optional(),
   priceMin: z.coerce.number().nonnegative().optional(),
   priceMax: z.coerce.number().nonnegative().optional(),
   // Всеки климатик е уникален артикул (със собствени серийни номера), затова
@@ -120,18 +123,25 @@ const QuerySchema = z.object({
 
 const emptyToUndef = (v: unknown) => (typeof v === "string" && v.trim() === "" ? undefined : v);
 
+const emptyToNull = (v: unknown) => (typeof v === "string" && v.trim() === "" ? null : v);
+
 const CreateSchema = z.object({
   slug: z.preprocess(emptyToUndef, z.string().min(2).max(120).optional()),
   name: z.string().min(2).max(200),
-  /** Кратък/технически модел (напр. „FTXA50AW“). Различен от `name`,
-   *  което е публичното име в каталога. */
-  modelCode: z.preprocess(emptyToUndef, z.string().max(120).optional().nullable()),
-  brandId: z.string().uuid(),
-  typeId: z.string().uuid(),
+  /** Кратък/технически модел (напр. „FTXA50AW“). Задължителен заедно с
+   *  „Име“ — за бързо въвеждане на употребявани климатици от контейнер,
+   *  когато останалата информация не е известна веднага. */
+  modelCode: z.string().trim().min(1, "Моделът е задължителен").max(120),
+  // По избор — при липса се използва placeholder „Неизвестна марка“/„Неизвестен тип“
+  // (виж resolveFallbackBrandId/resolveFallbackTypeId), за да не се нарушат NOT NULL.
+  brandId: z.preprocess(emptyToNull, z.string().uuid().nullable().optional()),
+  typeId: z.preprocess(emptyToNull, z.string().uuid().nullable().optional()),
+  // Контейнер (пратка втора употреба) — само за productCondition = "used".
+  containerId: z.preprocess(emptyToNull, z.string().uuid().nullable().optional()),
   productCondition: z.enum(["new", "used"]).optional().default("new"),
   description: z.string().max(5000).optional(),
   internalNote: z.string().max(5000).optional().nullable(),
-  price: z.number().nonnegative(),
+  price: z.number().nonnegative().optional().default(0),
   priceWithMount: z.number().nonnegative().optional(),
   indoorUnitSerial: z.string().max(200).optional().nullable(),
   outdoorUnitSerial: z.string().max(200).optional().nullable(),
@@ -170,6 +180,7 @@ export async function GET(req: NextRequest) {
     brandId,
     typeId,
     supplierId,
+    containerId,
     priceMin,
     priceMax,
     hasSerial,
@@ -249,6 +260,7 @@ export async function GET(req: NextRequest) {
     if (brandId) query = query.eq("brand_id", brandId);
     if (typeId) query = query.eq("type_id", typeId);
     if (applySupplyFields && supplierId) query = query.eq("supplier_id", supplierId);
+    if (containerId) query = query.eq("container_id", containerId);
     if (priceMin !== undefined) query = query.gte("price", priceMin);
     if (priceMax !== undefined) query = query.lte("price", priceMax);
     if (applySupplyFields && hasSerial === "with") {
@@ -291,6 +303,7 @@ export async function GET(req: NextRequest) {
       if (brandId) stubQuery = stubQuery.eq("brand_id", brandId);
       if (typeId) stubQuery = stubQuery.eq("type_id", typeId);
       if (supplierId) stubQuery = stubQuery.eq("supplier_id", supplierId);
+      if (containerId) stubQuery = stubQuery.eq("container_id", containerId);
       if (priceMin !== undefined) stubQuery = stubQuery.gte("price", priceMin);
       if (priceMax !== undefined) stubQuery = stubQuery.lte("price", priceMax);
       if (hasSerial === "with") {
@@ -374,6 +387,43 @@ export async function GET(req: NextRequest) {
     product_region: normalizeProductRegion((r as { product_region?: unknown }).product_region),
   }));
 
+  // `container_id` и името на контейнера идват от отделни леки заявки
+  // (вместо join/колона в основния SELECT по-горе), за да не се разраства
+  // комбинаторно списъкът с fallback варианти и да не се чупи списъкът
+  // за всички, докато миграция 0097 още не е приложена навсякъде.
+  try {
+    const rowIds = rows.map((r) => (r as { id?: unknown }).id).filter((v): v is string => typeof v === "string");
+    if (rowIds.length > 0) {
+      const { data: containerIdRows, error: containerIdErr } = await supabase
+        .from("products")
+        .select("id,container_id")
+        .in("id", rowIds);
+      if (!containerIdErr) {
+        const containerIdByProduct = new Map(
+          (containerIdRows ?? [])
+            .filter((p) => p.container_id)
+            .map((p) => [p.id as string, p.container_id as string]),
+        );
+        const containerIds = Array.from(new Set(containerIdByProduct.values()));
+        let nameById = new Map<string, string>();
+        if (containerIds.length > 0) {
+          const { data: containerRows } = await supabase.from("containers").select("id,name").in("id", containerIds);
+          nameById = new Map((containerRows ?? []).map((c) => [c.id as string, c.name as string]));
+        }
+        for (const r of rows as Record<string, unknown>[]) {
+          const pid = (r as { id?: unknown }).id;
+          const cid = typeof pid === "string" ? containerIdByProduct.get(pid) : undefined;
+          if (cid) {
+            r.container_id = cid;
+            if (nameById.has(cid)) r.container = { name: nameById.get(cid) };
+          }
+        }
+      }
+    }
+  } catch {
+    // Неблокиращо — списъкът с продукти работи и без обогатяване с контейнер.
+  }
+
   return withCors(
     req,
     NextResponse.json({
@@ -409,6 +459,17 @@ export async function POST(req: NextRequest) {
     canEditProductStockLocation(session.role) ? normalizeProductStockLocation(parsed.data.stockLocation) : "warehouse";
   const reg = normalizeProductRegion(parsed.data.productRegion);
 
+  const [resolvedBrandId, resolvedTypeId] = await Promise.all([
+    resolveFallbackBrandId(supabase, parsed.data.brandId),
+    resolveFallbackTypeId(supabase, parsed.data.typeId),
+  ]);
+  if (!resolvedBrandId || !resolvedTypeId) {
+    return withCors(
+      req,
+      NextResponse.json({ error: "Неуспешно определяне на марка/тип за продукта." }, { status: 500 }),
+    );
+  }
+
   const indoorSerial = parsed.data.indoorUnitSerial?.trim() || "";
   const outdoorSerial = parsed.data.outdoorUnitSerial?.trim() || "";
   if (indoorSerial || outdoorSerial) {
@@ -431,9 +492,10 @@ export async function POST(req: NextRequest) {
   const insertBase = {
     slug: parsed.data.slug ?? null,
     name: parsed.data.name,
-    brand_id: parsed.data.brandId,
-    type_id: parsed.data.typeId,
+    brand_id: resolvedBrandId,
+    type_id: resolvedTypeId,
     model_code: parsed.data.modelCode?.trim() || null,
+    container_id: parsed.data.containerId ?? null,
     product_condition: parsed.data.productCondition,
     description: parsed.data.description,
     internal_note: parsed.data.internalNote?.trim() || null,
@@ -457,11 +519,18 @@ export async function POST(req: NextRequest) {
   const { model_code: _mc, ...insertBaseNoModelCode } = insertBase;
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { internal_note: _internalNote, ...insertBaseNoInternalNote } = insertBase;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { container_id: _cid, ...insertBaseNoContainer } = insertBase;
   const insertVariants: Record<string, unknown>[] = [
     { ...insertBase, stock_location: loc, product_region: reg },
     { ...insertBase, product_region: reg },
     { ...insertBase, stock_location: loc },
     insertBase,
+    // Fallback за DB без миграция 0097 (`container_id` колоната липсва).
+    { ...insertBaseNoContainer, stock_location: loc, product_region: reg },
+    { ...insertBaseNoContainer, product_region: reg },
+    { ...insertBaseNoContainer, stock_location: loc },
+    insertBaseNoContainer,
     // Fallback за DB без миграция 0038 (`model_code` колоната липсва).
     { ...insertBaseNoModelCode, stock_location: loc, product_region: reg },
     { ...insertBaseNoModelCode, product_region: reg },
@@ -485,7 +554,8 @@ export async function POST(req: NextRequest) {
     const missingReg = isPostgrestMissingColumn(error, "product_region");
     const missingMc = isPostgrestMissingColumn(error, "model_code");
     const missingInternalNote = isPostgrestMissingColumn(error, "internal_note");
-    if (!missingLoc && !missingReg && !missingMc && !missingInternalNote) break;
+    const missingContainer = isPostgrestMissingColumn(error, "container_id");
+    if (!missingLoc && !missingReg && !missingMc && !missingInternalNote && !missingContainer) break;
   }
 
   if (error) {

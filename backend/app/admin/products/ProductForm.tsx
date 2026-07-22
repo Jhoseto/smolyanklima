@@ -61,6 +61,8 @@ export type AdminProductForm = {
   brandId: string;
   typeId: string;
   productCondition: "new" | "used";
+  /** Контейнер (пратка втора употреба), само за `productCondition === "used"`. */
+  containerId: string;
   description: string;
   /** Само админ — не се показва в публичния каталог. */
   internalNote: string;
@@ -180,6 +182,7 @@ export function emptyProductForm(): AdminProductForm {
     brandId: "",
     typeId: "",
     productCondition: "new",
+    containerId: "",
     description: "",
     internalNote: "",
     price: 0,
@@ -354,12 +357,15 @@ function matchBrandByModelPrefix(
   return null;
 }
 
-function FieldTitle({ label, info, ai }: { label: string; info: string; ai?: boolean }) {
+function FieldTitle({ label, info, ai, required }: { label: string; info: string; ai?: boolean; required?: boolean }) {
   return (
     <div className="mb-0.5 md:mb-1 leading-tight" title={info}>
       <div className="flex items-start justify-between gap-1.5">
         <div className="text-[10px] md:text-[11px] font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1 min-w-0 flex-1">
-          <span className="truncate">{label}</span>
+          <span className="truncate">
+            {label}
+            {required && <span className="text-red-500"> *</span>}
+          </span>
           {ai && <AiBadge />}
         </div>
         <span
@@ -453,6 +459,7 @@ export function buildPostBody(form: AdminProductForm) {
     brandId: form.brandId,
     typeId: form.typeId,
     productCondition: form.productCondition,
+    containerId: form.containerId.trim() || null,
     description: form.description.trim() || undefined,
     internalNote: form.internalNote.trim() || undefined,
     price: Number(form.price),
@@ -495,6 +502,7 @@ export function buildPutBody(
     brandId: form.brandId,
     typeId: form.typeId,
     productCondition: form.productCondition,
+    containerId: form.containerId.trim() || null,
     description: form.description.trim() || null,
     internalNote: form.internalNote.trim() || null,
     price: Number(form.price),
@@ -536,6 +544,7 @@ export function mapLoadedProductToForm(p: {
   brand_id: string;
   type_id: string;
   product_condition?: "new" | "used";
+  container_id?: string | null;
   description?: string | null;
   internal_note?: string | null;
   price: number;
@@ -570,6 +579,7 @@ export function mapLoadedProductToForm(p: {
     brandId: p.brand_id,
     typeId: p.type_id,
     productCondition: p.product_condition === "used" ? "used" : "new",
+    containerId: p.container_id ?? "",
     description: p.description ?? "",
     internalNote: p.internal_note ?? "",
     price: Number(p.price),
@@ -701,6 +711,8 @@ type Props = {
   types: { id: string; name: string }[];
   /** Доставчици от Контакти (contact_kind = supplier) */
   suppliers?: { id: string; full_name: string }[];
+  /** Контейнери (пратки втора употреба) — показва се само за productCondition = "used". */
+  containers?: { id: string; name: string }[];
   form: AdminProductForm;
   setForm: Dispatch<SetStateAction<AdminProductForm>>;
   cloudinaryKind?: "product" | "accessory";
@@ -721,12 +733,15 @@ type Props = {
   readOnly?: boolean;
   /** highlight delivery fields */
   highlightDelivery?: boolean;
+  /** Червен outline на Име/Модел при опит за save с празни задължителни полета. */
+  highlightRequired?: boolean;
 };
 
 export function ProductFormFields({
   brands: brandsProp,
   types,
   suppliers = [],
+  containers = [],
   form,
   setForm,
   cloudinaryKind = "product",
@@ -738,6 +753,7 @@ export function ProductFormFields({
   onPendingPhotosChange,
   readOnly = false,
   highlightDelivery = false,
+  highlightRequired = false,
 }: Props) {
   const ro = Boolean(readOnly);
   /** Локален overlay за марки, създадени по време на тази сесия чрез
@@ -1440,6 +1456,52 @@ export function ProductFormFields({
       <datalist id="cooling-kw-options">{COOLING_KW_OPTIONS.map((v) => <option key={v} value={v} />)}</datalist>
       <datalist id="heating-kw-options">{HEATING_KW_OPTIONS.map((v) => <option key={v} value={v} />)}</datalist>
 
+      {/* НАЙ-ГОРЕ: Състояние — определя се първо, преди всичко останало.
+          При „Втора употреба" се появява и полето Контейнер. */}
+      <section className="rounded-lg md:rounded-2xl border border-slate-200 bg-white p-2.5 sm:p-4">
+        <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
+          <label className="block">
+            <FieldTitle label="Състояние" info="Нови или Втора употреба. Изберете първо — влияе на останалите полета." required />
+            <Select
+              value={form.productCondition}
+              onChange={(e) => setForm({ ...form, productCondition: e.target.value as AdminProductForm["productCondition"] })}
+            >
+              <option value="new">Нови</option>
+              <option value="used">Втора употреба</option>
+            </Select>
+          </label>
+          {form.productCondition === "used" && (
+            <label className="block">
+              <div className="flex items-center justify-between gap-2">
+                <FieldTitle label="Контейнер" info="Пратка втора употреба, към която принадлежи този климатик. Управление в Контейнери." />
+                <Link
+                  href="/admin/containers"
+                  target="_blank"
+                  rel="noopener"
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-blue-700 hover:text-brand-blue-900 -mt-1"
+                  title="Отвори списък с контейнери"
+                >
+                  Управление <ExternalLink className="w-3 h-3" />
+                </Link>
+              </div>
+              <Select value={form.containerId} onChange={(e) => setForm({ ...form, containerId: e.target.value })}>
+                <option value="">— няма избран контейнер —</option>
+                {containers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </Select>
+              {containers.length === 0 && (
+                <div className="mt-1.5 text-[11px] font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                  Няма контейнери. Създайте в Контейнери.
+                </div>
+              )}
+            </label>
+          )}
+        </div>
+      </section>
+
       {/* ===================================================================== */}
       {/* БЪРЗ СТАРТ ОТ СНИМКА — складовият flow за PWA на телефон.            */}
       {/* Снимаш ИЛИ избираш от галерия → AI попълва серия + модел + specs.    */}
@@ -1579,6 +1641,7 @@ export function ProductFormFields({
                 label="Модел"
                 info="Само моделът — кратко техническо обозначение от табелката."
                 ai={isAiField("modelCode")}
+                required
               />
               <Input
                 value={form.modelCode}
@@ -1588,7 +1651,13 @@ export function ProductFormFields({
                 }}
                 placeholder="напр. FTXA50AW"
                 autoCapitalize="characters"
-                className={isAiField("modelCode") ? "border-emerald-300 bg-emerald-50/40" : ""}
+                className={
+                  highlightRequired && !form.modelCode.trim()
+                    ? "border-red-400 ring-2 ring-red-300/50"
+                    : isAiField("modelCode")
+                      ? "border-emerald-300 bg-emerald-50/40"
+                      : ""
+                }
               />
             </label>
           </div>
@@ -1621,7 +1690,9 @@ export function ProductFormFields({
             <label className="block md:col-span-7">
               <div className="flex items-center justify-between gap-2 mb-1 leading-tight">
                 <div>
-                  <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">Име в клиентския каталог</div>
+                  <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">
+                    Име в клиентския каталог<span className="text-red-500"> *</span>
+                  </div>
                   <div className="hidden md:block text-[10px] text-slate-400 truncate" title="Това вижда клиентът. Обикновено: марка + модел + kW.">
                     Това вижда клиентът. Обикновено: марка + модел + kW.
                   </div>
@@ -1647,6 +1718,7 @@ export function ProductFormFields({
                   });
                 }}
                 placeholder="напр. Daikin Stylish FTXA50AW 5kW"
+                className={highlightRequired && !form.name.trim() ? "border-red-400 ring-2 ring-red-300/50" : ""}
               />
             </label>
           </div>
@@ -1655,14 +1727,8 @@ export function ProductFormFields({
             <label className="block">
               <FieldTitle label="Тип" info="Стенен, мулти-сплит, касетъчен и т.н." />
               <Select value={form.typeId} onChange={(e) => setForm({ ...form, typeId: e.target.value })}>
+                <option value="">— без избран тип —</option>
                 {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </Select>
-            </label>
-            <label className="block">
-              <FieldTitle label="Състояние" info="Нови или Втора употреба." />
-              <Select value={form.productCondition} onChange={(e) => setForm({ ...form, productCondition: e.target.value as AdminProductForm["productCondition"] })}>
-                <option value="new">Нови</option>
-                <option value="used">Втора употреба</option>
               </Select>
             </label>
           </div>

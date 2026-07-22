@@ -136,6 +136,8 @@ type ProductRow = {
   brands?: { name?: string } | null;
   product_types?: { name?: string } | null;
   supplier?: { full_name?: string | null } | { full_name?: string | null }[] | null;
+  container_id?: string | null;
+  container?: { name?: string | null } | { name?: string | null }[] | null;
 };
 
 type OptionRow = { id: string; name: string };
@@ -595,6 +597,9 @@ export default function AdminProductsPage() {
   const [btuFilters, setBtuFilters] = useState<string[]>([]);
   const [typeId, setTypeId] = useState("");
   const [supplierId, setSupplierId] = useState("");
+  const [containerId, setContainerId] = useState("");
+  const [containers, setContainers] = useState<OptionRow[]>([]);
+  const containerIdHandledRef = useRef(false);
   const [priceRange, setPriceRange] = useState<[number, number]>([
     ADMIN_PRICE_FILTER_MIN,
     ADMIN_PRICE_FILTER_MAX,
@@ -673,6 +678,7 @@ export default function AdminProductsPage() {
         btuFilters,
         typeId,
         supplierId,
+        containerId,
         priceRange,
         hasSerial,
         hasPurchasePrice,
@@ -694,6 +700,7 @@ export default function AdminProductsPage() {
       btuFilters,
       typeId,
       supplierId,
+      containerId,
       priceRange,
       hasSerial,
       hasPurchasePrice,
@@ -723,6 +730,7 @@ export default function AdminProductsPage() {
     if (btuFilters.length) sp.set("btu", btuFilters.join(","));
     if (typeId) sp.set("typeId", typeId);
     if (supplierId) sp.set("supplierId", supplierId);
+    if (containerId) sp.set("containerId", containerId);
     if (priceRange[0] > ADMIN_PRICE_FILTER_MIN) sp.set("priceMin", String(priceRange[0]));
     if (priceRange[1] < ADMIN_PRICE_FILTER_MAX) sp.set("priceMax", String(priceRange[1]));
     if (hasSerial) sp.set("hasSerial", hasSerial);
@@ -747,6 +755,7 @@ export default function AdminProductsPage() {
     btuFilters,
     typeId,
     supplierId,
+    containerId,
     priceRange,
     hasSerial,
     hasPurchasePrice,
@@ -815,16 +824,18 @@ export default function AdminProductsPage() {
 
   async function loadMeta() {
     try {
-      const [bRes, tRes, sRes, wRes] = await Promise.all([
+      const [bRes, tRes, sRes, cRes, wRes] = await Promise.all([
         fetch("/api/admin/meta/brands?usedInProducts=1", { credentials: "include" }),
         fetch("/api/admin/meta/product-types", { credentials: "include" }),
         fetch("/api/admin/contacts?kind=supplier&perPage=500", { credentials: "include" }),
+        fetch("/api/admin/containers?perPage=200", { credentials: "include" }),
         fetch("/api/admin/whoami", { credentials: "include" }),
       ]);
-      const [bJson, tJson, sJson, wJson] = await Promise.all([
+      const [bJson, tJson, sJson, cJson, wJson] = await Promise.all([
         bRes.json().catch(() => ({})),
         tRes.json().catch(() => ({})),
         sRes.json().catch(() => ({})),
+        cRes.json().catch(() => ({})),
         wRes.json().catch(() => ({})),
       ]);
       if (bRes.ok) setBrands(((bJson as { data?: OptionRow[] }).data ?? []) as OptionRow[]);
@@ -837,6 +848,10 @@ export default function AdminProductsPage() {
         const m: Record<string, string> = {};
         for (const r of rows) m[r.id] = r.full_name;
         setSuppliersById(m);
+      }
+      if (cRes.ok) {
+        const rows = ((cJson as { data?: { id: string; name: string }[] }).data ?? []) as { id: string; name: string }[];
+        setContainers(rows.map((r) => ({ id: r.id, name: r.name })));
       }
       if (wRes.ok) {
         const role = (wJson as { data?: { admin?: { role?: string } | null } }).data?.admin?.role ?? "";
@@ -856,6 +871,13 @@ export default function AdminProductsPage() {
     if (joined?.trim()) return joined.trim();
     if (p.supplier_id && suppliersById[p.supplier_id]) return suppliersById[p.supplier_id];
     return "—";
+  }
+
+  function containerLabel(p: Pick<ProductRow, "container_id" | "container">): string | null {
+    const joined = p.container
+      ? (Array.isArray(p.container) ? p.container[0]?.name : p.container.name)
+      : null;
+    return joined?.trim() || null;
   }
 
   async function load() {
@@ -892,6 +914,17 @@ export default function AdminProductsPage() {
     setBtuFilters([]);
     setHasSerial("");
     setHasPurchasePrice("");
+    setPage(1);
+    router.replace("/admin/products");
+  }, [listFiltersReady, searchParams, router]);
+
+  /** Дълбока връзка от екрана „Контейнери“ — предварително филтрира по контейнер. */
+  useEffect(() => {
+    if (!listFiltersReady || containerIdHandledRef.current) return;
+    const cid = searchParams.get("containerId");
+    if (!cid) return;
+    containerIdHandledRef.current = true;
+    setContainerId(cid);
     setPage(1);
     router.replace("/admin/products");
   }, [listFiltersReady, searchParams, router]);
@@ -943,6 +976,7 @@ export default function AdminProductsPage() {
     setBtuFilters(d.btuFilters);
     setTypeId(d.typeId);
     setSupplierId(d.supplierId);
+    setContainerId("");
     setPriceRange(d.priceRange);
     setHasSerial(d.hasSerial);
     setHasPurchasePrice(d.hasPurchasePrice);
@@ -1339,6 +1373,7 @@ export default function AdminProductsPage() {
   const supplierName = supplierId ? suppliersById[supplierId] : null;
   const brandName = brandId ? brands.find((b) => b.id === brandId)?.name : null;
   const typeName = typeId ? types.find((t) => t.id === typeId)?.name : null;
+  const containerName = containerId ? containers.find((c) => c.id === containerId)?.name : null;
 
   const activeFilters: ActiveFilterChip[] = [];
   if (q.trim()) {
@@ -1417,6 +1452,7 @@ export default function AdminProductsPage() {
   }
   if (typeId) activeFilters.push({ key: "type", label: `Тип: ${typeName ?? "—"}`, onClear: () => setTypeId("") });
   if (supplierId) activeFilters.push({ key: "supplier", label: `Доставчик: ${supplierName ?? "—"}`, onClear: () => setSupplierId("") });
+  if (containerId) activeFilters.push({ key: "container", label: `Контейнер: ${containerName ?? "—"}`, onClear: () => setContainerId("") });
   if (isAdminPriceFilterActive(priceRange)) {
     activeFilters.push({
       key: "price",
@@ -1683,6 +1719,12 @@ export default function AdminProductsPage() {
                 .map(([id, name]) => (
                   <option key={id} value={id}>{name}</option>
                 ))}
+            </Select>
+            <Select value={containerId} onChange={(e) => { setContainerId(e.target.value); }}>
+              <option value="">Контейнер: всички</option>
+              {containers.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
             </Select>
             <Select value={stockLocationFilter} onChange={(e) => { setStockLocationFilter(e.target.value as "" | ProductStockLocation); }}>
               <option value="">Място: всички</option>
@@ -2071,6 +2113,11 @@ export default function AdminProductsPage() {
                 </Td>
                 <Td className="text-center align-middle min-w-0 truncate whitespace-nowrap" title={isAccessoryRow(p) ? undefined : supplierLabel(p)}>
                   <span className="block truncate">{isAccessoryRow(p) ? "—" : supplierLabel(p)}</span>
+                  {!isAccessoryRow(p) && containerLabel(p) && (
+                    <span className="block truncate text-[9px] font-semibold text-brand-blue-600" title={containerLabel(p) ?? undefined}>
+                      {containerLabel(p)}
+                    </span>
+                  )}
                 </Td>
                 <Td
                   className="text-[10px] text-slate-700 text-center align-middle truncate"
@@ -2447,6 +2494,12 @@ export default function AdminProductsPage() {
                   {supplierLabel(p)}
                 </span>
               </div>
+              {!isAccessoryRow(p) && containerLabel(p) && (
+                <div className="col-span-2 flex min-w-0 gap-1">
+                  <span className="text-slate-400 shrink-0">Контейнер</span>
+                  <span className="font-medium text-brand-blue-700 truncate min-w-0">{containerLabel(p)}</span>
+                </div>
+              )}
               {!isAccessoryRow(p) && productShowsSupplierInvoice(p.stock_status) && (
               <div className="col-span-2 min-w-0">
                 <span className="text-slate-400">Фактура </span>

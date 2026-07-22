@@ -15,6 +15,7 @@ import { Save, Trash2 } from "lucide-react";
 type Brand = { id: string; name: string };
 type ProductType = { id: string; name: string };
 type SupplierRow = { id: string; full_name: string };
+type ContainerRow = { id: string; name: string };
 
 export default function EditProductPage() {
   const params = useParams<{ id: string }>();
@@ -26,6 +27,8 @@ export default function EditProductPage() {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [types, setTypes] = useState<ProductType[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierRow[]>([]);
+  const [containers, setContainers] = useState<ContainerRow[]>([]);
+  const [highlightRequired, setHighlightRequired] = useState(false);
   const [role, setRole] = useState<string>("master_admin");
   const [canEditPrice, setCanEditPrice] = useState(true);
   const [canEditStockLocation, setCanEditStockLocation] = useState(false);
@@ -48,18 +51,20 @@ export default function EditProductPage() {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const [bRes, tRes, pRes, wRes, sRes] = await Promise.all([
+      const [bRes, tRes, pRes, wRes, sRes, cRes] = await Promise.all([
         fetch("/api/admin/meta/brands", { credentials: "include" }),
         fetch("/api/admin/meta/product-types", { credentials: "include" }),
         fetch(`/api/admin/products/${id}`, { credentials: "include" }),
         fetch("/api/admin/whoami", { credentials: "include" }),
         fetch("/api/admin/contacts?kind=supplier&perPage=200", { credentials: "include" }),
+        fetch("/api/admin/containers?perPage=200", { credentials: "include" }),
       ]);
       const b = await bRes.json();
       const t = await tRes.json();
       const p = await pRes.json();
       const w = await wRes.json();
       const s = await sRes.json();
+      const c = await cRes.json().catch(() => ({}));
       setBrands(b.data ?? []);
       setTypes(t.data ?? []);
       setSuppliers(
@@ -67,6 +72,9 @@ export default function EditProductPage() {
           id: row.id,
           full_name: row.full_name,
         })),
+      );
+      setContainers(
+        ((c as { data?: { id: string; name: string }[] }).data ?? []).map((row) => ({ id: row.id, name: row.name })),
       );
       const r = (w.data?.admin?.role as string) ?? "master_admin";
       setRole(r);
@@ -156,8 +164,21 @@ export default function EditProductPage() {
     return true;
   }
 
+  function validateRequiredFields(): boolean {
+    if (!form.name.trim() || !form.modelCode.trim()) {
+      setHighlightRequired(true);
+      const msg = "Попълнете задължителните полета: Име и Модел.";
+      setError(msg);
+      setToast({ kind: "err", text: msg });
+      return false;
+    }
+    setHighlightRequired(false);
+    return true;
+  }
+
   async function doSaveChanges() {
     setError(null);
+    if (!validateRequiredFields()) return;
 
     const needsDelivery = isDeliveredInstance || highlightDelivery;
     if (needsDelivery && !(await validateDeliveryForSave(false))) return;
@@ -189,6 +210,7 @@ export default function EditProductPage() {
 
   async function doSaveAsNewInstance() {
     setError(null);
+    if (!validateRequiredFields()) return;
     if (!isOnOrderTemplateLive) return;
     if (!(await validateDeliveryForSave(true))) return;
 
@@ -333,6 +355,7 @@ export default function EditProductPage() {
           brands={brands}
           types={types}
           suppliers={suppliers}
+          containers={containers}
           form={form}
           setForm={setForm}
           canEditPrice={canEditPrice}
@@ -342,6 +365,7 @@ export default function EditProductPage() {
           onPendingPhotosChange={setPendingPhotos}
           readOnly={readOnly}
           highlightDelivery={highlightDelivery || isDeliveredInstance}
+          highlightRequired={highlightRequired}
         />
       </Card>
 

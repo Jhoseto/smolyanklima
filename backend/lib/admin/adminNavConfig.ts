@@ -10,6 +10,7 @@ import {
   FolderOpen,
   Receipt,
   Truck,
+  Container,
   Bot,
   Headphones,
   MessageSquare,
@@ -56,15 +57,20 @@ export const PROFILE_LINK: AdminNavLinkDef = {
 };
 
 function officeSectionLinks(role: AdminRole): AdminNavLinkDef[] {
+  // Ред на модулите: Продукти, Продажби, Запитвания, Поръчки, Контакти,
+  // Чат на живо, Контейнери — по изричното желание за подредбата на менюто.
   const links: AdminNavLinkDef[] = [
     { href: "/admin/products", label: "Продукти", iconKey: "products", Icon: Package },
   ];
 
   if (role === "master_admin" || role === "office_staff") {
-    links.push(
-      { href: "/admin/history", label: "Продажби", iconKey: "sales", Icon: Receipt },
-      { href: "/admin/supplier-orders", label: "Поръчки", iconKey: "orders", Icon: Truck },
-    );
+    links.push({ href: "/admin/history", label: "Продажби", iconKey: "sales", Icon: Receipt });
+  }
+
+  links.push({ href: "/admin/inquiries", label: "Запитвания", iconKey: "inquiries", Icon: MessageSquare });
+
+  if (role === "master_admin" || role === "office_staff") {
+    links.push({ href: "/admin/supplier-orders", label: "Поръчки", iconKey: "orders", Icon: Truck });
   }
 
   links.push(
@@ -76,9 +82,11 @@ function officeSectionLinks(role: AdminRole): AdminNavLinkDef[] {
       iconKey: "chat",
       Icon: Headphones,
     },
-    { href: "/admin/inquiries", label: "Запитвания", iconKey: "inquiries", Icon: MessageSquare },
-    { href: "/admin/articles", label: "Статии", iconKey: "articles", Icon: FileText },
   );
+
+  if (role === "master_admin" || role === "office_staff") {
+    links.push({ href: "/admin/containers", label: "Контейнери", iconKey: "containers", Icon: Container });
+  }
 
   if (role === "office_staff") {
     links.push({
@@ -133,6 +141,7 @@ export function getAdminNavSections(role: AdminRole): AdminNavSectionDef[] {
 
     const adminLinks: AdminNavLinkDef[] = [
       { href: "/admin/staff", label: "Персонал", iconKey: "staff", Icon: ShieldCheck },
+      { href: "/admin/articles", label: "Статии", iconKey: "articles", Icon: FileText },
     ];
 
     if (role === "master_admin") {
