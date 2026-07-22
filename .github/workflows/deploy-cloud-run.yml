@@ -53,8 +53,13 @@ jobs:
       - name: Build & push unified image
         env:
           IMAGE: gcr.io/${{ env.PROJECT_ID }}/smolyanklima:${{ github.sha }}
+          ORIGIN: ${{ secrets.PROD_FRONTEND_ORIGIN }}
         run: |
-          docker build -t "$IMAGE" .
+          BUILD_ARG=""
+          if [ -n "${ORIGIN:-}" ]; then
+            BUILD_ARG="--build-arg NEXT_PUBLIC_SITE_ORIGIN=${ORIGIN}"
+          fi
+          docker build $BUILD_ARG -t "$IMAGE" .
           docker push "$IMAGE"
 
       - name: Deploy to Cloud Run (unified)
@@ -66,7 +71,7 @@ jobs:
           NOTIFY_FROM: ${{ secrets.PROD_NOTIFY_EMAIL_FROM }}
         run: |
           set -euo pipefail
-          ENV_VARS="NODE_ENV=production,FRONTEND_ORIGIN=${ORIGIN},APP_URL=${ORIGIN}"
+          ENV_VARS="NODE_ENV=production,FRONTEND_ORIGIN=${ORIGIN},APP_URL=${ORIGIN},NEXT_PUBLIC_SITE_ORIGIN=${ORIGIN}"
           if [ -n "${NOTIFY_TO:-}" ]; then ENV_VARS="${ENV_VARS},NOTIFY_EMAIL_TO=${NOTIFY_TO}"; fi
           if [ -n "${NOTIFY_FROM:-}" ]; then ENV_VARS="${ENV_VARS},NOTIFY_EMAIL_FROM=${NOTIFY_FROM}"; fi
           gcloud run deploy "$SERVICE" \

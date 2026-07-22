@@ -23,13 +23,40 @@ export function getPublicFrontendOriginFromEnv(): string {
   return defaultPublicFrontendOrigin();
 }
 
+function isLocalAdminDevOrigin(origin: string): boolean {
+  try {
+    const u = new URL(origin);
+    if (u.port !== "3001") return false;
+    return u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname === "[::1]";
+  } catch {
+    return false;
+  }
+}
+
+/** Линкове за клиенти — canonical domain, не вътрешен Cloud Run / dev admin host. */
+function shouldUseCanonicalPublicOrigin(origin: string): boolean {
+  if (isLocalAdminDevOrigin(origin)) return true;
+  try {
+    const u = new URL(origin);
+    if (u.hostname.endsWith(".run.app")) return true;
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
 /**
  * Origin за линкове към публичния каталог.
- * В браузъра (админ) — текущият host (production: smolyanklima.com), не localhost от build.
+ * Production (smolyanklima.com): admin + сайт на един origin → window.location.origin.
+ * Local dev: админ :3001 → Vite :3000. Cloud Run *.run.app → FRONTEND_ORIGIN / smolyanklima.com.
  */
 export function resolvePublicFrontendOrigin(): string {
   if (typeof window !== "undefined" && window.location?.origin) {
-    return window.location.origin.replace(/\/$/, "");
+    const origin = window.location.origin.replace(/\/$/, "");
+    if (shouldUseCanonicalPublicOrigin(origin)) {
+      return getPublicFrontendOriginFromEnv();
+    }
+    return origin;
   }
   return getPublicFrontendOriginFromEnv();
 }

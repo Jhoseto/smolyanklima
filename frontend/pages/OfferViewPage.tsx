@@ -98,6 +98,45 @@ function unitAfterTradeDiscount(it: OfferItem) {
   });
 }
 
+function OfferPriceCell({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="min-w-0 rounded-xl bg-[#F8FAFC] px-3 py-2.5">
+      <div className="text-[10px] font-bold uppercase leading-snug text-gray-400">{label}</div>
+      <div className="mt-1 font-bold tabular-nums text-sm text-gray-900 sm:text-base">{value}</div>
+    </div>
+  );
+}
+
+function OfferItemPriceBreakdown({ item, currency }: { item: OfferItem; currency: string }) {
+  const hasDiscount = Number(item.trade_discount_percent) > 0;
+  const hasInstall = item.install_price != null;
+
+  return (
+    <div className="mt-5 border-t border-gray-100 pt-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+        <OfferPriceCell label="Бройки" value={item.quantity} />
+        <OfferPriceCell label="Ед. цена" value={money(item.unit_price, currency)} />
+        <OfferPriceCell label={TRADE_DISCOUNT_LABEL} value={formatTradeDiscountPercent(item.trade_discount_percent)} />
+        {hasDiscount && (
+          <OfferPriceCell
+            label={`След ${TRADE_DISCOUNT_LABEL.toLowerCase()}`}
+            value={money(unitAfterTradeDiscount(item), currency)}
+          />
+        )}
+        {hasInstall && (
+          <OfferPriceCell label="Монтаж (ед.)" value={money(item.install_price!, currency)} />
+        )}
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-4 rounded-xl bg-[#FFF5ED] px-4 py-3">
+        <span className="text-xs font-bold uppercase tracking-wide text-[#FF4D00]">Общо за артикула</span>
+        <span className="shrink-0 font-outfit text-lg font-black tabular-nums text-[#FF4D00] sm:text-xl">
+          {money(lineTotal(item), currency)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function displayName(it: OfferItem) {
   return [it.brand_name, it.model_code || it.name].filter(Boolean).join(' ') || it.name;
 }
@@ -372,36 +411,7 @@ export default function OfferViewPage() {
                         </div>
 
                         {/* Price breakdown */}
-                        <div className="mt-5 grid grid-cols-2 gap-3 border-t border-gray-100 pt-4 sm:grid-cols-3 lg:grid-cols-6">
-                          <div className="rounded-xl bg-[#F8FAFC] px-3 py-2">
-                            <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Бройки</div>
-                            <div className="font-bold text-gray-900">{it.quantity}</div>
-                          </div>
-                          <div className="rounded-xl bg-[#F8FAFC] px-3 py-2">
-                            <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Ед. цена</div>
-                            <div className="font-bold text-gray-900">{money(it.unit_price, data.currency)}</div>
-                          </div>
-                          <div className="rounded-xl bg-[#F8FAFC] px-3 py-2">
-                            <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400">{TRADE_DISCOUNT_LABEL}</div>
-                            <div className="font-bold text-gray-900">{formatTradeDiscountPercent(it.trade_discount_percent)}</div>
-                          </div>
-                          {Number(it.trade_discount_percent) > 0 && (
-                            <div className="rounded-xl bg-[#F8FAFC] px-3 py-2">
-                              <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400">След {TRADE_DISCOUNT_LABEL.toLowerCase()}</div>
-                              <div className="font-bold text-gray-900">{money(unitAfterTradeDiscount(it), data.currency)}</div>
-                            </div>
-                          )}
-                          {it.install_price != null && (
-                            <div className="rounded-xl bg-[#F8FAFC] px-3 py-2">
-                              <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Монтаж</div>
-                              <div className="font-bold text-gray-900">{money(it.install_price, data.currency)}</div>
-                            </div>
-                          )}
-                          <div className="rounded-xl bg-[#FFF5ED] px-3 py-2 col-span-2 sm:col-span-1 lg:col-span-1">
-                            <div className="text-[10px] font-bold uppercase tracking-wide text-[#FF4D00]">Общо</div>
-                            <div className="font-bold text-[#FF4D00]">{money(lineTotal(it), data.currency)}</div>
-                          </div>
-                        </div>
+                        <OfferItemPriceBreakdown item={it} currency={data.currency} />
                       </div>
                     </div>
                   </article>
@@ -534,7 +544,7 @@ export default function OfferViewPage() {
                     <tr className="text-[10px] font-bold uppercase tracking-wide text-gray-400">
                       <th className="pb-2 text-left">Артикул</th>
                       <th className="pb-2 text-right">Бр.</th>
-                      <th className="pb-2 text-center">{TRADE_DISCOUNT_LABEL}</th>
+                      <th className="pb-2 text-center whitespace-nowrap">{TRADE_DISCOUNT_LABEL}</th>
                       <th className="pb-2 text-right">Общо</th>
                     </tr>
                   </thead>
