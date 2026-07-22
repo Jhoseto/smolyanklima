@@ -5,14 +5,15 @@ import { useDebounce } from "@/lib/hooks/useDebounce";
 import Link from "next/link";
 import {
   Plus, FileText, ChevronRight, Download,
-  ClipboardCheck, Wrench, CheckCircle, Loader2, Search, ArrowLeft, Trash2, Star,
+  ClipboardCheck, Wrench, CheckCircle, Loader2, Search, ArrowLeft, Trash2, Star, FilterX,
 } from "lucide-react";
 import { ServiceProtocolFormWizard } from "./ServiceProtocolFormWizard";
 import { ServiceProtocolPreview } from "./ServiceProtocolPreview";
 import type { AdminRole } from "@/lib/admin/db";
-import { FREON_CHARGE_LABEL, type FreonChargeMethod } from "@/lib/repair-protocol-fields";
+import { FREON_CHARGE_LABEL, SERVICE_KIND_LABEL, type FreonChargeMethod, type RepairServiceKind } from "@/lib/repair-protocol-fields";
 
 type ProtocolStatus = "prepared" | "in_progress" | "signed";
+type KindFilter = "" | RepairServiceKind;
 
 interface RepairProtocol {
   id: string;
@@ -26,6 +27,7 @@ interface RepairProtocol {
   is_japanese_brand: boolean | null;
   freon_charge_method: FreonChargeMethod | null;
   status: ProtocolStatus;
+  service_kind?: RepairServiceKind | null;
   service_rating: number | null;
   created_at: string;
 }
@@ -36,8 +38,21 @@ const STATUS_CONFIG: Record<ProtocolStatus, { label: string; icon: React.Compone
   signed:      { label: "Подписан",               icon: CheckCircle,    cls: "bg-brand-blue-100 text-brand-blue-900"},
 };
 
+const KIND_FILTERS: { value: KindFilter; label: string }[] = [
+  { value: "", label: "Всички" },
+  { value: "client", label: "За клиент" },
+  { value: "recycle", label: "Рециклиране" },
+];
+
 interface Props {
   role: AdminRole;
+}
+
+interface ListFilters {
+  q: string;
+  kind: KindFilter;
+  dateFrom: string;
+  dateTo: string;
 }
 
 export function ServiceDocumentsClient({ role }: Props) {
@@ -46,6 +61,9 @@ export function ServiceDocumentsClient({ role }: Props) {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [kindFilter, setKindFilter] = useState<KindFilter>("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const debouncedSearch = useDebounce(search, 300);
   const isFirstRender = useRef(true);
   const [openForm, setOpenForm] = useState(false);
@@ -56,13 +74,17 @@ export function ServiceDocumentsClient({ role }: Props) {
   const perPage = 20;
 
   const canDelete = role === "master_admin";
+  const hasActiveFilters = Boolean(kindFilter || dateFrom || dateTo);
 
-  const load = useCallback(async (p = 1, q = "") => {
+  const load = useCallback(async (p = 1, filters: ListFilters) => {
     setLoading(true);
     setErrorMsg(null);
     try {
       const params = new URLSearchParams({ page: String(p), perPage: String(perPage) });
-      if (q) params.set("q", q);
+      if (filters.q) params.set("q", filters.q);
+      if (filters.kind) params.set("kind", filters.kind);
+      if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
+      if (filters.dateTo) params.set("dateTo", filters.dateTo);
       const res = await fetch(`/api/admin/service/repair-protocols?${params}`, { credentials: "include" });
       if (res.ok) {
         const json = await res.json();
@@ -89,21 +111,38 @@ export function ServiceDocumentsClient({ role }: Props) {
     }
   }, [perPage]);
 
+  const currentFilters = useCallback((): ListFilters => ({
+    q: debouncedSearch,
+    kind: kindFilter,
+    dateFrom,
+    dateTo,
+  }), [debouncedSearch, kindFilter, dateFrom, dateTo]);
+
   useEffect(() => {
-    if (isFirstRender.current) { isFirstRender.current = false; void load(1, debouncedSearch); return; }
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      void load(1, currentFilters());
+      return;
+    }
     setPage(1);
     window.scrollTo({ top: 0, behavior: "smooth" });
-    void load(1, debouncedSearch);
-  }, [load, debouncedSearch]);
+    void load(1, currentFilters());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [load, debouncedSearch, kindFilter, dateFrom, dateTo]);
 
   const handleSearch = (v: string) => { setSearch(v); };
+  const clearFilters = () => {
+    setKindFilter("");
+    setDateFrom("");
+    setDateTo("");
+  };
   const handleNew = () => { setPreview(null); setEditId(null); setOpenForm(true); };
   const openPreview = (p: RepairProtocol) => { setPreview(p); };
   const openEdit = (id: string) => { setPreview(null); setEditId(id); setOpenForm(true); };
 
   const handleSaved = (id: string) => {
     setEditId(id);
-    void load(1, search);
+    void load(1, { q: search, kind: kindFilter, dateFrom, dateTo });
   };
 
   const downloadPdf = async (e: React.MouseEvent, id: string) => {
@@ -116,7 +155,9 @@ export function ServiceDocumentsClient({ role }: Props) {
       const objectUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = objectUrl;
-      a.download = `repair-protocol-${id}.pdf`;
+      const cd = res.headers.get("Content-Disposition");
+      const match = cd?.match(/filename="([^"]+)"/);
+      a.download = match?.[1] ?? `servizen-protokol-${id}.pdf`;
       document.body.appendChild(a);
       a.click();
       setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(objectUrl); }, 1000);
@@ -165,8 +206,6 @@ export function ServiceDocumentsClient({ role }: Props) {
     }
     const addr = p.address?.trim();
     if (addr) parts.push(addr);
-    const client = p.client_name?.trim();
-    if (client) parts.push(client);
     return parts;
   };
 
@@ -174,6 +213,15 @@ export function ServiceDocumentsClient({ role }: Props) {
     const st = STATUS_CONFIG[p.status];
     const Icon = st.icon;
     const brandModel = [p.ac_brand, p.ac_model].filter(Boolean).join(" ").trim();
+    const kind = p.service_kind === "recycle" ? "recycle" : "client";
+    const title =
+      kind === "recycle"
+        ? (brandModel || "Рециклиране")
+        : (p.client_name?.trim() || brandModel || "—");
+    const subtitleParts: string[] = [];
+    if (kind === "client" && p.client_name?.trim() && brandModel) subtitleParts.push(brandModel);
+    if (kind === "recycle" && brandModel && title !== brandModel) subtitleParts.push(brandModel);
+    subtitleParts.push(formatDate(p.date));
     const meta = listRowMetaParts(p);
     return (
       <div
@@ -187,12 +235,21 @@ export function ServiceDocumentsClient({ role }: Props) {
 
         <div className="flex-1 min-w-0">
           <p className="text-[15px] sm:text-base font-bold text-slate-900 leading-snug">
-            <span className="break-words">{brandModel || "—"}</span>
-            <span className="text-slate-600 font-semibold"> · {formatDate(p.date)}</span>
+            <span className="break-words">{title}</span>
+            <span className="text-slate-600 font-semibold"> · {subtitleParts.join(" · ")}</span>
           </p>
           <div className="flex items-center gap-2 mt-1 flex-wrap">
             <span className="text-[11px] font-mono text-slate-500 tabular-nums shrink-0" title="Номер на протокол">
               № {p.protocol_number}
+            </span>
+            <span
+              className={`inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${
+                kind === "recycle"
+                  ? "bg-brand-orange-100 text-brand-orange-900"
+                  : "bg-slate-100 text-slate-700"
+              }`}
+            >
+              {SERVICE_KIND_LABEL[kind]}
             </span>
             <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${st.cls}`}>
               <Icon className="w-3 h-3" />
@@ -242,9 +299,10 @@ export function ServiceDocumentsClient({ role }: Props) {
     return (
       <ServiceProtocolFormWizard
         protocolId={editId ?? undefined}
+        role={role}
         onClose={() => {
           setOpenForm(false);
-          void load(1, search);
+          void load(1, { q: search, kind: kindFilter, dateFrom, dateTo });
         }}
         onSaved={handleSaved}
       />
@@ -256,7 +314,15 @@ export function ServiceDocumentsClient({ role }: Props) {
       <ServiceProtocolPreview
         protocolId={preview.id}
         protocolNumber={preview.protocol_number}
-        clientLabel={[preview.ac_brand, preview.ac_model].filter(Boolean).join(" ") || "—"}
+        clientLabel={
+          (() => {
+            const brandModel = [preview.ac_brand, preview.ac_model].filter(Boolean).join(" ");
+            if (preview.service_kind === "recycle") {
+              return [SERVICE_KIND_LABEL.recycle, brandModel].filter(Boolean).join(" · ") || "—";
+            }
+            return [preview.client_name, brandModel].filter(Boolean).join(" · ") || "—";
+          })()
+        }
         dateLabel={formatDate(preview.date)}
         role={role}
         onClose={() => setPreview(null)}
@@ -294,15 +360,71 @@ export function ServiceDocumentsClient({ role }: Props) {
           </button>
         </div>
 
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            type="search"
-            value={search}
-            onChange={e => handleSearch(e.target.value)}
-            placeholder="Търси по модел, номер на протокол..."
-            className="w-full pl-9 pr-4 py-2.5 bg-slate-100 rounded-xl text-sm outline-none focus:bg-white focus:ring-2 focus:ring-brand-blue-400 transition-all"
-          />
+        <div className="space-y-2.5">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="search"
+              value={search}
+              onChange={e => handleSearch(e.target.value)}
+              placeholder="Търси по клиент, модел, номер..."
+              className="w-full pl-9 pr-4 py-2.5 bg-slate-100 rounded-xl text-sm outline-none focus:bg-white focus:ring-2 focus:ring-brand-blue-400 transition-all"
+            />
+          </div>
+
+          <div className="flex items-center gap-2 overflow-x-auto pb-0.5 -mx-0.5 px-0.5">
+            {KIND_FILTERS.map((opt) => {
+              const active = kindFilter === opt.value;
+              return (
+                <button
+                  key={opt.value || "all"}
+                  type="button"
+                  onClick={() => setKindFilter(opt.value)}
+                  className={`shrink-0 min-h-[40px] px-3 rounded-xl text-sm font-semibold transition-colors ${
+                    active
+                      ? "bg-brand-blue-700 text-white"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="shrink-0 min-h-[40px] inline-flex items-center justify-center gap-1 px-3 rounded-xl text-sm font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200"
+                title="Изчисти филтрите"
+              >
+                <FilterX className="w-4 h-4" />
+                Изчисти
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="block text-[11px] font-semibold text-slate-500 mb-1">От дата</span>
+              <input
+                type="date"
+                value={dateFrom}
+                max={dateTo || undefined}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="w-full min-h-[44px] px-3 py-2 bg-slate-100 rounded-xl text-sm outline-none focus:bg-white focus:ring-2 focus:ring-brand-blue-400"
+              />
+            </label>
+            <label className="block">
+              <span className="block text-[11px] font-semibold text-slate-500 mb-1">До дата</span>
+              <input
+                type="date"
+                value={dateTo}
+                min={dateFrom || undefined}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="w-full min-h-[44px] px-3 py-2 bg-slate-100 rounded-xl text-sm outline-none focus:bg-white focus:ring-2 focus:ring-brand-blue-400"
+              />
+            </label>
+          </div>
         </div>
       </div>
 
@@ -330,25 +452,43 @@ export function ServiceDocumentsClient({ role }: Props) {
               <FileText className="w-7 h-7 text-slate-300" />
             </div>
             <div>
-              <p className="font-bold text-slate-700">Няма протоколи</p>
+              <p className="font-bold text-slate-700">
+                {hasActiveFilters || search ? "Няма резултати" : "Няма протоколи"}
+              </p>
               <p className="text-sm text-slate-400 mt-1">
-                Създайте нов протокол при следваща профилактика или ремонт
+                {hasActiveFilters || search
+                  ? "Променете филтрите или търсенето"
+                  : "Създайте нов протокол при следваща профилактика или ремонт"}
               </p>
             </div>
-            <button
-              onClick={handleNew}
-              className="flex items-center gap-2 bg-brand-blue-700 hover:bg-brand-blue-800 text-white px-6 py-3 rounded-xl font-semibold text-sm"
-            >
-              <Plus className="w-5 h-5" />
-              Нов протокол
-            </button>
+            {hasActiveFilters || search ? (
+              <button
+                onClick={() => { setSearch(""); clearFilters(); }}
+                className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-6 py-3 rounded-xl font-semibold text-sm"
+              >
+                <FilterX className="w-5 h-5" />
+                Изчисти филтрите
+              </button>
+            ) : (
+              <button
+                onClick={handleNew}
+                className="flex items-center gap-2 bg-brand-blue-700 hover:bg-brand-blue-800 text-white px-6 py-3 rounded-xl font-semibold text-sm"
+              >
+                <Plus className="w-5 h-5" />
+                Нов протокол
+              </button>
+            )}
           </div>
         ) : (
           <div className="space-y-2">
             {protocols.map(p => renderProtocolRow(p))}
             {protocols.length < total && (
               <button
-                onClick={() => { const p = page + 1; setPage(p); void load(p, debouncedSearch); }}
+                onClick={() => {
+                  const p = page + 1;
+                  setPage(p);
+                  void load(p, currentFilters());
+                }}
                 disabled={loading}
                 className="w-full py-3 text-sm text-brand-blue-700 font-semibold flex items-center justify-center gap-2"
               >

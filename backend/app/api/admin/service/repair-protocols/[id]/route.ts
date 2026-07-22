@@ -11,9 +11,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
+import { assertRepairProtocolVisible, assertRepairProtocolWritable } from "@/lib/admin/repairProtocolAccess";
 
 const UpdateSchema = z.object({
   date:             z.string().optional(),
+  service_kind:     z.enum(["client", "recycle"]).optional(),
 
   client_name:      z.string().max(200).optional().nullable(),
   ac_brand:         z.string().max(120).optional().nullable(),
@@ -90,7 +92,12 @@ export async function GET(
     .eq("id", id)
     .maybeSingle();
   if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
-  if (!data)  return withCors(req, NextResponse.json({ error: "Не е намерен" }, { status: 404 }));
+
+  const access = assertRepairProtocolVisible(session, data);
+  if (!access.ok) {
+    return withCors(req, NextResponse.json({ error: access.error }, { status: access.status }));
+  }
+
   return withCors(req, NextResponse.json({ data }));
 }
 
@@ -113,49 +120,85 @@ export async function PUT(
     return withCors(req, NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Невалидни данни" }, { status: 400 }));
   }
 
+  const { data: current, error: curErr } = await session.db
+    .from("service_repair_protocols")
+    .select("id, created_by, status, signature_team, freon_charge_method, vacuum_cleaning_done, valves_ok, outdoor_bearings_state, indoor_bearings_state, pressure_cold_bar, pressure_hot_bar, consumption_cold_kw, consumption_hot_kw, original_remote, outdoor_noise_level, welds_indoor_heat_exchanger, welds_outdoor_heat_exchanger, welds_pipes, indoor_mechanism_repaired, broken_turbine, service_rating")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (curErr) return withCors(req, NextResponse.json({ error: curErr.message }, { status: 500 }));
+  if (!current) return withCors(req, NextResponse.json({ error: "Не е намерен" }, { status: 404 }));
+
+  const writable = assertRepairProtocolWritable(
+    session,
+    current,
+    parsed.data.status,
+  );
+  if (!writable.ok) {
+    return withCors(req, NextResponse.json({ error: writable.error }, { status: writable.status }));
+  }
+
   const update: Record<string, unknown> = { ...parsed.data };
+  const c = current as unknown as Record<string, unknown>;
+  const currentStatus = String(c.status) as "prepared" | "in_progress" | "signed";
+
+  const effectiveKind =
+    (parsed.data.service_kind ?? (c as { service_kind?: string }).service_kind ?? "client") as
+      "client" | "recycle";
+  if (effectiveKind === "recycle") {
+    update.client_name = null;
+    update.client_phone = null;
+    update.client_email = null;
+    update.address = null;
+    update.serial_number = null;
+  }
 
   // Автоматичен workflow на статуси (само ако клиентът НЕ изпраща явно status):
   //   prepared    → in_progress : при поява на технически параметри или подпис на техник
   //   *           → signed      : при подпис на сервизен техник
-  //   signed                    : final — не се връща назад
+  //   signed                    : final — не се връща назад (освен master)
   if (parsed.data.status === undefined) {
-    const { data: current } = await session.db
-      .from("service_repair_protocols")
-      .select([
-        "status", "signature_team",
-        ...TECHNICAL_FIELDS,
-      ].join(","))
-      .eq("id", id)
-      .maybeSingle();
+    if (currentStatus !== "signed") {
+      const sigTeam = parsed.data.signature_team !== undefined
+        ? parsed.data.signature_team
+        : (c.signature_team as string | null);
 
-    if (
-      current &&
-      typeof current === "object" &&
-      "status" in current &&
-      (current as { status: string }).status !== "signed"
-    ) {
-      const c = current as Record<string, unknown>;
-      const sigTeam = parsed.data.signature_team !== undefined ? parsed.data.signature_team : (c.signature_team as string | null);
-
-      // Проверка дали има технически параметри (merged: входящи || текущи).
       const technicalPresent = TECHNICAL_FIELDS.some((field) => {
         const incomingVal = (parsed.data as Record<string, unknown>)[field];
         const merged = incomingVal !== undefined ? incomingVal : c[field];
         return merged !== null && merged !== undefined;
       });
 
-      const techSigned = Boolean(sigTeam);
+      const techSigned = Boolean(sigTeam?.trim());
 
-      let newStatus: "prepared" | "in_progress" | "signed" = (c.status as "prepared" | "in_progress" | "signed");
+      let newStatus: "prepared" | "in_progress" | "signed" = currentStatus;
       if (techSigned) {
         newStatus = "signed";
-      } else if (c.status === "prepared" && (technicalPresent || sigTeam)) {
+      } else if (currentStatus === "prepared" && (technicalPresent || sigTeam)) {
         newStatus = "in_progress";
       }
-      if (newStatus !== c.status) {
+      if (newStatus !== currentStatus) {
         update.status = newStatus;
       }
+    } else {
+      // Вече signed — подписът трябва да остане
+      const mergedTeam = parsed.data.signature_team !== undefined
+        ? parsed.data.signature_team
+        : (c.signature_team as string | null);
+      if (!mergedTeam?.trim()) {
+        return withCors(req, NextResponse.json(
+          { error: "Подписан протокол не може да остане без подпис на сервизен техник" },
+          { status: 400 },
+        ));
+      }
+    }
+  } else if (parsed.data.status === "signed") {
+    const team = parsed.data.signature_team ?? (c.signature_team as string | null);
+    if (!team?.trim()) {
+      return withCors(req, NextResponse.json(
+        { error: "За подписан протокол е нужен подпис на сервизен техник." },
+        { status: 400 },
+      ));
     }
   }
 
@@ -165,7 +208,7 @@ export async function PUT(
     if (v !== undefined) cleaned[k] = v;
   }
 
-  // Няма какво да се обнови → върни текущия ред (избягваме UPDATE с 0 колони).
+  // Няма какво да се обнови → върни текущия ред
   if (Object.keys(cleaned).length === 0) {
     const { data: row, error: selErr } = await session.db
       .from("service_repair_protocols")
@@ -194,6 +237,23 @@ export async function PUT(
     const retry = await session.db
       .from("service_repair_protocols")
       .update(updateLegacy)
+      .eq("id", id)
+      .select("*")
+      .maybeSingle();
+    data = retry.data;
+    error = retry.error;
+  }
+
+  const missingKindColumn =
+    !!error &&
+    /service_kind|42703|does not exist|undefined_column/i.test(
+      `${error.message} ${(error as { code?: string }).code ?? ""}`,
+    );
+  if (missingKindColumn && "service_kind" in cleaned) {
+    const { service_kind: _drop, ...updateNoKind } = cleaned;
+    const retry = await session.db
+      .from("service_repair_protocols")
+      .update(updateNoKind)
       .eq("id", id)
       .select("*")
       .maybeSingle();

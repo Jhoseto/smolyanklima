@@ -13,8 +13,8 @@ import {
 } from "@react-pdf/renderer";
 import { ProtocolPdfBrandMark } from "@/lib/protocol-pdf-brand";
 import {
-  FREON_CHARGE_LABEL, BEARINGS_LABEL, NOISE_LABEL,
-  type FreonChargeMethod, type BearingsState, type NoiseLevel,
+  FREON_CHARGE_LABEL, BEARINGS_LABEL, NOISE_LABEL, SERVICE_KIND_LABEL,
+  type FreonChargeMethod, type BearingsState, type NoiseLevel, type RepairServiceKind,
 } from "@/lib/repair-protocol-fields";
 
 const NOTO_REG =
@@ -166,6 +166,7 @@ const s = StyleSheet.create({
 interface RepairProtocolData {
   protocol_number: string;
   date: string;
+  service_kind?: RepairServiceKind | null;
 
   client_name: string | null;
   ac_brand: string | null;
@@ -235,6 +236,7 @@ function PdfCell({
 
 export function RepairProtocolPDF({ data }: { data: RepairProtocolData }) {
   const rating = data.service_rating ?? 0;
+  const isRecycle = data.service_kind === "recycle";
   return (
     <Document>
       <Page size="A4" style={s.page}>
@@ -247,16 +249,35 @@ export function RepairProtocolPDF({ data }: { data: RepairProtocolData }) {
             <Text style={s.docTitle}>СЕРВИЗЕН ПРОТОКОЛ</Text>
             <Text style={s.docNo}>№ {data.protocol_number}</Text>
             <Text style={s.docDate}>от дата {fmtDate(data.date)}</Text>
+            <Text style={s.docDate}>
+              {SERVICE_KIND_LABEL[isRecycle ? "recycle" : "client"]}
+            </Text>
           </View>
         </View>
 
-        {/* Климатик (сервизният протокол не включва клиентски данни) */}
+        {/* Клиент — само за клиентски сервиз */}
+        {!isRecycle && (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>Клиент</Text>
+            <View style={s.sectionBody}>
+              <View style={s.grid}>
+                <PdfCell label="Име" value={data.client_name} />
+                <PdfCell label="Телефон" value={data.client_phone} />
+                <PdfCell label="Имейл" value={data.client_email} />
+                <PdfCell label="Адрес" value={data.address} />
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Климатик */}
         <View style={s.section}>
           <Text style={s.sectionTitle}>Климатик</Text>
           <View style={s.sectionBody}>
             <View style={s.grid}>
               <PdfCell label="Марка" value={data.ac_brand} />
               <PdfCell label="Модел" value={data.ac_model} />
+              {!isRecycle && <PdfCell label="Сериен №" value={data.serial_number} />}
               <PdfCell label="Японски" value={data.is_japanese_brand === null ? "—" : boolText(data.is_japanese_brand)} />
             </View>
           </View>

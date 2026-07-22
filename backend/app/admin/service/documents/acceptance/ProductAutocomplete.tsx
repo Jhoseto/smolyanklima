@@ -8,8 +8,62 @@ export interface ProductSuggestion {
   name: string;
   slug: string;
   model_number?: string | null;
+  model_code?: string | null;
+  brand_name?: string | null;
+  brands?: { name?: string | null } | null;
   indoor_unit_serial?: string | null;
   outdoor_unit_serial?: string | null;
+}
+
+function brandFromProduct(p: ProductSuggestion): string {
+  const nested = p.brands?.name?.trim();
+  if (nested) return nested;
+  return p.brand_name?.trim() ?? "";
+}
+
+/** Етикет за показване в полето: „Марка Модел“. */
+export function productCatalogLabel(p: ProductSuggestion): string {
+  const brand = brandFromProduct(p);
+  const model = (p.model_code || p.model_number || "").trim();
+  if (brand && model) return `${brand} ${model}`;
+  if (brand && p.name) {
+    if (p.name.toLowerCase().startsWith(brand.toLowerCase())) return p.name;
+    return `${brand} ${p.name}`;
+  }
+  return p.name;
+}
+
+/** Разделя избор от каталога на ac_brand / ac_model. */
+export function splitProductSelection(p: ProductSuggestion): { brand: string; model: string } {
+  const brand = brandFromProduct(p);
+  const modelCode = (p.model_code || p.model_number || "").trim();
+  if (brand && modelCode) return { brand, model: modelCode };
+  if (brand && p.name.toLowerCase().startsWith(brand.toLowerCase())) {
+    return { brand, model: p.name.slice(brand.length).trim() || p.name };
+  }
+  if (brand) return { brand, model: p.name };
+  return { brand: "", model: p.name };
+}
+
+function normalizeProductRow(raw: Record<string, unknown>): ProductSuggestion {
+  const brands = raw.brands as ProductSuggestion["brands"] | undefined;
+  return {
+    id: String(raw.id ?? ""),
+    name: String(raw.name ?? ""),
+    slug: String(raw.slug ?? ""),
+    model_number: (raw.model_number as string | null | undefined) ?? null,
+    model_code: (raw.model_code as string | null | undefined) ?? null,
+    brand_name: brandFromProduct({
+      id: "",
+      name: "",
+      slug: "",
+      brands,
+      brand_name: (raw.brand_name as string | null | undefined) ?? null,
+    }) || null,
+    brands: brands ?? null,
+    indoor_unit_serial: (raw.indoor_unit_serial as string | null | undefined) ?? null,
+    outdoor_unit_serial: (raw.outdoor_unit_serial as string | null | undefined) ?? null,
+  };
 }
 
 interface Props {
@@ -43,8 +97,8 @@ export function ProductAutocomplete({ value, onChange, placeholder = "Въвед
         { credentials: "include" },
       );
       if (!res.ok) return;
-      const json = await res.json() as { data?: ProductSuggestion[] };
-      const list = json.data ?? [];
+      const json = await res.json() as { data?: Record<string, unknown>[] };
+      const list = (json.data ?? []).map(normalizeProductRow);
       setResults(list);
       setOpen(list.length > 0);
     } finally {
@@ -61,10 +115,11 @@ export function ProductAutocomplete({ value, onChange, placeholder = "Въвед
   };
 
   const handleSelect = (p: ProductSuggestion) => {
-    setQuery(p.name);
+    const label = productCatalogLabel(p);
+    setQuery(label);
     setSelected(true);
     setOpen(false);
-    onChange(p.name, p);
+    onChange(label, p);
   };
 
   const handleClear = () => {
@@ -132,10 +187,13 @@ export function ProductAutocomplete({ value, onChange, placeholder = "Въвед
               onMouseDown={e => { e.preventDefault(); handleSelect(p); }}
               className="w-full text-left px-4 py-3 hover:bg-blue-50 active:bg-blue-100 border-b border-slate-50 last:border-b-0"
             >
-              <p className="text-sm font-semibold text-slate-800 truncate">{p.name}</p>
+              <p className="text-sm font-semibold text-slate-800 truncate">{productCatalogLabel(p)}</p>
               <div className="flex flex-wrap gap-2 mt-0.5">
-                {p.model_number && (
-                  <span className="text-xs text-slate-400">{p.model_number}</span>
+                {brandFromProduct(p) && (
+                  <span className="text-xs text-slate-500">{brandFromProduct(p)}</span>
+                )}
+                {(p.model_code || p.model_number) && (
+                  <span className="text-xs text-slate-400">{p.model_code || p.model_number}</span>
                 )}
                 {(p.indoor_unit_serial || p.outdoor_unit_serial) && (
                   <span className="text-xs text-emerald-600 font-medium">

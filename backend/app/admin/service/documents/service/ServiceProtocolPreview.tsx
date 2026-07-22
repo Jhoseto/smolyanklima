@@ -5,8 +5,8 @@ import { X, Pencil, Download, Loader2, Star, PlayCircle, ClipboardCheck, Wrench,
 import { Logo } from "@/app/admin/ui/Logo";
 import type { AdminRole } from "@/lib/admin/db";
 import {
-  FREON_CHARGE_LABEL, BEARINGS_LABEL, NOISE_LABEL,
-  type FreonChargeMethod, type BearingsState, type NoiseLevel,
+  FREON_CHARGE_LABEL, BEARINGS_LABEL, NOISE_LABEL, SERVICE_KIND_LABEL,
+  type FreonChargeMethod, type BearingsState, type NoiseLevel, type RepairServiceKind,
 } from "@/lib/repair-protocol-fields";
 
 interface Props {
@@ -23,6 +23,12 @@ interface ProtocolRow {
   id: string;
   protocol_number: string;
   date: string;
+
+  client_name: string | null;
+  client_phone: string | null;
+  client_email: string | null;
+  address: string | null;
+  serial_number: string | null;
 
   ac_brand: string | null;
   ac_model: string | null;
@@ -54,6 +60,7 @@ interface ProtocolRow {
   notes: string | null;
   signature_team: string | null;
   status: string;
+  service_kind?: RepairServiceKind | null;
 }
 
 function fmtDate(iso: string) {
@@ -89,7 +96,33 @@ export function ServiceProtocolPreview({
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const [pdfBusy, setPdfBusy] = useState(false);
+
   const pdfUrl = `/api/admin/service/repair-protocols/${protocolId}/pdf`;
+
+  const downloadPdf = async () => {
+    if (pdfBusy) return;
+    setPdfBusy(true);
+    try {
+      const res = await fetch(pdfUrl, { credentials: "include" });
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      const cd = res.headers.get("Content-Disposition");
+      const match = cd?.match(/filename="([^"]+)"/);
+      a.download = match?.[1] ?? `servizen-protokol-${protocolNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(objectUrl);
+      }, 1000);
+    } finally {
+      setPdfBusy(false);
+    }
+  };
 
   // ── Достъп до бутоните в горната лента ──────────────────────────────
   // Завършените (signed) протоколи: само master/office могат да
@@ -168,10 +201,11 @@ export function ServiceProtocolPreview({
             {isFinished && (
               <button
                 type="button"
-                onClick={() => window.open(pdfUrl, "_blank")}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900 shrink-0"
+                onClick={() => void downloadPdf()}
+                disabled={pdfBusy}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900 shrink-0 disabled:opacity-60"
               >
-                <Download className="w-4 h-4" />
+                {pdfBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                 PDF
               </button>
             )}
@@ -231,7 +265,7 @@ export function ServiceProtocolPreview({
                 </p>
                 <p className="text-xs text-brand-orange-800 leading-snug mt-0.5">
                   {status === "prepared"
-                    ? "Протоколът е започнат (дата, марка, модел). Натиснете „Довърши“, за да попълните сервизните данни и подписа на място."
+                    ? "Протоколът е започнат. Натиснете „Довърши“, за да попълните клиент, сервизни данни и подпис на място."
                     : "Има въведени данни, но липсва подпис на сервизен техник. Натиснете „Довърши“, за да приключите попълването и да подпишете протокола."}
                 </p>
               </div>
@@ -269,11 +303,33 @@ export function ServiceProtocolPreview({
               </div>
 
               <div className="px-4 pb-4 space-y-4">
-                {/* ── Климатик (без клиентска секция) ── */}
+                <Section title="Тип сервиз">
+                  <PreviewField
+                    label="Тип"
+                    value={SERVICE_KIND_LABEL[row.service_kind === "recycle" ? "recycle" : "client"]}
+                  />
+                </Section>
+
+                {/* ── Клиент (само при клиентски сервиз) ── */}
+                {row.service_kind !== "recycle" && (
+                  <Section title="Клиент">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+                      <PreviewField label="Име" value={row.client_name} />
+                      <PreviewField label="Телефон" value={row.client_phone} />
+                      <PreviewField label="Имейл" value={row.client_email} />
+                      <PreviewField label="Адрес" value={row.address} />
+                    </div>
+                  </Section>
+                )}
+
+                {/* ── Климатик ── */}
                 <Section title="Климатик">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
                     <PreviewField label="Марка" value={row.ac_brand} />
                     <PreviewField label="Модел" value={row.ac_model} />
+                    {row.service_kind !== "recycle" && (
+                      <PreviewField label="Сериен №" value={row.serial_number} />
+                    )}
                     <PreviewField label="Японски" value={row.is_japanese_brand === null ? "—" : boolLabel(row.is_japanese_brand)} />
                   </div>
                 </Section>

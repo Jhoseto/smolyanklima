@@ -42,6 +42,27 @@ export type NoiseLevel = "quiet" | "normal" | "elevated" | "loud" | "very_loud";
 
 export type RepairProtocolStatus = "prepared" | "in_progress" | "signed";
 
+/** Тип сервизен протокол: клиентски сервиз или рециклиране за магазина. */
+export type RepairServiceKind = "client" | "recycle";
+
+export const SERVICE_KIND_OPTIONS: { value: RepairServiceKind; label: string; hint: string }[] = [
+  {
+    value: "client",
+    label: "Сервиз за клиент",
+    hint: "Клиент от указателя, адрес и сериен номер",
+  },
+  {
+    value: "recycle",
+    label: "Сервиз рециклиране",
+    hint: "Втора употреба за магазина — без клиент и сериен №",
+  },
+];
+
+export const SERVICE_KIND_LABEL: Record<RepairServiceKind, string> = {
+  client: "Сервиз за клиент",
+  recycle: "Сервиз рециклиране",
+};
+
 // ─── UI опции (value + label-и на български) ───────────────────────────
 
 export const FREON_CHARGE_OPTIONS: { value: FreonChargeMethod; label: string }[] = [

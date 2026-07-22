@@ -6,11 +6,18 @@ import {
   PenLine, Trash2, X, Loader2, CheckCircle2, Star,
 } from "lucide-react";
 import { SignatureCanvas } from "../acceptance/SignatureCanvas";
-import { ProductAutocomplete } from "../acceptance/ProductAutocomplete";
+import {
+  ProductAutocomplete,
+  splitProductSelection,
+  type ProductSuggestion,
+} from "../acceptance/ProductAutocomplete";
+import { ContactAutocomplete, type ContactSuggestion } from "../acceptance/ContactAutocomplete";
+import type { AdminRole } from "@/lib/admin/db";
 import {
   FREON_CHARGE_OPTIONS, BEARINGS_OPTIONS, NOISE_OPTIONS,
-  SERVICE_RATING_OPTIONS, isJapaneseBrand,
+  SERVICE_RATING_OPTIONS, SERVICE_KIND_OPTIONS, isJapaneseBrand,
   type FreonChargeMethod, type BearingsState, type NoiseLevel,
+  type RepairServiceKind,
 } from "@/lib/repair-protocol-fields";
 
 // ─── Типове ──────────────────────────────────────────────────────────────────
@@ -18,6 +25,14 @@ import {
 interface FormData {
   date:             string;
   work_item_id:     string | null;
+  service_kind:     RepairServiceKind;
+
+  client_name:      string;
+  client_phone:     string;
+  client_email:     string;
+  address:          string;
+  serial_number:    string;
+
   ac_brand:         string;
   ac_model:         string;
 
@@ -54,6 +69,14 @@ interface FormData {
 const defaultForm = (): FormData => ({
   date:             new Date().toISOString().slice(0, 10),
   work_item_id:     null,
+  service_kind:     "client",
+
+  client_name:      "",
+  client_phone:     "",
+  client_email:     "",
+  address:          "",
+  serial_number:    "",
+
   ac_brand:         "",
   ac_model:         "",
 
@@ -89,12 +112,13 @@ const defaultForm = (): FormData => ({
 interface Props {
   protocolId?: string;
   initialData?: Partial<FormData>;
+  role: AdminRole;
   onClose: () => void;
   onSaved: (id: string) => void;
 }
 
 const STEPS = [
-  "Марка, модел и дата",
+  "Тип, климатик и дата",
   "Фреон & почистване",
   "Клапи, лагери & дистанционно",
   "Налягания & консумация",
@@ -103,16 +127,26 @@ const STEPS = [
   "Забележки & подпис",
 ] as const;
 
+const inputCls =
+  "w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-blue-400 disabled:opacity-60 disabled:cursor-not-allowed";
+
 // ─── Главен компонент ────────────────────────────────────────────────────────
 
-export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, onSaved }: Props) {
+export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClose, onSaved }: Props) {
   const [step, setStep]     = useState(0);
   const [form, setForm]     = useState<FormData>({ ...defaultForm(), ...initialData });
   const [saving, setSaving] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(protocolId ?? null);
   const [sigOpen, setSigOpen] = useState(false);
   const [error, setError]    = useState<string | null>(null);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isSignedRef = useRef(false);
+
+  // master/office могат да коригират signed; service_staff — само преглед
+  const canEditSigned = role === "master_admin" || role === "office_staff";
+  const isSigned = form.status === "signed" && !canEditSigned;
+  isSignedRef.current = isSigned;
 
   // ── Зареждане на initial data при отваряне на съществуващ протокол ─────────
   useEffect(() => {
@@ -123,11 +157,19 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
         const res = await fetch(`/api/admin/service/repair-protocols/${protocolId}`, {
           credentials: "include",
         });
-        if (!res.ok) return;
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}));
+          if (!cancelled) {
+            setLoadErr((json as { error?: string }).error ?? "Протоколът не може да бъде зареден");
+          }
+          return;
+        }
         const { data } = await res.json();
         if (cancelled || !data) return;
         applyServerData(data);
-      } catch { /* ignore */ }
+      } catch {
+        if (!cancelled) setLoadErr("Протоколът не може да бъде зареден");
+      }
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -138,6 +180,14 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
       ...prev,
       date:             (data.date as string) ?? prev.date,
       work_item_id:     (data.work_item_id as string | null) ?? null,
+      service_kind:     ((data.service_kind as RepairServiceKind) === "recycle" ? "recycle" : "client"),
+
+      client_name:      (data.client_name as string) ?? "",
+      client_phone:     (data.client_phone as string) ?? "",
+      client_email:     (data.client_email as string) ?? "",
+      address:          (data.address as string) ?? "",
+      serial_number:    (data.serial_number as string) ?? "",
+
       ac_brand:         (data.ac_brand as string) ?? "",
       ac_model:         (data.ac_model as string) ?? "",
 
@@ -171,9 +221,9 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
     }));
   }, []);
 
-  // Auto-detect: ако моделът съдържа японска марка и потребителят не е дал
-  // изричен отговор на is_japanese_brand → отбелязваме автоматично.
+  // Auto-detect японска марка
   useEffect(() => {
+    if (isSignedRef.current) return;
     if (form.is_japanese_brand !== null) return;
     const brandModelHint = `${form.ac_brand} ${form.ac_model}`.trim();
     if (isJapaneseBrand(brandModelHint)) {
@@ -182,7 +232,6 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.ac_brand, form.ac_model]);
 
-  // In-flight lock: предотвратява двойно повикване на persistForm.
   const persistRef = useRef<Promise<unknown> | null>(null);
 
   useEffect(() => () => {
@@ -192,12 +241,11 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
     }
   }, []);
 
-  /**
-   * Auto-save: ако формулярът има някакво съдържание (клиент или техническа
-   * информация), запазва се след 2с. Празните протоколи НЕ се запазват.
-   */
   const autoSave = useCallback(async (data: FormData, id: string | null) => {
+    if (isSignedRef.current) return;
+
     const hasContent =
+      data.client_name || data.client_phone || data.address || data.serial_number ||
       data.ac_brand || data.ac_model ||
       data.is_japanese_brand !== null || data.freon_charge_method !== null ||
       data.vacuum_cleaning_done !== null || data.valves_ok !== null ||
@@ -214,11 +262,13 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
 
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(async () => {
+      if (isSignedRef.current) return;
       await persistForm(data, id, false);
     }, 2000);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const update = useCallback(<K extends keyof FormData>(key: K, val: FormData[K]) => {
+    if (isSignedRef.current) return;
     setForm(prev => {
       const next = { ...prev, [key]: val };
       autoSave(next, savedId);
@@ -229,6 +279,7 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
   // ── Запазване в API ─────────────────────────────────────────────────────
 
   const persistForm = async (data: FormData, id: string | null, showSaving = true): Promise<string | null> => {
+    if (isSignedRef.current) return id;
     if (persistRef.current) {
       try { await persistRef.current; } catch { /* ignore */ }
     }
@@ -245,7 +296,6 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
     if (showSaving) setSaving(true);
     setError(null);
     try {
-      // Не изпращаме status — backend-ът сам управлява workflow-а.
       const numOrNull = (s: string) => {
         if (!s) return null;
         const n = Number(s.replace(",", "."));
@@ -255,15 +305,17 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
       const payload = {
         work_item_id:     data.work_item_id,
         date:             data.date || new Date().toISOString().slice(0, 10),
-        // Сервизният протокол не събира клиентски данни — винаги нулираме колоните в БД.
-        client_name:      null,
+        service_kind:     data.service_kind,
+
+        client_name:      data.service_kind === "recycle" ? null : (data.client_name.trim() || null),
+        client_phone:     data.service_kind === "recycle" ? null : (data.client_phone.trim() || null),
+        client_email:     data.service_kind === "recycle" ? null : (data.client_email.trim() || null),
+        address:          data.service_kind === "recycle" ? null : (data.address.trim() || null),
+        serial_number:    data.service_kind === "recycle" ? null : (data.serial_number.trim() || null),
+        paid_amount:      null,
+
         ac_brand:         data.ac_brand || null,
         ac_model:         data.ac_model || null,
-        serial_number:    null,
-        address:          null,
-        paid_amount:      null,
-        client_email:     null,
-        client_phone:     null,
 
         is_japanese_brand:   data.is_japanese_brand,
         freon_charge_method: data.freon_charge_method,
@@ -335,17 +387,38 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
   };
 
   const finalize = async () => {
+    if (isSigned) return;
     const id = await persistForm(form, savedId, true);
     if (id) setSavedId(id);
   };
 
-  const downloadPdf = () => {
+  const downloadPdf = async () => {
     if (!savedId) return;
-    window.open(`/api/admin/service/repair-protocols/${savedId}/pdf`, "_blank");
+    try {
+      const res = await fetch(`/api/admin/service/repair-protocols/${savedId}/pdf`, {
+        credentials: "include",
+      });
+      if (!res.ok) {
+        setError("Грешка при генериране на PDF");
+        return;
+      }
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = `servizen-protokol-${savedId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(objectUrl);
+      }, 1000);
+    } catch {
+      setError("Неуспешно сваляне на PDF");
+    }
   };
 
   const isLastStep = step === STEPS.length - 1;
-  const isSigned   = form.status === "signed";
 
   // ─── Рендер ────────────────────────────────────────────────────────────────
 
@@ -354,13 +427,18 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
       {/* ── Хедър с прогрес ── */}
       <div className="bg-white border-b border-slate-200 shrink-0">
         <div className="flex items-center gap-3 px-4 py-3">
-          <button onClick={onClose} className="text-slate-500 active:text-slate-800 p-1 -ml-1">
+          <button onClick={onClose} className="text-slate-500 active:text-slate-800 p-1 -ml-1" title="Затвори">
             <X className="w-5 h-5" />
           </button>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <p className="text-xs text-slate-400">Стъпка {step + 1} от {STEPS.length}</p>
-            <p className="text-sm font-bold text-slate-800">{STEPS[step]}</p>
+            <p className="text-sm font-bold text-slate-800 truncate">{STEPS[step]}</p>
           </div>
+          {isSigned && (
+            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full bg-slate-100 text-slate-600 shrink-0">
+              Само преглед
+            </span>
+          )}
           {saving && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
         </div>
         <div className="h-1 bg-slate-100">
@@ -374,35 +452,182 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
       {/* ── Съдържание ── */}
       <div className="flex-1 overflow-y-auto">
         <div className="p-4 pb-24 max-w-2xl mx-auto">
-          {/* Стъпка 0 — само дата + марка + модел */}
+          {loadErr && (
+            <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-xl text-sm">
+              {loadErr}
+            </div>
+          )}
+
+          {isSigned && (
+            <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              Подписаният протокол е само за преглед. За корекции се свържете с офиса.
+            </div>
+          )}
+
+          {/* Стъпка 0 — тип + дата + клиент/климатик */}
           {step === 0 && (
             <div className="space-y-3">
+              <div>
+                <p className="text-xs font-semibold text-slate-700 mb-1.5">Тип сервиз</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {SERVICE_KIND_OPTIONS.map((opt) => {
+                    const active = form.service_kind === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        disabled={isSigned}
+                        onClick={() => {
+                          if (isSignedRef.current) return;
+                          setForm((prev) => {
+                            const next: FormData = {
+                              ...prev,
+                              service_kind: opt.value,
+                              ...(opt.value === "recycle"
+                                ? {
+                                    client_name: "",
+                                    client_phone: "",
+                                    client_email: "",
+                                    address: "",
+                                    serial_number: "",
+                                    is_japanese_brand:
+                                      prev.is_japanese_brand === null ? true : prev.is_japanese_brand,
+                                  }
+                                : {}),
+                            };
+                            autoSave(next, savedId);
+                            return next;
+                          });
+                        }}
+                        className={`text-left rounded-xl border px-3 py-3 transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
+                          active
+                            ? "border-brand-blue-600 bg-brand-blue-50 ring-2 ring-brand-blue-400"
+                            : "border-slate-200 bg-white hover:bg-slate-50"
+                        }`}
+                      >
+                        <p className={`text-sm font-bold ${active ? "text-brand-blue-900" : "text-slate-800"}`}>
+                          {opt.label}
+                        </p>
+                        <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">{opt.hint}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <Field label="Дата на сервиз">
                 <input
                   type="date"
                   value={form.date}
                   onChange={e => update("date", e.target.value)}
-                  className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-blue-400"
+                  disabled={isSigned}
+                  className={inputCls}
                 />
               </Field>
 
-              <Field label="Марка">
-                <input
-                  type="text"
-                  value={form.ac_brand}
-                  onChange={e => update("ac_brand", e.target.value)}
-                  placeholder="напр. Daikin"
-                  className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-blue-400"
-                />
-              </Field>
+              {form.service_kind === "client" && (
+                <>
+                  <ContactAutocomplete
+                    label="Клиент (от указателя)"
+                    value={form.client_name}
+                    placeholder="Търси контакт или въведи име"
+                    disabled={isSigned}
+                    onChange={(name, contact?: ContactSuggestion) => {
+                      if (isSignedRef.current) return;
+                      setForm(prev => {
+                        const next = {
+                          ...prev,
+                          client_name: name,
+                          ...(contact ? {
+                            client_phone: contact.phone ?? prev.client_phone,
+                            client_email: contact.email ?? prev.client_email,
+                            address:      contact.address ?? prev.address,
+                          } : {}),
+                        };
+                        autoSave(next, savedId);
+                        return next;
+                      });
+                    }}
+                  />
 
-              <Field label="Модел">
-                <ProductAutocomplete
-                  value={form.ac_model}
-                  onChange={(model) => update("ac_model", model)}
-                  placeholder="Търси в каталога или въведи ръчно"
-                />
-              </Field>
+                  <Field label="Телефон">
+                    <input
+                      type="tel"
+                      value={form.client_phone}
+                      onChange={e => update("client_phone", e.target.value)}
+                      placeholder="08…"
+                      disabled={isSigned}
+                      className={inputCls}
+                    />
+                  </Field>
+
+                  <Field label="Адрес">
+                    <input
+                      type="text"
+                      value={form.address}
+                      onChange={e => update("address", e.target.value)}
+                      placeholder="гр. Смолян, ул. …"
+                      disabled={isSigned}
+                      className={inputCls}
+                    />
+                  </Field>
+                </>
+              )}
+
+              {form.service_kind === "recycle" && (
+                <div className="rounded-xl border border-brand-orange-200 bg-brand-orange-50 px-3 py-2.5 text-sm text-brand-orange-900">
+                  Рециклиране за магазина — без клиент и сериен номер. Попълнете марка/модел и техническите данни.
+                </div>
+              )}
+
+              <ProductAutocomplete
+                label="Марка и модел"
+                value={[form.ac_brand, form.ac_model].filter(Boolean).join(" ")}
+                disabled={isSigned}
+                placeholder="Търси в каталога или въведи ръчно"
+                onChange={(label, product?: ProductSuggestion) => {
+                  if (isSignedRef.current) return;
+                  setForm(prev => {
+                    let ac_brand = "";
+                    let ac_model = label.trim();
+                    if (product) {
+                      const split = splitProductSelection(product);
+                      ac_brand = split.brand;
+                      ac_model = split.model;
+                    }
+                    const serialFromProduct = product
+                      ? [product.indoor_unit_serial, product.outdoor_unit_serial]
+                          .filter(Boolean)
+                          .join(" / ")
+                      : "";
+                    const next = {
+                      ...prev,
+                      ac_brand,
+                      ac_model,
+                      ...(prev.service_kind === "client" &&
+                      serialFromProduct &&
+                      !prev.serial_number.trim()
+                        ? { serial_number: serialFromProduct }
+                        : {}),
+                    };
+                    autoSave(next, savedId);
+                    return next;
+                  });
+                }}
+              />
+
+              {form.service_kind === "client" && (
+                <Field label="Сериен номер">
+                  <input
+                    type="text"
+                    value={form.serial_number}
+                    onChange={e => update("serial_number", e.target.value)}
+                    placeholder="От табелката на тялото"
+                    disabled={isSigned}
+                    className={inputCls}
+                  />
+                </Field>
+              )}
             </div>
           )}
 
@@ -414,6 +639,7 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
                 hint="Автоматично се отбелязва ако марката е сред японските."
                 value={form.is_japanese_brand}
                 onChange={v => update("is_japanese_brand", v)}
+                disabled={isSigned}
               />
 
               <EnumField<FreonChargeMethod>
@@ -424,12 +650,14 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
                 value={form.freon_charge_method}
                 options={FREON_CHARGE_OPTIONS}
                 onChange={v => update("freon_charge_method", v)}
+                disabled={isSigned}
               />
 
               <YesNoField
                 label="Прахосмукачка (почистване)"
                 value={form.vacuum_cleaning_done}
                 onChange={v => update("vacuum_cleaning_done", v)}
+                disabled={isSigned}
               />
             </div>
           )}
@@ -442,23 +670,27 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
                 hint='Изолационни и контролни клапи на тръбите.'
                 value={form.valves_ok}
                 onChange={v => update("valves_ok", v)}
+                disabled={isSigned}
               />
               <EnumField<BearingsState>
                 label="Лагери на външно тяло"
                 value={form.outdoor_bearings_state}
                 options={BEARINGS_OPTIONS}
                 onChange={v => update("outdoor_bearings_state", v)}
+                disabled={isSigned}
               />
               <EnumField<BearingsState>
                 label="Лагери на вътрешно тяло"
                 value={form.indoor_bearings_state}
                 options={BEARINGS_OPTIONS}
                 onChange={v => update("indoor_bearings_state", v)}
+                disabled={isSigned}
               />
               <YesNoField
                 label="Оригинално дистанционно"
                 value={form.original_remote}
                 onChange={v => update("original_remote", v)}
+                disabled={isSigned}
               />
             </div>
           )}
@@ -480,7 +712,8 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
                       value={form.pressure_cold_bar}
                       onChange={e => update("pressure_cold_bar", e.target.value)}
                       placeholder="bar"
-                      className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-blue-400"
+                      disabled={isSigned}
+                      className={inputCls}
                     />
                   </Field>
                   <Field label="Топъл режим">
@@ -492,7 +725,8 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
                       value={form.pressure_hot_bar}
                       onChange={e => update("pressure_hot_bar", e.target.value)}
                       placeholder="bar"
-                      className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-blue-400"
+                      disabled={isSigned}
+                      className={inputCls}
                     />
                   </Field>
                 </div>
@@ -512,7 +746,8 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
                       value={form.consumption_cold_kw}
                       onChange={e => update("consumption_cold_kw", e.target.value)}
                       placeholder="kW"
-                      className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-blue-400"
+                      disabled={isSigned}
+                      className={inputCls}
                     />
                   </Field>
                   <Field label="Топъл режим">
@@ -524,7 +759,8 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
                       value={form.consumption_hot_kw}
                       onChange={e => update("consumption_hot_kw", e.target.value)}
                       placeholder="kW"
-                      className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-blue-400"
+                      disabled={isSigned}
+                      className={inputCls}
                     />
                   </Field>
                 </div>
@@ -540,6 +776,7 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
                 value={form.outdoor_noise_level}
                 options={NOISE_OPTIONS}
                 onChange={v => update("outdoor_noise_level", v)}
+                disabled={isSigned}
               />
 
               <div>
@@ -551,16 +788,19 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
                     label="Топлообменник на вътрешно тяло"
                     value={form.welds_indoor_heat_exchanger}
                     onChange={v => update("welds_indoor_heat_exchanger", v)}
+                    disabled={isSigned}
                   />
                   <YesNoField
                     label="Топлообменник на външно тяло"
                     value={form.welds_outdoor_heat_exchanger}
                     onChange={v => update("welds_outdoor_heat_exchanger", v)}
+                    disabled={isSigned}
                   />
                   <YesNoField
                     label="Тръби"
                     value={form.welds_pipes}
                     onChange={v => update("welds_pipes", v)}
+                    disabled={isSigned}
                   />
                 </div>
               </div>
@@ -574,11 +814,13 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
                 label="Ремонт на механиката на вътрешното тяло"
                 value={form.indoor_mechanism_repaired}
                 onChange={v => update("indoor_mechanism_repaired", v)}
+                disabled={isSigned}
               />
               <YesNoField
                 label="Счупена турбина"
                 value={form.broken_turbine}
                 onChange={v => update("broken_turbine", v)}
+                disabled={isSigned}
               />
 
               <div>
@@ -588,6 +830,7 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
                 <StarRatingField
                   value={form.service_rating}
                   onChange={v => update("service_rating", v)}
+                  disabled={isSigned}
                 />
               </div>
             </div>
@@ -602,7 +845,8 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
                   onChange={e => update("notes", e.target.value)}
                   rows={4}
                   placeholder="Допълнителни наблюдения, препоръки, направени интервенции..."
-                  className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-blue-400 resize-none"
+                  disabled={isSigned}
+                  className={`${inputCls} resize-none`}
                 />
               </Field>
 
@@ -611,10 +855,10 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
                 signature={form.signature_team}
                 onSign={() => setSigOpen(true)}
                 onClear={() => update("signature_team", null)}
-                disabled={isSigned && !!form.signature_team}
+                disabled={isSigned || (form.status === "signed" && !!form.signature_team)}
               />
 
-              {sigOpen && (
+              {sigOpen && !isSigned && (
                 <SignatureCanvas
                   label="Подпис на сервизен техник"
                   onSave={dataUrl => {
@@ -625,8 +869,7 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
                 />
               )}
 
-              {/* Финализиране */}
-              {form.signature_team && form.status !== "signed" && (
+              {form.signature_team && form.status !== "signed" && !isSigned && (
                 <button
                   onClick={finalize}
                   disabled={saving}
@@ -637,8 +880,7 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, onClose, on
                 </button>
               )}
 
-              {/* PDF — само за подписан протокол (без имейл към клиент). */}
-              {savedId && isSigned && (
+              {savedId && form.status === "signed" && (
                 <div className="space-y-3 pt-2">
                   <button
                     onClick={downloadPdf}
@@ -695,26 +937,23 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-/**
- * Три-стейт boolean поле: NULL (не проверено) / true (Да) / false (Не).
- * Показва три бутона; активният има по-наситен цвят. „—“ нулира избора.
- */
 function YesNoField({
-  label, hint, value, onChange,
+  label, hint, value, onChange, disabled,
 }: {
   label: string;
   hint?: string;
   value: boolean | null;
   onChange: (v: boolean | null) => void;
+  disabled?: boolean;
 }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-3">
+    <div className={`bg-white border border-slate-200 rounded-xl p-3 ${disabled ? "opacity-60" : ""}`}>
       <div className="flex items-start justify-between gap-3 mb-2">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-slate-800">{label}</p>
           {hint && <p className="text-[11px] text-slate-500 mt-0.5">{hint}</p>}
         </div>
-        {value !== null && (
+        {value !== null && !disabled && (
           <button
             type="button"
             onClick={() => onChange(null)}
@@ -728,8 +967,9 @@ function YesNoField({
       <div className="grid grid-cols-2 gap-2">
         <button
           type="button"
+          disabled={disabled}
           onClick={() => onChange(true)}
-          className={`py-2.5 rounded-lg text-sm font-semibold transition-colors ${
+          className={`py-2.5 rounded-lg text-sm font-semibold transition-colors disabled:cursor-not-allowed ${
             value === true
               ? "bg-brand-blue-700 text-white"
               : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -739,8 +979,9 @@ function YesNoField({
         </button>
         <button
           type="button"
+          disabled={disabled}
           onClick={() => onChange(false)}
-          className={`py-2.5 rounded-lg text-sm font-semibold transition-colors ${
+          className={`py-2.5 rounded-lg text-sm font-semibold transition-colors disabled:cursor-not-allowed ${
             value === false
               ? "bg-rose-600 text-white"
               : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -753,27 +994,24 @@ function YesNoField({
   );
 }
 
-/**
- * Поле с фиксиран списък от опции. NULL → нищо избрано.
- * Показваме чипове в grid за лесен touch избор.
- */
 function EnumField<T extends string>({
-  label, hint, value, options, onChange,
+  label, hint, value, options, onChange, disabled,
 }: {
   label: string;
   hint?: string;
   value: T | null;
   options: readonly { value: T; label: string }[];
   onChange: (v: T | null) => void;
+  disabled?: boolean;
 }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-3">
+    <div className={`bg-white border border-slate-200 rounded-xl p-3 ${disabled ? "opacity-60" : ""}`}>
       <div className="flex items-start justify-between gap-3 mb-2">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-slate-800">{label}</p>
           {hint && <p className="text-[11px] text-slate-500 mt-0.5">{hint}</p>}
         </div>
-        {value !== null && (
+        {value !== null && !disabled && (
           <button
             type="button"
             onClick={() => onChange(null)}
@@ -789,8 +1027,9 @@ function EnumField<T extends string>({
           <button
             key={opt.value}
             type="button"
+            disabled={disabled}
             onClick={() => onChange(opt.value)}
-            className={`py-2 px-3 rounded-lg text-sm font-medium text-left transition-colors ${
+            className={`py-2 px-3 rounded-lg text-sm font-medium text-left transition-colors disabled:cursor-not-allowed ${
               value === opt.value
                 ? "bg-brand-blue-700 text-white"
                 : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -805,13 +1044,14 @@ function EnumField<T extends string>({
 }
 
 function StarRatingField({
-  value, onChange,
+  value, onChange, disabled,
 }: {
   value: number | null;
   onChange: (v: number | null) => void;
+  disabled?: boolean;
 }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-3">
+    <div className={`bg-white border border-slate-200 rounded-xl p-3 ${disabled ? "opacity-60" : ""}`}>
       <div className="flex items-center justify-center gap-2">
         {[1, 2, 3, 4, 5].map(n => {
           const active = value !== null && n <= value;
@@ -819,8 +1059,9 @@ function StarRatingField({
             <button
               key={n}
               type="button"
+              disabled={disabled}
               onClick={() => onChange(value === n ? null : n)}
-              className="p-1.5 transition-transform active:scale-90"
+              className="p-1.5 transition-transform active:scale-90 disabled:cursor-not-allowed"
               title={SERVICE_RATING_OPTIONS.find(o => o.value === n)?.label}
             >
               <Star
