@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { OFFER_ITEM_SELECT, OFFER_SELECT } from "@/lib/offers/offerTypes";
+import { sanitizeOfferDescription } from "@/lib/offers/sanitizeOfferDescription";
 import { COMPANY_INFO } from "@/lib/company/companyInfo";
 
 export async function OPTIONS(req: NextRequest) {
@@ -58,7 +59,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       type_name: it.type_name,
       model_code: it.model_code,
       image_url: it.image_url,
-      description: it.description,
+      description: sanitizeOfferDescription(it.description),
       specs: it.specs,
       group_label: it.group_label,
       quantity: it.quantity,

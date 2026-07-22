@@ -1,4 +1,5 @@
 import type { OfferSpecRow } from "@/lib/offers/buildSpecsFromProduct";
+import { sanitizeOfferDescription } from "@/lib/offers/sanitizeOfferDescription";
 
 export type OfferStatus = "draft" | "sent" | "accepted" | "rejected";
 export type OfferItemKind = "product" | "installation" | "custom";
@@ -90,7 +91,7 @@ export function mapItemInputToDb(item: OfferItemInput, offerId: string, sortOrde
     type_name: item.typeName?.trim() || null,
     model_code: item.modelCode?.trim() || null,
     image_url: item.imageUrl?.trim() || null,
-    description: item.description?.trim() || null,
+    description: sanitizeOfferDescription(item.description?.trim()) ?? null,
     specs: item.specs ?? [],
     group_label: item.groupLabel?.trim() || null,
     quantity: Number(item.quantity) || 1,

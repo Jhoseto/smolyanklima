@@ -9,7 +9,7 @@ import {
   ADMIN_MODAL_BACKDROP, ADMIN_MODAL_PANEL, AdminModalDragHandle, useAdminBackHandler,
 } from "../../../ui";
 import {
-  OfferEditor, emptyOfferEditor, offerToEditor, editorToPayload, type OfferEditorValue,
+  OfferEditor, emptyOfferEditor, offerToEditor, editorToPayload, validateOfferEditor, type OfferEditorValue,
 } from "./OfferEditor";
 import { formatOfferMoney } from "@/lib/offers/calcTotals";
 import { getPublicFrontendOriginFromEnv } from "@/lib/publicCatalogUrl";
@@ -58,7 +58,7 @@ export function OffersClient() {
   const [deleting, setDeleting] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  useAdminBackHandler(Boolean(editorOpen || deleteTarget), () => {
+  useAdminBackHandler(Boolean(deleteTarget || (editorOpen && editorMode === "edit")), () => {
     if (deleteTarget) setDeleteTarget(null);
     else setEditorOpen(false);
   }, "offers-modal");
@@ -124,7 +124,8 @@ export function OffersClient() {
     setSaveError(null);
     try {
       const payload = editorToPayload(editor);
-      if (!payload.items.length) throw new Error("Добавете поне един артикул");
+      const validationError = validateOfferEditor(editor);
+      if (validationError) throw new Error(validationError);
       const url = editorMode === "create" ? "/api/admin/service/offers" : `/api/admin/service/offers/${editingId}`;
       const method = editorMode === "create" ? "POST" : "PUT";
       const res = await fetch(url, {
@@ -306,7 +307,10 @@ export function OffersClient() {
       )}
 
       {editorOpen && (
-        <div className={ADMIN_MODAL_BACKDROP} onClick={() => !saving && setEditorOpen(false)}>
+        <div
+          className={ADMIN_MODAL_BACKDROP}
+          onClick={editorMode === "edit" && !saving ? () => setEditorOpen(false) : undefined}
+        >
           <div
             className={`${ADMIN_MODAL_PANEL} md:max-w-2xl md:h-[90vh]`}
             onClick={(e) => e.stopPropagation()}

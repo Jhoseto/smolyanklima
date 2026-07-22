@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Trash2, GripVertical, X } from "lucide-react";
+import { Plus, Trash2, GripVertical, X, Minus } from "lucide-react";
 import { Button, Input, Textarea } from "../../../ui";
 import { ContactAutocomplete, type ContactSuggestion } from "../acceptance/ContactAutocomplete";
 import { CatalogProductAutocomplete, type CatalogProductPick } from "./CatalogProductAutocomplete";
 import { calcOfferTotals, formatOfferMoney } from "@/lib/offers/calcTotals";
-import { DEFAULT_OFFER_TERMS } from "@/lib/company/companyInfo";
+import { DEFAULT_OFFER_INTRO, DEFAULT_OFFER_TERMS } from "@/lib/company/companyInfo";
+import { sanitizeOfferDescription } from "@/lib/offers/sanitizeOfferDescription";
 import type { OfferSpecRow } from "@/lib/offers/buildSpecsFromProduct";
 
 export type EditorItem = {
@@ -44,8 +45,20 @@ export type OfferEditorValue = {
   items: EditorItem[];
 };
 
+function parseItemQty(raw: string): number {
+  const n = Math.floor(Number(raw));
+  return Number.isFinite(n) && n >= 1 ? n : 1;
+}
+
 function uid() {
   return `tmp-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function itemLineTotal(it: Pick<EditorItem, "quantity" | "unitPrice" | "installPrice">): number {
+  const qty = parseItemQty(it.quantity);
+  const unit = Number(it.unitPrice) || 0;
+  const install = it.installPrice.trim() === "" ? 0 : Number(it.installPrice) || 0;
+  return qty * (unit + install);
 }
 
 export function emptyOfferEditor(): OfferEditorValue {
@@ -59,7 +72,7 @@ export function emptyOfferEditor(): OfferEditorValue {
     clientAddress: "",
     title: "Оферта за климатизация",
     objectNote: "",
-    introNote: "",
+    introNote: DEFAULT_OFFER_INTRO,
     termsNote: DEFAULT_OFFER_TERMS,
     validUntil: until.toISOString().slice(0, 10),
     vatRate: "20",
@@ -109,7 +122,7 @@ export function offerToEditor(data: {
     clientAddress: data.client_address ?? "",
     title: data.title ?? "",
     objectNote: data.object_note ?? "",
-    introNote: data.intro_note ?? "",
+    introNote: data.intro_note ?? DEFAULT_OFFER_INTRO,
     termsNote: data.terms_note ?? DEFAULT_OFFER_TERMS,
     validUntil: data.valid_until ?? "",
     vatRate: String(data.vat_rate ?? 20),
@@ -124,10 +137,10 @@ export function offerToEditor(data: {
       typeName: it.type_name ?? "",
       modelCode: it.model_code ?? "",
       imageUrl: it.image_url ?? "",
-      description: it.description ?? "",
+      description: sanitizeOfferDescription(it.description) ?? "",
       specs: Array.isArray(it.specs) ? it.specs : [],
       groupLabel: it.group_label ?? "",
-      quantity: String(it.quantity),
+      quantity: String(Math.max(1, Math.floor(Number(it.quantity) || 1))),
       unitPrice: String(it.unit_price),
       installPrice: it.install_price != null ? String(it.install_price) : "",
       lineNote: it.line_note ?? "",
@@ -138,8 +151,8 @@ export function offerToEditor(data: {
 export function editorToPayload(v: OfferEditorValue) {
   return {
     contactId: v.contactId,
-    clientName: v.clientName.trim() || null,
-    clientPhone: v.clientPhone.trim() || null,
+    clientName: v.clientName.trim(),
+    clientPhone: v.clientPhone.trim(),
     clientEmail: v.clientEmail.trim() || null,
     clientAddress: v.clientAddress.trim() || null,
     title: v.title.trim() || null,
@@ -158,16 +171,22 @@ export function editorToPayload(v: OfferEditorValue) {
       typeName: it.typeName.trim() || null,
       modelCode: it.modelCode.trim() || null,
       imageUrl: it.imageUrl.trim() || null,
-      description: it.description.trim() || null,
+      description: it.description.trim() ? sanitizeOfferDescription(it.description.trim()) ?? "" : "",
       specs: it.specs.filter((s) => s.label.trim() || s.value.trim()),
       groupLabel: it.groupLabel.trim() || null,
-      quantity: Number(it.quantity) || 1,
+      quantity: Math.max(1, Math.floor(Number(it.quantity) || 1)),
       unitPrice: Number(it.unitPrice) || 0,
       installPrice: it.installPrice.trim() === "" ? null : Number(it.installPrice),
       lineNote: it.lineNote.trim() || null,
       sortOrder: idx,
     })),
   };
+}
+
+export function validateOfferEditor(v: OfferEditorValue): string | null {
+  if (!v.clientName.trim()) return "Попълнете името на клиента";
+  if (!v.clientPhone.trim()) return "Попълнете телефона на клиента";
+  return null;
 }
 
 type Props = {
@@ -181,6 +200,7 @@ type Props = {
 };
 
 export function OfferEditor({ value, onChange, onClose, onSave, saving, error, mode }: Props) {
+  const [catalogQty, setCatalogQty] = useState("1");
   const set = <K extends keyof OfferEditorValue>(key: K, val: OfferEditorValue[K]) =>
     onChange({ ...value, [key]: val });
 
@@ -208,19 +228,19 @@ export function OfferEditor({ value, onChange, onClose, onSave, saving, error, m
       description: p.description ?? "",
       specs: p.specs,
       groupLabel: "",
-      quantity: "1",
+      quantity: String(parseItemQty(catalogQty)),
       unitPrice: String(p.unitPrice),
       installPrice: String(p.installPrice),
       lineNote: "",
     };
-    onChange({ ...value, items: [...value.items, item] });
+    onChange({ ...value, items: [item, ...value.items] });
+    setCatalogQty("1");
   };
 
   const addCustom = () => {
     onChange({
       ...value,
       items: [
-        ...value.items,
         {
           key: uid(),
           productId: null,
@@ -238,6 +258,7 @@ export function OfferEditor({ value, onChange, onClose, onSave, saving, error, m
           installPrice: "",
           lineNote: "",
         },
+        ...value.items,
       ],
     });
   };
@@ -246,7 +267,7 @@ export function OfferEditor({ value, onChange, onClose, onSave, saving, error, m
     () =>
       calcOfferTotals({
         items: value.items.map((it) => ({
-          quantity: Number(it.quantity) || 0,
+          quantity: parseItemQty(it.quantity),
           unit_price: Number(it.unitPrice) || 0,
           install_price: it.installPrice.trim() === "" ? null : Number(it.installPrice),
         })),
@@ -256,6 +277,8 @@ export function OfferEditor({ value, onChange, onClose, onSave, saving, error, m
       }),
     [value.items, value.vatRate, value.pricesIncludeVat, value.discountTotal],
   );
+
+  const canSave = value.clientName.trim().length > 0 && value.clientPhone.trim().length > 0;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -280,7 +303,7 @@ export function OfferEditor({ value, onChange, onClose, onSave, saving, error, m
         <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
           <h3 className="text-[11px] font-bold uppercase tracking-wide text-brand-blue-700">Клиент</h3>
           <ContactAutocomplete
-            label="Име"
+            label="Име *"
             value={value.clientName}
             onChange={(name, contact?: ContactSuggestion) => {
               if (contact) {
@@ -300,8 +323,8 @@ export function OfferEditor({ value, onChange, onClose, onSave, saving, error, m
           />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="block">
-              <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-500">Телефон</span>
-              <Input value={value.clientPhone} onChange={(e) => set("clientPhone", e.target.value)} />
+              <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-500">Телефон *</span>
+              <Input value={value.clientPhone} onChange={(e) => set("clientPhone", e.target.value)} required />
             </label>
             <label className="block">
               <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-500">Имейл</span>
@@ -331,7 +354,7 @@ export function OfferEditor({ value, onChange, onClose, onSave, saving, error, m
           </label>
           <label className="block">
             <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-500">Въведение</span>
-            <Textarea value={value.introNote} onChange={(e) => set("introNote", e.target.value)} rows={2} />
+            <Textarea value={value.introNote} onChange={(e) => set("introNote", e.target.value)} rows={8} />
           </label>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="block">
@@ -350,11 +373,19 @@ export function OfferEditor({ value, onChange, onClose, onSave, saving, error, m
               Свободен ред
             </Button>
           </div>
-          <CatalogProductAutocomplete onPick={addFromCatalog} />
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+            <div className="min-w-0 flex-1">
+              <CatalogProductAutocomplete onPick={addFromCatalog} />
+            </div>
+            <label className="block w-full shrink-0 sm:w-28">
+              <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-500">Бройки</span>
+              <QuantityStepper value={catalogQty} onChange={setCatalogQty} />
+            </label>
+          </div>
 
           {value.items.length === 0 && (
             <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 py-8 text-center text-sm text-slate-500">
-              Добавете климатик от каталога по-горе
+              Можете да добавите климатици по-късно — за запис са нужни само име и телефон
             </div>
           )}
 
@@ -406,7 +437,7 @@ export function OfferEditor({ value, onChange, onClose, onSave, saving, error, m
 
         <section className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4">
           <h3 className="text-[11px] font-bold uppercase tracking-wide text-brand-blue-700">Условия за монтаж</h3>
-          <Textarea value={value.termsNote} onChange={(e) => set("termsNote", e.target.value)} rows={8} />
+          <Textarea value={value.termsNote} onChange={(e) => set("termsNote", e.target.value)} rows={18} />
         </section>
       </div>
 
@@ -414,10 +445,57 @@ export function OfferEditor({ value, onChange, onClose, onSave, saving, error, m
         <Button variant="secondary" onClick={onClose} disabled={saving}>
           Отказ
         </Button>
-        <Button variant="primary" onClick={onSave} disabled={saving || value.items.length === 0}>
+        <Button variant="primary" onClick={onSave} disabled={saving || !canSave}>
           {saving ? "Записвам…" : mode === "create" ? "Създай оферта" : "Запази"}
         </Button>
       </div>
+    </div>
+  );
+}
+
+function QuantityStepper({
+  value,
+  onChange,
+  compact = false,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  compact?: boolean;
+}) {
+  const qty = parseItemQty(value);
+  const btnClass = compact
+    ? "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+    : "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40";
+
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        className={btnClass}
+        disabled={qty <= 1}
+        onClick={() => onChange(String(qty - 1))}
+        aria-label="Намали бройките"
+      >
+        <Minus className="h-4 w-4" />
+      </button>
+      <Input
+        type="number"
+        min={1}
+        step={1}
+        inputMode="numeric"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={() => onChange(String(parseItemQty(value)))}
+        className={`text-center font-bold tabular-nums ${compact ? "h-9 px-1" : "h-10 px-1"}`}
+      />
+      <button
+        type="button"
+        className={btnClass}
+        onClick={() => onChange(String(qty + 1))}
+        aria-label="Увеличи бройките"
+      >
+        <Plus className="h-4 w-4" />
+      </button>
     </div>
   );
 }
@@ -432,6 +510,7 @@ function ItemCard({
   onRemove: () => void;
 }) {
   const [specsOpen, setSpecsOpen] = useState(false);
+  const lineTotal = itemLineTotal(item);
 
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3 space-y-2.5">
@@ -456,9 +535,15 @@ function ItemCard({
             <Input value={item.modelCode} onChange={(e) => onChange({ modelCode: e.target.value })} placeholder="Модел" />
           </div>
         </div>
-        <button type="button" onClick={onRemove} className="rounded-lg p-2 text-red-400 hover:bg-red-50 hover:text-red-600">
-          <Trash2 className="h-4 w-4" />
-        </button>
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <button type="button" onClick={onRemove} className="rounded-lg p-2 text-red-400 hover:bg-red-50 hover:text-red-600">
+            <Trash2 className="h-4 w-4" />
+          </button>
+          <div className="text-right">
+            <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Бройки</div>
+            <QuantityStepper value={item.quantity} onChange={(quantity) => onChange({ quantity })} compact />
+          </div>
+        </div>
       </div>
 
       <Textarea
@@ -469,19 +554,19 @@ function ItemCard({
         className="text-xs"
       />
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         <label className="block">
-          <span className="mb-0.5 block text-[10px] font-bold text-slate-500">Кол-во</span>
-          <Input type="number" min={0.01} step="1" value={item.quantity} onChange={(e) => onChange({ quantity: e.target.value })} />
-        </label>
-        <label className="block">
-          <span className="mb-0.5 block text-[10px] font-bold text-slate-500">Цена €</span>
+          <span className="mb-0.5 block text-[10px] font-bold text-slate-500">Цена € (ед.)</span>
           <Input type="number" min={0} step="0.01" value={item.unitPrice} onChange={(e) => onChange({ unitPrice: e.target.value })} />
         </label>
         <label className="block">
-          <span className="mb-0.5 block text-[10px] font-bold text-slate-500">Монтаж €</span>
+          <span className="mb-0.5 block text-[10px] font-bold text-slate-500">Монтаж € (ед.)</span>
           <Input type="number" min={0} step="0.01" value={item.installPrice} onChange={(e) => onChange({ installPrice: e.target.value })} />
         </label>
+        <div className="col-span-2 flex items-end justify-between rounded-xl bg-[#FFF5ED] px-3 py-2 sm:col-span-1">
+          <span className="text-[10px] font-bold uppercase tracking-wide text-brand-orange-600">Общо ред</span>
+          <span className="font-black tabular-nums text-brand-orange-600">{formatOfferMoney(lineTotal)}</span>
+        </div>
       </div>
 
       <Input

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Phone, Mail, MapPin, Calendar, Clock, ShieldCheck, Truck, BadgeCheck, CheckCircle2, FileText, ChevronRight } from 'lucide-react';
+import { Phone, MapPin, Calendar, Clock, ShieldCheck, Truck, BadgeCheck, CheckCircle2, FileText, ChevronRight } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { SiteSeo } from '../components/seo/SiteSeo';
 
@@ -353,7 +353,7 @@ export default function OfferViewPage() {
                         {/* Price breakdown */}
                         <div className="mt-5 grid grid-cols-2 gap-3 border-t border-gray-100 pt-4 sm:grid-cols-4">
                           <div className="rounded-xl bg-[#F8FAFC] px-3 py-2">
-                            <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Количество</div>
+                            <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Бройки</div>
                             <div className="font-bold text-gray-900">{it.quantity}</div>
                           </div>
                           <div className="rounded-xl bg-[#F8FAFC] px-3 py-2">
@@ -434,20 +434,13 @@ export default function OfferViewPage() {
                 </div>
               </div>
 
-              <div className="space-y-3 px-6 pb-6">
+              <div className="px-6 pb-6">
                 <a
                   href={`tel:${company.phoneE164}`}
                   className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#FF4D00] to-[#FF2A4D] font-bold text-white shadow-lg shadow-[#FF4D00]/20 hover:opacity-95 transition"
                 >
                   <Phone className="h-4 w-4" />
                   Потвърди офертата по телефона
-                </a>
-                <a
-                  href={`mailto:${company.email}?subject=${encodeURIComponent(`Оферта ${data.offer_number}`)}`}
-                  className="flex h-12 items-center justify-center gap-2 rounded-2xl border-2 border-gray-100 bg-white font-bold text-gray-900 hover:border-[#00B4D8] hover:text-[#00B4D8] transition"
-                >
-                  <Mail className="h-4 w-4" />
-                  Запитване по имейл
                 </a>
               </div>
             </div>
@@ -460,7 +453,7 @@ export default function OfferViewPage() {
                   <thead>
                     <tr className="text-[10px] font-bold uppercase tracking-wide text-gray-400">
                       <th className="pb-2 text-left">Артикул</th>
-                      <th className="pb-2 text-right">Кол.</th>
+                      <th className="pb-2 text-right">Бр.</th>
                       <th className="pb-2 text-right">Общо</th>
                     </tr>
                   </thead>
@@ -504,22 +497,15 @@ export default function OfferViewPage() {
             Готови сме да монтираме
           </h2>
           <p className="text-gray-300 mb-6 max-w-lg mx-auto">
-            Потвърдете офертата и нашият екип ще се свърже с вас за уточняване на детайлите и удобна дата.
+            Потвърдете офертата по телефона и нашият екип ще се свърже с вас за уточняване на детайлите и удобна дата.
           </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+          <div className="flex items-center justify-center">
             <a
               href={`tel:${company.phoneE164}`}
               className="inline-flex h-14 items-center gap-2 rounded-full bg-gradient-to-r from-[#FF4D00] to-[#FF2A4D] px-8 font-bold text-white shadow-xl shadow-[#FF4D00]/20 hover:scale-[1.02] transition"
             >
               <Phone className="h-5 w-5" />
               {company.phone}
-            </a>
-            <a
-              href={`mailto:${company.email}?subject=${encodeURIComponent(`Оферта ${data.offer_number}`)}`}
-              className="inline-flex h-14 items-center gap-2 rounded-full border-2 border-white/20 bg-white/5 px-8 font-bold text-white hover:border-[#00B4D8] hover:text-[#00B4D8] transition"
-            >
-              <Mail className="h-5 w-5" />
-              Имейл
             </a>
           </div>
         </section>
@@ -543,7 +529,7 @@ export default function OfferViewPage() {
       <style>{`
         @media print {
           .sticky { position: static !important; }
-          a[href^="tel"], a[href^="mailto"] { text-decoration: none; color: inherit; }
+          a[href^="tel"] { text-decoration: none; color: inherit; }
         }
       `}</style>
     </div>

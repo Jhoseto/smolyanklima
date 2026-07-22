@@ -39,8 +39,14 @@ const ItemSchema = z.object({
 
 const UpdateSchema = z.object({
   contactId: z.string().uuid().optional().nullable(),
-  clientName: z.string().max(300).optional().nullable(),
-  clientPhone: z.string().max(80).optional().nullable(),
+  clientName: z.preprocess(
+    (v) => (typeof v === "string" ? v.trim() : v),
+    z.string().min(1, "Името на клиента е задължително").max(300),
+  ),
+  clientPhone: z.preprocess(
+    (v) => (typeof v === "string" ? v.trim() : v),
+    z.string().min(1, "Телефонът е задължителен").max(80),
+  ),
   clientEmail: z.string().max(200).optional().nullable(),
   clientAddress: z.string().max(500).optional().nullable(),
   title: z.string().max(500).optional().nullable(),
@@ -54,7 +60,7 @@ const UpdateSchema = z.object({
   currency: z.string().max(8).optional(),
   status: z.enum(["draft", "sent", "accepted", "rejected"]).optional(),
   publicEnabled: z.boolean().optional(),
-  items: z.array(ItemSchema).min(1).optional(),
+  items: z.array(ItemSchema).optional(),
 });
 
 export async function OPTIONS(req: NextRequest) {
@@ -191,12 +197,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (body.items) {
     await supabase.from("service_offer_items").delete().eq("offer_id", id);
     const itemRows = (body.items as OfferItemInput[]).map((item, idx) => mapItemInputToDb(item, id, idx));
-    const { data: inserted, error: itemsErr } = await supabase
-      .from("service_offer_items")
-      .insert(itemRows)
-      .select(OFFER_ITEM_SELECT);
-    if (itemsErr) return withCors(req, NextResponse.json({ error: itemsErr.message }, { status: 500 }));
-    items = inserted;
+    if (itemRows.length > 0) {
+      const { data: inserted, error: itemsErr } = await supabase
+        .from("service_offer_items")
+        .insert(itemRows)
+        .select(OFFER_ITEM_SELECT);
+      if (itemsErr) return withCors(req, NextResponse.json({ error: itemsErr.message }, { status: 500 }));
+      items = inserted;
+    } else {
+      items = [];
+    }
   } else {
     const { data: existingItems } = await supabase
       .from("service_offer_items")

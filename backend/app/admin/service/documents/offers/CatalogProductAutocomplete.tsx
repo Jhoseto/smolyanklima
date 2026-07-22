@@ -7,6 +7,7 @@ import {
   resolveInstallPrice,
   type OfferSpecRow,
 } from "@/lib/offers/buildSpecsFromProduct";
+import { sanitizeOfferDescription } from "@/lib/offers/sanitizeOfferDescription";
 
 export type CatalogProductPick = {
   productId: string;
@@ -57,7 +58,7 @@ function toPick(p: PublicListRow): CatalogProductPick {
     typeName: p.product_types?.name ?? null,
     modelCode: p.model_code ?? null,
     imageUrl: main?.url ?? null,
-    description: p.description ?? null,
+    description: sanitizeOfferDescription(p.description),
     specs: buildSpecsFromProduct(firstSpec(p.product_specs) as Parameters<typeof buildSpecsFromProduct>[0]),
     unitPrice,
     installPrice: resolveInstallPrice(p.price, p.price_with_mount),

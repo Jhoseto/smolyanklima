@@ -5,7 +5,7 @@ import { adminSession, requireRole } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
 import { isPostgrestMissingRelation } from "@/lib/admin/pgMissingColumn";
 import { calcOfferTotals } from "@/lib/offers/calcTotals";
-import { DEFAULT_OFFER_TERMS } from "@/lib/company/companyInfo";
+import { DEFAULT_OFFER_INTRO, DEFAULT_OFFER_TERMS } from "@/lib/company/companyInfo";
 import {
   OFFER_ITEM_SELECT,
   OFFER_SELECT,
@@ -40,8 +40,14 @@ const ItemSchema = z.object({
 
 const CreateSchema = z.object({
   contactId: z.string().uuid().optional().nullable(),
-  clientName: z.string().max(300).optional().nullable(),
-  clientPhone: z.string().max(80).optional().nullable(),
+  clientName: z.preprocess(
+    (v) => (typeof v === "string" ? v.trim() : v),
+    z.string().min(1, "Името на клиента е задължително").max(300),
+  ),
+  clientPhone: z.preprocess(
+    (v) => (typeof v === "string" ? v.trim() : v),
+    z.string().min(1, "Телефонът е задължителен").max(80),
+  ),
   clientEmail: z.string().max(200).optional().nullable(),
   clientAddress: z.string().max(500).optional().nullable(),
   title: z.string().max(500).optional().nullable(),
@@ -54,7 +60,7 @@ const CreateSchema = z.object({
   discountTotal: z.coerce.number().min(0).optional().default(0),
   currency: z.string().max(8).optional().default("EUR"),
   status: z.enum(["draft", "sent", "accepted", "rejected"]).optional().default("draft"),
-  items: z.array(ItemSchema).min(1, "Добавете поне един артикул"),
+  items: z.array(ItemSchema).optional().default([]),
 });
 
 const QuerySchema = z.object({
@@ -172,7 +178,7 @@ export async function POST(req: NextRequest) {
     client_address: body.clientAddress?.trim() || null,
     title: body.title?.trim() || null,
     object_note: body.objectNote?.trim() || null,
-    intro_note: body.introNote?.trim() || null,
+    intro_note: body.introNote?.trim() || DEFAULT_OFFER_INTRO,
     terms_note: body.termsNote?.trim() || DEFAULT_OFFER_TERMS,
     valid_until: body.validUntil?.trim() || null,
     vat_rate: body.vatRate,
@@ -199,14 +205,18 @@ export async function POST(req: NextRequest) {
   }
 
   const itemRows = items.map((item, idx) => mapItemInputToDb(item, offer.id as string, idx));
-  const { data: insertedItems, error: itemsErr } = await supabase
-    .from("service_offer_items")
-    .insert(itemRows)
-    .select(OFFER_ITEM_SELECT);
+  let insertedItems: Awaited<ReturnType<typeof supabase.from>>["data"] = [];
+  if (itemRows.length > 0) {
+    const { data, error: itemsErr } = await supabase
+      .from("service_offer_items")
+      .insert(itemRows)
+      .select(OFFER_ITEM_SELECT);
+    insertedItems = data;
 
-  if (itemsErr) {
-    await supabase.from("service_offers").delete().eq("id", offer.id);
-    return withCors(req, NextResponse.json({ error: itemsErr.message }, { status: 500 }));
+    if (itemsErr) {
+      await supabase.from("service_offers").delete().eq("id", offer.id);
+      return withCors(req, NextResponse.json({ error: itemsErr.message }, { status: 500 }));
+    }
   }
 
   await logAdminActivity({

@@ -3,11 +3,12 @@
  * Цени само в евро (EUR). Без letterSpacing (бърка кирилица в react-pdf).
  */
 import React from "react";
-import { Document, Page, View, Text, StyleSheet, Font } from "@react-pdf/renderer";
+import { Document, Page, View, Text, StyleSheet, Font, Link } from "@react-pdf/renderer";
 import { ProtocolPdfBrandMark } from "@/lib/protocol-pdf-brand";
 import { COMPANY_INFO } from "@/lib/company/companyInfo";
 import type { OfferItemRow, OfferRow } from "@/lib/offers/offerTypes";
 import type { OfferSpecRow } from "@/lib/offers/buildSpecsFromProduct";
+import { sanitizeOfferDescription } from "@/lib/offers/sanitizeOfferDescription";
 
 const NOTO_REG =
   "https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSans/NotoSans-Regular.ttf";
@@ -98,7 +99,42 @@ const s = StyleSheet.create({
   },
   sectionTitle: { fontSize: 8, fontWeight: 700, color: C.orange, textTransform: "uppercase" },
 
-  intro: { fontSize: 7.5, color: C.muted, marginBottom: 4 },
+  intro: { fontSize: 7.5, color: C.muted, marginBottom: 4, lineHeight: 1.35 },
+
+  terms: { fontSize: 7, color: C.muted, lineHeight: 1.35 },
+
+  ctaBanner: {
+    marginTop: 10,
+    marginBottom: 6,
+    backgroundColor: C.ink,
+    borderRadius: 10,
+    paddingVertical: 16,
+    paddingHorizontal: 14,
+    alignItems: "center",
+  },
+  ctaTitle: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: C.white,
+    marginBottom: 5,
+    textAlign: "center",
+    lineHeight: 1.35,
+  },
+  ctaSub: {
+    fontSize: 8,
+    color: "#D1D5DB",
+    textAlign: "center",
+    marginBottom: 10,
+    lineHeight: 1.4,
+    maxWidth: 380,
+  },
+  ctaPhoneBtn: {
+    backgroundColor: C.orange,
+    borderRadius: 18,
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+  },
+  ctaPhoneText: { fontSize: 10, fontWeight: 700, color: C.white },
 
   groupLabel: {
     fontSize: 7.5,
@@ -127,7 +163,7 @@ const s = StyleSheet.create({
   itemTitle: { fontSize: 9, fontWeight: 700, color: C.ink, maxWidth: "72%" },
   itemPrice: { fontSize: 9, fontWeight: 700, color: C.orange },
   itemType: { fontSize: 7, color: C.cyanDark, marginBottom: 2 },
-  itemDesc: { fontSize: 7, color: C.muted, marginBottom: 3 },
+  itemDesc: { fontSize: 7, color: C.muted, marginBottom: 3, lineHeight: 1.35 },
 
   specsGrid: {
     flexDirection: "row",
@@ -201,8 +237,6 @@ const s = StyleSheet.create({
   grandLabel: { fontSize: 9, fontWeight: 700, color: C.white, lineHeight: 1.4 },
   grandValue: { fontSize: 12, fontWeight: 700, color: C.white, lineHeight: 1.45 },
 
-  terms: { fontSize: 7, color: C.muted, lineHeight: 1.3 },
-
   footer: {
     position: "absolute",
     bottom: 10,
@@ -264,7 +298,7 @@ export function OfferPDF({ data }: { data: OfferRow & { items: OfferItemRow[] } 
 
   return (
     <Document>
-      <Page size="A4" style={s.page}>
+      <Page size="A4" style={s.page} wrap>
         <View style={s.header}>
           <View>
             <ProtocolPdfBrandMark />
@@ -302,7 +336,7 @@ export function OfferPDF({ data }: { data: OfferRow & { items: OfferItemRow[] } 
           </View>
         </View>
 
-        {data.intro_note ? <Text style={s.intro}>{clip(data.intro_note, 420)}</Text> : null}
+        {data.intro_note ? <Text style={s.intro}>{data.intro_note}</Text> : null}
 
         <View style={s.sectionBar}>
           <Text style={s.sectionTitle}>Предложени климатици</Text>
@@ -325,10 +359,12 @@ export function OfferPDF({ data }: { data: OfferRow & { items: OfferItemRow[] } 
                   <Text style={s.itemPrice}>{eur(lineEur)}</Text>
                 </View>
                 {item.type_name ? <Text style={s.itemType}>{item.type_name}</Text> : null}
-                {item.description ? <Text style={s.itemDesc}>{clip(item.description, 280)}</Text> : null}
+                {item.description ? (
+                  <Text style={s.itemDesc}>{sanitizeOfferDescription(item.description) ?? ""}</Text>
+                ) : null}
                 {specs.length > 0 ? (
                   <View style={s.specsGrid}>
-                    {specs.slice(0, 10).map((sp, i) => (
+                    {specs.map((sp, i) => (
                       <View key={`${item.id}-sp-${i}`} style={s.specCell}>
                         <Text style={s.specLabel}>{sp.label}</Text>
                         <Text style={s.specValue}>{sp.value}</Text>
@@ -338,7 +374,7 @@ export function OfferPDF({ data }: { data: OfferRow & { items: OfferItemRow[] } 
                 ) : null}
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4, borderTopWidth: 0.5, borderTopColor: C.line, paddingTop: 4 }}>
                   <View style={{ flex: 1, minWidth: 80 }}>
-                    <Text style={{ fontSize: 6, color: C.muted, textTransform: "uppercase" }}>Количество</Text>
+                    <Text style={{ fontSize: 6, color: C.muted, textTransform: "uppercase" }}>Бройки</Text>
                     <Text style={{ fontSize: 8, fontWeight: 700 }}>{item.quantity}</Text>
                   </View>
                   <View style={{ flex: 1, minWidth: 80 }}>
@@ -366,7 +402,7 @@ export function OfferPDF({ data }: { data: OfferRow & { items: OfferItemRow[] } 
         </View>
         <View style={s.tableHeader}>
           <Text style={[s.th, s.colName]}>Артикул</Text>
-          <Text style={[s.th, s.colQty]}>Кол.</Text>
+          <Text style={[s.th, s.colQty]}>Бр.</Text>
           <Text style={[s.th, s.colUnit]}>Ед. цена</Text>
           <Text style={[s.th, s.colInstall]}>Монтаж</Text>
           <Text style={[s.th, s.colTotal]}>Общо</Text>
@@ -413,9 +449,22 @@ export function OfferPDF({ data }: { data: OfferRow & { items: OfferItemRow[] } 
             <View style={[s.sectionBar, { marginTop: 8 }]}>
               <Text style={s.sectionTitle}>Условия</Text>
             </View>
-            <Text style={s.terms}>{clip(data.terms_note, 900)}</Text>
+            <Text style={s.terms}>{data.terms_note}</Text>
           </>
         ) : null}
+
+        <View style={s.ctaBanner}>
+          <Text style={s.ctaTitle}>Готови сме да монтираме</Text>
+          <Text style={s.ctaSub}>
+            Потвърдете офертата по телефона и нашият екип ще се свърже с вас за уточняване на детайлите и
+            удобна дата за монтаж.
+          </Text>
+          <Link src={`tel:${COMPANY_INFO.phoneE164}`} style={{ textDecoration: "none" }}>
+            <View style={s.ctaPhoneBtn}>
+              <Text style={s.ctaPhoneText}>Потвърди офертата · {COMPANY_INFO.phone}</Text>
+            </View>
+          </Link>
+        </View>
 
         <View style={s.footer} fixed>
           <Text style={s.footerText}>
