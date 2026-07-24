@@ -1,6 +1,7 @@
 /** Единен калкулатор за суми на оферта — админ, PDF, публична страница, snapshot в БД. */
 
 export const TRADE_DISCOUNT_LABEL = "Търговска отстъпка";
+export const OFFER_INSTALL_LABEL = "Стандартен монтаж";
 
 export type OfferCalcLine = {
   quantity: number;

@@ -9,7 +9,7 @@ import { COMPANY_INFO } from "@/lib/company/companyInfo";
 import type { OfferItemRow, OfferRow } from "@/lib/offers/offerTypes";
 import type { OfferItemPdfRow } from "@/lib/offers/offerPdfImages";
 import type { OfferSpecRow } from "@/lib/offers/buildSpecsFromProduct";
-import { lineTotal as calcOfferLineTotal, effectiveUnitPrice, lineTradeDiscountAmount, totalTradeDiscountAmount, formatTradeDiscountWithAmount, TRADE_DISCOUNT_LABEL } from "@/lib/offers/calcTotals";
+import { lineTotal as calcOfferLineTotal, effectiveUnitPrice, lineTradeDiscountAmount, totalTradeDiscountAmount, formatTradeDiscountWithAmount, TRADE_DISCOUNT_LABEL, OFFER_INSTALL_LABEL } from "@/lib/offers/calcTotals";
 import { sanitizeOfferDescription } from "@/lib/offers/sanitizeOfferDescription";
 import { splitOfferTermsEmphasis } from "@/lib/offers/formatOfferTermsDisplay";
 
@@ -110,7 +110,9 @@ const s = StyleSheet.create({
   ctaBanner: {
     marginTop: 10,
     marginBottom: 6,
-    backgroundColor: C.ink,
+    backgroundColor: C.white,
+    borderWidth: 1.5,
+    borderColor: C.ink,
     borderRadius: 10,
     paddingVertical: 16,
     paddingHorizontal: 14,
@@ -119,14 +121,14 @@ const s = StyleSheet.create({
   ctaTitle: {
     fontSize: 13,
     fontWeight: 700,
-    color: C.white,
+    color: C.ink,
     marginBottom: 5,
     textAlign: "center",
     lineHeight: 1.35,
   },
   ctaSub: {
     fontSize: 8,
-    color: "#D1D5DB",
+    color: C.muted,
     textAlign: "center",
     marginBottom: 10,
     lineHeight: 1.4,
@@ -248,11 +250,11 @@ const s = StyleSheet.create({
   th: { fontSize: 6.5, fontWeight: 700, color: C.white, textTransform: "uppercase", lineHeight: 1.25 },
   td: { fontSize: 7, color: C.ink, lineHeight: 1.3 },
   tdBold: { fontSize: 7, fontWeight: 700, color: C.ink, lineHeight: 1.3 },
-  colName: { width: "40%", paddingRight: 6 },
+  colName: { width: "38%", paddingRight: 6 },
   colQty: { width: "5%" },
   colUnit: { width: "12%" },
-  colTo: { width: "18%" },
-  colInstall: { width: "11%" },
+  colTo: { width: "17%" },
+  colInstall: { width: "14%" },
   colTotal: { width: "14%" },
   cellRight: { alignItems: "flex-end" },
   cellCenter: { alignItems: "center" },
@@ -486,7 +488,7 @@ export function OfferPDF({ data }: { data: OfferRow & { items: OfferItemPdfRow[]
                   ) : null}
                   {installEur != null && (
                     <View style={{ flex: 1, minWidth: 80 }}>
-                      <Text style={{ fontSize: 6, color: C.muted, textTransform: "uppercase" }}>Монтаж</Text>
+                      <Text style={{ fontSize: 6, color: C.muted, textTransform: "uppercase" }}>{OFFER_INSTALL_LABEL}</Text>
                       <Text style={{ fontSize: 8, fontWeight: 700 }}>{eur(installEur)}</Text>
                     </View>
                   )}
@@ -519,7 +521,7 @@ export function OfferPDF({ data }: { data: OfferRow & { items: OfferItemPdfRow[]
             <Text style={[s.th, { textAlign: "center", fontSize: 5.5, lineHeight: 1.2 }]}>{TRADE_DISCOUNT_LABEL}</Text>
           </View>
           <View style={[s.colInstall, s.cellRight]}>
-            <Text style={[s.th, { textAlign: "right" }]}>Монтаж</Text>
+            <Text style={[s.th, { textAlign: "right", fontSize: 5.5, lineHeight: 1.2 }]}>{OFFER_INSTALL_LABEL}</Text>
           </View>
           <View style={[s.colTotal, s.cellRight]}>
             <Text style={[s.th, { textAlign: "right" }]}>Общо</Text>

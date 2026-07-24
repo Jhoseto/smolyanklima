@@ -9,6 +9,7 @@ import {
   formatTradeDiscountPercent,
   lineTotal as calcOfferLineTotal,
   TRADE_DISCOUNT_LABEL,
+  OFFER_INSTALL_LABEL,
 } from '../lib/offerCalc';
 
 type Spec = { label: string; value: string };
@@ -124,7 +125,7 @@ function OfferItemPriceBreakdown({ item, currency }: { item: OfferItem; currency
           />
         )}
         {hasInstall && (
-          <OfferPriceCell label="Монтаж (ед.)" value={money(item.install_price!, currency)} />
+          <OfferPriceCell label={OFFER_INSTALL_LABEL} value={money(item.install_price!, currency)} />
         )}
       </div>
       <div className="mt-3 flex items-center justify-between gap-4 rounded-xl bg-[#FFF5ED] px-4 py-3">
@@ -433,7 +434,7 @@ export default function OfferViewPage() {
                         <th className="pb-3 pr-3 text-right">Бр.</th>
                         <th className="pb-3 pr-3 text-right">Ед. цена</th>
                         <th className="pb-3 pr-3 text-center">{TRADE_DISCOUNT_LABEL}</th>
-                        <th className="pb-3 pr-3 text-right">Монтаж</th>
+                        <th className="pb-3 pr-3 text-right">{OFFER_INSTALL_LABEL}</th>
                         <th className="pb-3 text-right">Общо</th>
                       </tr>
                     </thead>
@@ -586,11 +587,11 @@ export default function OfferViewPage() {
         </div>
 
         {/* Bottom CTA banner */}
-        <section className="mt-10 overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-[#111827] via-[#1a1a1a] to-[#111827] p-6 sm:p-10 text-white text-center">
-          <h2 className="font-outfit text-2xl sm:text-4xl font-black mb-2">
+        <section className="mt-10 overflow-hidden rounded-[2.5rem] border-2 border-gray-900 bg-white p-6 sm:p-10 text-center">
+          <h2 className="font-outfit text-2xl sm:text-4xl font-black mb-2 text-gray-900">
             Готови сме да монтираме
           </h2>
-          <p className="text-gray-300 mb-6 max-w-lg mx-auto">
+          <p className="text-gray-600 mb-6 max-w-lg mx-auto">
             Потвърдете офертата по телефона и нашият екип ще се свърже с вас за уточняване на детайлите и удобна дата.
           </p>
           <div className="flex items-center justify-center">

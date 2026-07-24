@@ -1,6 +1,7 @@
 /** Огледало на backend/lib/offers/calcTotals.ts — редове на оферта. */
 
 export const TRADE_DISCOUNT_LABEL = "Търговска отстъпка";
+export const OFFER_INSTALL_LABEL = "Стандартен монтаж";
 
 export type OfferCalcLine = {
   quantity: number;
