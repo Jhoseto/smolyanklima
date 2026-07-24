@@ -96,6 +96,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   if (orderRow.status === "done") {
     return withCors(req, NextResponse.json({ error: "Поръчката вече е изпълнена" }, { status: 409 }));
   }
+  if (orderRow.status === "cancelled") {
+    return withCors(req, NextResponse.json({ error: "Отказана поръчка не може да бъде изпълнена" }, { status: 409 }));
+  }
   if (!orderRow.product_id) {
     return withCors(req, NextResponse.json({ error: "Поръчката няма свързан продукт" }, { status: 400 }));
   }
