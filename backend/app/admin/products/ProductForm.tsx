@@ -817,6 +817,22 @@ export function ProductFormFields({
    *  качени в Cloudinary. Save-action-ът проверява тази стойност и
    *  предупреждава, ако се опитва да запази продукта с pending снимки. */
   const [pendingPhotosCount, setPendingPhotosCount] = useState(0);
+  /** Блокира паралелни AI scan-ове на двата етикета (вътрешно/външно). */
+  const [activeLabelScan, setActiveLabelScan] = useState<"indoor" | "outdoor" | null>(null);
+
+  const labelScanLockedReason =
+    activeLabelScan === "indoor"
+      ? "Обработва се етикетът на вътрешното тяло — изчакай или натисни „Отказ“."
+      : activeLabelScan === "outdoor"
+        ? "Обработва се етикетът на външното тяло — изчакай или натисни „Отказ“."
+        : undefined;
+
+  function handleLabelScanBusy(whichUnit: "indoor" | "outdoor", busy: boolean) {
+    setActiveLabelScan((prev) => {
+      if (busy) return whichUnit;
+      return prev === whichUnit ? null : prev;
+    });
+  }
 
   useEffect(() => {
     onPendingPhotosChange?.(pendingPhotosCount);
@@ -1534,6 +1550,9 @@ export function ProductFormFields({
             knownBrand={brands.find((b) => b.id === form.brandId)?.name}
             knownModel={form.modelCode}
             availableBrands={brands.map((b) => b.name)}
+            disabled={activeLabelScan === "outdoor"}
+            disabledReason={labelScanLockedReason}
+            onBusyChange={(busy) => handleLabelScanBusy("indoor", busy)}
             onExtracted={(r) => mergeLabelExtract(r, "indoor")}
           />
           <LabelScanButton
@@ -1541,6 +1560,9 @@ export function ProductFormFields({
             knownBrand={brands.find((b) => b.id === form.brandId)?.name}
             knownModel={form.modelCode}
             availableBrands={brands.map((b) => b.name)}
+            disabled={activeLabelScan === "indoor"}
+            disabledReason={labelScanLockedReason}
+            onBusyChange={(busy) => handleLabelScanBusy("outdoor", busy)}
             onExtracted={(r) => mergeLabelExtract(r, "outdoor")}
           />
         </div>
@@ -1967,6 +1989,9 @@ export function ProductFormFields({
                 knownBrand={brands.find((b) => b.id === form.brandId)?.name}
                 knownModel={form.modelCode}
                 availableBrands={brands.map((b) => b.name)}
+                disabled={activeLabelScan === "outdoor"}
+                disabledReason={labelScanLockedReason}
+                onBusyChange={(busy) => handleLabelScanBusy("indoor", busy)}
                 onExtracted={(r) => mergeLabelExtract(r, "indoor")}
               />
             </div>
@@ -1998,6 +2023,9 @@ export function ProductFormFields({
                 knownBrand={brands.find((b) => b.id === form.brandId)?.name}
                 knownModel={form.modelCode}
                 availableBrands={brands.map((b) => b.name)}
+                disabled={activeLabelScan === "indoor"}
+                disabledReason={labelScanLockedReason}
+                onBusyChange={(busy) => handleLabelScanBusy("outdoor", busy)}
                 onExtracted={(r) => mergeLabelExtract(r, "outdoor")}
               />
             </div>

@@ -3,24 +3,9 @@
 /**
  * Multi-photo upload компонент за продуктовата форма.
  *
- * Поведение:
- *  1. Един бутон „Снимай / Избери снимки“ — отваря native picker (камера ИЛИ
- *     галерия). На phone-а ще се покаже системно меню „Camera | Photos | Files“.
- *  2. След избор, снимките попадат в локален „pending“ списък и се показват
- *     като thumbnails (preview) — НЕ са качени в Cloudinary все още.
- *  3. Максимален лимит — MAX_PRODUCT_IMAGES (4) за продукт. Ако вече има
- *     качени, оставащите слотове се отчитат.
- *  4. Бутон „Качи снимките“ — bulk upload към Cloudinary в папка по
- *     модела (brand + model_code). При успех URL-ите се добавят към
- *     основния form state.
- *  5. Защита: parent компонентът се известява чрез `onPendingChange`, така
- *     че save-action-ът може да предупреди, ако pending > 0.
- *
- * Поверителност / съхранение:
- *  - Снимките се качват в Cloudinary с auto-оптимизация (q_auto, f_auto)
- *    в отделна папка с името на модела (споделена между инстанции).
- *  - Re-use: ако вече има снимки за същия (brand, model_code) в каталога,
- *    показва се панел „Този модел вече има N снимки“ + бутон „Линкни ги“.
+ * Два file input-а:
+ *  - `capture="environment"` → камера (една снимка наведнъж).
+ *  - без `capture`, `multiple` → галерия/файлове (до лимита).
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -28,6 +13,7 @@ import { Camera, ImagePlus, Loader2, Trash2, Upload, CheckCircle2, AlertTriangle
 import { ImageLightbox } from "./ImageLightbox";
 import { AIPhotoFinder } from "./AIPhotoFinder";
 import { enhancePhotoViaAI } from "@/lib/photos/enhancePhoto";
+import { isImageFile } from "@/lib/photos/compressImage";
 
 type Props = {
   brandSlug: string | null | undefined;
@@ -98,7 +84,8 @@ export function ProductPhotoUploader({
   reusableFromName,
   onLinkReusable,
 }: Props) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const galleryInputRef = useRef<HTMLInputElement | null>(null);
   const [pending, setPending] = useState<Pending[]>([]);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
@@ -168,13 +155,23 @@ export function ProductPhotoUploader({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [globalError]);
 
-  function openPicker() {
-    if (uploading) return;
+  function ensureCanAdd(): boolean {
+    if (uploading) return false;
     if (remainingSlots - pending.length <= 0) {
       setGlobalError(`Достигнат е лимитът от ${MAX_PRODUCT_IMAGES} снимки на продукт.`);
-      return;
+      return false;
     }
-    inputRef.current?.click();
+    return true;
+  }
+
+  function openCamera() {
+    if (!ensureCanAdd()) return;
+    cameraInputRef.current?.click();
+  }
+
+  function openGallery() {
+    if (!ensureCanAdd()) return;
+    galleryInputRef.current?.click();
   }
 
   function handleFilesIn(filesIn: FileList | File[]) {
@@ -184,22 +181,41 @@ export function ProductPhotoUploader({
       setGlobalError(`Достигнат е лимитът от ${MAX_PRODUCT_IMAGES} снимки на продукт.`);
       return;
     }
-    const accepted = filesArr.slice(0, available);
+
+    const valid: File[] = [];
+    const invalidNames: string[] = [];
+    for (const f of filesArr) {
+      if (isImageFile(f)) valid.push(f);
+      else invalidNames.push(f.name || "неизвестен файл");
+    }
+
+    if (valid.length === 0) {
+      setGlobalError(
+        invalidNames.length > 0
+          ? `Неподдържан формат: ${invalidNames.slice(0, 2).join(", ")}. Използвай JPEG, PNG, WebP или HEIC.`
+          : "Няма валидни снимки за добавяне.",
+      );
+      return;
+    }
+
+    const accepted = valid.slice(0, available);
     const overflow = filesArr.length - accepted.length;
+    const skippedInvalid = invalidNames.length;
+
     if (overflow > 0) {
       setGlobalError(`Качени са само първите ${accepted.length} снимки (макс. ${MAX_PRODUCT_IMAGES}).`);
+    } else if (skippedInvalid > 0) {
+      setGlobalError(`Пропуснати ${skippedInvalid} файла с неподдържан формат.`);
     } else {
       setGlobalError(null);
     }
-    const newPending: Pending[] = accepted
-      .filter((f) => /^image\//.test(f.type))
-      .map((f) => {
+    const newPending: Pending[] = accepted.map((f) => {
         const blobUrl = URL.createObjectURL(f);
         return {
           id: `${f.name}-${f.size}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
           file: f,
           previewUrl: blobUrl,
-          originalUrl: blobUrl, // първоначално оригиналът = preview
+          originalUrl: blobUrl,
           aiStatus: "idle" as const,
           status: "ready" as const,
         };
@@ -478,11 +494,22 @@ export function ProductPhotoUploader({
         </div>
       )}
 
-      {/* Hidden file input — multiple, без `capture` за да отвори native picker. */}
+      {/* Hidden file inputs — камера (1 снимка) и галерия (multiple). */}
       <input
-        ref={inputRef}
+        ref={cameraInputRef}
         type="file"
-        accept="image/*"
+        accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files && e.target.files.length > 0) handleFilesIn(e.target.files);
+          e.target.value = "";
+        }}
+      />
+      <input
+        ref={galleryInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/*"
         multiple
         className="hidden"
         onChange={(e) => {
@@ -491,38 +518,48 @@ export function ProductPhotoUploader({
         }}
       />
 
-      {/* CTA бутон — голям, в стила на горните scan бутончета. */}
-      <button
-        type="button"
-        onClick={openPicker}
-        disabled={!canAddMore}
-        className={`flex flex-col items-center justify-center gap-1 max-md:gap-0.5 p-3 max-md:p-2.5 rounded-xl max-md:rounded-lg border-2 w-full text-center transition-all ${
+      {/* CTA — изричен избор камера / галерия */}
+      <div
+        className={`flex flex-col items-center justify-center gap-1.5 max-md:gap-1 p-3 max-md:p-2.5 rounded-xl max-md:rounded-lg border-2 w-full text-center transition-all ${
           !canAddMore
-            ? "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed"
-            : "bg-gradient-to-br from-brand-blue-50 to-brand-orange-50/60 border-dashed border-brand-blue-300 text-brand-blue-900 hover:from-brand-blue-100 hover:border-brand-blue-400 hover:shadow-md active:scale-[0.99]"
+            ? "bg-slate-50 border-slate-200 text-slate-400"
+            : "bg-gradient-to-br from-brand-blue-50 to-brand-orange-50/60 border-dashed border-brand-blue-300 text-brand-blue-900"
         }`}
       >
-        <div className={`flex h-9 w-9 sm:h-11 sm:w-11 items-center justify-center rounded-lg shadow-sm ${canAddMore ? "bg-brand-blue-500 text-white" : "bg-slate-300 text-white"}`}>
+        <div
+          className={`flex h-9 w-9 sm:h-11 sm:w-11 items-center justify-center rounded-lg shadow-sm ${
+            canAddMore ? "bg-brand-blue-500 text-white" : "bg-slate-300 text-white"
+          }`}
+        >
           <ImagePlus className="w-4 h-4 sm:w-5 sm:h-5" />
         </div>
-        <div className="text-xs sm:text-base font-bold leading-tight px-1">Снимай или избери снимки</div>
+        <div className="text-xs sm:text-base font-bold leading-tight px-1">Каталогови снимки</div>
         <div className="text-[10px] sm:text-xs font-normal opacity-80 leading-tight px-1">
           {canAddMore
             ? `Можеш да добавиш още ${remainingAfterPending} ${remainingAfterPending === 1 ? "снимка" : "снимки"} (макс. ${MAX_PRODUCT_IMAGES} общо)`
             : `Достигнат е лимитът от ${MAX_PRODUCT_IMAGES} снимки`}
         </div>
         {canAddMore && (
-          <div className="inline-flex items-center gap-2 mt-1 text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
-            <span className="inline-flex items-center gap-1">
-              <Camera className="w-3 h-3" /> снимай
-            </span>
-            <span className="text-slate-300">/</span>
-            <span className="inline-flex items-center gap-1">
-              <ImagePlus className="w-3 h-3" /> галерия
-            </span>
+          <div className="grid grid-cols-2 gap-2 w-full mt-1">
+            <button
+              type="button"
+              onClick={openCamera}
+              className="inline-flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-2 py-2 sm:py-2.5 rounded-lg border-2 border-brand-blue-200 bg-brand-blue-50 text-brand-blue-800 text-xs sm:text-sm font-bold transition-all hover:bg-brand-blue-100 hover:border-brand-blue-300 active:scale-[0.98]"
+            >
+              <Camera className="w-4 h-4 shrink-0" />
+              Снимай
+            </button>
+            <button
+              type="button"
+              onClick={openGallery}
+              className="inline-flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-2 py-2 sm:py-2.5 rounded-lg border-2 border-slate-200 bg-white text-slate-800 text-xs sm:text-sm font-bold transition-all hover:bg-slate-50 hover:border-slate-300 active:scale-[0.98]"
+            >
+              <ImagePlus className="w-4 h-4 shrink-0" />
+              Качи снимка
+            </button>
           </div>
         )}
-      </button>
+      </div>
 
       {/* Secondary CTA: AI намира официални снимки в интернет — за случаите,
           когато климатикът е в кашон и не може да се снима. Активен е САМО

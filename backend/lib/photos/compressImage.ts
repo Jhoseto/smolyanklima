@@ -31,6 +31,21 @@ export type CompressOptions = {
 const DEFAULT_MAX_LONG_EDGE = 2048;
 const DEFAULT_QUALITY = 0.85;
 
+/** Проверка преди компресия / preview — ползва се от label scan и photo uploader. */
+export function validateImageFile(file: File): string | null {
+  if (!file.type.startsWith("image/") && !/\.(jpe?g|png|webp|heic|heif)$/i.test(file.name)) {
+    return "Избери файл със снимка (JPEG, PNG, WebP или HEIC).";
+  }
+  if (file.size > 25 * 1024 * 1024) {
+    return "Снимката е твърде голяма (макс. ~25 MB). Опитай по-малък файл.";
+  }
+  return null;
+}
+
+export function isImageFile(file: File): boolean {
+  return validateImageFile(file) === null;
+}
+
 export async function compressImage(file: File, opts: CompressOptions = {}): Promise<CompressedImage> {
   const maxLongEdge = opts.maxLongEdge ?? DEFAULT_MAX_LONG_EDGE;
   const quality = opts.quality ?? DEFAULT_QUALITY;
