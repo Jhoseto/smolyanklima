@@ -148,6 +148,10 @@ interface SEOMetaTagsProps {
   description: string;
   keywords?: string[];
   ogImage?: string;
+  ogImageWidth?: number;
+  ogImageHeight?: number;
+  ogImageType?: string;
+  ogImageAlt?: string;
   ogType?: 'website' | 'article';
   canonicalUrl?: string;
   robots?: string;
@@ -162,6 +166,10 @@ export const SEOMetaTags: React.FC<SEOMetaTagsProps> = ({
   description,
   keywords = [],
   ogImage = '/images/og-default.jpg',
+  ogImageWidth,
+  ogImageHeight,
+  ogImageType,
+  ogImageAlt,
   ogType = 'website',
   canonicalUrl,
   robots = 'index, follow',
@@ -171,6 +179,9 @@ export const SEOMetaTags: React.FC<SEOMetaTagsProps> = ({
   articleSection,
 }) => {
   const googleVerification = import.meta.env.VITE_GOOGLE_SITE_VERIFICATION?.trim();
+  const ogImageAbs = absoluteUrl(ogImage);
+  const resolvedOgType = ogImageType ?? (ogImageAbs.endsWith('.png') ? 'image/png' : 'image/jpeg');
+  const resolvedOgAlt = ogImageAlt ?? title.split('|')[0].trim();
 
   return (
     <>
@@ -192,7 +203,13 @@ export const SEOMetaTags: React.FC<SEOMetaTagsProps> = ({
       <meta property="og:description" content={description} />
       <meta property="og:type" content={ogType} />
       <meta property="og:url" content={canonicalUrl ? absoluteUrl(canonicalUrl) : SITE_ORIGIN} />
-      <meta property="og:image" content={absoluteUrl(ogImage)} />
+      <meta property="og:image" content={ogImageAbs} />
+      <meta property="og:image:secure_url" content={ogImageAbs} />
+      <meta property="og:image:type" content={resolvedOgType} />
+      <meta property="og:image:alt" content={resolvedOgAlt} />
+      {ogImageWidth ? <meta property="og:image:width" content={String(ogImageWidth)} /> : null}
+      {ogImageHeight ? <meta property="og:image:height" content={String(ogImageHeight)} /> : null}
+      <link rel="image_src" href={ogImageAbs} />
       <meta property="og:site_name" content="Smolyan Klima" />
       <meta property="og:locale" content="bg_BG" />
       {ogType === 'article' && articlePublishedTime ? (
@@ -212,7 +229,7 @@ export const SEOMetaTags: React.FC<SEOMetaTagsProps> = ({
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content={title} />
       <meta name="twitter:description" content={description} />
-      <meta name="twitter:image" content={absoluteUrl(ogImage)} />
+      <meta name="twitter:image" content={ogImageAbs} />
       
       {/* Robots */}
       <meta name="robots" content={robots} />

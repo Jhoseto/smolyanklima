@@ -7,6 +7,10 @@ export type SeoPage = {
   keywords?: string[];
   canonicalPath: string;
   ogImage?: string;
+  ogImageWidth?: number;
+  ogImageHeight?: number;
+  ogImageType?: string;
+  ogImageAlt?: string;
   ogType?: 'website' | 'article';
   noindex?: boolean;
   bodyHtml?: string;

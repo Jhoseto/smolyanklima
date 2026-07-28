@@ -21,6 +21,15 @@ const BOT_PATTERNS = [
   /ahrefsbot/i,
   /mj12bot/i,
   /petalbot/i,
+  /TelegramBot/i,
+  /WhatsApp/i,
+  /ViberBot/i,
+  /Viber/i,
+  /Slackbot/i,
+  /Discordbot/i,
+  /SkypeUriPreview/i,
+  /Facebot/i,
+  /facebookcatalog/i,
 ];
 
 export function isSeoBot(userAgent: string | null): boolean {

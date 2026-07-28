@@ -12,6 +12,16 @@ import { HOME_FAQS } from './faqs';
 import { blogCategorySeo as backendBlogCategorySeo } from './blogCategories';
 
 import { escapeHtml } from '@/lib/security/htmlEscape';
+import {
+  fetchPublicOfferShare,
+  offerShareDescription,
+  offerShareOgImagePath,
+  offerShareTitle,
+  formatShareTotal,
+  formatShareValidUntil,
+  offerProductSummary,
+} from '@/lib/offers/publicOfferShare';
+import { COMPANY_INFO } from '@/lib/company/companyInfo';
 
 function stripHtml(value: string): string {
   return value.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -193,6 +203,49 @@ export async function resolveSeoForPath(pathname: string): Promise<{ page: SeoPa
       page: {
         title: 'Аксесоарът не е намерен | Смолян Клима',
         description: 'Търсеният аксесоар не е наличен в каталога.',
+        canonicalPath: path,
+        noindex: true,
+      },
+      schemas,
+    };
+  }
+
+  const offerMatch = path.match(/^\/oferta\/([^/]+)$/);
+  if (offerMatch) {
+    const token = decodeURIComponent(offerMatch[1]);
+    const offer = await fetchPublicOfferShare(token);
+    if (offer) {
+      const title = offerShareTitle(offer);
+      const description = offerShareDescription(offer);
+      const products = offerProductSummary(offer.items);
+      const page: SeoPage = {
+        title,
+        description,
+        canonicalPath: `/oferta/${token}`,
+        ogImage: offerShareOgImagePath(token),
+        ogImageWidth: 1200,
+        ogImageHeight: 630,
+        ogImageType: "image/jpeg",
+        ogImageAlt: offer.title?.trim() || `Оферта ${offer.offer_number}`,
+        ogType: "website",
+        noindex: true,
+        bodyHtml: [
+          `<h1>${escapeHtml(offer.title?.trim() || 'Оферта за климатизация')}</h1>`,
+          `<p><strong>${escapeHtml(offer.offer_number)}</strong></p>`,
+          offer.client_name ? `<p>Клиент: ${escapeHtml(offer.client_name)}</p>` : '',
+          offer.object_note ? `<p>${escapeHtml(offer.object_note)}</p>` : '',
+          products ? `<p>${escapeHtml(products)}</p>` : '',
+          `<p>Крайна цена: ${escapeHtml(formatShareTotal(offer))} с ДДС</p>`,
+          `<p>Валидна до ${escapeHtml(formatShareValidUntil(offer.valid_until))}</p>`,
+          `<p><a href="tel:${COMPANY_INFO.phoneE164}">${escapeHtml(COMPANY_INFO.phone)}</a></p>`,
+        ].filter(Boolean).join(''),
+      };
+      return { page, schemas };
+    }
+    return {
+      page: {
+        title: 'Офертата не е налична | Смолян Клима',
+        description: 'Линкът към офертата е невалиден или е деактивиран.',
         canonicalPath: path,
         noindex: true,
       },

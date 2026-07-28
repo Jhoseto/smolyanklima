@@ -27,6 +27,10 @@ export const SiteSeo: React.FC<SiteSeoProps> = ({ config, schemas = [] }) => {
         description={config.description}
         keywords={config.keywords}
         ogImage={config.ogImage}
+        ogImageWidth={config.ogImageWidth}
+        ogImageHeight={config.ogImageHeight}
+        ogImageType={config.ogImageType}
+        ogImageAlt={config.ogImageAlt}
         ogType={config.ogType}
         canonicalUrl={config.canonicalPath}
         robots={config.noindex ? 'noindex, follow' : 'index, follow'}
