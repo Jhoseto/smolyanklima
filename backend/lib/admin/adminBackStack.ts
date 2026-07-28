@@ -35,6 +35,22 @@ function seedAdminHistoryTrap(): void {
   }
 }
 
+/** Премахва всички overlay слоеве БЕЗ history.back() — при смяна на route. */
+export function cancelAllAdminBackLayers(): void {
+  if (layers.length === 0) return;
+  layers.length = 0;
+  scheduleRearmTrap();
+}
+
+function scheduleRearmTrap(): void {
+  queueMicrotask(rearmTrapIfNeeded);
+}
+
+/** Програмна навигация в admin PWA — отменя overlay слоеве преди router.push/replace. */
+export function prepareAdminRouteNavigation(cancelLayerIds: string[] = []): void {
+  for (const id of cancelLayerIds) cancelAdminBackLayer(id);
+}
+
 function rearmTrapIfNeeded(): void {
   if (typeof window === "undefined") return;
   if (!isAdminPath(window.location.pathname)) return;
@@ -94,7 +110,7 @@ export function popAdminBackLayer(id: string, fromPopstate: boolean): void {
     suppressPopCount++;
     history.back();
   }
-  queueMicrotask(rearmTrapIfNeeded);
+  scheduleRearmTrap();
 }
 
 /**
@@ -106,5 +122,5 @@ export function cancelAdminBackLayer(id: string): void {
   const idx = layers.findIndex((l) => l.id === id);
   if (idx === -1) return;
   layers.splice(idx, 1);
-  queueMicrotask(rearmTrapIfNeeded);
+  scheduleRearmTrap();
 }

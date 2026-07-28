@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAdminBackHandler } from "@/lib/admin/useAdminBackHandler";
-import Link from "next/link";
+import { popAdminBackLayer, prepareAdminRouteNavigation } from "@/lib/admin/adminBackStack";
 import { usePathname, useRouter } from "next/navigation";
 import { adminNavSectionForPath } from "@/lib/admin/adminNavSectionForPath";
 import { logoutAction } from "@/app/login/actions";
@@ -61,11 +61,22 @@ export function MobileNav({
     if (active) expand(active);
   }, [pathname, role, expand]);
 
-  /** Navigate and close drawer — using router.push for reliable PWA navigation */
-  function navigateTo(href: string) {
+  /** Затваря drawer и синхронизира history (X / backdrop). */
+  function closeDrawer() {
+    popAdminBackLayer("mobile-nav-drawer", false);
     setDrawerOpen(false);
-    // Small delay so drawer close animation starts before navigation
-    setTimeout(() => { void router.push(href); }, 50);
+  }
+
+  /** Навигация от drawer или bottom bar — без history.back() race с router.push. */
+  function navigateTo(href: string) {
+    if (pathname === href || (href !== "/admin" && pathname.startsWith(`${href}/`))) {
+      prepareAdminRouteNavigation(["mobile-nav-drawer"]);
+      setDrawerOpen(false);
+      return;
+    }
+    prepareAdminRouteNavigation(["mobile-nav-drawer"]);
+    setDrawerOpen(false);
+    void router.push(href);
   }
 
   function linkLabel(link: AdminNavLinkDef) {
@@ -115,14 +126,14 @@ export function MobileNav({
       {drawerOpen && (
         <div
           className="md:hidden fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-sm"
-          onClick={() => setDrawerOpen(false)}
+          onClick={() => closeDrawer()}
         />
       )}
 
       {/* Slide-up drawer */}
       <div
         className={`md:hidden fixed left-0 right-0 bottom-0 z-50 bg-white/98 backdrop-blur-xl rounded-t-[28px] border-t border-slate-200/60 shadow-[0_-4px_60px_rgba(15,23,42,0.22)] transition-transform duration-300 ease-out ${
-          drawerOpen ? "translate-y-0" : "translate-y-full"
+          drawerOpen ? "translate-y-0 pointer-events-auto" : "translate-y-full pointer-events-none"
         }`}
       >
         {/* Drag handle */}
@@ -134,7 +145,7 @@ export function MobileNav({
         <div className="flex items-center justify-between px-5 py-3">
           <span className="text-base font-black text-slate-900 tracking-tight">Меню</span>
           <button
-            onClick={() => setDrawerOpen(false)}
+            onClick={() => closeDrawer()}
             className="min-w-[44px] min-h-[44px] rounded-full bg-slate-100 flex items-center justify-center text-slate-500 active:bg-slate-200 transition-colors"
             aria-label="Затвори меню"
           >
@@ -209,10 +220,10 @@ export function MobileNav({
               link.href === "/admin/chat" && chatWaitingCount > 0 && !active;
 
             return (
-              <Link
+              <button
                 key={link.href}
-                href={link.href}
-                prefetch={false}
+                type="button"
+                onClick={() => navigateTo(link.href)}
                 className="flex flex-col items-center gap-1 px-1.5 py-1 rounded-2xl min-w-0 flex-1 min-h-[48px] justify-center select-none active:opacity-70 transition-opacity"
                 title={link.label}
               >
@@ -245,7 +256,7 @@ export function MobileNav({
                 >
                   {linkLabel(link)}
                 </span>
-              </Link>
+              </button>
             );
           })}
 

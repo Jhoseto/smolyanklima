@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { prepareAdminRouteNavigation } from "@/lib/admin/adminBackStack";
 import { useState } from "react";
 import { CheckCircle2, ChevronRight, X } from "lucide-react";
 import {
@@ -273,23 +273,21 @@ export function DashboardPanel({
   const totalLabel = badge > 0 ? badge : items.length;
 
   function goToFullModule() {
+    prepareAdminRouteNavigation(["dashboard-panel"]);
     setSelected(null);
     setListOpen(false);
-    // След затваряне на overlay — навигирай (Link в fixed modal често не сработва)
-    window.setTimeout(() => {
-      const hashIdx = href.indexOf("#");
-      const path = hashIdx >= 0 ? href.slice(0, hashIdx) : href;
-      const hash = hashIdx >= 0 ? href.slice(hashIdx + 1) : "";
-      const onSamePath =
-        typeof window !== "undefined" &&
-        (window.location.pathname === path || (path === "/admin" && window.location.pathname === "/admin"));
+    const hashIdx = href.indexOf("#");
+    const path = hashIdx >= 0 ? href.slice(0, hashIdx) : href;
+    const hash = hashIdx >= 0 ? href.slice(hashIdx + 1) : "";
+    const onSamePath =
+      typeof window !== "undefined" &&
+      (window.location.pathname === path || (path === "/admin" && window.location.pathname === "/admin"));
 
-      if (onSamePath && hash) {
-        document.getElementById(hash)?.scrollIntoView({ behavior: "smooth", block: "start" });
-        return;
-      }
-      router.push(href);
-    }, 0);
+    if (onSamePath && hash) {
+      document.getElementById(hash)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    void router.push(href);
   }
 
   const itemProps = {
