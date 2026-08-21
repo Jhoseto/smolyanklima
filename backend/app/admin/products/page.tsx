@@ -55,7 +55,7 @@ import {
   ADMIN_PRICE_FILTER_MAX,
   isAdminPriceFilterActive,
 } from "./PriceRangeSlider";
-import { postAdminCatalogBulkInChunks } from "@/lib/admin/catalogBulkFetch";
+import { postAdminCatalogBulkInChunks, BulkConfirmRequiredError } from "@/lib/admin/catalogBulkFetch";
 import { useDebounce } from "@/lib/hooks/useDebounce";
 import { assertNoContactPrimaryPhoneDuplicate } from "@/lib/admin/contactPhoneConflictClient";
 import {
@@ -633,6 +633,7 @@ export default function AdminProductsPage() {
     quantity?: number;
   } | null>(null);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const [bulkDeleteActiveLinkWarning, setBulkDeleteActiveLinkWarning] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [listFiltersReady, setListFiltersReady] = useState(false);
   const [catalogSettingsOpen, setCatalogSettingsOpen] = useState(false);
@@ -995,25 +996,31 @@ export default function AdminProductsPage() {
   // операции (промяна на статус, тип, наличност) се правят индивидуално от
   // карта/редакция, защото всеки климатик е уникален артикул със собствени
   // серийни номера и не се мисли „на бройки“.
-  async function bulkDelete() {
+  async function bulkDelete(force = false) {
     if (selected.length === 0) return;
-    if (!confirmBulkDelete) {
+    if (!confirmBulkDelete && !force) {
       setConfirmBulkDelete(true);
       return;
     }
     const { productIds, accessoryIds } = partitionSelectedIds(items, selected);
     try {
       if (productIds.length > 0) {
-        await postAdminCatalogBulkInChunks("/api/admin/products/bulk", productIds, { action: "delete" });
+        await postAdminCatalogBulkInChunks("/api/admin/products/bulk", productIds, { action: "delete", force });
       }
       if (accessoryIds.length > 0) {
         await postAdminCatalogBulkInChunks("/api/admin/accessories/bulk", accessoryIds, { action: "delete" });
       }
     } catch (e: unknown) {
+      if (e instanceof BulkConfirmRequiredError) {
+        setConfirmBulkDelete(false);
+        setBulkDeleteActiveLinkWarning(e.warning);
+        return;
+      }
       setError(e instanceof Error ? e.message : String(e));
       return;
     }
     setConfirmBulkDelete(false);
+    setBulkDeleteActiveLinkWarning(null);
     setSelected([]);
     await load();
   }
@@ -1822,7 +1829,7 @@ export default function AdminProductsPage() {
             <Button
               variant="danger"
               size="sm"
-              onClick={bulkDelete}
+              onClick={() => void bulkDelete()}
               className="gap-1 !py-1.5"
             >
               <Trash2 className="w-3.5 h-3.5" /> Изтрий избраните
@@ -3010,6 +3017,34 @@ export default function AdminProductsPage() {
               <Button variant="secondary" onClick={() => setConfirmBulkDelete(false)}>Отказ</Button>
               <Button variant="danger" onClick={() => void bulkDelete()} className="gap-1.5">
                 <Trash2 className="w-3.5 h-3.5" /> Изтрий {selected.length}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {bulkDeleteActiveLinkWarning && (
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/70 p-0 md:p-4 backdrop-blur-md">
+          <div
+            className="w-full max-w-lg max-h-[92dvh] overflow-y-auto rounded-t-3xl md:rounded-3xl bg-white p-5 md:p-6 shadow-2xl ring-2 ring-amber-300 pb-safe md:pb-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-center pb-2 md:hidden">
+              <div className="w-10 h-1 rounded-full bg-slate-200" />
+            </div>
+            <div className="flex items-center gap-2 text-xl font-black text-amber-700">
+              <span aria-hidden>⚠️</span> Внимание — избрани са продукти с активна поръчка
+            </div>
+            <div className="mt-3 text-sm text-slate-700 leading-relaxed font-medium">
+              {bulkDeleteActiveLinkWarning}
+            </div>
+            <div className="mt-3 text-xs font-bold text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+              Препоръчваме първо да отмените резервациите/продажбите от съответните места, а не да изтривате продуктите директно.
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setBulkDeleteActiveLinkWarning(null)}>Отказ</Button>
+              <Button variant="danger" onClick={() => void bulkDelete(true)} className="gap-1.5">
+                <Trash2 className="w-3.5 h-3.5" /> Изтрий въпреки това
               </Button>
             </div>
           </div>

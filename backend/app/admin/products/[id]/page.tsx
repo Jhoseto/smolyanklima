@@ -38,6 +38,7 @@ export default function EditProductPage() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<AdminProductForm>(emptyProductForm);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [activeLinkWarning, setActiveLinkWarning] = useState<string | null>(null);
   // Брой неприбрани (preview, но не качени) снимки.
   const [pendingPhotos, setPendingPhotos] = useState(0);
   const [pendingPhotosConfirm, setPendingPhotosConfirm] = useState<null | { proceed: () => void }>(null);
@@ -259,13 +260,19 @@ export default function EditProductPage() {
     void doSaveAsNewInstance();
   }
 
-  async function remove() {
-    if (!confirmDelete) {
+  async function remove(force = false) {
+    if (!confirmDelete && !force) {
       setConfirmDelete(true);
       return;
     }
-    const res = await fetch(`/api/admin/products/${id}`, { method: "DELETE", credentials: "include" });
-    const json = await res.json();
+    const url = force ? `/api/admin/products/${id}?force=true` : `/api/admin/products/${id}`;
+    const res = await fetch(url, { method: "DELETE", credentials: "include" });
+    const json = await res.json().catch(() => ({}));
+    if (res.status === 409 && (json as { warning?: string }).warning) {
+      setConfirmDelete(false);
+      setActiveLinkWarning((json as { warning: string }).warning);
+      return;
+    }
     if (!res.ok) setError(json.error || "Грешка");
     else router.push("/admin/products");
   }
@@ -373,7 +380,7 @@ export default function EditProductPage() {
         <>
           {/* Desktop action row */}
           <div className="hidden md:flex justify-between items-center pt-2 gap-3">
-            <Button variant="danger" onClick={remove} className="gap-2">
+            <Button variant="danger" onClick={() => void remove()} className="gap-2">
               <Trash2 className="w-4 h-4" /> Изтрий продукт
             </Button>
             <div className="flex items-center gap-2">
@@ -399,7 +406,7 @@ export default function EditProductPage() {
           {/* Mobile sticky save bar */}
           <div className="fixed bottom-16 left-0 right-0 z-40 md:hidden border-t border-slate-200 bg-white/95 backdrop-blur-sm px-3 py-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
             <div className="flex gap-2">
-              <Button variant="danger" onClick={remove} className="gap-1.5 shrink-0 !py-3 text-xs rounded-xl" title="Изтрий продукт">
+              <Button variant="danger" onClick={() => void remove()} className="gap-1.5 shrink-0 !py-3 text-xs rounded-xl" title="Изтрий продукт">
                 <Trash2 className="w-4 h-4" />
               </Button>
               {isOnOrderTemplateLive ? (
@@ -494,6 +501,25 @@ export default function EditProductPage() {
             <div className="mt-6 flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setConfirmDelete(false)}>Отказ</Button>
               <Button variant="danger" onClick={() => void remove()}>Изтрий</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!readOnly && activeLinkWarning && (
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4 bg-slate-950/70 backdrop-blur-md">
+          <div className="w-full md:max-w-lg rounded-t-3xl md:rounded-3xl border-2 border-amber-300 bg-white p-6 shadow-[0_-8px_40px_rgba(15,23,42,0.35)]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-center mb-3 md:hidden"><div className="w-10 h-1 rounded-full bg-slate-200" /></div>
+            <div className="flex items-center gap-2 text-xl font-black text-amber-700">
+              <span aria-hidden>⚠️</span> Внимание — продуктът е свързан с активна поръчка
+            </div>
+            <div className="mt-3 text-sm text-slate-700 leading-relaxed font-medium">{activeLinkWarning}</div>
+            <div className="mt-3 text-xs font-bold text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+              Препоръчваме първо да отмените резервацията/продажбата от съответното място, а не да изтривате продукта директно.
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setActiveLinkWarning(null)}>Отказ</Button>
+              <Button variant="danger" onClick={() => void remove(true)}>Изтрий въпреки това</Button>
             </div>
           </div>
         </div>

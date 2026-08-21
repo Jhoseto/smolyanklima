@@ -8,6 +8,7 @@ import { insertProductCatalogStockCalendarEvent } from "@/lib/admin/productCatal
 import { detachProductsBeforeDelete } from "@/lib/admin/detachProductReferences";
 import { mapProductDbError } from "@/lib/admin/productDbErrors";
 import { ADMIN_CATALOG_BULK_IDS_MAX } from "@/lib/admin/catalogBulkLimits";
+import { findProductActiveLinks, productActiveLinkWarningLine } from "@/lib/admin/productActiveLinksWarning";
 
 const IdsSchema = z.array(z.string().uuid()).min(1).max(ADMIN_CATALOG_BULK_IDS_MAX);
 
@@ -15,6 +16,7 @@ const BodySchema = z.discriminatedUnion("action", [
   z.object({
     ids: IdsSchema,
     action: z.literal("delete"),
+    force: z.boolean().optional(),
   }),
   z.object({
     ids: IdsSchema,
@@ -57,6 +59,31 @@ export async function POST(req: NextRequest) {
   if (action === "delete") {
     const { data: rows, error: selErr } = await supabase.from("products").select("id,name").in("id", ids);
     if (selErr) return withCors(req, NextResponse.json({ error: selErr.message }, { status: 500 }));
+
+    if (!parsed.data.force) {
+      const warningLines: string[] = [];
+      for (const r of rows ?? []) {
+        const row = r as { id: string; name?: string | null };
+        const links = await findProductActiveLinks(supabase, row.id);
+        if (links.length > 0) {
+          warningLines.push(productActiveLinkWarningLine(String(row.name ?? "Продукт"), links));
+        }
+      }
+      if (warningLines.length > 0) {
+        return withCors(
+          req,
+          NextResponse.json(
+            {
+              error: "confirm_required",
+              warning:
+                `${warningLines.join(" ")} Ако продължите, тези продукти ще бъдат изтрити завинаги, ` +
+                `а резервациите/продажбите ще останат в историята, но вече без връзка към климатик.`,
+            },
+            { status: 409 },
+          ),
+        );
+      }
+    }
 
     for (const r of rows ?? []) {
       const row = r as { id: string; name?: string | null };

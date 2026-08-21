@@ -16,6 +16,8 @@ async function deleteInstallationWorkItem(db: Db, installId: string): Promise<st
 
 /**
  * Преди изтриване на sale work_item: монтаж, поръчка към доставчик (Поръчки), import/delivered продукт.
+ * Връща `productDeleted`, за да знае извикващият дали трябва отделно да възстанови наличността
+ * на продукта (виж restoreProductStockAfterPendingSaleCancel) — ако продуктът е изтрит тук, няма смисъл.
  */
 export async function cascadeDeleteBeforeSaleWorkItem(
   db: Db,
@@ -24,7 +26,7 @@ export async function cascadeDeleteBeforeSaleWorkItem(
     installation_work_item_id?: string | null;
     product_id?: string | null;
   },
-): Promise<{ error?: string; deletedSupplierOrderId?: string | null }> {
+): Promise<{ error?: string; deletedSupplierOrderId?: string | null; productDeleted?: boolean }> {
   const installIds = new Set<string>();
   if (sale.installation_work_item_id) installIds.add(sale.installation_work_item_id);
 
@@ -69,8 +71,9 @@ export async function cascadeDeleteBeforeSaleWorkItem(
       if (prodDelErr) {
         return { error: `Неуспешно изтриване на свързания продукт: ${prodDelErr.message}` };
       }
+      return { deletedSupplierOrderId: supplierOrderId, productDeleted: true };
     }
   }
 
-  return { deletedSupplierOrderId: supplierOrderId };
+  return { deletedSupplierOrderId: supplierOrderId, productDeleted: false };
 }

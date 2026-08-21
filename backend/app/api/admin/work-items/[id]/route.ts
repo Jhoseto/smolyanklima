@@ -660,11 +660,13 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
   const supabase = session.db;
   const { data: existing } = await supabase
     .from("work_items")
-    .select("event_code,title,customer_name,type,installation_work_item_id,product_id,contact_id")
+    .select("event_code,title,customer_name,type,installation_work_item_id,product_id,contact_id,status,quantity")
     .eq("id", id)
     .maybeSingle();
 
   let cascadeMeta: { deletedSupplierOrderId?: string | null } = {};
+  let restoredProductId: string | null = null;
+
   if (existing?.event_code === "sale") {
     const cascade = await cascadeDeleteBeforeSaleWorkItem(supabase, {
       id,
@@ -675,12 +677,50 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
       return withCors(req, NextResponse.json({ error: cascade.error }, { status: 500 }));
     }
     cascadeMeta = { deletedSupplierOrderId: cascade.deletedSupplierOrderId ?? null };
+
+    // Твърдо изтриване на продажба, чиито ефект (артикул маркиран out_of_stock/продаден)
+    // все още стои — иначе бройката остава завинаги „изчерпана“ без запис в историята.
+    // Ако вече е cancelled, наличността е била възстановена при самото анулиране — не пипаме пак.
+    if (!cascade.productDeleted && existing.product_id && existing.status !== "cancelled") {
+      try {
+        const result = await restoreProductStockAfterPendingSaleCancel(
+          supabase,
+          existing.product_id,
+          existing.quantity ?? 1,
+        );
+        if (result.restored) restoredProductId = result.productId;
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        return withCors(
+          req,
+          NextResponse.json({ error: `Продажбата беше изтрита, но възстановяването на склада: ${message}` }, { status: 500 }),
+        );
+      }
+    }
   } else if (existing?.event_code === "service_installation") {
     try {
       await deleteAcceptanceProtocolForInstallation(supabase, id, "install_cancelled");
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : String(e);
       console.error("[work-items DELETE] acceptance protocol delete failed:", message);
+    }
+  } else if (
+    existing?.event_code === "reservation"
+    && existing.product_id
+    && existing.status !== "cancelled"
+    && existing.status !== "done"
+  ) {
+    // Твърдо изтриване на резервация — иначе продуктът остава „Резервиран“ завинаги
+    // (скрит от каталога и извън наличните бройки), без видим запис защо.
+    try {
+      const result = await restoreProductStockAfterReservationCancel(supabase, existing.product_id);
+      if (result.restored) restoredProductId = result.productId;
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      return withCors(
+        req,
+        NextResponse.json({ error: `Резервацията беше изтрита, но възстановяването на склада: ${message}` }, { status: 500 }),
+      );
     }
   }
 
@@ -699,6 +739,7 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
           ...(cascadeMeta.deletedSupplierOrderId
             ? { deleted_supplier_order_id: cascadeMeta.deletedSupplierOrderId }
             : {}),
+          ...(restoredProductId ? { restored_product_id: restoredProductId } : {}),
         }
       : undefined,
   });

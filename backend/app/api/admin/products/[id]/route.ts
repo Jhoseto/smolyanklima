@@ -28,6 +28,7 @@ import {
   validateOnOrderPartialDelivery,
 } from "@/lib/admin/productOnOrderInstancePut";
 import { enforceStockStatusAfterSale } from "@/lib/admin/productSaleStock";
+import { findProductActiveLinks, productActiveLinkWarningMessage } from "@/lib/admin/productActiveLinksWarning";
 import { replaceProductImages, upsertProductSpecs, type ImageInput, type SpecsInput } from "@/lib/admin/syncProductChildren";
 import { resolveFallbackBrandId, resolveFallbackTypeId } from "@/lib/admin/productFallbackRefs";
 
@@ -541,6 +542,24 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
     );
   }
   const supabase = session.db;
+
+  const force = req.nextUrl.searchParams.get("force") === "true";
+  if (!force) {
+    const links = await findProductActiveLinks(supabase, id);
+    if (links.length > 0) {
+      return withCors(
+        req,
+        NextResponse.json(
+          {
+            error: "confirm_required",
+            warning: productActiveLinkWarningMessage(links),
+            links,
+          },
+          { status: 409 },
+        ),
+      );
+    }
+  }
 
   const { data: prod } = await supabase.from("products").select("id,name").eq("id", id).maybeSingle();
   if (prod) {
