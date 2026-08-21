@@ -83,7 +83,7 @@ const QuerySchema = z.object({
   /** Само видими / само скрити в публичния каталог (`show_in_public_catalog`). */
   publicCatalog: z.string().optional(),
   stockStatus: z.string().optional(),
-  stockLocation: z.enum(["showroom", "warehouse"]).optional(),
+  stockLocation: z.enum(["showroom", "warehouse", "service"]).optional(),
   productRegion: z.enum(["europe", "japan"]).optional(),
   brandId: z.string().uuid().optional(),
   typeId: z.string().uuid().optional(),
@@ -154,7 +154,7 @@ const CreateSchema = z.object({
   stockStatus: z.enum(["in_stock", "out_of_stock", "on_order", "reserved"]).optional().default("in_stock"),
   stockQuantity: z.number().int().nonnegative().optional().default(0),
   soldQuantity: z.number().int().nonnegative().optional().default(0),
-  stockLocation: z.enum(["showroom", "warehouse"]).optional().default("warehouse"),
+  stockLocation: z.enum(["showroom", "warehouse", "service"]).optional().default("warehouse"),
   productRegion: z.enum(["europe", "japan"]).optional().default("europe"),
   specs: SpecsSchema.optional(),
   images: z.array(ImageSchema).max(MAX_IMAGES).optional(),

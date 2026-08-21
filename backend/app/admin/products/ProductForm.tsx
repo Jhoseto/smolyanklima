@@ -1935,6 +1935,7 @@ export function ProductFormFields({
             >
               <option value="showroom">В магазин</option>
               <option value="warehouse">В склада</option>
+              <option value="service">В сервиз</option>
             </Select>
             {!canEditStockLocation && (
               <div className="text-[10px] text-slate-500 mt-0.5">Промяна: главен админ или офис.</div>

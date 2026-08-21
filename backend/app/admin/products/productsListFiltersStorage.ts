@@ -183,7 +183,7 @@ export function loadAdminProductsListFilters(): AdminProductsListFiltersSnapshot
       publicCatalogFlags,
       stockStatuses,
       stockLocationFilter:
-        stockLoc === "showroom" || stockLoc === "warehouse" ? stockLoc : "",
+        stockLoc === "showroom" || stockLoc === "warehouse" || stockLoc === "service" ? stockLoc : "",
       productRegionFilter: region === "europe" || region === "japan" ? region : "",
       brandId: typeof parsed.brandId === "string" ? parsed.brandId : "",
       btuFilters,

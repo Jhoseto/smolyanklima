@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isPostgrestMissingColumn } from "@/lib/admin/pgMissingColumn";
+import { productStockLocationLabelCompact } from "@/lib/admin/productStockLocation";
 
 const PAGE = 500;
 
@@ -281,12 +282,7 @@ async function fetchInStockProducts(supabase: SupabaseClient): Promise<Record<st
         ...productEmbedFields(product),
         продажна_цена: raw.price ?? null,
         състояние: raw.product_condition === "used" ? "Употребяван" : "Нов",
-        място:
-          raw.stock_location === "showroom"
-            ? "Магазин"
-            : raw.stock_location === "warehouse"
-              ? "Склад"
-              : (raw.stock_location as string | null) ?? null,
+        място: raw.stock_location ? productStockLocationLabelCompact(raw.stock_location) : null,
       };
       rows.push(orderedRow(row, STOCK_EXPORT_COLUMNS));
     }

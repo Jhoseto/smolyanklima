@@ -69,6 +69,8 @@ import { recordProductSale } from "@/lib/admin/recordProductSale";
 import {
   normalizeProductStockLocation,
   productStockLocationLabel,
+  productStockLocationLabelCompact,
+  productStockLocationBadgeClass,
   type ProductStockLocation,
 } from "@/lib/admin/productStockLocation";
 import {
@@ -226,12 +228,6 @@ function SortableTh({
   );
 }
 
-function productStockLocationBadgeClass(loc: unknown) {
-  const n = normalizeProductStockLocation(loc);
-  if (n === "showroom") return "bg-violet-100 text-violet-900";
-  return "bg-slate-100 text-slate-800";
-}
-
 function canRecordSale(p: ProductRow) {
   return p.stock_status === "in_stock" || p.stock_status === "on_order";
 }
@@ -317,11 +313,6 @@ function catalogStockBadgeText(status: string, compact = false) {
   if (status === "on_order") return "По поръчка";
   if (status === "reserved") return "Резервиран";
   return status || "—";
-}
-
-function stockLocationLabelCompact(loc: unknown) {
-  const n = normalizeProductStockLocation(loc);
-  return n === "showroom" ? "Магагазин" : "Склад";
 }
 
 function catalogStockBadgeClass(status: string) {
@@ -1279,10 +1270,16 @@ export default function AdminProductsPage() {
     }
   }
 
+  const STOCK_LOCATION_CYCLE: Record<ProductStockLocation, ProductStockLocation> = {
+    showroom: "warehouse",
+    warehouse: "service",
+    service: "showroom",
+  };
+
   function toggleStockLocation(p: ProductRow) {
     if (!canMutateProductRows) return;
     const cur = normalizeProductStockLocation(p.stock_location);
-    const next: ProductStockLocation = cur === "showroom" ? "warehouse" : "showroom";
+    const next: ProductStockLocation = STOCK_LOCATION_CYCLE[cur];
     void patchStockLocation(p.id, next);
   }
 
@@ -1431,7 +1428,7 @@ export default function AdminProductsPage() {
   if (stockLocationFilter) {
     activeFilters.push({
       key: "stockLocation",
-      label: `Място: ${stockLocationFilter === "showroom" ? "Магазин" : "Склад"}`,
+      label: `Място: ${productStockLocationLabelCompact(stockLocationFilter)}`,
       onClear: () => setStockLocationFilter(""),
     });
   }
@@ -1730,6 +1727,7 @@ export default function AdminProductsPage() {
               <option value="">Място: всички</option>
               <option value="showroom">В магазин</option>
               <option value="warehouse">В склада</option>
+              <option value="service">В сервиз</option>
             </Select>
             <Select value={productRegionFilter} onChange={(e) => { setProductRegionFilter(e.target.value as "" | ProductRegion); }}>
               <option value="">Страна: всички</option>
@@ -2144,16 +2142,16 @@ export default function AdminProductsPage() {
                     type="button"
                     disabled={locationBusyId === p.id}
                     onClick={() => toggleStockLocation(p)}
-                    title="Клик за смяна: магазин ↔ склад"
+                    title="Клик за смяна: магазин → склад → сервиз"
                     className={`inline-flex items-center justify-center px-1 py-px rounded text-[10px] font-semibold border border-slate-200/80 cursor-pointer hover:opacity-90 disabled:opacity-60 ${productStockLocationBadgeClass(p.stock_location)}`}
                   >
-                    {locationBusyId === p.id ? "…" : stockLocationLabelCompact(p.stock_location)}
+                    {locationBusyId === p.id ? "…" : productStockLocationLabelCompact(p.stock_location)}
                   </button>
                   ) : (
                   <span
                     className={`inline-flex items-center justify-center px-1 py-px rounded text-[10px] font-semibold border border-slate-200/80 ${productStockLocationBadgeClass(p.stock_location)}`}
                   >
-                    {stockLocationLabelCompact(p.stock_location)}
+                    {productStockLocationLabelCompact(p.stock_location)}
                   </span>
                   )}
                 </Td>
@@ -2475,7 +2473,7 @@ export default function AdminProductsPage() {
                     type="button"
                     disabled={locationBusyId === p.id}
                     onClick={() => toggleStockLocation(p)}
-                    title="Клик: магазин ↔ склад"
+                    title="Клик за смяна: магазин → склад → сервиз"
                     className="inline font-semibold text-slate-800 underline-offset-2 hover:underline disabled:opacity-50"
                   >
                     {locationBusyId === p.id ? "…" : productStockLocationLabel(p.stock_location)}

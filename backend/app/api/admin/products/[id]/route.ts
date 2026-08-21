@@ -104,7 +104,7 @@ const UpdateSchema = z
   isFeatured: z.boolean().optional(),
   showInPublicCatalog: z.boolean().optional(),
   stockStatus: z.enum(["in_stock", "out_of_stock", "on_order", "reserved"]).optional(),
-  stockLocation: z.enum(["showroom", "warehouse"]).optional(),
+  stockLocation: z.enum(["showroom", "warehouse", "service"]).optional(),
   productRegion: z.enum(["europe", "japan"]).optional(),
   stockQuantity: z.number().int().nonnegative().optional(),
   soldQuantity: z.number().int().nonnegative().optional(),
