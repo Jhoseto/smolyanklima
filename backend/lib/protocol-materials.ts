@@ -75,7 +75,7 @@ export const PDF_RIGHT_MATERIALS: ProtocolMaterial[] = PDF_MATERIALS_ORDERED
   .map(m => ({ ...m, column: "right" as const }));
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Стъпка 3 в уизарда — Главни монтажни елементи (25 позиции, ред на полето)
+// Стъпка 3 в уизарда — Главни монтажни елементи (26 позиции, ред на полето)
 // ─────────────────────────────────────────────────────────────────────────────
 export const PRIMARY_MATERIALS: ProtocolMaterial[] = [
   { id: "pipe_635",          name: "Тръба - Ф6",        unit: "м",   column: "left" },
@@ -83,6 +83,7 @@ export const PRIMARY_MATERIALS: ProtocolMaterial[] = [
   { id: "pipe_127",          name: "Тръба - Ф12",       unit: "м",   column: "left" },
   { id: "pri_gofre",         name: "Гофре",             unit: "м",   column: "left" },
   { id: "kabel_shvps_3x15",  name: "Кабел - 3 х 1,5",  unit: "м",   column: "left" },
+  { id: "kabel_shvps_4x1",   name: "Кабел - 4 х 1",    unit: "м",   column: "left" },
   { id: "pri_kabel_3x25",    name: "Кабел - 3 х 2,5",  unit: "м",   column: "left" },
   { id: "kabel_svt",         name: "СВТ - 3 х 2,5",    unit: "м",   column: "left" },
   { id: "pri_izolatsia",     name: "Изолация",          unit: "м",   column: "left" },
@@ -155,7 +156,7 @@ export function normalizeLoadedMaterials(
 /** PDF-only редове — скрити от допълнителните стъпки, qty идва от PRIMARY. */
 const PRIMARY_REUSED_IDS = new Set([
   "pipe_635", "pipe_952", "pipe_127",
-  "kabel_shvps_3x15", "kabel_svt", "stoiki_golemi",
+  "kabel_shvps_3x15", "kabel_shvps_4x1", "kabel_svt", "stoiki_golemi",
   "dyubel_prp_80", "dyubel_prp_100", "dyubel_prp_120",
   "dyubel_prp_140", "dyubel_prp_160", "dyubel_trv",
 ]);

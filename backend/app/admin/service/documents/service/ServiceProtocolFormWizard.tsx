@@ -16,6 +16,7 @@ import type { AdminRole } from "@/lib/admin/db";
 import {
   FREON_CHARGE_OPTIONS, BEARINGS_OPTIONS, NOISE_OPTIONS,
   SERVICE_RATING_OPTIONS, SERVICE_KIND_OPTIONS, isJapaneseBrand,
+  REFRIGERANT_TYPE_OPTIONS,
   type FreonChargeMethod, type BearingsState, type NoiseLevel,
   type RepairServiceKind,
 } from "@/lib/repair-protocol-fields";
@@ -38,6 +39,8 @@ interface FormData {
 
   is_japanese_brand:   boolean | null;
   freon_charge_method: FreonChargeMethod | null;
+  refrigerant_type:       string;
+  refrigerant_amount_g:   string;
 
   vacuum_cleaning_done:   boolean | null;
   valves_ok:              boolean | null;
@@ -82,6 +85,8 @@ const defaultForm = (): FormData => ({
 
   is_japanese_brand:   null,
   freon_charge_method: null,
+  refrigerant_type:       "",
+  refrigerant_amount_g:   "",
 
   vacuum_cleaning_done:   null,
   valves_ok:              null,
@@ -193,6 +198,8 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClo
 
       is_japanese_brand:   (data.is_japanese_brand as boolean | null) ?? null,
       freon_charge_method: (data.freon_charge_method as FreonChargeMethod | null) ?? null,
+      refrigerant_type:     (data.refrigerant_type as string) ?? "",
+      refrigerant_amount_g: data.refrigerant_amount_g != null ? String(data.refrigerant_amount_g) : "",
 
       vacuum_cleaning_done:   (data.vacuum_cleaning_done as boolean | null) ?? null,
       valves_ok:              (data.valves_ok as boolean | null) ?? null,
@@ -248,6 +255,7 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClo
       data.client_name || data.client_phone || data.address || data.serial_number ||
       data.ac_brand || data.ac_model ||
       data.is_japanese_brand !== null || data.freon_charge_method !== null ||
+      data.refrigerant_type || data.refrigerant_amount_g ||
       data.vacuum_cleaning_done !== null || data.valves_ok !== null ||
       data.outdoor_bearings_state !== null || data.indoor_bearings_state !== null ||
       data.pressure_cold_bar || data.pressure_hot_bar ||
@@ -319,6 +327,8 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClo
 
         is_japanese_brand:   data.is_japanese_brand,
         freon_charge_method: data.freon_charge_method,
+        refrigerant_type:     data.refrigerant_type.trim() || null,
+        refrigerant_amount_g: numOrNull(data.refrigerant_amount_g),
 
         vacuum_cleaning_done:   data.vacuum_cleaning_done,
         valves_ok:              data.valves_ok,
@@ -652,6 +662,41 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClo
                 onChange={v => update("freon_charge_method", v)}
                 disabled={isSigned}
               />
+
+              {form.freon_charge_method && form.freon_charge_method !== "none" && (
+                <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-3">
+                  <p className="text-sm font-semibold text-slate-800">Вид и количество на хладилния агент</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Field label="Вид хладилен агент">
+                      <input
+                        type="text"
+                        list="refrigerant-type-options"
+                        value={form.refrigerant_type}
+                        onChange={e => update("refrigerant_type", e.target.value)}
+                        placeholder="напр. R-32"
+                        disabled={isSigned}
+                        className={inputCls}
+                      />
+                      <datalist id="refrigerant-type-options">
+                        {REFRIGERANT_TYPE_OPTIONS.map(v => <option key={v} value={v} />)}
+                      </datalist>
+                    </Field>
+                    <Field label="Количество сложено (грамове)">
+                      <input
+                        type="number"
+                        step="1"
+                        min="0"
+                        inputMode="numeric"
+                        value={form.refrigerant_amount_g}
+                        onChange={e => update("refrigerant_amount_g", e.target.value)}
+                        placeholder="напр. 150"
+                        disabled={isSigned}
+                        className={inputCls}
+                      />
+                    </Field>
+                  </div>
+                </div>
+              )}
 
               <YesNoField
                 label="Прахосмукачка (почистване)"

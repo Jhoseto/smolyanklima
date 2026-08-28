@@ -40,6 +40,8 @@ const CreateSchema = z.object({
 
   is_japanese_brand:   z.boolean().optional().nullable(),
   freon_charge_method: z.enum(["none", "scale", "standard"]).optional().nullable(),
+  refrigerant_type:     z.string().max(40).optional().nullable(),
+  refrigerant_amount_g: z.number().nonnegative().optional().nullable(),
 
   vacuum_cleaning_done:   z.boolean().optional().nullable(),
   valves_ok:              z.boolean().optional().nullable(),
@@ -189,7 +191,7 @@ export async function GET(req: NextRequest) {
 
 function hasTechnicalContent(d: z.infer<typeof CreateSchema>): boolean {
   const fieldsToCheck: (keyof z.infer<typeof CreateSchema>)[] = [
-    "freon_charge_method", "vacuum_cleaning_done", "valves_ok",
+    "freon_charge_method", "refrigerant_type", "refrigerant_amount_g", "vacuum_cleaning_done", "valves_ok",
     "outdoor_bearings_state", "indoor_bearings_state",
     "pressure_cold_bar", "pressure_hot_bar",
     "consumption_cold_kw", "consumption_hot_kw",
@@ -262,6 +264,8 @@ export async function POST(req: NextRequest) {
 
     is_japanese_brand:   d.is_japanese_brand ?? (isRecycle ? true : null),
     freon_charge_method: d.freon_charge_method ?? null,
+    refrigerant_type:     d.refrigerant_type?.trim() || null,
+    refrigerant_amount_g: d.refrigerant_amount_g ?? null,
 
     vacuum_cleaning_done:   d.vacuum_cleaning_done ?? null,
     valves_ok:              d.valves_ok ?? null,

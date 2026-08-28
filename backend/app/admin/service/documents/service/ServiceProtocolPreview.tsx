@@ -35,6 +35,8 @@ interface ProtocolRow {
 
   is_japanese_brand: boolean | null;
   freon_charge_method: FreonChargeMethod | null;
+  refrigerant_type: string | null;
+  refrigerant_amount_g: number | null;
 
   vacuum_cleaning_done: boolean | null;
   valves_ok: boolean | null;
@@ -340,6 +342,11 @@ export function ServiceProtocolPreview({
                     <PreviewField
                       label="Фреон / зареждане"
                       value={row.freon_charge_method ? FREON_CHARGE_LABEL[row.freon_charge_method] : "—"}
+                    />
+                    <PreviewField label="Вид хладилен агент" value={row.refrigerant_type} />
+                    <PreviewField
+                      label="Количество сложено"
+                      value={row.refrigerant_amount_g != null ? `${row.refrigerant_amount_g} г` : "—"}
                     />
                     <PreviewField
                       label="Прахосмукачка"

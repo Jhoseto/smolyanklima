@@ -36,6 +36,9 @@ export function isJapaneseBrand(brandOrModel: string | null | undefined): boolea
 
 export type FreonChargeMethod = "none" | "scale" | "standard";
 
+/** Свободен текст (datalist) — огледало на REFRIGERANT_OPTIONS от ProductForm.tsx. */
+export const REFRIGERANT_TYPE_OPTIONS = ["R-32", "R-410A", "R-290", "R-134a"] as const;
+
 export type BearingsState = "ok" | "noisy" | "lubricated" | "replaced";
 
 export type NoiseLevel = "quiet" | "normal" | "elevated" | "loud" | "very_loud";

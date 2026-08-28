@@ -28,6 +28,8 @@ const UpdateSchema = z.object({
 
   is_japanese_brand:   z.boolean().optional().nullable(),
   freon_charge_method: z.enum(["none", "scale", "standard"]).optional().nullable(),
+  refrigerant_type:     z.string().max(40).optional().nullable(),
+  refrigerant_amount_g: z.number().nonnegative().optional().nullable(),
 
   vacuum_cleaning_done:   z.boolean().optional().nullable(),
   valves_ok:              z.boolean().optional().nullable(),
@@ -60,7 +62,7 @@ const UpdateSchema = z.object({
  * показват че екипът реално работи на място → преход prepared → in_progress.
  */
 const TECHNICAL_FIELDS = [
-  "freon_charge_method", "vacuum_cleaning_done", "valves_ok",
+  "freon_charge_method", "refrigerant_type", "refrigerant_amount_g", "vacuum_cleaning_done", "valves_ok",
   "outdoor_bearings_state", "indoor_bearings_state",
   "pressure_cold_bar", "pressure_hot_bar",
   "consumption_cold_kw", "consumption_hot_kw",
@@ -122,7 +124,7 @@ export async function PUT(
 
   const { data: current, error: curErr } = await session.db
     .from("service_repair_protocols")
-    .select("id, created_by, status, signature_team, freon_charge_method, vacuum_cleaning_done, valves_ok, outdoor_bearings_state, indoor_bearings_state, pressure_cold_bar, pressure_hot_bar, consumption_cold_kw, consumption_hot_kw, original_remote, outdoor_noise_level, welds_indoor_heat_exchanger, welds_outdoor_heat_exchanger, welds_pipes, indoor_mechanism_repaired, broken_turbine, service_rating")
+    .select("id, created_by, status, signature_team, freon_charge_method, refrigerant_type, refrigerant_amount_g, vacuum_cleaning_done, valves_ok, outdoor_bearings_state, indoor_bearings_state, pressure_cold_bar, pressure_hot_bar, consumption_cold_kw, consumption_hot_kw, original_remote, outdoor_noise_level, welds_indoor_heat_exchanger, welds_outdoor_heat_exchanger, welds_pipes, indoor_mechanism_repaired, broken_turbine, service_rating")
     .eq("id", id)
     .maybeSingle();
 

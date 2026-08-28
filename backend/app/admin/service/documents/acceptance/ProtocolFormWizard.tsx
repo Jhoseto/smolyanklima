@@ -1312,7 +1312,7 @@ function MaterialStepGroup({
   );
 }
 
-/** Стъпка 3 — Главни монтажни елементи (25 позиции в фиксиран ред). */
+/** Стъпка 3 — Главни монтажни елементи (26 позиции в фиксиран ред). */
 function PrimaryMaterialsStep({
   values, onChange,
 }: {

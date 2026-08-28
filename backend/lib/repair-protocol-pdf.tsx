@@ -179,6 +179,8 @@ interface RepairProtocolData {
 
   is_japanese_brand: boolean | null;
   freon_charge_method: FreonChargeMethod | null;
+  refrigerant_type: string | null;
+  refrigerant_amount_g: number | null;
 
   vacuum_cleaning_done: boolean | null;
   valves_ok: boolean | null;
@@ -291,6 +293,11 @@ export function RepairProtocolPDF({ data }: { data: RepairProtocolData }) {
               <PdfCell
                 label="Фреон / зареждане"
                 value={data.freon_charge_method ? FREON_CHARGE_LABEL[data.freon_charge_method] : "—"}
+              />
+              <PdfCell label="Вид хладилен агент" value={data.refrigerant_type} />
+              <PdfCell
+                label="Количество сложено"
+                value={data.refrigerant_amount_g != null ? `${data.refrigerant_amount_g} г` : "—"}
               />
               <PdfCell label="Прахосмукачка" value={boolText(data.vacuum_cleaning_done)} />
               <PdfCell label="Клапи" value={boolText(data.valves_ok)} />
