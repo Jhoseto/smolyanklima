@@ -3,16 +3,17 @@ import { withCors, corsPreflight } from "@/lib/http/cors";
 import { requireMasterAdminOrCron } from "@/lib/ai/agent/agentAuth";
 import { purgeOldAgentConversations } from "@/lib/ai/agent/agentRetention";
 import { logAdminActivity } from "@/lib/admin/audit";
-import { adminDb } from "@/lib/admin/db";
 import { getEnv } from "@/lib/env";
+import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflight(req);
 }
 
 export async function POST(req: NextRequest) {
+  let auth;
   try {
-    const auth = await requireMasterAdminOrCron(req);
+    auth = await requireMasterAdminOrCron(req);
     if (auth === "cron" && !process.env.AI_AGENT_CRON_SECRET) {
       return withCors(req, NextResponse.json({ error: "Cron not configured" }, { status: 503 }));
     }
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
 
   const env = getEnv();
   const retentionDays = env.AI_AGENT_RETENTION_DAYS ?? 90;
-  const db = await adminDb();
+  const db = auth === "cron" ? createSupabaseServiceRoleClient() : auth.db;
   const result = await purgeOldAgentConversations(db, retentionDays);
 
   await logAdminActivity({

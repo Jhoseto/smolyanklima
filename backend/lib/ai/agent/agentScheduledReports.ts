@@ -1,7 +1,8 @@
-import { adminDb, type AdminSession } from "@/lib/admin/db";
+import type { AdminSession } from "@/lib/admin/db";
 import { agentSessionForUserId } from "@/lib/ai/agent/agentAuth";
 import { handleAgentChat } from "@/lib/ai/agent/chatHandler";
 import { computeNextRunAt, type ReportFrequency } from "@/lib/ai/agent/agentSchedule";
+import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 export type ScheduledReportRow = {
   id: string;
@@ -94,7 +95,7 @@ export async function runDueScheduledReports(): Promise<{
   failed: number;
   results: Array<{ reportId: string; status: string }>;
 }> {
-  const db = await adminDb();
+  const db = createSupabaseServiceRoleClient();
   const now = new Date().toISOString();
 
   const { data: due, error } = await db

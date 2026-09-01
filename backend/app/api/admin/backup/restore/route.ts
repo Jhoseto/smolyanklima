@@ -4,6 +4,7 @@ import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
 import { importPublicTablesBackup, parseBackupFile } from "@/lib/backup/importPublicTablesBackup";
+import { listPublicTablesForBackup } from "@/lib/backup/listPublicTables";
 
 export const maxDuration = 300;
 
@@ -60,7 +61,8 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = await importPublicTablesBackup(session.db, payload, parsed.data.mode);
+    const currentTables = parsed.data.mode === "replace" ? await listPublicTablesForBackup(session.db) : undefined;
+    const result = await importPublicTablesBackup(session.db, payload, parsed.data.mode, { currentTables });
 
     await logAdminActivity({
       action: "backup.full_restore",

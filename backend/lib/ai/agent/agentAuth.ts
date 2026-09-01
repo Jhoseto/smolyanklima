@@ -1,4 +1,5 @@
-import { adminDb, adminSession, requireRole, type AdminSession } from "@/lib/admin/db";
+import { adminSession, requireRole, type AdminSession } from "@/lib/admin/db";
+import { createSupabaseServiceRoleClient } from "@/lib/supabase/server";
 
 /** master_admin + office_staff — чат с AI agent. */
 export async function requireAdminAgentSession(): Promise<AdminSession> {
@@ -19,7 +20,7 @@ export function canBrowseAgentConversations(session: AdminSession): boolean {
 }
 
 export async function agentSessionForUserId(userId: string): Promise<AdminSession> {
-  const db = await adminDb();
+  const db = createSupabaseServiceRoleClient();
   const { data: adminRow, error } = await db
     .from("admin_users")
     .select("id,is_active,role,name,email,avatar_url")
