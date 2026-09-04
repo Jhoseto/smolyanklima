@@ -36,6 +36,12 @@ export type RecordProductSaleOptions = {
   /** По подразбиране true — създава и монтаж в календара. */
   withInstallation?: boolean;
   salePrice?: number;
+  /** Задължителни, ако продаваният ред няма вече записани серийни номера
+   *  (напр. бройка от партида „втора употреба“ без сериен №) — виж
+   *  products/page.tsx: продажбата изисква въвеждане на точно кой уред
+   *  (вътрешно/външно тяло) се продава. */
+  indoorUnitSerial?: string | null;
+  outdoorUnitSerial?: string | null;
 };
 
 function toIsoFromDateAndTimeLocal(dateStr: string, timeStr: string | undefined | null): string | null {
@@ -146,6 +152,11 @@ export async function recordProductSale(
   if (!hasModelCode) putBody.stockQuantity = nextQty;
   const nextStockStatus = stockStatusAfterSale(prod.stock_status, hasModelCode, nextQty);
   if (nextStockStatus !== undefined) putBody.stockStatus = nextStockStatus;
+  // Серийни номера на конкретния продаван уред — попада в същия PUT, който
+  // маркира реда като продаден (виж products/page.tsx: изисква се, ако
+  // редът досега няма серийни номера).
+  if (options?.indoorUnitSerial != null) putBody.indoorUnitSerial = options.indoorUnitSerial;
+  if (options?.outdoorUnitSerial != null) putBody.outdoorUnitSerial = options.outdoorUnitSerial;
 
   let saleId: string | null = null;
   let installId: string | null = null;

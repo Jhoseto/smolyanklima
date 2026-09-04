@@ -735,6 +735,10 @@ type Props = {
   highlightDelivery?: boolean;
   /** Червен outline на Име/Модел при опит за save с празни задължителни полета. */
   highlightRequired?: boolean;
+  /** При добавяне на няколко еднакви бройки (втора употреба, количество > 1) —
+   *  серийните номера не важат за партида, затова полетата се заключват и
+   *  изчистват. Въвеждат се по-късно, индивидуално, при продажба/сервиз. */
+  disableSerialFields?: boolean;
 };
 
 export function ProductFormFields({
@@ -754,6 +758,7 @@ export function ProductFormFields({
   readOnly = false,
   highlightDelivery = false,
   highlightRequired = false,
+  disableSerialFields = false,
 }: Props) {
   const ro = Boolean(readOnly);
   /** Локален overlay за марки, създадени по време на тази сесия чрез
@@ -1966,6 +1971,15 @@ export function ProductFormFields({
       </div>
 
       <CollapsibleSection title="Серийни номера и доставчик" badge="вътрешен запис, не се показва публично">
+        {disableSerialFields && (
+            <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800">
+              <span className="mt-0.5 text-amber-500">&#9888;</span>
+              <span>
+                Добавяте няколко еднакви бройки — серийните номера не могат да важат за партида.
+                Ще се въведат по-късно, индивидуално, при <strong>продажба</strong> или <strong>прибиране в сервиз</strong>.
+              </span>
+            </div>
+        )}
         {highlightDelivery && (
             <div className="mb-3 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800">
               <span className="mt-0.5 text-red-500">&#9888;</span>
@@ -1990,20 +2004,21 @@ export function ProductFormFields({
                 knownBrand={brands.find((b) => b.id === form.brandId)?.name}
                 knownModel={form.modelCode}
                 availableBrands={brands.map((b) => b.name)}
-                disabled={activeLabelScan === "outdoor"}
+                disabled={disableSerialFields || activeLabelScan === "outdoor"}
                 disabledReason={labelScanLockedReason}
                 onBusyChange={(busy) => handleLabelScanBusy("indoor", busy)}
                 onExtracted={(r) => mergeLabelExtract(r, "indoor")}
               />
             </div>
             <Input
-              value={form.indoorUnitSerial}
+              value={disableSerialFields ? "" : form.indoorUnitSerial}
+              disabled={disableSerialFields}
               onChange={(e) => {
                 setForm({ ...form, indoorUnitSerial: e.target.value });
                 if (isAiField("indoorUnitSerial")) clearAiFlag("indoorUnitSerial");
               }}
-              placeholder="напр. T000532"
-              className={`${indoorDup.length > 0 ? "border-amber-400 focus:ring-amber-400" : ""} ${isAiField("indoorUnitSerial") ? "border-emerald-300 bg-emerald-50/40" : ""} ${highlightDelivery && !form.indoorUnitSerial.trim() ? "border-red-400 ring-2 ring-red-300/50" : ""}`}
+              placeholder={disableSerialFields ? "Ще се въведе при продажба/сервиз" : "напр. T000532"}
+              className={`${indoorDup.length > 0 ? "border-amber-400 focus:ring-amber-400" : ""} ${isAiField("indoorUnitSerial") ? "border-emerald-300 bg-emerald-50/40" : ""} ${highlightDelivery && !form.indoorUnitSerial.trim() ? "border-red-400 ring-2 ring-red-300/50" : ""} ${disableSerialFields ? "opacity-60 cursor-not-allowed bg-slate-50" : ""}`}
             />
             <SerialDuplicateNotice matches={indoorDup} label="вътрешно" />
           </label>
@@ -2024,20 +2039,21 @@ export function ProductFormFields({
                 knownBrand={brands.find((b) => b.id === form.brandId)?.name}
                 knownModel={form.modelCode}
                 availableBrands={brands.map((b) => b.name)}
-                disabled={activeLabelScan === "indoor"}
+                disabled={disableSerialFields || activeLabelScan === "indoor"}
                 disabledReason={labelScanLockedReason}
                 onBusyChange={(busy) => handleLabelScanBusy("outdoor", busy)}
                 onExtracted={(r) => mergeLabelExtract(r, "outdoor")}
               />
             </div>
             <Input
-              value={form.outdoorUnitSerial}
+              value={disableSerialFields ? "" : form.outdoorUnitSerial}
+              disabled={disableSerialFields}
               onChange={(e) => {
                 setForm({ ...form, outdoorUnitSerial: e.target.value });
                 if (isAiField("outdoorUnitSerial")) clearAiFlag("outdoorUnitSerial");
               }}
-              placeholder="напр. T001024"
-              className={`${outdoorDup.length > 0 ? "border-amber-400 focus:ring-amber-400" : ""} ${isAiField("outdoorUnitSerial") ? "border-emerald-300 bg-emerald-50/40" : ""} ${highlightDelivery && !form.outdoorUnitSerial.trim() ? "border-red-400 ring-2 ring-red-300/50" : ""}`}
+              placeholder={disableSerialFields ? "Ще се въведе при продажба/сервиз" : "напр. T001024"}
+              className={`${outdoorDup.length > 0 ? "border-amber-400 focus:ring-amber-400" : ""} ${isAiField("outdoorUnitSerial") ? "border-emerald-300 bg-emerald-50/40" : ""} ${highlightDelivery && !form.outdoorUnitSerial.trim() ? "border-red-400 ring-2 ring-red-300/50" : ""} ${disableSerialFields ? "opacity-60 cursor-not-allowed bg-slate-50" : ""}`}
             />
             <SerialDuplicateNotice matches={outdoorDup} label="външно" />
           </label>

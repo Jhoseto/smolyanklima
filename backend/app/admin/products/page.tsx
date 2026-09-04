@@ -232,6 +232,13 @@ function canRecordSale(p: ProductRow) {
   return p.stock_status === "in_stock" || p.stock_status === "on_order";
 }
 
+/** Няма записани серийни номера — напр. бройка от партида „втора употреба“,
+ *  добавена по количество без сериен №. При продажба/прибиране в сервиз
+ *  трябва да се въведат, за да се знае точно кой уред е засегнат. */
+function productMissingSerials(p: Pick<ProductRow, "catalog_item" | "indoor_unit_serial" | "outdoor_unit_serial">) {
+  return !isAccessoryRow(p) && !(p.indoor_unit_serial ?? "").trim() && !(p.outdoor_unit_serial ?? "").trim();
+}
+
 function canReserveProduct(p: ProductRow) {
   return !isAccessoryRow(p) && p.stock_status === "in_stock";
 }
@@ -614,6 +621,10 @@ export default function AdminProductsPage() {
   const [reserveCancelBusyId, setReserveCancelBusyId] = useState<string | null>(null);
   const [saleBusy, setSaleBusy] = useState(false);
   const [saleForm, setSaleForm] = useState(emptySaleModalForm);
+  // Серийни номера, попълвани в момента на продажба — само когато редът
+  // още няма записани такива (напр. бройка от партида „втора употреба“).
+  const [saleSerialIndoor, setSaleSerialIndoor] = useState("");
+  const [saleSerialOutdoor, setSaleSerialOutdoor] = useState("");
   const [contactQuery, setContactQuery] = useState("");
   const [contactLoading, setContactLoading] = useState(false);
   const [contactResults, setContactResults] = useState<ContactChoice[]>([]);
@@ -638,6 +649,12 @@ export default function AdminProductsPage() {
   const [listFiltersReady, setListFiltersReady] = useState(false);
   const [catalogSettingsOpen, setCatalogSettingsOpen] = useState(false);
   const [locationBusyId, setLocationBusyId] = useState<string | null>(null);
+  // Промяна на място в „Сервиз“ при продукт без серийни номера — изисква
+  // потвърждение с попълване на серийните номера преди PATCH.
+  const [serviceSerialPromptFor, setServiceSerialPromptFor] = useState<ProductRow | null>(null);
+  const [serviceSerialIndoor, setServiceSerialIndoor] = useState("");
+  const [serviceSerialOutdoor, setServiceSerialOutdoor] = useState("");
+  useAdminBackHandler(Boolean(serviceSerialPromptFor), () => setServiceSerialPromptFor(null), "catalog-product-service-serial");
   const [suppliersById, setSuppliersById] = useState<Record<string, string>>({});
   /** Бърза инлайн редакция на продажна / закупна цена в таблицата — само master_admin (сървърът също валидира). */
   const [canEditMasterPricesInline, setCanEditMasterPricesInline] = useState(false);
@@ -1134,8 +1151,18 @@ export default function AdminProductsPage() {
     mount: { date: string; timeFrom: string; timeTo: string } | null,
     salePrice?: number,
     withInstallation = true,
+    serials?: { indoor: string; outdoor: string },
   ) {
     if (!canRecordSale(prod)) return false;
+
+    // Ако редът досега няма серийни номера (напр. бройка от партида
+    // „втора употреба“), е задължително да се въведат точно сега.
+    if (productMissingSerials(prod)) {
+      if (!serials?.indoor.trim() || !serials?.outdoor.trim()) {
+        setError("Въведете серийните номера (вътрешно и външно тяло) на продавания уред.");
+        return false;
+      }
+    }
 
     const unitPrice =
       salePrice != null && Number.isFinite(salePrice) && salePrice >= 0
@@ -1164,7 +1191,12 @@ export default function AdminProductsPage() {
         },
         customer,
         mount,
-        { withInstallation, salePrice: unitPrice },
+        {
+          withInstallation,
+          salePrice: unitPrice,
+          ...(serials?.indoor.trim() ? { indoorUnitSerial: serials.indoor.trim() } : {}),
+          ...(serials?.outdoor.trim() ? { outdoorUnitSerial: serials.outdoor.trim() } : {}),
+        },
       );
 
       const modelKey = (prod.model_code ?? "").trim().toLowerCase();
@@ -1177,6 +1209,8 @@ export default function AdminProductsPage() {
               stock_status: soldRowStatus,
               sold_quantity: nextSold,
               stock_quantity: hasModelCode ? x.stock_quantity : nextQty,
+              ...(serials?.indoor.trim() ? { indoor_unit_serial: serials.indoor.trim() } : {}),
+              ...(serials?.outdoor.trim() ? { outdoor_unit_serial: serials.outdoor.trim() } : {}),
             };
           }
           if (
@@ -1287,23 +1321,49 @@ export default function AdminProductsPage() {
     if (!canMutateProductRows) return;
     const cur = normalizeProductStockLocation(p.stock_location);
     const next: ProductStockLocation = STOCK_LOCATION_CYCLE[cur];
+    // Преди прибиране в сервиз трябва да сме сигурни точно кой уред е —
+    // ако още няма серийни номера, искаме потвърждение с попълването им.
+    if (next === "service" && productMissingSerials(p)) {
+      setServiceSerialIndoor("");
+      setServiceSerialOutdoor("");
+      setServiceSerialPromptFor(p);
+      return;
+    }
     void patchStockLocation(p.id, next);
   }
 
-  async function patchStockLocation(productId: string, next: ProductStockLocation) {
+  async function patchStockLocation(
+    productId: string,
+    next: ProductStockLocation,
+    serials?: { indoor: string; outdoor: string },
+  ) {
     setError(null);
     setLocationBusyId(productId);
     try {
+      const body: Record<string, unknown> = { stockLocation: next };
+      if (serials?.indoor.trim()) body.indoorUnitSerial = serials.indoor.trim();
+      if (serials?.outdoor.trim()) body.outdoorUnitSerial = serials.outdoor.trim();
       const res = await fetch(`/api/admin/products/${productId}`, {
         method: "PUT",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stockLocation: next }),
+        body: JSON.stringify(body),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((json as any).error || "Грешка при смяна на място");
       const norm = normalizeProductStockLocation(next);
-      setItems((prev) => prev.map((x) => (x.id === productId ? { ...x, stock_location: norm } : x)));
+      setItems((prev) =>
+        prev.map((x) =>
+          x.id === productId
+            ? {
+                ...x,
+                stock_location: norm,
+                ...(serials?.indoor.trim() ? { indoor_unit_serial: serials.indoor.trim() } : {}),
+                ...(serials?.outdoor.trim() ? { outdoor_unit_serial: serials.outdoor.trim() } : {}),
+              }
+            : x,
+        ),
+      );
     } catch (e: any) {
       setError(String(e?.message ?? e));
     } finally {
@@ -2178,6 +2238,8 @@ export default function AdminProductsPage() {
                           }
                           setSaleFor(p);
                           setSaleForm(saleModalFormForProduct(p));
+                          setSaleSerialIndoor("");
+                          setSaleSerialOutdoor("");
                           setContactQuery("");
                           setContactResults([]);
                         }}
@@ -2536,6 +2598,8 @@ export default function AdminProductsPage() {
                       }
                       setSaleFor(p);
                       setSaleForm(saleModalFormForProduct(p));
+                      setSaleSerialIndoor("");
+                      setSaleSerialOutdoor("");
                       setContactQuery("");
                       setContactResults([]);
                     }}
@@ -2727,6 +2791,26 @@ export default function AdminProductsPage() {
               <Input value={saleForm.customerAddress} onChange={(e) => setSaleForm((s) => ({ ...s, customerAddress: e.target.value }))} placeholder="Адрес" className="md:col-span-2" />
               <Textarea value={saleForm.notes} onChange={(e) => setSaleForm((s) => ({ ...s, notes: e.target.value }))} placeholder="Бележки (по желание)" rows={2} className="md:col-span-2 min-h-[2.75rem]" />
 
+              {productMissingSerials(saleFor) && (
+                <div className="col-span-full rounded-xl border-2 border-amber-300 bg-amber-50 p-3 space-y-2">
+                  <p className="text-xs font-bold text-amber-900">
+                    Този уред още няма записани серийни номера — въведете ги сега, за да се знае точно кой климатик се продава.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Input
+                      value={saleSerialIndoor}
+                      onChange={(e) => setSaleSerialIndoor(e.target.value)}
+                      placeholder="Сериен № вътрешно тяло *"
+                    />
+                    <Input
+                      value={saleSerialOutdoor}
+                      onChange={(e) => setSaleSerialOutdoor(e.target.value)}
+                      placeholder="Сериен № външно тяло *"
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="col-span-full border-t border-slate-100 pt-3 mt-1 space-y-3">
                 {isClimateProduct && (
                   <label className="flex items-start gap-3 cursor-pointer rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5">
@@ -2810,7 +2894,8 @@ export default function AdminProductsPage() {
                     saleBusy ||
                     !saleForm.customerName.trim() ||
                     !saleForm.customerPhone.trim() ||
-                    (withInstallation && !saleForm.mountDate.trim())
+                    (withInstallation && !saleForm.mountDate.trim()) ||
+                    (productMissingSerials(saleFor) && (!saleSerialIndoor.trim() || !saleSerialOutdoor.trim()))
                   }
                   onClick={async () => {
                     setSaleBusy(true);
@@ -2837,6 +2922,7 @@ export default function AdminProductsPage() {
                           : null,
                         Number.isFinite(resolvedPrice) ? resolvedPrice : Number(saleFor.price),
                         withInstallation,
+                        { indoor: saleSerialIndoor, outdoor: saleSerialOutdoor },
                       );
                       if (ok) {
                         setSaleSuccess({
@@ -3045,6 +3131,56 @@ export default function AdminProductsPage() {
               <Button variant="secondary" onClick={() => setBulkDeleteActiveLinkWarning(null)}>Отказ</Button>
               <Button variant="danger" onClick={() => void bulkDelete(true)} className="gap-1.5">
                 <Trash2 className="w-3.5 h-3.5" /> Изтрий въпреки това
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {serviceSerialPromptFor && (
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-950/70 p-0 md:p-4 backdrop-blur-md">
+          <div
+            className="w-full max-w-lg max-h-[92dvh] overflow-y-auto rounded-t-3xl md:rounded-3xl bg-white p-5 md:p-6 shadow-2xl ring-2 ring-amber-300 pb-safe md:pb-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-center pb-2 md:hidden">
+              <div className="w-10 h-1 rounded-full bg-slate-200" />
+            </div>
+            <div className="flex items-center gap-2 text-xl font-black text-amber-700">
+              <span aria-hidden>⚠️</span> Прибиране в сервиз — липсват серийни номера
+            </div>
+            <div className="mt-3 text-sm text-slate-700 leading-relaxed font-medium">
+              „{serviceSerialPromptFor.name}“ още няма записани серийни номера (напр. бройка от партида „втора употреба“).
+              Въведете ги сега, за да се знае точно кой уред е предаден за сервиз.
+            </div>
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Input
+                value={serviceSerialIndoor}
+                onChange={(e) => setServiceSerialIndoor(e.target.value)}
+                placeholder="Сериен № вътрешно тяло *"
+              />
+              <Input
+                value={serviceSerialOutdoor}
+                onChange={(e) => setServiceSerialOutdoor(e.target.value)}
+                placeholder="Сериен № външно тяло *"
+              />
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setServiceSerialPromptFor(null)}>Отказ</Button>
+              <Button
+                variant="primary"
+                disabled={!serviceSerialIndoor.trim() || !serviceSerialOutdoor.trim() || locationBusyId === serviceSerialPromptFor.id}
+                onClick={async () => {
+                  const p = serviceSerialPromptFor;
+                  if (!p) return;
+                  await patchStockLocation(p.id, "service", {
+                    indoor: serviceSerialIndoor,
+                    outdoor: serviceSerialOutdoor,
+                  });
+                  setServiceSerialPromptFor(null);
+                }}
+              >
+                Потвърди и прибери в сервиз
               </Button>
             </div>
           </div>

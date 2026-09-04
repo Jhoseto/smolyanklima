@@ -3,8 +3,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ProductFormFields, emptyProductForm, buildPostBody, type AdminProductForm } from "../ProductForm";
-import { SectionTitle, Card, Button } from "../../ui";
+import { SectionTitle, Card, Button, Input } from "../../ui";
 import { Save } from "lucide-react";
+
+/** Максимален брой еднакви бройки, добавяни наведнъж (защита от грешка в полето). */
+const MAX_BULK_QUANTITY = 50;
 
 type Brand = { id: string; name: string };
 type ProductType = { id: string; name: string };
@@ -28,6 +31,8 @@ export default function NewProductPage() {
   const [pendingPhotos, setPendingPhotos] = useState(0);
   const [pendingPhotosConfirm, setPendingPhotosConfirm] = useState<null | { proceed: () => void }>(null);
   const [highlightRequired, setHighlightRequired] = useState(false);
+  // Бройки без сериен № (само за „Втора употреба“) — вж. bulkQuantity() по-долу.
+  const [bulkQuantity, setBulkQuantity] = useState("1");
 
   useEffect(() => {
     if (!toast) return;
@@ -83,29 +88,65 @@ export default function NewProductPage() {
     })().catch((e) => setError(String(e?.message ?? e)));
   }, []);
 
+  /** Ефективен брой бройки за създаване. > 1 само при „Втора употреба“ —
+   *  партида еднакви климатици без серийни номера (виж disableSerialFields). */
+  const isBulkUsedBatch = form.productCondition === "used";
+  const effectiveQuantity = isBulkUsedBatch
+    ? Math.min(MAX_BULK_QUANTITY, Math.max(1, parseInt(bulkQuantity, 10) || 1))
+    : 1;
+
+  async function postOneProduct(body: Record<string, unknown>): Promise<{ id?: string; error?: string }> {
+    const res = await fetch("/api/admin/products", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { error: (json as any)?.error || "Грешка при създаване" };
+    }
+    return { id: String((json as { data?: { id?: string } })?.data?.id ?? "") };
+  }
+
   // Реалното submit действие — без protection guard. Извиква се след
   // confirm dialog-а (или директно ако няма pending снимки).
   async function doSubmit() {
     setError(null);
     setSubmitting(true);
     try {
-      const res = await fetch("/api/admin/products", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildPostBody(form)),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const msg = (json as any)?.error || "Грешка при създаване";
-        setError(msg);
-        setToast({ kind: "err", text: msg });
-        return;
+      const qty = effectiveQuantity;
+      const baseBody = buildPostBody(form);
+      // При > 1 бройка серийните номера не важат за цялата партида —
+      // изчистваме ги (полетата вече са заключени и в UI, виж disableSerialFields).
+      if (qty > 1) {
+        baseBody.indoorUnitSerial = null;
+        baseBody.outdoorUnitSerial = null;
       }
-      const newId = String((json as { data?: { id?: string } })?.data?.id ?? "");
-      setToast({ kind: "ok", text: "Създадено" });
-      if (newId) {
-        router.replace(`/admin/products?focusProductId=${encodeURIComponent(newId)}`);
+
+      let created = 0;
+      let lastId = "";
+      for (let i = 0; i < qty; i++) {
+        const result = await postOneProduct(baseBody);
+        if (result.error) {
+          const msg =
+            created > 0
+              ? `Добавени ${created} от ${qty} бройки — спряно поради грешка: ${result.error}`
+              : result.error;
+          setError(msg);
+          setToast({ kind: "err", text: msg });
+          if (created > 0) router.replace("/admin/products");
+          return;
+        }
+        created += 1;
+        lastId = result.id ?? "";
+      }
+
+      setToast({ kind: "ok", text: qty > 1 ? `Добавени ${created} бройки` : "Създадено" });
+      if (qty > 1) {
+        router.replace("/admin/products");
+      } else if (lastId) {
+        router.replace(`/admin/products?focusProductId=${encodeURIComponent(lastId)}`);
       } else {
         router.replace("/admin/products");
       }
@@ -159,6 +200,29 @@ export default function NewProductPage() {
         </div>
       )}
 
+      {isBulkUsedBatch && (
+        <Card className="p-3 sm:p-4 shadow-sm border-brand-orange-200 bg-brand-orange-50/50 max-md:rounded-lg">
+          <label className="block max-w-xs">
+            <div className="text-[11px] font-bold text-brand-orange-900 uppercase tracking-wide mb-1">
+              Количество бройки (без серийни номера)
+            </div>
+            <Input
+              type="number"
+              min={1}
+              max={MAX_BULK_QUANTITY}
+              value={bulkQuantity}
+              onChange={(e) => setBulkQuantity(e.target.value)}
+            />
+          </label>
+          <p className="mt-1.5 text-xs text-brand-orange-800 leading-snug">
+            За партида еднакви климатици „втора употреба“ без известни серийни номера все още.
+            Ще се създадат {effectiveQuantity} {effectiveQuantity === 1 ? "еднаква бройка" : "еднакви бройки"} в наличност.
+            Серийните номера (вътрешно/външно тяло) ще се въведат по-късно, индивидуално за всеки уред —
+            при <strong>продажба</strong> или при <strong>прибиране в сервиз</strong>.
+          </p>
+        </Card>
+      )}
+
       <Card className="p-2 sm:p-3 md:p-6 shadow-sm border-slate-200/90 max-md:rounded-lg">
         <ProductFormFields
           brands={brands}
@@ -173,6 +237,7 @@ export default function NewProductPage() {
           autoPriceWithMountFromCatalog
           onPendingPhotosChange={setPendingPhotos}
           highlightRequired={highlightRequired}
+          disableSerialFields={effectiveQuantity > 1}
         />
       </Card>
 
@@ -180,7 +245,11 @@ export default function NewProductPage() {
       <div className="hidden md:flex justify-end">
         <Button variant="primary" size="lg" onClick={submit} disabled={submitting} className="gap-2 shadow-sm">
           <Save className="w-5 h-5" />
-          {submitting ? "Създавам..." : "Създай климатик"}
+          {submitting
+            ? "Създавам..."
+            : effectiveQuantity > 1
+              ? `Създай ${effectiveQuantity} бройки`
+              : "Създай климатик"}
         </Button>
       </div>
 
@@ -188,7 +257,11 @@ export default function NewProductPage() {
       <div className="fixed bottom-16 left-0 right-0 z-40 md:hidden border-t border-slate-200 bg-white/95 backdrop-blur-sm px-3 py-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
         <Button variant="primary" className="w-full justify-center gap-2 !py-3 text-sm font-bold rounded-xl" onClick={submit} disabled={submitting}>
           <Save className="w-4 h-4" />
-          {submitting ? "Създавам..." : "Създай климатик"}
+          {submitting
+            ? "Създавам..."
+            : effectiveQuantity > 1
+              ? `Създай ${effectiveQuantity} бройки`
+              : "Създай климатик"}
         </Button>
       </div>
 
