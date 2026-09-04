@@ -172,6 +172,8 @@ interface RepairProtocolData {
   ac_brand: string | null;
   ac_model: string | null;
   serial_number: string | null;
+  indoor_unit_serial?: string | null;
+  outdoor_unit_serial?: string | null;
   address: string | null;
   paid_amount: number | null;
   client_email: string | null;
@@ -280,6 +282,12 @@ export function RepairProtocolPDF({ data }: { data: RepairProtocolData }) {
               <PdfCell label="Марка" value={data.ac_brand} />
               <PdfCell label="Модел" value={data.ac_model} />
               {!isRecycle && <PdfCell label="Сериен №" value={data.serial_number} />}
+              {isRecycle && (
+                <>
+                  <PdfCell label="Сериен № вътрешно тяло" value={data.indoor_unit_serial} />
+                  <PdfCell label="Сериен № външно тяло" value={data.outdoor_unit_serial} />
+                </>
+              )}
               <PdfCell label="Японски" value={data.is_japanese_brand === null ? "—" : boolText(data.is_japanese_brand)} />
             </View>
           </View>

@@ -57,7 +57,7 @@ export const SERVICE_KIND_OPTIONS: { value: RepairServiceKind; label: string; hi
   {
     value: "recycle",
     label: "Сервиз рециклиране",
-    hint: "Втора употреба за магазина — без клиент и сериен №",
+    hint: "Втора употреба за магазина — без клиент, с избор на бройка от партидата",
   },
 ];
 

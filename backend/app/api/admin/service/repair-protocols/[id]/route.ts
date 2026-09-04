@@ -12,6 +12,7 @@ import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
 import { assertRepairProtocolVisible, assertRepairProtocolWritable } from "@/lib/admin/repairProtocolAccess";
+import { applyRecycleSerialsToProduct } from "@/lib/admin/recycleProtocolProductLink";
 
 const UpdateSchema = z.object({
   date:             z.string().optional(),
@@ -25,6 +26,11 @@ const UpdateSchema = z.object({
   paid_amount:      z.number().nonnegative().optional().nullable(),
   client_email:     z.string().max(200).optional().nullable().transform(v => v?.trim() || null),
   client_phone:     z.string().max(30).optional().nullable(),
+
+  // Само за service_kind='recycle' — виж 0105_*.sql.
+  product_id:            z.string().uuid().optional().nullable(),
+  indoor_unit_serial:    z.string().max(100).optional().nullable(),
+  outdoor_unit_serial:   z.string().max(100).optional().nullable(),
 
   is_japanese_brand:   z.boolean().optional().nullable(),
   freon_charge_method: z.enum(["none", "scale", "standard"]).optional().nullable(),
@@ -122,11 +128,31 @@ export async function PUT(
     return withCors(req, NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Невалидни данни" }, { status: 400 }));
   }
 
-  const { data: current, error: curErr } = await session.db
+  const CURRENT_COLS_WITH_LINK =
+    "id, created_by, status, signature_team, service_kind, product_id, indoor_unit_serial, outdoor_unit_serial, freon_charge_method, refrigerant_type, refrigerant_amount_g, vacuum_cleaning_done, valves_ok, outdoor_bearings_state, indoor_bearings_state, pressure_cold_bar, pressure_hot_bar, consumption_cold_kw, consumption_hot_kw, original_remote, outdoor_noise_level, welds_indoor_heat_exchanger, welds_outdoor_heat_exchanger, welds_pipes, indoor_mechanism_repaired, broken_turbine, service_rating";
+  const CURRENT_COLS_NO_LINK =
+    "id, created_by, status, signature_team, service_kind, freon_charge_method, refrigerant_type, refrigerant_amount_g, vacuum_cleaning_done, valves_ok, outdoor_bearings_state, indoor_bearings_state, pressure_cold_bar, pressure_hot_bar, consumption_cold_kw, consumption_hot_kw, original_remote, outdoor_noise_level, welds_indoor_heat_exchanger, welds_outdoor_heat_exchanger, welds_pipes, indoor_mechanism_repaired, broken_turbine, service_rating";
+
+  let { data: current, error: curErr } = await session.db
     .from("service_repair_protocols")
-    .select("id, created_by, status, signature_team, freon_charge_method, refrigerant_type, refrigerant_amount_g, vacuum_cleaning_done, valves_ok, outdoor_bearings_state, indoor_bearings_state, pressure_cold_bar, pressure_hot_bar, consumption_cold_kw, consumption_hot_kw, original_remote, outdoor_noise_level, welds_indoor_heat_exchanger, welds_outdoor_heat_exchanger, welds_pipes, indoor_mechanism_repaired, broken_turbine, service_rating")
+    .select(CURRENT_COLS_WITH_LINK)
     .eq("id", id)
     .maybeSingle();
+
+  const currentMissingLinkCols =
+    !!curErr &&
+    /product_id|indoor_unit_serial|outdoor_unit_serial|42703|does not exist|undefined_column/i.test(
+      `${curErr.message} ${(curErr as { code?: string }).code ?? ""}`,
+    );
+  if (currentMissingLinkCols) {
+    const retry = await session.db
+      .from("service_repair_protocols")
+      .select(CURRENT_COLS_NO_LINK)
+      .eq("id", id)
+      .maybeSingle();
+    current = retry.data as typeof current;
+    curErr = retry.error;
+  }
 
   if (curErr) return withCors(req, NextResponse.json({ error: curErr.message }, { status: 500 }));
   if (!current) return withCors(req, NextResponse.json({ error: "Не е намерен" }, { status: 404 }));
@@ -153,6 +179,11 @@ export async function PUT(
     update.client_email = null;
     update.address = null;
     update.serial_number = null;
+  } else {
+    // product_id / indoor_unit_serial / outdoor_unit_serial са само за 'recycle'.
+    update.product_id = null;
+    update.indoor_unit_serial = null;
+    update.outdoor_unit_serial = null;
   }
 
   // Автоматичен workflow на статуси (само ако клиентът НЕ изпраща явно status):
@@ -229,6 +260,23 @@ export async function PUT(
     .select("*")
     .maybeSingle();
 
+  const missingProductLinkColumn =
+    !!error &&
+    /product_id|indoor_unit_serial|outdoor_unit_serial|42703|does not exist|undefined_column/i.test(
+      `${error.message} ${(error as { code?: string }).code ?? ""}`,
+    );
+  if (missingProductLinkColumn && ("product_id" in cleaned || "indoor_unit_serial" in cleaned || "outdoor_unit_serial" in cleaned)) {
+    const { product_id: _dropP, indoor_unit_serial: _dropI, outdoor_unit_serial: _dropO, ...updateNoLink } = cleaned;
+    const retry = await session.db
+      .from("service_repair_protocols")
+      .update(updateNoLink)
+      .eq("id", id)
+      .select("*")
+      .maybeSingle();
+    data = retry.data;
+    error = retry.error;
+  }
+
   const missingBrandColumn =
     !!error &&
     /ac_brand|42703|does not exist|undefined_column/i.test(
@@ -285,7 +333,25 @@ export async function PUT(
     },
   });
 
-  return withCors(req, NextResponse.json({ data }));
+  // При рециклиране, щом и двата серийни номера са налични (текущи или
+  // току-що обновени) → "финализирай" свързаната партидна бройка.
+  let productLinkWarning: string | null = null;
+  const mergedProductId =
+    "product_id" in cleaned ? (cleaned.product_id as string | null) : (c.product_id as string | null | undefined) ?? null;
+  if (effectiveKind === "recycle" && mergedProductId) {
+    const mergedIndoor =
+      "indoor_unit_serial" in cleaned
+        ? (cleaned.indoor_unit_serial as string | null)
+        : (c.indoor_unit_serial as string | null | undefined) ?? null;
+    const mergedOutdoor =
+      "outdoor_unit_serial" in cleaned
+        ? (cleaned.outdoor_unit_serial as string | null)
+        : (c.outdoor_unit_serial as string | null | undefined) ?? null;
+    const linkResult = await applyRecycleSerialsToProduct(session.db, mergedProductId, mergedIndoor, mergedOutdoor);
+    if (!linkResult.ok) productLinkWarning = linkResult.error;
+  }
+
+  return withCors(req, NextResponse.json({ data, ...(productLinkWarning ? { productLinkWarning } : {}) }));
 }
 
 export async function DELETE(

@@ -32,6 +32,9 @@ interface ProtocolRow {
 
   ac_brand: string | null;
   ac_model: string | null;
+  product_id: string | null;
+  indoor_unit_serial: string | null;
+  outdoor_unit_serial: string | null;
 
   is_japanese_brand: boolean | null;
   freon_charge_method: FreonChargeMethod | null;
@@ -332,8 +335,30 @@ export function ServiceProtocolPreview({
                     {row.service_kind !== "recycle" && (
                       <PreviewField label="Сериен №" value={row.serial_number} />
                     )}
+                    {row.service_kind === "recycle" && (
+                      <>
+                        <PreviewField label="Сериен № вътрешно тяло" value={row.indoor_unit_serial} />
+                        <PreviewField label="Сериен № външно тяло" value={row.outdoor_unit_serial} />
+                      </>
+                    )}
                     <PreviewField label="Японски" value={row.is_japanese_brand === null ? "—" : boolLabel(row.is_japanese_brand)} />
                   </div>
+                  {row.service_kind === "recycle" && (
+                    <p className="text-[11px] mt-2">
+                      {row.product_id && row.indoor_unit_serial && row.outdoor_unit_serial
+                        ? (
+                          <span className="text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-2 py-1 inline-block">
+                            Бройката е финализирана в склада с тези серийни номера.
+                          </span>
+                        ) : row.product_id ? (
+                          <span className="text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1 inline-block">
+                            Бройка избрана — чака попълване на двата серийни номера, за да се финализира в склада.
+                          </span>
+                        ) : (
+                          <span className="text-slate-500">Няма свързана бройка от склада.</span>
+                        )}
+                    </p>
+                  )}
                 </Section>
 
                 {/* ── Профилактика ── */}

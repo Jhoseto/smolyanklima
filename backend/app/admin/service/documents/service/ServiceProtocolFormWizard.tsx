@@ -11,6 +11,7 @@ import {
   splitProductSelection,
   type ProductSuggestion,
 } from "../acceptance/ProductAutocomplete";
+import { RecycleBatchPicker, type RecycleBatchGroup } from "./RecycleBatchPicker";
 import { ContactAutocomplete, type ContactSuggestion } from "../acceptance/ContactAutocomplete";
 import type { AdminRole } from "@/lib/admin/db";
 import {
@@ -33,6 +34,11 @@ interface FormData {
   client_email:     string;
   address:          string;
   serial_number:    string;
+
+  /** Само за service_kind='recycle' — виж 0105_*.sql. */
+  product_id:          string | null;
+  indoor_unit_serial:   string;
+  outdoor_unit_serial:  string;
 
   ac_brand:         string;
   ac_model:         string;
@@ -79,6 +85,10 @@ const defaultForm = (): FormData => ({
   client_email:     "",
   address:          "",
   serial_number:    "",
+
+  product_id:           null,
+  indoor_unit_serial:   "",
+  outdoor_unit_serial:  "",
 
   ac_brand:         "",
   ac_model:         "",
@@ -144,6 +154,7 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClo
   const [savedId, setSavedId] = useState<string | null>(protocolId ?? null);
   const [sigOpen, setSigOpen] = useState(false);
   const [error, setError]    = useState<string | null>(null);
+  const [linkWarning, setLinkWarning] = useState<string | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isSignedRef = useRef(false);
@@ -192,6 +203,10 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClo
       client_email:     (data.client_email as string) ?? "",
       address:          (data.address as string) ?? "",
       serial_number:    (data.serial_number as string) ?? "",
+
+      product_id:           (data.product_id as string | null) ?? null,
+      indoor_unit_serial:   (data.indoor_unit_serial as string) ?? "",
+      outdoor_unit_serial:  (data.outdoor_unit_serial as string) ?? "",
 
       ac_brand:         (data.ac_brand as string) ?? "",
       ac_model:         (data.ac_model as string) ?? "",
@@ -253,6 +268,7 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClo
 
     const hasContent =
       data.client_name || data.client_phone || data.address || data.serial_number ||
+      data.product_id || data.indoor_unit_serial || data.outdoor_unit_serial ||
       data.ac_brand || data.ac_model ||
       data.is_japanese_brand !== null || data.freon_charge_method !== null ||
       data.refrigerant_type || data.refrigerant_amount_g ||
@@ -322,6 +338,10 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClo
         serial_number:    data.service_kind === "recycle" ? null : (data.serial_number.trim() || null),
         paid_amount:      null,
 
+        product_id:           data.service_kind === "recycle" ? data.product_id : null,
+        indoor_unit_serial:   data.service_kind === "recycle" ? (data.indoor_unit_serial.trim() || null) : null,
+        outdoor_unit_serial:  data.service_kind === "recycle" ? (data.outdoor_unit_serial.trim() || null) : null,
+
         ac_brand:         data.ac_brand || null,
         ac_model:         data.ac_model || null,
 
@@ -362,11 +382,16 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClo
           headers: { "Content-Type": "application/json" },
           body:    JSON.stringify(payload),
         });
-        const json = await res.json().catch(() => ({})) as { error?: string; data?: { status?: FormData["status"] } };
+        const json = await res.json().catch(() => ({})) as {
+          error?: string;
+          data?: { status?: FormData["status"] };
+          productLinkWarning?: string;
+        };
         if (!res.ok) throw new Error(json.error ?? `Грешка при запазване (${res.status})`);
         if (json.data?.status && json.data.status !== data.status) {
           setForm(prev => ({ ...prev, status: json.data!.status! }));
         }
+        setLinkWarning(json.productLinkWarning ?? null);
       } else {
         const res = await fetch("/api/admin/service/repair-protocols", {
           method:  "POST",
@@ -377,6 +402,7 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClo
         const json = await res.json().catch(() => ({})) as {
           error?: string;
           data?: { id?: string; status?: FormData["status"] };
+          productLinkWarning?: string;
         };
         if (!res.ok) throw new Error(json.error ?? `Грешка при създаване (${res.status})`);
         const newId = json.data?.id;
@@ -385,6 +411,7 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClo
         if (json.data?.status) {
           setForm(prev => ({ ...prev, status: json.data!.status! }));
         }
+        setLinkWarning(json.productLinkWarning ?? null);
         onSaved(newId);
         return newId;
       }
@@ -503,7 +530,11 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClo
                                     is_japanese_brand:
                                       prev.is_japanese_brand === null ? true : prev.is_japanese_brand,
                                   }
-                                : {}),
+                                : {
+                                    product_id: null,
+                                    indoor_unit_serial: "",
+                                    outdoor_unit_serial: "",
+                                  }),
                             };
                             autoSave(next, savedId);
                             return next;
@@ -581,62 +612,108 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClo
                       className={inputCls}
                     />
                   </Field>
+
+                  <ProductAutocomplete
+                    label="Марка и модел"
+                    value={[form.ac_brand, form.ac_model].filter(Boolean).join(" ")}
+                    disabled={isSigned}
+                    placeholder="Търси в каталога или въведи ръчно"
+                    onChange={(label, product?: ProductSuggestion) => {
+                      if (isSignedRef.current) return;
+                      setForm(prev => {
+                        let ac_brand = "";
+                        let ac_model = label.trim();
+                        if (product) {
+                          const split = splitProductSelection(product);
+                          ac_brand = split.brand;
+                          ac_model = split.model;
+                        }
+                        const serialFromProduct = product
+                          ? [product.indoor_unit_serial, product.outdoor_unit_serial]
+                              .filter(Boolean)
+                              .join(" / ")
+                          : "";
+                        const next = {
+                          ...prev,
+                          ac_brand,
+                          ac_model,
+                          ...(serialFromProduct && !prev.serial_number.trim()
+                            ? { serial_number: serialFromProduct }
+                            : {}),
+                        };
+                        autoSave(next, savedId);
+                        return next;
+                      });
+                    }}
+                  />
+
+                  <Field label="Сериен номер">
+                    <input
+                      type="text"
+                      value={form.serial_number}
+                      onChange={e => update("serial_number", e.target.value)}
+                      placeholder="От табелката на тялото"
+                      disabled={isSigned}
+                      className={inputCls}
+                    />
+                  </Field>
                 </>
               )}
 
               {form.service_kind === "recycle" && (
-                <div className="rounded-xl border border-brand-orange-200 bg-brand-orange-50 px-3 py-2.5 text-sm text-brand-orange-900">
-                  Рециклиране за магазина — без клиент и сериен номер. Попълнете марка/модел и техническите данни.
-                </div>
-              )}
+                <>
+                  <div className="rounded-xl border border-brand-orange-200 bg-brand-orange-50 px-3 py-2.5 text-sm text-brand-orange-900">
+                    Рециклиране за магазина — без клиент. Избери конкретна бройка от партида
+                    втора употреба и попълни серийните номера — те ще се пренесат автоматично
+                    към складовата бройка.
+                  </div>
 
-              <ProductAutocomplete
-                label="Марка и модел"
-                value={[form.ac_brand, form.ac_model].filter(Boolean).join(" ")}
-                disabled={isSigned}
-                placeholder="Търси в каталога или въведи ръчно"
-                onChange={(label, product?: ProductSuggestion) => {
-                  if (isSignedRef.current) return;
-                  setForm(prev => {
-                    let ac_brand = "";
-                    let ac_model = label.trim();
-                    if (product) {
-                      const split = splitProductSelection(product);
-                      ac_brand = split.brand;
-                      ac_model = split.model;
-                    }
-                    const serialFromProduct = product
-                      ? [product.indoor_unit_serial, product.outdoor_unit_serial]
-                          .filter(Boolean)
-                          .join(" / ")
-                      : "";
-                    const next = {
-                      ...prev,
-                      ac_brand,
-                      ac_model,
-                      ...(prev.service_kind === "client" &&
-                      serialFromProduct &&
-                      !prev.serial_number.trim()
-                        ? { serial_number: serialFromProduct }
-                        : {}),
-                    };
-                    autoSave(next, savedId);
-                    return next;
-                  });
-                }}
-              />
-
-              {form.service_kind === "client" && (
-                <Field label="Сериен номер">
-                  <input
-                    type="text"
-                    value={form.serial_number}
-                    onChange={e => update("serial_number", e.target.value)}
-                    placeholder="От табелката на тялото"
+                  <RecycleBatchPicker
+                    value={form.product_id}
+                    currentLabel={[form.ac_brand, form.ac_model].filter(Boolean).join(" ")}
                     disabled={isSigned}
-                    className={inputCls}
+                    onChange={(productId, group?: RecycleBatchGroup) => {
+                      if (isSignedRef.current) return;
+                      setForm(prev => {
+                        const ac_brand = group ? group.brand : prev.ac_brand;
+                        const ac_model = group ? group.model : prev.ac_model;
+                        const next = { ...prev, product_id: productId, ac_brand, ac_model };
+                        autoSave(next, savedId);
+                        return next;
+                      });
+                    }}
                   />
-                </Field>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Field label="Сериен № вътрешно тяло">
+                      <input
+                        type="text"
+                        value={form.indoor_unit_serial}
+                        onChange={e => update("indoor_unit_serial", e.target.value)}
+                        placeholder="От табелката на вътрешното тяло"
+                        disabled={isSigned}
+                        className={inputCls}
+                      />
+                    </Field>
+                    <Field label="Сериен № външно тяло">
+                      <input
+                        type="text"
+                        value={form.outdoor_unit_serial}
+                        onChange={e => update("outdoor_unit_serial", e.target.value)}
+                        placeholder="От табелката на външното тяло"
+                        disabled={isSigned}
+                        className={inputCls}
+                      />
+                    </Field>
+                  </div>
+
+                  {form.product_id && form.indoor_unit_serial.trim() && form.outdoor_unit_serial.trim() && (
+                    <p className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-2.5 py-1.5">
+                      И двата серийни номера са попълнени — при запис бройката ще стане
+                      конкретна инстанция в склада.
+                    </p>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -936,6 +1013,12 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClo
                   </button>
                 </div>
               )}
+            </div>
+          )}
+
+          {linkWarning && (
+            <div className="mt-4 bg-amber-50 border border-amber-200 text-amber-800 px-3 py-2 rounded-xl text-sm">
+              Протоколът е запазен, но серийните номера не са пренесени към склада: {linkWarning}
             </div>
           )}
 

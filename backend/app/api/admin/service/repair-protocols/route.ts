@@ -13,6 +13,7 @@ import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
 import { buildAdminSearchOrFilter } from "@/lib/admin/phoneSearchPattern";
+import { applyRecycleSerialsToProduct } from "@/lib/admin/recycleProtocolProductLink";
 
 const QuerySchema = z.object({
   page:     z.coerce.number().int().min(1).optional().default(1),
@@ -37,6 +38,12 @@ const CreateSchema = z.object({
   paid_amount:   z.number().nonnegative().optional().nullable(),
   client_email:  z.string().max(200).optional().nullable().transform(v => v?.trim() || null),
   client_phone:  z.string().max(30).optional().nullable(),
+
+  // Само за service_kind='recycle' — свързва протокола с конкретна анонимна
+  // бройка от партида втора употреба (products). Виж 0105_*.sql.
+  product_id:            z.string().uuid().optional().nullable(),
+  indoor_unit_serial:    z.string().max(100).optional().nullable(),
+  outdoor_unit_serial:   z.string().max(100).optional().nullable(),
 
   is_japanese_brand:   z.boolean().optional().nullable(),
   freon_charge_method: z.enum(["none", "scale", "standard"]).optional().nullable(),
@@ -262,6 +269,10 @@ export async function POST(req: NextRequest) {
     client_email:     isRecycle ? null : (d.client_email || null),
     client_phone:     isRecycle ? null : (d.client_phone?.trim() || null),
 
+    product_id:          isRecycle ? (d.product_id ?? null) : null,
+    indoor_unit_serial:  isRecycle ? (d.indoor_unit_serial?.trim() || null) : null,
+    outdoor_unit_serial: isRecycle ? (d.outdoor_unit_serial?.trim() || null) : null,
+
     is_japanese_brand:   d.is_japanese_brand ?? (isRecycle ? true : null),
     freon_charge_method: d.freon_charge_method ?? null,
     refrigerant_type:     d.refrigerant_type?.trim() || null,
@@ -311,20 +322,23 @@ export async function POST(req: NextRequest) {
         .single();
       data = retry.data;
       error = retry.error;
-      if (!error && data) {
-        await logAdminActivity({
-          action: "service_repair_protocol.create",
-          entityType: "service_repair_protocol",
-          entityId: (data as { id: string }).id,
-          details: {
-            protocol_number: retryNum.number,
-            client_name: d.client_name ?? null,
-            status: computedStatus,
-          },
-        });
-        return withCors(req, NextResponse.json({ data }, { status: 201 }));
-      }
     }
+  }
+
+  const missingProductLinkColumn =
+    !!error &&
+    /product_id|indoor_unit_serial|outdoor_unit_serial|42703|does not exist|undefined_column/i.test(
+      `${error.message} ${(error as { code?: string }).code ?? ""}`,
+    );
+  if (missingProductLinkColumn) {
+    const { product_id: _drop1, indoor_unit_serial: _drop2, outdoor_unit_serial: _drop3, ...payloadNoLink } = payload;
+    const retry = await session.db
+      .from("service_repair_protocols")
+      .insert(payloadNoLink)
+      .select("*")
+      .single();
+    data = retry.data;
+    error = retry.error;
   }
 
   const missingBrandColumn =
@@ -375,5 +389,21 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  return withCors(req, NextResponse.json({ data }, { status: 201 }));
+  // При рециклиране, ако вече са попълнени и двата серийни номера →
+  // "финализирай" свързаната партидна бройка веднага при създаване.
+  let productLinkWarning: string | null = null;
+  if (isRecycle && payload.product_id) {
+    const linkResult = await applyRecycleSerialsToProduct(
+      session.db,
+      String(payload.product_id),
+      d.indoor_unit_serial,
+      d.outdoor_unit_serial,
+    );
+    if (!linkResult.ok) productLinkWarning = linkResult.error;
+  }
+
+  return withCors(req, NextResponse.json(
+    { data, ...(productLinkWarning ? { productLinkWarning } : {}) },
+    { status: 201 },
+  ));
 }
