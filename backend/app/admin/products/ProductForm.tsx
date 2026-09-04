@@ -746,6 +746,10 @@ type Props = {
   bulkQuantityValue?: string;
   onBulkQuantityChange?: (value: string) => void;
   bulkQuantityMax?: number;
+  /** При редакция на съществуваща бройка (partial batch stub): полето
+   *  представлява ДОПЪЛНИТЕЛНИ еднакви бройки за добавяне (не общ брой за
+   *  създаване от нулата) — минимумът е 0 и текстът/поведението се менят. */
+  bulkQuantityIsAdditive?: boolean;
 };
 
 export function ProductFormFields({
@@ -769,6 +773,7 @@ export function ProductFormFields({
   bulkQuantityValue,
   onBulkQuantityChange,
   bulkQuantityMax = 50,
+  bulkQuantityIsAdditive = false,
 }: Props) {
   const bulkQuantityMode = form.productCondition === "used" && onBulkQuantityChange != null;
   const ro = Boolean(readOnly);
@@ -1868,7 +1873,11 @@ export function ProductFormFields({
                 {bulkQuantityMode ? (
                   <span
                     className="inline-flex items-center gap-0.5 text-[9px] font-bold text-brand-orange-800 bg-brand-orange-100 border border-brand-orange-200 rounded px-1 py-px uppercase tracking-wide whitespace-nowrap"
-                    title="Партида еднакви климатици без серийни номера — ще се създадат толкова отделни бройки."
+                    title={
+                      bulkQuantityIsAdditive
+                        ? "Партида еднакви климатици без серийни номера — можеш да добавиш още отделни бройки."
+                        : "Партида еднакви климатици без серийни номера — ще се създадат толкова отделни бройки."
+                    }
                   >
                     ✏️ бройки
                   </span>
@@ -1884,11 +1893,15 @@ export function ProductFormFields({
               {bulkQuantityMode ? (
                 <Input
                   type="number"
-                  min={1}
+                  min={bulkQuantityIsAdditive ? 0 : 1}
                   max={bulkQuantityMax}
-                  value={bulkQuantityValue ?? "1"}
+                  value={bulkQuantityValue ?? (bulkQuantityIsAdditive ? "0" : "1")}
                   onChange={(e) => onBulkQuantityChange?.(e.target.value)}
-                  title="Брой еднакви бройки за създаване наведнъж (без серийни номера — въвеждат се по-късно, при продажба/сервиз)."
+                  title={
+                    bulkQuantityIsAdditive
+                      ? "Брой ДОПЪЛНИТЕЛНИ еднакви бройки за добавяне при запис (без серийни номера — въвеждат се по-късно, при продажба/сервиз)."
+                      : "Брой еднакви бройки за създаване наведнъж (без серийни номера — въвеждат се по-късно, при продажба/сервиз)."
+                  }
                 />
               ) : (
                 (() => {
@@ -1916,8 +1929,25 @@ export function ProductFormFields({
           </div>
           {bulkQuantityMode && (
             <div className="-mt-1 rounded-lg border border-brand-orange-200 bg-brand-orange-50/60 px-2.5 py-1.5 text-[10.5px] leading-snug text-brand-orange-900">
-              Ще се създадат {Math.min(bulkQuantityMax, Math.max(1, parseInt(bulkQuantityValue ?? "1", 10) || 1))}{" "}
-              еднакви бройки в наличност. Серийните номера (вътрешно/външно тяло) се въвеждат по-късно,
+              {bulkQuantityIsAdditive ? (
+                (() => {
+                  const extra = Math.min(bulkQuantityMax, Math.max(0, parseInt(bulkQuantityValue ?? "0", 10) || 0));
+                  return extra > 0 ? (
+                    <>
+                      При запис ще се добавят <strong>{extra}</strong> допълнителни еднакви{" "}
+                      {extra === 1 ? "бройка" : "бройки"} (без сериен №) към тази партида.
+                    </>
+                  ) : (
+                    <>Остави на 0, ако не искаш да добавяш още бройки — само тази ще се запази.</>
+                  );
+                })()
+              ) : (
+                <>
+                  Ще се създадат {Math.min(bulkQuantityMax, Math.max(1, parseInt(bulkQuantityValue ?? "1", 10) || 1))}{" "}
+                  еднакви бройки в наличност.
+                </>
+              )}{" "}
+              Серийните номера (вътрешно/външно тяло) се въвеждат по-късно,
               индивидуално за всеки уред — при <strong>продажба</strong> или <strong>прибиране в сервиз</strong>.
             </div>
           )}

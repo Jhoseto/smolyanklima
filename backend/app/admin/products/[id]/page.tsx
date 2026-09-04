@@ -7,6 +7,7 @@ import {
   emptyProductForm,
   mapLoadedProductToForm,
   buildPutBody,
+  buildPostBody,
   type AdminProductForm,
 } from "../ProductForm";
 import { HelpRow, SectionTitle, HelpCard, Card, Button } from "../../ui";
@@ -16,6 +17,9 @@ type Brand = { id: string; name: string };
 type ProductType = { id: string; name: string };
 type SupplierRow = { id: string; full_name: string };
 type ContainerRow = { id: string; name: string };
+
+/** Максимален брой ДОПЪЛНИТЕЛНИ еднакви бройки, добавяни наведнъж при редакция. */
+const MAX_BULK_QUANTITY = 50;
 
 export default function EditProductPage() {
   const params = useParams<{ id: string }>();
@@ -43,6 +47,9 @@ export default function EditProductPage() {
   const [pendingPhotos, setPendingPhotos] = useState(0);
   const [pendingPhotosConfirm, setPendingPhotosConfirm] = useState<null | { proceed: () => void }>(null);
   const [isDeliveredInstance, setIsDeliveredInstance] = useState(false);
+  // Допълнителни еднакви бройки (втора употреба, без сериен №) за добавяне
+  // към партидата при запис на тази бройка — виж isBulkUsedBatch по-долу.
+  const [bulkExtraQuantity, setBulkExtraQuantity] = useState("0");
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 2200);
@@ -201,6 +208,38 @@ export default function EditProductPage() {
         setToast({ kind: "err", text: msg });
         return json;
       }
+
+      // Партиден stub (втора употреба, без сериен №) + поискани допълнителни
+      // бройки → добавяме толкова еднакви нови редове в наличност.
+      if (isBulkUsedBatch && effectiveExtraQuantity > 0) {
+        const extraBody = buildPostBody(form);
+        let createdExtra = 0;
+        for (let i = 0; i < effectiveExtraQuantity; i++) {
+          const extraRes = await fetch("/api/admin/products", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(extraBody),
+          });
+          if (!extraRes.ok) break;
+          createdExtra += 1;
+        }
+        if (createdExtra < effectiveExtraQuantity) {
+          setToast({
+            kind: "err",
+            text: `Промените са запазени, но добавени само ${createdExtra} от ${effectiveExtraQuantity} допълнителни бройки.`,
+          });
+          returnToProductsTable(id);
+          return json;
+        }
+        setToast({
+          kind: "ok",
+          text: `Промените са запазени + добавени ${createdExtra} допълнителни ${createdExtra === 1 ? "бройка" : "бройки"}.`,
+        });
+        returnToProductsTable(id);
+        return json;
+      }
+
       setToast({ kind: "ok", text: "Промените са запазени." });
       returnToProductsTable(id);
       return json;
@@ -286,6 +325,17 @@ export default function EditProductPage() {
   }
 
   const readOnly = role === "service_staff";
+  // Партиден "stub" за втора употреба (все още без сериен №) — за такива
+  // бройки полето „Количество“ позволява добавяне на още еднакви бройки
+  // директно от екрана за редакция (вж. bulkExtraQuantity).
+  const isBulkUsedBatch =
+    !readOnly &&
+    form.productCondition === "used" &&
+    !form.indoorUnitSerial.trim() &&
+    !form.outdoorUnitSerial.trim();
+  const effectiveExtraQuantity = isBulkUsedBatch
+    ? Math.min(MAX_BULK_QUANTITY, Math.max(0, parseInt(bulkExtraQuantity, 10) || 0))
+    : 0;
 
   return (
     <div className="w-full max-w-none space-y-3 pb-24 md:space-y-4 md:pb-4">
@@ -373,6 +423,10 @@ export default function EditProductPage() {
           readOnly={readOnly}
           highlightDelivery={highlightDelivery || isDeliveredInstance}
           highlightRequired={highlightRequired}
+          bulkQuantityValue={isBulkUsedBatch ? bulkExtraQuantity : undefined}
+          onBulkQuantityChange={isBulkUsedBatch ? setBulkExtraQuantity : undefined}
+          bulkQuantityMax={MAX_BULK_QUANTITY}
+          bulkQuantityIsAdditive
         />
       </Card>
 
@@ -392,7 +446,11 @@ export default function EditProductPage() {
                 className="gap-2 shadow-sm"
               >
                 <Save className="w-5 h-5" />
-                {saving ? "Запазвам..." : "Запази промените"}
+                {saving
+                  ? "Запазвам..."
+                  : effectiveExtraQuantity > 0
+                    ? `Запази + добави ${effectiveExtraQuantity} бр.`
+                    : "Запази промените"}
               </Button>
               {isOnOrderTemplateLive && (
                 <Button variant="primary" size="lg" onClick={saveAsNewInstance} disabled={saving} className="gap-2 shadow-sm">
@@ -433,7 +491,11 @@ export default function EditProductPage() {
               ) : (
                 <Button variant="primary" className="flex-1 justify-center gap-2 !py-3 text-sm font-bold rounded-xl" onClick={saveChanges} disabled={saving}>
                   <Save className="w-4 h-4" />
-                  {saving ? "Запазвам..." : "Запази промените"}
+                  {saving
+                    ? "Запазвам..."
+                    : effectiveExtraQuantity > 0
+                      ? `Запази + ${effectiveExtraQuantity} бр.`
+                      : "Запази промените"}
                 </Button>
               )}
             </div>
