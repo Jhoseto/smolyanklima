@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ProductFormFields, emptyProductForm, buildPostBody, type AdminProductForm } from "../ProductForm";
-import { SectionTitle, Card, Button, Input } from "../../ui";
+import { SectionTitle, Card, Button } from "../../ui";
 import { Save } from "lucide-react";
 
 /** Максимален брой еднакви бройки, добавяни наведнъж (защита от грешка в полето). */
@@ -200,29 +200,6 @@ export default function NewProductPage() {
         </div>
       )}
 
-      {isBulkUsedBatch && (
-        <Card className="p-3 sm:p-4 shadow-sm border-brand-orange-200 bg-brand-orange-50/50 max-md:rounded-lg">
-          <label className="block max-w-xs">
-            <div className="text-[11px] font-bold text-brand-orange-900 uppercase tracking-wide mb-1">
-              Количество бройки (без серийни номера)
-            </div>
-            <Input
-              type="number"
-              min={1}
-              max={MAX_BULK_QUANTITY}
-              value={bulkQuantity}
-              onChange={(e) => setBulkQuantity(e.target.value)}
-            />
-          </label>
-          <p className="mt-1.5 text-xs text-brand-orange-800 leading-snug">
-            За партида еднакви климатици „втора употреба“ без известни серийни номера все още.
-            Ще се създадат {effectiveQuantity} {effectiveQuantity === 1 ? "еднаква бройка" : "еднакви бройки"} в наличност.
-            Серийните номера (вътрешно/външно тяло) ще се въведат по-късно, индивидуално за всеки уред —
-            при <strong>продажба</strong> или при <strong>прибиране в сервиз</strong>.
-          </p>
-        </Card>
-      )}
-
       <Card className="p-2 sm:p-3 md:p-6 shadow-sm border-slate-200/90 max-md:rounded-lg">
         <ProductFormFields
           brands={brands}
@@ -238,6 +215,9 @@ export default function NewProductPage() {
           onPendingPhotosChange={setPendingPhotos}
           highlightRequired={highlightRequired}
           disableSerialFields={effectiveQuantity > 1}
+          bulkQuantityValue={bulkQuantity}
+          onBulkQuantityChange={setBulkQuantity}
+          bulkQuantityMax={MAX_BULK_QUANTITY}
         />
       </Card>
 

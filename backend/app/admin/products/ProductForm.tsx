@@ -739,6 +739,13 @@ type Props = {
    *  серийните номера не важат за партида, затова полетата се заключват и
    *  изчистват. Въвеждат се по-късно, индивидуално, при продажба/сервиз. */
   disableSerialFields?: boolean;
+  /** Само при нов продукт + „Втора употреба": прави полето „Количество" в
+   *  панела „Каталог & наличност" редактируемо (вместо автоматично изчислено) —
+   *  за партида еднакви климатици без серийни номера. Родителят пази стойността
+   *  и цикли create заявки. Ако не е зададено, полето си остава readonly „авто". */
+  bulkQuantityValue?: string;
+  onBulkQuantityChange?: (value: string) => void;
+  bulkQuantityMax?: number;
 };
 
 export function ProductFormFields({
@@ -759,7 +766,11 @@ export function ProductFormFields({
   highlightDelivery = false,
   highlightRequired = false,
   disableSerialFields = false,
+  bulkQuantityValue,
+  onBulkQuantityChange,
+  bulkQuantityMax = 50,
 }: Props) {
+  const bulkQuantityMode = form.productCondition === "used" && onBulkQuantityChange != null;
   const ro = Boolean(readOnly);
   /** Локален overlay за марки, създадени по време на тази сесия чрез
    *  „+ Създай нова марка“ в BrandCombobox. Parent prop-ът може да не се
@@ -1854,39 +1865,68 @@ export function ProductFormFields({
                 <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wide leading-tight">
                   Количество
                 </div>
-                <span
-                  className="inline-flex items-center gap-0.5 text-[9px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 rounded px-1 py-px uppercase tracking-wide whitespace-nowrap"
-                  title="Изчислява се автоматично — броят на всички продукти със същата марка и модел, които са в наличност."
-                >
-                  🔄 авто
-                </span>
+                {bulkQuantityMode ? (
+                  <span
+                    className="inline-flex items-center gap-0.5 text-[9px] font-bold text-brand-orange-800 bg-brand-orange-100 border border-brand-orange-200 rounded px-1 py-px uppercase tracking-wide whitespace-nowrap"
+                    title="Партида еднакви климатици без серийни номера — ще се създадат толкова отделни бройки."
+                  >
+                    ✏️ бройки
+                  </span>
+                ) : (
+                  <span
+                    className="inline-flex items-center gap-0.5 text-[9px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 rounded px-1 py-px uppercase tracking-wide whitespace-nowrap"
+                    title="Изчислява се автоматично — броят на всички продукти със същата марка и модел, които са в наличност."
+                  >
+                    🔄 авто
+                  </span>
+                )}
               </div>
-              {(() => {
-                // Display value:
-                //  - preview е достъпен и моделът е попълнен → ползваме nextInStock;
-                //  - в противен случай показваме стойността от базата (form.stockQuantity).
-                const displayQty =
-                  modelStockPreview && form.brandId && form.modelCode.trim()
-                    ? modelStockPreview.nextInStock
-                    : form.stockQuantity;
-                return (
-                  <Input
-                    type="number"
-                    min={0}
-                    value={displayQty}
-                    readOnly
-                    tabIndex={-1}
-                    className="bg-slate-100 text-slate-700 cursor-not-allowed border-slate-200"
-                    title="Полето е автоматично — броят на инстанциите със същия модел в наличност."
-                  />
-                );
-              })()}
+              {bulkQuantityMode ? (
+                <Input
+                  type="number"
+                  min={1}
+                  max={bulkQuantityMax}
+                  value={bulkQuantityValue ?? "1"}
+                  onChange={(e) => onBulkQuantityChange?.(e.target.value)}
+                  title="Брой еднакви бройки за създаване наведнъж (без серийни номера — въвеждат се по-късно, при продажба/сервиз)."
+                />
+              ) : (
+                (() => {
+                  // Display value:
+                  //  - preview е достъпен и моделът е попълнен → ползваме nextInStock;
+                  //  - в противен случай показваме стойността от базата (form.stockQuantity).
+                  const displayQty =
+                    modelStockPreview && form.brandId && form.modelCode.trim()
+                      ? modelStockPreview.nextInStock
+                      : form.stockQuantity;
+                  return (
+                    <Input
+                      type="number"
+                      min={0}
+                      value={displayQty}
+                      readOnly
+                      tabIndex={-1}
+                      className="bg-slate-100 text-slate-700 cursor-not-allowed border-slate-200"
+                      title="Полето е автоматично — броят на инстанциите със същия модел в наличност."
+                    />
+                  );
+                })()
+              )}
             </div>
           </div>
+          {bulkQuantityMode && (
+            <div className="-mt-1 rounded-lg border border-brand-orange-200 bg-brand-orange-50/60 px-2.5 py-1.5 text-[10.5px] leading-snug text-brand-orange-900">
+              Ще се създадат {Math.min(bulkQuantityMax, Math.max(1, parseInt(bulkQuantityValue ?? "1", 10) || 1))}{" "}
+              еднакви бройки в наличност. Серийните номера (вътрешно/външно тяло) се въвеждат по-късно,
+              индивидуално за всеки уред — при <strong>продажба</strong> или <strong>прибиране в сервиз</strong>.
+            </div>
+          )}
 
           {/* Помощен ред под „Статус / Количество“: обяснява автоматичния
-              механизъм + показва live preview. */}
-          {form.brandId && form.modelCode.trim() ? (
+              механизъм + показва live preview. При bulkQuantityMode вече
+              обяснихме нещата в блока по-горе — тук би било подвеждащо
+              (текстът приема, че се добавя точно 1 бройка). */}
+          {bulkQuantityMode ? null : form.brandId && form.modelCode.trim() ? (
             <div className="-mt-1 rounded-lg border border-emerald-200 bg-emerald-50/60 px-2.5 py-1.5 text-[10.5px] leading-snug text-emerald-900">
               {modelStockLoading ? (
                 <span className="opacity-70">Изчисляване…</span>
