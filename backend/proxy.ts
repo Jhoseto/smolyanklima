@@ -9,7 +9,7 @@ import {
   shouldRedirectAggressiveBotQuery,
 } from "@/lib/seo/trafficGuards";
 
-const STATIC_SEO = new Set(["/robots.txt", "/sitemap.xml", "/rss.xml", "/llms.txt"]);
+const STATIC_SEO = new Set(["/robots.txt", "/sitemap.xml", "/rss.xml", "/llms.txt", "/BingSiteAuth.xml"]);
 
 function applyPublicTrafficGuards(req: NextRequest): NextResponse | null {
   const { pathname } = req.nextUrl;

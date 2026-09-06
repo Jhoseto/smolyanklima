@@ -49,7 +49,7 @@ COPY --from=backend_builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=backend_builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=frontend_builder --chown=nextjs:nodejs /repo/dist ./public
 # Гарантирай SEO файлове (Vite ги копира, но явно възстановяваме при нужда)
-COPY --chown=nextjs:nodejs public/robots.txt public/llms.txt ./public/
+COPY --chown=nextjs:nodejs public/robots.txt public/llms.txt public/BingSiteAuth.xml ./public/
 # Vite dist презаписва public — върни PWA/SEO икони (Google търси favicon.ico + PNG)
 COPY --chown=nextjs:nodejs public/favicon.ico public/favicon-16x16.png public/favicon-32x32.png \
   public/apple-touch-icon.png public/icon-192.png public/icon-512.png public/icon.svg ./public/
