@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useDebounce } from "@/lib/hooks/useDebounce";
-import { SectionTitle, Card, Input, Select, Button, Table, Th, Td, AdminPhoneLink, useAdminBackHandler } from "../ui";
+import { SectionTitle, Card, Input, Select, Button, Table, Th, Td, AdminPhoneLink, useAdminBackHandler, AdminTableLoading } from "../ui";
 import { RefreshCw, CheckCircle2, Ban, Eye, ArrowUpDown, ArrowUp, ArrowDown, Sparkles, Recycle, FilterX, Plus, BarChart3 } from "lucide-react";
 import { ProductQuickViewButton } from "../ProductQuickView";
 import { SaleDetailModal } from "./SaleDetailModal";
@@ -1091,19 +1091,13 @@ export default function AdminHistoryPage() {
         />
       )}
 
-      {loading && (
-        <div className="flex items-center justify-center py-10 text-sm font-medium text-slate-500 gap-2">
-          <RefreshCw className="h-4 w-4 animate-spin" />
-          Зареждане…
-        </div>
-      )}
       {!loading && error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm font-medium">{error}</div>}
 
       {isProductSales ? (
         <>
       {/* Desktop table */}
       <div className="hidden md:block min-w-0">
-        <Table tableClassName="w-full min-w-[1120px]">
+        <Table loading={loading} tableClassName="w-full min-w-[1120px]">
           <thead>
             <tr>
               <SortableTh label="Продукт" field="product" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[8.5rem]`} />
@@ -1241,12 +1235,14 @@ export default function AdminHistoryPage() {
 
       {/* Mobile card list */}
       <div className="md:hidden space-y-2">
-        {items.length === 0 && (
+        {loading ? (
+          <AdminTableLoading />
+        ) : items.length === 0 ? (
           <div className="bg-white rounded-xl border border-slate-200 p-6 text-center text-slate-500 text-sm">
             {emptySalesMessage(productConditions, containerName)}
           </div>
-        )}
-        {items.map((row) => {
+        ) : (
+        items.map((row) => {
           const amount = row.total_amount != null ? row.total_amount : row.unit_price;
           const productName = row.products?.name ?? "—";
           const containerLabel = saleContainerLabel(row.products);
@@ -1352,12 +1348,14 @@ export default function AdminHistoryPage() {
               </div>
             </div>
           );
-        })}
+        })
+        )}
       </div>
         </>
       ) : (
         <ServiceSalesTable
           items={items}
+          loading={loading}
           sortBy={sortBy as ServiceSortField}
           sortDir={sortDir}
           onSort={handleServiceSort}

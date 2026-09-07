@@ -7,6 +7,7 @@ import {
 import {
   Button, Input, Card,
   ADMIN_MODAL_BACKDROP, ADMIN_MODAL_PANEL, AdminModalDragHandle, useAdminBackHandler,
+  AdminTableLoading,
 } from "../../../ui";
 import {
   OfferEditor, emptyOfferEditor, offerToEditor, editorToPayload, validateOfferEditor, type OfferEditorValue,
@@ -238,11 +239,7 @@ export function OffersClient() {
         </div>
       </Card>
 
-      {loading && (
-        <div className="flex items-center justify-center gap-2 py-10 text-sm text-slate-500">
-          <RefreshCw className="h-4 w-4 animate-spin" /> Зареждане…
-        </div>
-      )}
+      {loading && <AdminTableLoading />}
       {!loading && error && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
       )}

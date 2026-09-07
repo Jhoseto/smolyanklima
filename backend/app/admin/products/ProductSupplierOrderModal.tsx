@@ -20,6 +20,7 @@ import {
   type GroupedSupplier,
 } from "@/lib/admin/supplierNameNormalize";
 import { notifyAdminCalendarReload } from "@/lib/admin/calendarReload";
+import { notifyAdminProductsCatalogChanged } from "@/lib/admin/productsCatalogReload";
 import { formatAdminPriceEuro } from "@/lib/admin/formatEuro";
 
 type ContactChoice = {
@@ -246,6 +247,7 @@ export function ProductSupplierOrderModal({
       const json = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) throw new Error(json.error || "Грешка при запис на поръчката");
       notifyAdminCalendarReload();
+      notifyAdminProductsCatalogChanged();
       const unitPrice =
         agreedPrice != null && Number.isFinite(agreedPrice) ? agreedPrice : Number(product.price);
       onSuccess({

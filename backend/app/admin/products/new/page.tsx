@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ProductFormFields, emptyProductForm, buildPostBody, type AdminProductForm } from "../ProductForm";
 import { SectionTitle, Card, Button } from "../../ui";
+import { notifyAdminProductsCatalogChanged } from "@/lib/admin/productsCatalogReload";
 import { Save } from "lucide-react";
 
 /** Максимален брой еднакви бройки, добавяни наведнъж (защита от грешка в полето). */
@@ -137,7 +138,10 @@ export default function NewProductPage() {
               : result.error;
           setError(msg);
           setToast({ kind: "err", text: msg });
-          if (created > 0) router.replace("/admin/products");
+          if (created > 0) {
+            notifyAdminProductsCatalogChanged();
+            router.replace("/admin/products");
+          }
           return;
         }
         created += 1;
@@ -145,6 +149,7 @@ export default function NewProductPage() {
       }
 
       setToast({ kind: "ok", text: qty > 1 ? `Добавени ${created} бройки` : "Създадено" });
+      notifyAdminProductsCatalogChanged();
       if (qty > 1) {
         router.replace("/admin/products");
       } else if (lastId) {

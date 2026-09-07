@@ -1,5 +1,5 @@
 import type { ReactNode, ComponentProps } from "react";
-import { Info } from "lucide-react";
+import { Info, Loader2 } from "lucide-react";
 import { useAdminBackHandler } from "@/lib/admin/useAdminBackHandler";
 
 /** Кратко обяснение при hover/focus върху иконки и компактни бутони. */
@@ -209,23 +209,78 @@ export function Textarea({ className = "", ...props }: ComponentProps<"textarea"
   );
 }
 
+/** Единен loading индикатор за admin таблици и списъци. */
+export function AdminTableLoading({
+  label = "Зареждане…",
+  className = "",
+  size = "md",
+}: {
+  label?: string;
+  className?: string;
+  size?: "sm" | "md" | "lg";
+}) {
+  const iconClass = size === "sm" ? "h-5 w-5" : size === "lg" ? "h-8 w-8" : "h-6 w-6";
+  const textClass = size === "sm" ? "text-xs" : "text-sm";
+  const padClass = size === "sm" ? "py-6" : size === "lg" ? "py-16" : "py-10";
+  return (
+    <div
+      className={`flex flex-col items-center justify-center gap-2 ${padClass} ${className}`}
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <Loader2 className={`${iconClass} animate-spin text-brand-orange-500`} aria-hidden />
+      <span className={`${textClass} font-medium text-slate-600`}>{label}</span>
+    </div>
+  );
+}
+
+/** Ред в `<tbody>` докато се зарежда таблица. */
+export function AdminTableLoadingRow({
+  colSpan,
+  label = "Зареждане…",
+}: {
+  colSpan: number;
+  label?: string;
+}) {
+  return (
+    <tr>
+      <td colSpan={colSpan} className="border-b border-slate-100 p-0">
+        <AdminTableLoading label={label} size="sm" className="py-8" />
+      </td>
+    </tr>
+  );
+}
+
 export function Table({
   children,
   className = "",
   tableClassName = "",
   stickyHeader = false,
+  loading = false,
+  loadingLabel = "Зареждане…",
 }: {
   children: ReactNode;
   className?: string;
   tableClassName?: string;
   stickyHeader?: boolean;
+  loading?: boolean;
+  loadingLabel?: string;
 }) {
   return (
     <div
-      className={`${
+      className={`relative ${
         stickyHeader ? "w-full" : "w-full overflow-x-auto"
-      } bg-white border border-slate-200/80 rounded-2xl shadow-sm ${className}`}
+      } bg-white border border-slate-200/80 rounded-2xl shadow-sm ${loading ? "min-h-[14rem]" : ""} ${className}`}
     >
+      {loading && (
+        <div
+          className="absolute inset-0 z-20 flex items-center justify-center rounded-2xl bg-white/85 backdrop-blur-[2px]"
+          aria-busy="true"
+        >
+          <AdminTableLoading label={loadingLabel} className="py-0" />
+        </div>
+      )}
       <table
         className={`w-full text-left ${stickyHeader ? "border-separate border-spacing-0" : "border-collapse"} ${tableClassName}`}
       >

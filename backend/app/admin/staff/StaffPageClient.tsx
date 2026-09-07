@@ -6,7 +6,7 @@ import {
   CheckCircle2, XCircle, Pencil, Trash2, KeyRound,
   Loader2, X, Eye, EyeOff, Phone, ImagePlus,
 } from "lucide-react";
-import { Button, Input, Select, ADMIN_MODAL_BACKDROP, ADMIN_MODAL_PANEL, AdminModalDragHandle } from "../ui";
+import { Button, Input, Select, ADMIN_MODAL_BACKDROP, ADMIN_MODAL_PANEL, AdminModalDragHandle, AdminTableLoading } from "../ui";
 import { StaffAvatarCropModal } from "./StaffAvatarCropModal";
 
 type AdminRole = "master_admin" | "office_staff" | "service_staff";
@@ -359,7 +359,7 @@ export function StaffPageClient({
 
       {/* Staff list */}
       {loading ? (
-        <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>
+        <AdminTableLoading label="Зареждане на екипа…" />
       ) : error ? (
         <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</p>
       ) : (

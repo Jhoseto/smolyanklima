@@ -418,3 +418,74 @@ export async function findRepairProtocolForSale(
 
   return null;
 }
+
+const REPAIR_PROTOCOL_LIST_SELECT =
+  "id,protocol_number,status,date,service_kind,ac_brand,ac_model,serial_number,product_id,client_name";
+
+/**
+ * Batch lookup на сервизни протоколи за списък продукти.
+ * 1) Една заявка по product_id (бърз път)
+ * 2) Само за липсващи — legacy match по серийни/марка (ограничен паралелизъм)
+ */
+export async function findRepairProtocolsForProductIds(
+  db: SupabaseClient,
+  productIds: string[],
+): Promise<Record<string, Record<string, unknown>>> {
+  const map: Record<string, Record<string, unknown>> = {};
+  const ids = [...new Set(productIds.filter(Boolean))];
+  if (ids.length === 0) return map;
+
+  const { data: linkedRows, error: linkErr } = await db
+    .from("service_repair_protocols")
+    .select(REPAIR_PROTOCOL_LIST_SELECT)
+    .in("product_id", ids)
+    .order("date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (linkErr) {
+    const missingCol = /product_id|42703|does not exist|undefined_column/i.test(linkErr.message ?? "");
+    if (!missingCol) throw linkErr;
+  } else {
+    for (const row of linkedRows ?? []) {
+      const pid = String((row as { product_id?: string }).product_id ?? "");
+      if (pid && !map[pid]) map[pid] = row as Record<string, unknown>;
+    }
+  }
+
+  const missingIds = ids.filter((id) => !map[id]);
+  if (missingIds.length === 0) return map;
+
+  const { data: products, error: prodErr } = await db
+    .from("products")
+    .select("id, name, model_code, indoor_unit_serial, outdoor_unit_serial, brands:brand_id(name)")
+    .in("id", missingIds);
+
+  if (prodErr) throw prodErr;
+
+  const CHUNK = 8;
+  const list = products ?? [];
+  for (let i = 0; i < list.length; i += CHUNK) {
+    await Promise.all(
+      list.slice(i, i + CHUNK).map(async (product) => {
+        const pid = String((product as { id: string }).id);
+        const brandsEmbed = (product as { brands?: { name?: string | null } | null }).brands;
+        try {
+          const protocol = await findRepairProtocolForSale(db, {
+            product: {
+              indoor_unit_serial: (product.indoor_unit_serial as string | null) ?? null,
+              outdoor_unit_serial: (product.outdoor_unit_serial as string | null) ?? null,
+              brand_name: brandsEmbed?.name ?? null,
+              model_code: (product.model_code as string | null) ?? null,
+              name: (product.name as string | null) ?? null,
+            },
+          });
+          if (protocol) map[pid] = protocol;
+        } catch {
+          /* пропускаме единични грешки */
+        }
+      }),
+    );
+  }
+
+  return map;
+}

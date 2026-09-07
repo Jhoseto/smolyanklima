@@ -2,7 +2,7 @@
 
 import type { ReactElement, ReactNode } from "react";
 import { Eye } from "lucide-react";
-import { Button, Table, Th, Td, AdminPhoneLink } from "../ui";
+import { Button, Table, Th, Td, AdminPhoneLink, AdminTableLoading } from "../ui";
 import { ContactNameButton, type ContactHistoryTarget } from "../contacts/ContactHistoryModal";
 
 type ServiceRow = {
@@ -106,6 +106,7 @@ export function ServiceSalesTable({
   onDetail,
   onContactOpen,
   emptyMessage,
+  loading = false,
 }: {
   items: ServiceRow[];
   sortBy: ServiceSortField;
@@ -114,11 +115,12 @@ export function ServiceSalesTable({
   onDetail: (id: string) => void;
   onContactOpen?: (target: ContactHistoryTarget) => void;
   emptyMessage: string;
+  loading?: boolean;
 }) {
   return (
     <>
       <div className="hidden md:block">
-        <Table>
+        <Table loading={loading}>
           <thead>
             <tr>
               <Th>Заглавие</Th>
@@ -174,7 +176,7 @@ export function ServiceSalesTable({
                 </tr>
               );
             })}
-            {items.length === 0 && (
+            {!loading && items.length === 0 && (
               <tr>
                 <Td colSpan={8} className="text-center py-8 text-slate-500">
                   {emptyMessage}
@@ -186,10 +188,12 @@ export function ServiceSalesTable({
       </div>
 
       <div className="md:hidden space-y-2">
-        {items.length === 0 && (
+        {loading ? (
+          <AdminTableLoading />
+        ) : items.length === 0 ? (
           <div className="bg-white rounded-xl border border-slate-200 p-6 text-center text-slate-500 text-sm">{emptyMessage}</div>
-        )}
-        {items.map((row) => {
+        ) : (
+        items.map((row) => {
           const amount = row.total_amount ?? row.unit_price;
           return (
             <div key={row.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
@@ -237,7 +241,8 @@ export function ServiceSalesTable({
               </div>
             </div>
           );
-        })}
+        })
+        )}
       </div>
     </>
   );

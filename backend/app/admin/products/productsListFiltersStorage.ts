@@ -4,11 +4,12 @@ import {
 } from "./PriceRangeSlider";
 import type { ProductStockLocation } from "@/lib/admin/productStockLocation";
 import type { ProductRegion } from "@/lib/admin/productRegion";
-import type {
-  FeaturedFilter,
-  ProductConditionFilter,
-  PublicCatalogFilter,
-  StockStatusFilter,
+import {
+  csvParam,
+  type FeaturedFilter,
+  type ProductConditionFilter,
+  type PublicCatalogFilter,
+  type StockStatusFilter,
 } from "@/lib/admin/productListQueryFilters";
 
 export const ADMIN_PRODUCTS_LIST_FILTERS_KEY = "sk-admin-products-list-filters-v2";
@@ -225,4 +226,39 @@ export function clearAdminProductsListFilters(): void {
   } catch {
     /* ignore */
   }
+}
+
+/** Query string за GET /api/admin/products — споделен между страницата и session cache. */
+export function buildAdminProductsListQueryString(
+  snapshot: AdminProductsListFiltersSnapshot,
+  opts?: { page?: number; containerId?: string },
+): string {
+  const sp = new URLSearchParams();
+  if (snapshot.q.trim()) sp.set("q", snapshot.q.trim());
+  sp.set("catalogKind", snapshot.catalogKind);
+  if (snapshot.conditions.length) sp.set("condition", snapshot.conditions.join(","));
+  const featuredParam = csvParam(snapshot.featuredFlags);
+  if (featuredParam) sp.set("featured", featuredParam);
+  const publicCatalogParam = csvParam(snapshot.publicCatalogFlags);
+  if (publicCatalogParam) sp.set("publicCatalog", publicCatalogParam);
+  if (snapshot.stockStatuses.length) sp.set("stockStatus", snapshot.stockStatuses.join(","));
+  if (snapshot.stockLocationFilter) sp.set("stockLocation", snapshot.stockLocationFilter);
+  if (snapshot.productRegionFilter) sp.set("productRegion", snapshot.productRegionFilter);
+  if (snapshot.brandId) sp.set("brandId", snapshot.brandId);
+  if (snapshot.btuFilters.length) sp.set("btu", snapshot.btuFilters.join(","));
+  if (snapshot.typeId) sp.set("typeId", snapshot.typeId);
+  if (snapshot.supplierId) sp.set("supplierId", snapshot.supplierId);
+  const containerId = opts?.containerId?.trim();
+  if (containerId) sp.set("containerId", containerId);
+  if (snapshot.priceRange[0] > ADMIN_PRICE_FILTER_MIN) sp.set("priceMin", String(snapshot.priceRange[0]));
+  if (snapshot.priceRange[1] < ADMIN_PRICE_FILTER_MAX) sp.set("priceMax", String(snapshot.priceRange[1]));
+  if (snapshot.hasSerial) sp.set("hasSerial", snapshot.hasSerial);
+  if (snapshot.hasPurchasePrice) sp.set("hasPurchasePrice", snapshot.hasPurchasePrice);
+  if (snapshot.purchasedFrom) sp.set("purchasedFrom", snapshot.purchasedFrom);
+  if (snapshot.purchasedTo) sp.set("purchasedTo", snapshot.purchasedTo);
+  sp.set("sortBy", snapshot.sortBy);
+  sp.set("sortDir", snapshot.sortDir);
+  sp.set("page", String(opts?.page ?? 1));
+  sp.set("perPage", String(ADMIN_PRODUCTS_LIST_PER_PAGE));
+  return sp.toString();
 }

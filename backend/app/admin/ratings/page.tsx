@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { SectionTitle, Card, Input, Button, Select, Table, Th, Td, useAdminBackHandler } from "../ui";
+import { SectionTitle, Card, Input, Button, Select, Table, Th, Td, useAdminBackHandler, AdminTableLoading } from "../ui";
 import { useDebounce } from "@/lib/hooks/useDebounce";
 import { RefreshCw, Star, ChevronRight, X, Trash2, Plus, Minus, SlidersHorizontal } from "lucide-react";
 
@@ -334,7 +334,7 @@ function DetailModal({
             </div>
 
             {loading ? (
-              <div className="py-8 text-center text-slate-400 text-sm">Зарежда...</div>
+              <AdminTableLoading size="sm" className="py-8" />
             ) : rows.length === 0 ? (
               <div className="py-8 text-center text-slate-400 text-sm">Няма оценки.</div>
             ) : (
@@ -593,7 +593,7 @@ export default function AdminRatingsPage() {
 
       {/* Desktop table */}
       <div className="hidden md:block">
-        <Table>
+        <Table loading={loading}>
           <thead>
             <tr>
               <Th>Продукт</Th>
@@ -604,9 +604,6 @@ export default function AdminRatingsPage() {
             </tr>
           </thead>
           <tbody>
-            {loading && (
-              <tr><Td colSpan={5} className="text-center py-8 text-slate-400">Зарежда...</Td></tr>
-            )}
             {!loading && items.length === 0 && (
               <tr><Td colSpan={5} className="text-center py-8 text-slate-500">Няма намерени продукти в публичния каталог.</Td></tr>
             )}
@@ -638,13 +635,14 @@ export default function AdminRatingsPage() {
 
       {/* Mobile cards */}
       <div className="md:hidden space-y-2">
-        {loading && <div className="text-center py-8 text-slate-400 text-sm">Зарежда...</div>}
-        {!loading && items.length === 0 && (
+        {loading ? (
+          <AdminTableLoading />
+        ) : items.length === 0 ? (
           <div className="bg-white rounded-xl border border-slate-200 p-6 text-center text-slate-500 text-sm">
             Няма намерени продукти в публичния каталог.
           </div>
-        )}
-        {!loading && items.map((item) => (
+        ) : (
+        items.map((item) => (
           <div
             key={item.id}
             className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 cursor-pointer active:scale-[0.99] transition-transform"
@@ -661,7 +659,8 @@ export default function AdminRatingsPage() {
             </div>
             <DistBar dist={item.distribution} total={item.reviews_count} />
           </div>
-        ))}
+        ))
+        )}
       </div>
 
       {/* Pagination */}

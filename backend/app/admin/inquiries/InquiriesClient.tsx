@@ -20,6 +20,7 @@ import {
   HoverTip,
   AdminPhoneLink,
   AdminLabeledBox,
+  AdminTableLoading,
 } from "../ui";
 import { RefreshCw, MessageSquare, PlayCircle, CheckCircle, ShieldAlert, StickyNote, Sparkles, X, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
 import { useDebounce } from "@/lib/hooks/useDebounce";
@@ -512,7 +513,7 @@ export function InquiriesClient() {
       {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm font-medium">{error}</div>}
 
       {loading ? (
-        <div className="text-center py-12 text-slate-500 font-medium">Зареждане...</div>
+        <AdminTableLoading />
       ) : (
         <>
           {/* Desktop table */}

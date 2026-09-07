@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { X, Loader2, ExternalLink } from "lucide-react";
-import { Button, Table, Th, Td, AdminPhoneLink } from "../ui";
+import { Button, Table, Th, Td, AdminPhoneLink, AdminTableLoading } from "../ui";
 import { ProductQuickViewButton } from "../ProductQuickView";
 import { useAdminBackHandler } from "@/lib/admin/useAdminBackHandler";
 import { inquiryServiceTypeLabel } from "@/lib/inquiry/serviceTypeLabels";
@@ -239,18 +239,11 @@ export function ContactHistoryModal({
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-          {loading && (
-            <div className="flex items-center justify-center gap-2 py-12 text-slate-500 text-sm">
-              <Loader2 className="w-5 h-5 animate-spin" />
-              Зареждане…
-            </div>
-          )}
-
-          {!loading && error && (
+          {loading ? (
+            <AdminTableLoading />
+          ) : error ? (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{error}</div>
-          )}
-
-          {!loading && !error && contact && (
+          ) : contact ? (
             <>
               <div className="flex flex-wrap items-center gap-2">
                 {contact.email && <span className="text-xs text-slate-600">{contact.email}</span>}
@@ -350,7 +343,7 @@ export function ContactHistoryModal({
                 ))}
               </div>
             </>
-          )}
+          ) : null}
         </div>
 
         <div className="border-t border-slate-100 px-5 py-3 shrink-0 flex justify-end">

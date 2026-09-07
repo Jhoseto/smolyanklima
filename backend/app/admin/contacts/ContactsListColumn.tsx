@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Search, Phone, X, Loader2 } from "lucide-react";
-import { Card, Input } from "../ui";
+import { Card, Input, AdminTableLoading } from "../ui";
 
 type ContactKind = "client" | "supplier";
 
@@ -107,10 +107,7 @@ export function ContactsListColumn({
 
         <div className="overflow-y-auto flex-1 p-2 space-y-1 min-h-[240px]">
           {loading && items.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-slate-500 gap-2">
-              <Loader2 className="w-6 h-6 animate-spin opacity-60" />
-              <span className="text-sm font-medium">Зареждане…</span>
-            </div>
+            <AdminTableLoading size="sm" />
           ) : null}
 
           {!loading && items.length === 0 ? (

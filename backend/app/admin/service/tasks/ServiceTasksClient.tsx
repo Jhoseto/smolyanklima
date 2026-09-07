@@ -7,8 +7,7 @@ import {
   AlertCircle, ChevronLeft, ChevronRight, RefreshCw,
   ChevronDown, FileText,
 } from "lucide-react";
-
-// ── Types ────────────────────────────────────────────────────────────────────
+import { AdminTableLoading } from "../../ui";
 
 type TaskStatus = "planned" | "in_progress" | "done" | "cancelled";
 type EventCode =
@@ -409,7 +408,7 @@ export function ServiceTasksClient({
         )}
 
         {loading ? (
-          <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-slate-300" /></div>
+          <AdminTableLoading />
         ) : dayTasks.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-10 text-center bg-white border border-dashed border-slate-200 rounded-2xl px-4">
             <CheckCircle2 className="w-8 h-8 text-emerald-200" />

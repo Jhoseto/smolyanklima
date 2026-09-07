@@ -16,6 +16,7 @@ import {
   ADMIN_MODAL_PANEL,
   AdminModalDragHandle,
   useAdminBackHandler,
+  AdminTableLoading,
 } from "../ui";
 import { Plus, RefreshCw, PackageSearch, Trash2, Pencil, ArrowRight } from "lucide-react";
 
@@ -370,20 +371,12 @@ export default function AdminContainersPage() {
         </div>
       </Card>
 
-      {loading && (
-        <div className="flex items-center justify-center py-10 text-sm font-medium text-slate-500 gap-2">
-          <RefreshCw className="h-4 w-4 animate-spin" />
-          Зареждане…
-        </div>
-      )}
-
       {!loading && error && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">{error}</div>
       )}
 
-      {!loading && !error && (
-        <div className="hidden md:block">
-          <Table>
+      <div className="hidden md:block">
+        <Table loading={loading}>
             <thead>
               <tr>
                 <SortableTh label="Име" field="name" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
@@ -447,16 +440,16 @@ export default function AdminContainersPage() {
             </tbody>
           </Table>
         </div>
-      )}
 
-      {!loading && !error && (
-        <div className="space-y-2 md:hidden">
-          {rows.length === 0 && (
-            <div className="rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-500">
-              Няма контейнери. Създайте първия с бутона по-горе.
-            </div>
-          )}
-          {rows.map((row) => (
+      <div className="space-y-2 md:hidden">
+        {loading ? (
+          <AdminTableLoading />
+        ) : rows.length === 0 ? (
+          <div className="rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-500">
+            Няма контейнери. Създайте първия с бутона по-горе.
+          </div>
+        ) : (
+          rows.map((row) => (
             <div key={row.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-start justify-between gap-2">
                 <div>
@@ -498,9 +491,9 @@ export default function AdminContainersPage() {
                 </Button>
               </div>
             </div>
-          ))}
-        </div>
-      )}
+          ))
+        )}
+      </div>
 
       {createOpen && (
         <div className={ADMIN_MODAL_BACKDROP} onClick={() => !createSubmitting && setCreateOpen(false)}>

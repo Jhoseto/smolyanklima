@@ -15,6 +15,7 @@ import {
   Td,
   Textarea,
   AdminContactSuggestRow,
+  AdminTableLoading,
 } from "../ui";
 import { ActiveFilterChipsBar, type ActiveFilterChip } from "./ActiveFilterChipsBar";
 import {
@@ -80,6 +81,10 @@ import {
   parseDecimalInput,
 } from "@/lib/admin/agreedPriceDiscount";
 import { notifyAdminCalendarReload } from "@/lib/admin/calendarReload";
+import {
+  notifyAdminProductsCatalogChanged,
+  subscribeAdminProductsCatalogReload,
+} from "@/lib/admin/productsCatalogReload";
 import { recordProductSale } from "@/lib/admin/recordProductSale";
 import {
   normalizeProductStockLocation,
@@ -91,11 +96,22 @@ import {
   type ProductRegion,
 } from "@/lib/admin/productRegion";
 import {
+  getProductsListSessionCache,
+  getProductsMetaSessionCache,
+  invalidateAllProductsSessionCache,
+  invalidateProductsListSessionCache,
+  patchProductsListSessionRepairProtocols,
+  setProductsListSessionCache,
+  setProductsMetaSessionCache,
+} from "@/lib/admin/productsListSessionCache";
+import {
   ADMIN_PRODUCTS_LIST_PER_PAGE,
+  buildAdminProductsListQueryString,
   clearAdminProductsListFilters,
   DEFAULT_ADMIN_PRODUCTS_LIST_FILTERS,
   loadAdminProductsListFilters,
   saveAdminProductsListFilters,
+  type AdminProductsListFiltersSnapshot,
   type CatalogKindFilter,
   type SortDir,
   type SortField,
@@ -107,7 +123,6 @@ import {
   productShowsSupplierInvoice,
 } from "@/lib/admin/productCatalogDisplay";
 import {
-  csvParam,
   toggleChipFilter,
   type FeaturedFilter,
   type ProductConditionFilter,
@@ -598,44 +613,65 @@ function truncCell(s: string | null | undefined, max = 16) {
   return `${t.slice(0, max)}…`;
 }
 
+function bootstrapProductsPageSession() {
+  const filters = loadAdminProductsListFilters();
+  const qs = buildAdminProductsListQueryString(filters, { page: 1 });
+  return {
+    filters,
+    listCache: getProductsListSessionCache(qs),
+    metaCache: getProductsMetaSessionCache(),
+  };
+}
+
 export default function AdminProductsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const focusProductHandledRef = useRef(false);
-  const [items, setItems] = useState<ProductRow[]>([]);
-  const [brands, setBrands] = useState<OptionRow[]>([]);
-  const [types, setTypes] = useState<OptionRow[]>([]);
+  const [pageBootstrap] = useState(bootstrapProductsPageSession);
+  const initialFilters = pageBootstrap.filters;
+  const [items, setItems] = useState<ProductRow[]>(
+    () => (pageBootstrap.listCache?.items as ProductRow[] | undefined) ?? [],
+  );
+  const [brands, setBrands] = useState<OptionRow[]>(() => pageBootstrap.metaCache?.brands ?? []);
+  const [types, setTypes] = useState<OptionRow[]>(() => pageBootstrap.metaCache?.types ?? []);
   const [selected, setSelected] = useState<string[]>([]);
   const [shareProduct, setShareProduct] = useState<ProductRow | null>(null);
   const [featuredFor, setFeaturedFor] = useState<ProductRow | null>(null);
-  const [q, setQ] = useState("");
-  const [conditions, setConditions] = useState<ProductConditionFilter[]>([]);
-  const [featuredFlags, setFeaturedFlags] = useState<FeaturedFilter[]>([]);
-  const [publicCatalogFlags, setPublicCatalogFlags] = useState<PublicCatalogFilter[]>([]);
-  const [stockStatuses, setStockStatuses] = useState<StockStatusFilter[]>([]);
-  const [stockLocationFilter, setStockLocationFilter] = useState<"" | ProductStockLocation>("");
-  const [productRegionFilter, setProductRegionFilter] = useState<"" | ProductRegion>("");
-  const [catalogKind, setCatalogKind] = useState<CatalogKindFilter>("climatics");
-  const [brandId, setBrandId] = useState("");
-  const [btuFilters, setBtuFilters] = useState<string[]>([]);
-  const [typeId, setTypeId] = useState("");
-  const [supplierId, setSupplierId] = useState("");
+  const [q, setQ] = useState(initialFilters.q);
+  const [conditions, setConditions] = useState<ProductConditionFilter[]>(initialFilters.conditions);
+  const [featuredFlags, setFeaturedFlags] = useState<FeaturedFilter[]>(initialFilters.featuredFlags);
+  const [publicCatalogFlags, setPublicCatalogFlags] = useState<PublicCatalogFilter[]>(
+    initialFilters.publicCatalogFlags,
+  );
+  const [stockStatuses, setStockStatuses] = useState<StockStatusFilter[]>(initialFilters.stockStatuses);
+  const [stockLocationFilter, setStockLocationFilter] = useState<"" | ProductStockLocation>(
+    initialFilters.stockLocationFilter,
+  );
+  const [productRegionFilter, setProductRegionFilter] = useState<"" | ProductRegion>(
+    initialFilters.productRegionFilter,
+  );
+  const [catalogKind, setCatalogKind] = useState<CatalogKindFilter>(initialFilters.catalogKind);
+  const [brandId, setBrandId] = useState(initialFilters.brandId);
+  const [btuFilters, setBtuFilters] = useState<string[]>(initialFilters.btuFilters);
+  const [typeId, setTypeId] = useState(initialFilters.typeId);
+  const [supplierId, setSupplierId] = useState(initialFilters.supplierId);
   const [containerId, setContainerId] = useState("");
-  const [containers, setContainers] = useState<OptionRow[]>([]);
+  const [containers, setContainers] = useState<OptionRow[]>(
+    () => pageBootstrap.metaCache?.containers ?? [],
+  );
   const containerIdHandledRef = useRef(false);
-  const [priceRange, setPriceRange] = useState<[number, number]>([
-    ADMIN_PRICE_FILTER_MIN,
-    ADMIN_PRICE_FILTER_MAX,
-  ]);
-  const [hasSerial, setHasSerial] = useState<"" | "with" | "without">("");
-  const [hasPurchasePrice, setHasPurchasePrice] = useState<"" | "with" | "without">("");
-  const [purchasedFrom, setPurchasedFrom] = useState("");
-  const [purchasedTo, setPurchasedTo] = useState("");
-  const [sortBy, setSortBy] = useState<SortField>("name");
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [priceRange, setPriceRange] = useState<[number, number]>(initialFilters.priceRange);
+  const [hasSerial, setHasSerial] = useState<"" | "with" | "without">(initialFilters.hasSerial);
+  const [hasPurchasePrice, setHasPurchasePrice] = useState<"" | "with" | "without">(
+    initialFilters.hasPurchasePrice,
+  );
+  const [purchasedFrom, setPurchasedFrom] = useState(initialFilters.purchasedFrom);
+  const [purchasedTo, setPurchasedTo] = useState(initialFilters.purchasedTo);
+  const [sortBy, setSortBy] = useState<SortField>(initialFilters.sortBy);
+  const [sortDir, setSortDir] = useState<SortDir>(initialFilters.sortDir);
   const [page, setPage] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [totalCount, setTotalCount] = useState(() => pageBootstrap.listCache?.totalCount ?? 0);
+  const [loading, setLoading] = useState(() => !pageBootstrap.listCache);
   const [error, setError] = useState<string | null>(null);
   const [saleFor, setSaleFor] = useState<ProductRow | null>(null);
   useAdminBackHandler(Boolean(saleFor), () => setSaleFor(null), "catalog-product-sale");
@@ -670,8 +706,8 @@ export default function AdminProductsPage() {
   } | null>(null);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [bulkDeleteActiveLinkWarning, setBulkDeleteActiveLinkWarning] = useState<string | null>(null);
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [listFiltersReady, setListFiltersReady] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(initialFilters.filtersOpen);
+  const [listFiltersReady, setListFiltersReady] = useState(true);
   const [catalogSettingsOpen, setCatalogSettingsOpen] = useState(false);
   const [locationBusyId, setLocationBusyId] = useState<string | null>(null);
   // Промяна на място в „Сервиз“ при продукт без серийни номера — изисква
@@ -680,16 +716,22 @@ export default function AdminProductsPage() {
   const [serviceSerialIndoor, setServiceSerialIndoor] = useState("");
   const [serviceSerialOutdoor, setServiceSerialOutdoor] = useState("");
   useAdminBackHandler(Boolean(serviceSerialPromptFor), () => setServiceSerialPromptFor(null), "catalog-product-service-serial");
-  const [suppliersById, setSuppliersById] = useState<Record<string, string>>({});
+  const [suppliersById, setSuppliersById] = useState<Record<string, string>>(
+    () => pageBootstrap.metaCache?.suppliersById ?? {},
+  );
   /** Бърза инлайн редакция на продажна / закупна цена в таблицата — само master_admin (сървърът също валидира). */
-  const [canEditMasterPricesInline, setCanEditMasterPricesInline] = useState(false);
+  const [canEditMasterPricesInline, setCanEditMasterPricesInline] = useState(
+    () => pageBootstrap.metaCache?.canEditMasterPricesInline ?? false,
+  );
   /** Master + офис: редакции в списъка, продажба, изтриване, топ продукти. Сервиз — само преглед + нов продукт. */
-  const [canMutateProductRows, setCanMutateProductRows] = useState(true);
+  const [canMutateProductRows, setCanMutateProductRows] = useState(
+    () => pageBootstrap.metaCache?.canMutateProductRows ?? true,
+  );
   /** Роля от whoami — за каталог настройки (сервиз: преглед). */
-  const [adminRole, setAdminRole] = useState<string>("");
+  const [adminRole, setAdminRole] = useState<string>(() => pageBootstrap.metaCache?.adminRole ?? "");
   const [repairProtocolByProductId, setRepairProtocolByProductId] = useState<
     Record<string, LinkedRepairProtocolSummary>
-  >({});
+  >(() => pageBootstrap.listCache?.repairProtocolByProductId ?? {});
   const [serviceProtocolWizard, setServiceProtocolWizard] = useState<{
     editId?: string;
     initialData?: ReturnType<typeof productToServiceProtocolInitialData>;
@@ -758,33 +800,30 @@ export default function AdminProductsPage() {
   const queryPage = listFiltersKeyRef.current !== listFiltersKey ? 1 : page;
 
   const qs = useMemo(() => {
-    const sp = new URLSearchParams();
-    if (debouncedQ.trim()) sp.set("q", debouncedQ.trim());
-    sp.set("catalogKind", catalogKind);
-    if (conditions.length) sp.set("condition", conditions.join(","));
-    const featuredParam = csvParam(featuredFlags);
-    if (featuredParam) sp.set("featured", featuredParam);
-    const publicCatalogParam = csvParam(publicCatalogFlags);
-    if (publicCatalogParam) sp.set("publicCatalog", publicCatalogParam);
-    if (stockStatuses.length) sp.set("stockStatus", stockStatuses.join(","));
-    if (stockLocationFilter) sp.set("stockLocation", stockLocationFilter);
-    if (productRegionFilter) sp.set("productRegion", productRegionFilter);
-    if (brandId) sp.set("brandId", brandId);
-    if (btuFilters.length) sp.set("btu", btuFilters.join(","));
-    if (typeId) sp.set("typeId", typeId);
-    if (supplierId) sp.set("supplierId", supplierId);
-    if (containerId) sp.set("containerId", containerId);
-    if (priceRange[0] > ADMIN_PRICE_FILTER_MIN) sp.set("priceMin", String(priceRange[0]));
-    if (priceRange[1] < ADMIN_PRICE_FILTER_MAX) sp.set("priceMax", String(priceRange[1]));
-    if (hasSerial) sp.set("hasSerial", hasSerial);
-    if (hasPurchasePrice) sp.set("hasPurchasePrice", hasPurchasePrice);
-    if (purchasedFrom) sp.set("purchasedFrom", purchasedFrom);
-    if (purchasedTo) sp.set("purchasedTo", purchasedTo);
-    sp.set("sortBy", sortBy);
-    sp.set("sortDir", sortDir);
-    sp.set("page", String(queryPage));
-    sp.set("perPage", String(ADMIN_PRODUCTS_LIST_PER_PAGE));
-    return sp.toString();
+    const snapshot: AdminProductsListFiltersSnapshot = {
+      version: 3,
+      q: debouncedQ,
+      catalogKind,
+      conditions,
+      featuredFlags,
+      publicCatalogFlags,
+      stockStatuses,
+      stockLocationFilter,
+      productRegionFilter,
+      brandId,
+      btuFilters,
+      typeId,
+      supplierId,
+      priceRange,
+      hasSerial,
+      hasPurchasePrice,
+      purchasedFrom,
+      purchasedTo,
+      sortBy,
+      sortDir,
+      filtersOpen,
+    };
+    return buildAdminProductsListQueryString(snapshot, { page: queryPage, containerId });
   }, [
     debouncedQ,
     catalogKind,
@@ -806,6 +845,7 @@ export default function AdminProductsPage() {
     purchasedTo,
     sortBy,
     sortDir,
+    filtersOpen,
     queryPage,
   ]);
 
@@ -814,30 +854,6 @@ export default function AdminProductsPage() {
     listFiltersKeyRef.current = listFiltersKey;
     setPage(1);
   }, [listFiltersKey]);
-
-  function applySavedListFilters() {
-    const s = loadAdminProductsListFilters();
-    setQ(s.q);
-    setCatalogKind(s.catalogKind);
-    setConditions(s.conditions);
-    setFeaturedFlags(s.featuredFlags);
-    setPublicCatalogFlags(s.publicCatalogFlags);
-    setStockStatuses(s.stockStatuses);
-    setStockLocationFilter(s.stockLocationFilter);
-    setProductRegionFilter(s.productRegionFilter);
-    setBrandId(s.brandId);
-    setBtuFilters(s.btuFilters);
-    setTypeId(s.typeId);
-    setSupplierId(s.supplierId);
-    setPriceRange(s.priceRange);
-    setHasSerial(s.hasSerial);
-    setHasPurchasePrice(s.hasPurchasePrice);
-    setPurchasedFrom(s.purchasedFrom);
-    setPurchasedTo(s.purchasedTo);
-    setSortBy(s.sortBy);
-    setSortDir(s.sortDir);
-    setFiltersOpen(s.filtersOpen);
-  }
 
   function snapshotListFilters() {
     return {
@@ -865,7 +881,17 @@ export default function AdminProductsPage() {
     };
   }
 
-  async function loadMeta() {
+  async function loadMeta(opts?: { background?: boolean }) {
+    const cached = !opts?.background ? getProductsMetaSessionCache() : null;
+    if (cached) {
+      setBrands(cached.brands);
+      setTypes(cached.types);
+      setSuppliersById(cached.suppliersById);
+      setContainers(cached.containers);
+      setAdminRole(cached.adminRole);
+      setCanEditMasterPricesInline(cached.canEditMasterPricesInline);
+      setCanMutateProductRows(cached.canMutateProductRows);
+    }
     try {
       const [bRes, tRes, sRes, cRes, wRes] = await Promise.all([
         fetch("/api/admin/meta/brands?usedInProducts=1", { credentials: "include" }),
@@ -881,27 +907,44 @@ export default function AdminProductsPage() {
         cRes.json().catch(() => ({})),
         wRes.json().catch(() => ({})),
       ]);
-      if (bRes.ok) setBrands(((bJson as { data?: OptionRow[] }).data ?? []) as OptionRow[]);
-      if (tRes.ok) setTypes(((tJson as { data?: OptionRow[] }).data ?? []) as OptionRow[]);
+      const brands = bRes.ok ? (((bJson as { data?: OptionRow[] }).data ?? []) as OptionRow[]) : [];
+      const types = tRes.ok ? (((tJson as { data?: OptionRow[] }).data ?? []) as OptionRow[]) : [];
+      let suppliersById: Record<string, string> = {};
       if (sRes.ok) {
         const rows = ((sJson as { data?: { id: string; full_name: string }[] }).data ?? []) as {
           id: string;
           full_name: string;
         }[];
-        const m: Record<string, string> = {};
-        for (const r of rows) m[r.id] = r.full_name;
-        setSuppliersById(m);
+        for (const r of rows) suppliersById[r.id] = r.full_name;
       }
-      if (cRes.ok) {
-        const rows = ((cJson as { data?: { id: string; name: string }[] }).data ?? []) as { id: string; name: string }[];
-        setContainers(rows.map((r) => ({ id: r.id, name: r.name })));
-      }
+      const containers = cRes.ok
+        ? (((cJson as { data?: { id: string; name: string }[] }).data ?? []) as { id: string; name: string }[])
+            .map((r) => ({ id: r.id, name: r.name }))
+        : [];
+      let adminRole = "";
+      let canEditMasterPricesInline = false;
+      let canMutateProductRows = true;
       if (wRes.ok) {
-        const role = (wJson as { data?: { admin?: { role?: string } | null } }).data?.admin?.role ?? "";
-        setAdminRole(role);
-        setCanEditMasterPricesInline(role === "master_admin");
-        setCanMutateProductRows(role === "master_admin" || role === "office_staff");
+        adminRole = (wJson as { data?: { admin?: { role?: string } | null } }).data?.admin?.role ?? "";
+        canEditMasterPricesInline = adminRole === "master_admin";
+        canMutateProductRows = adminRole === "master_admin" || adminRole === "office_staff";
       }
+      setBrands(brands);
+      setTypes(types);
+      setSuppliersById(suppliersById);
+      setContainers(containers);
+      setAdminRole(adminRole);
+      setCanEditMasterPricesInline(canEditMasterPricesInline);
+      setCanMutateProductRows(canMutateProductRows);
+      setProductsMetaSessionCache({
+        brands,
+        types,
+        suppliersById,
+        containers,
+        adminRole,
+        canEditMasterPricesInline,
+        canMutateProductRows,
+      });
     } catch {
       // non-blocking for products table
     }
@@ -923,22 +966,30 @@ export default function AdminProductsPage() {
     return joined?.trim() || null;
   }
 
-  async function loadRepairProtocolMap(rows: ProductRow[]) {
+  const repairProtocolLoadSeq = useRef(0);
+  const catalogSyncDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  async function loadRepairProtocolMap(rows: ProductRow[], cacheQs = qs) {
     const ids = rows
       .filter((p) => !isAccessoryRow(p) && p.stock_status === "in_stock")
       .map((p) => p.id);
     if (ids.length === 0) {
       setRepairProtocolByProductId({});
+      patchProductsListSessionRepairProtocols(cacheQs, {});
       return;
     }
+    const seq = ++repairProtocolLoadSeq.current;
     try {
       const res = await fetch(
         `/api/admin/products/repair-protocol-ids?ids=${ids.join(",")}`,
         { credentials: "include" },
       );
-      if (!res.ok) return;
+      if (!res.ok || seq !== repairProtocolLoadSeq.current) return;
       const json = await res.json() as { data?: Record<string, LinkedRepairProtocolSummary> };
-      setRepairProtocolByProductId(json.data ?? {});
+      if (seq !== repairProtocolLoadSeq.current) return;
+      const map = json.data ?? {};
+      setRepairProtocolByProductId(map);
+      patchProductsListSessionRepairProtocols(cacheQs, map);
     } catch {
       /* non-blocking */
     }
@@ -987,30 +1038,82 @@ export default function AdminProductsPage() {
     return `${d}.${m}.${y}`;
   }
 
-  async function load() {
-    setLoading(true);
-    setError(null);
+  async function load(opts?: { force?: boolean; background?: boolean }) {
+    const cacheQs = qs;
+    const cached = !opts?.force ? getProductsListSessionCache(cacheQs) : null;
+    const showSpinner = !opts?.background && !cached;
+
+    if (cached) {
+      setItems(cached.items as ProductRow[]);
+      setTotalCount(cached.totalCount);
+      setRepairProtocolByProductId(cached.repairProtocolByProductId);
+      setSelected([]);
+      setError(null);
+      setLoading(false);
+    } else if (showSpinner) {
+      setLoading(true);
+      setError(null);
+    }
+
     try {
-      const res = await fetch(`/api/admin/products?${qs}`, { credentials: "include" });
+      const res = await fetch(`/api/admin/products?${cacheQs}`, { credentials: "include" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Грешка");
       const rows: ProductRow[] = json.data ?? [];
+      const total = json.meta?.total ?? (rows.length ?? 0);
       setItems(rows);
-      setTotalCount(json.meta?.total ?? (rows.length ?? 0));
+      setTotalCount(total);
       setSelected([]);
-      void loadRepairProtocolMap(rows);
+      setProductsListSessionCache(cacheQs, {
+        items: rows,
+        totalCount: total,
+        repairProtocolByProductId: cached?.repairProtocolByProductId ?? {},
+      });
+      setLoading(false);
+      window.setTimeout(() => void loadRepairProtocolMap(rows, cacheQs), 0);
     } catch (e: any) {
-      setError(String(e?.message ?? e));
-    } finally {
+      if (!cached) {
+        setError(String(e?.message ?? e));
+      }
       setLoading(false);
     }
   }
 
+  async function reloadProductsList() {
+    invalidateAllProductsSessionCache();
+    await load({ force: true });
+  }
+
   useEffect(() => {
-    applySavedListFilters();
-    setListFiltersReady(true);
     void loadMeta();
   }, []);
+
+  /** Друг таб / доставчик / продажба — винаги свежи данни от сървъра. */
+  useEffect(() => {
+    const syncFromServer = () => {
+      if (catalogSyncDebounceRef.current) clearTimeout(catalogSyncDebounceRef.current);
+      catalogSyncDebounceRef.current = setTimeout(() => {
+        catalogSyncDebounceRef.current = null;
+        invalidateAllProductsSessionCache();
+        void load({ force: true, background: true });
+        void loadMeta({ background: true });
+      }, 250);
+    };
+    return subscribeAdminProductsCatalogReload(syncFromServer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** Телефон / друг таб — при връщане на фокуса презареждаме тихо. */
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== "visible" || !listFiltersReady) return;
+      void load({ background: true });
+      void loadMeta({ background: true });
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listFiltersReady]);
 
   /** След запис от редакция — маха филтри, които крият новата/запазената бройка. */
   useEffect(() => {
@@ -1139,7 +1242,7 @@ export default function AdminProductsPage() {
     setConfirmBulkDelete(false);
     setBulkDeleteActiveLinkWarning(null);
     setSelected([]);
-    await load();
+    await reloadProductsList();
   }
 
   async function bulkSetPublicCatalog(visible: boolean) {
@@ -1163,7 +1266,7 @@ export default function AdminProductsPage() {
       return;
     }
     setSelected([]);
-    await load();
+    await reloadProductsList();
   }
 
   async function togglePublicCatalog(p: ProductRow) {
@@ -1325,6 +1428,8 @@ export default function AdminProductsPage() {
         }),
       );
 
+      invalidateProductsListSessionCache();
+      notifyAdminProductsCatalogChanged();
       if (withInstallation) notifyAdminCalendarReload();
       return true;
     } catch (e: unknown) {
@@ -1368,6 +1473,8 @@ export default function AdminProductsPage() {
         amount: Number(prod.price) || 0,
         isReservationCancel: true,
       });
+      invalidateProductsListSessionCache();
+      notifyAdminProductsCatalogChanged();
       return true;
     } catch (e: unknown) {
       setError(String(e instanceof Error ? e.message : e));
@@ -1695,7 +1802,7 @@ export default function AdminProductsPage() {
       <ProductCatalogSettingsModal
         open={catalogSettingsOpen}
         onClose={() => setCatalogSettingsOpen(false)}
-        onApplied={() => void load()}
+        onApplied={() => reloadProductsList()}
         readOnly={!canEditMasterPricesInline}
       />
 
@@ -2012,6 +2119,7 @@ export default function AdminProductsPage() {
           className="px-3 py-2 border-b border-brand-blue-100 bg-brand-blue-50/40 rounded-none"
         />
         <Table
+          loading={loading}
           className="border-0 rounded-none shadow-none bg-transparent w-full table-fixed [&_th]:!px-1 [&_th]:!py-1 [&_th]:!text-[10px] [&_td]:!px-1 [&_td]:!py-0.5 [&_td]:!text-[11px] [&_td]:leading-tight"
           stickyHeader
         >
@@ -2456,15 +2564,14 @@ export default function AdminProductsPage() {
             <option value="stock_location:desc">Място Я→А</option>
           </Select>
         </div>
-        {loading && (
-          <div className="text-center py-6 text-slate-500 text-xs">Зареждане...</div>
-        )}
-        {!loading && displayRows.length === 0 && (
+        {loading ? (
+          <AdminTableLoading size="sm" className="py-6" />
+        ) : displayRows.length === 0 ? (
           <div className="bg-white rounded-lg border border-slate-200 px-3 py-4 text-center text-slate-500 text-xs">
             {catalogEmptyMessageMobile}
           </div>
-        )}
-        {!loading && displayRows.map(({ row: p, groupKey, groupedCount, isGroupedExhausted }) => {
+        ) : (
+          displayRows.map(({ row: p, groupKey, groupedCount, isGroupedExhausted }) => {
           const groupedExhausted = isGroupedExhausted && groupedCount > 1;
           return (
           <article
@@ -2806,7 +2913,8 @@ export default function AdminProductsPage() {
             )}
           </article>
         );
-        })}
+        })
+        )}
       </div>
 
       <div className="pt-1 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -3337,7 +3445,7 @@ export default function AdminProductsPage() {
             is_active: featuredFor.is_active ?? null,
           }}
           onClose={() => setFeaturedFor(null)}
-          onSaved={() => { void load(); }}
+          onSaved={() => { reloadProductsList(); }}
         />
       )}
 
@@ -3354,7 +3462,7 @@ export default function AdminProductsPage() {
             setServiceProtocolWizard((prev) =>
               prev ? { ...prev, editId: id } : null,
             );
-            void load();
+            reloadProductsList();
           }}
         />
       )}

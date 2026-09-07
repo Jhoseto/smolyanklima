@@ -15,6 +15,7 @@ import {
 import { assertNoContactPrimaryPhoneDuplicate } from "@/lib/admin/contactPhoneConflictClient";
 import { groupSupplierNames, mergeSupplierGroups, normalizeSupplierKey, type GroupedSupplier } from "@/lib/admin/supplierNameNormalize";
 import { notifyAdminCalendarReload } from "@/lib/admin/calendarReload";
+import { notifyAdminProductsCatalogChanged } from "@/lib/admin/productsCatalogReload";
 import type { ProductRegion } from "@/lib/admin/productRegion";
 
 type ContactChoice = {
@@ -681,6 +682,7 @@ export function ManualDeliveryModal({
       const json = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) throw new Error(json.error || "Грешка при запис на доставката");
       notifyAdminCalendarReload();
+      notifyAdminProductsCatalogChanged();
       removeDraft(section);
       onSuccess();
       onClose();

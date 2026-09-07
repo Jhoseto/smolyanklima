@@ -15,6 +15,7 @@ import {
 import { assertNoContactPrimaryPhoneDuplicate } from "@/lib/admin/contactPhoneConflictClient";
 import { canRecordProductSale } from "@/lib/admin/recordProductSale";
 import { notifyAdminCalendarReload } from "@/lib/admin/calendarReload";
+import { notifyAdminProductsCatalogChanged } from "@/lib/admin/productsCatalogReload";
 import { groupSupplierNames, mergeSupplierGroups, normalizeSupplierKey, type GroupedSupplier } from "@/lib/admin/supplierNameNormalize";
 
 type ContactChoice = {
@@ -869,6 +870,7 @@ export function ManualSaleModal({
       }
       removeDraft(section);
       notifyAdminCalendarReload();
+      notifyAdminProductsCatalogChanged();
       onSuccess();
       onClose();
     } catch (e: unknown) {

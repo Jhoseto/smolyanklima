@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { ServiceProtocolFormWizard } from "./ServiceProtocolFormWizard";
 import { ServiceProtocolPreview } from "./ServiceProtocolPreview";
+import { AdminTableLoading } from "../../../ui";
 import type { AdminRole } from "@/lib/admin/db";
 import { FREON_CHARGE_LABEL, SERVICE_KIND_LABEL, type FreonChargeMethod, type RepairServiceKind } from "@/lib/repair-protocol-fields";
 
@@ -451,9 +452,7 @@ export function ServiceDocumentsClient({ role }: Props) {
         )}
 
         {loading && protocols.length === 0 ? (
-          <div className="flex justify-center py-16">
-            <Loader2 className="w-8 h-8 animate-spin text-slate-300" />
-          </div>
+          <AdminTableLoading />
         ) : protocols.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
             <div className="w-16 h-16 rounded-2xl bg-white border-2 border-dashed border-slate-200 flex items-center justify-center">

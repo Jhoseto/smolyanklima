@@ -5,6 +5,7 @@ import { ChevronRight, GripVertical, Truck } from "lucide-react";
 import { Card, AdminContactMetaLine } from "./ui";
 import { SupplierOrderDetailModal } from "./SupplierOrderDetailModal";
 import { notifyAdminCalendarReload } from "@/lib/admin/calendarReload";
+import { notifyAdminProductsCatalogChanged } from "@/lib/admin/productsCatalogReload";
 import type { NormalizedSupplierOrderRow } from "@/lib/admin/supplierOrderRow";
 
 function displayName(row: NormalizedSupplierOrderRow): string {
@@ -121,6 +122,7 @@ export function SupplierOrdersPanel({
     setRows((prev) => prev.filter((r) => r.id !== orderId));
     void refresh();
     notifyAdminCalendarReload();
+    notifyAdminProductsCatalogChanged();
   }
 
   const count = rows.length;
@@ -241,11 +243,13 @@ export function SupplierOrdersPanel({
           onUpdated={(updated) => {
             setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
             notifyAdminCalendarReload();
+            notifyAdminProductsCatalogChanged();
           }}
           onFulfilled={() => {
             setSelectedOrderId(null);
             void refresh();
             notifyAdminCalendarReload();
+            notifyAdminProductsCatalogChanged();
           }}
         />
       )}

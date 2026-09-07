@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { SectionTitle, Card, Input, Select, Button, Table, Th, Td, AdminPhoneLink, AdminContactMetaLine } from "../ui";
+import { SectionTitle, Card, Input, Select, Button, Table, Th, Td, AdminPhoneLink, AdminContactMetaLine, AdminTableLoading } from "../ui";
 import { RefreshCw, Eye, Receipt, ArrowUpDown, ArrowUp, ArrowDown, Sparkles, Recycle, FilterX, Plus } from "lucide-react";
 import { SupplierOrderDetailModal } from "../SupplierOrderDetailModal";
 import { SupplierOrderSaleModal } from "./SupplierOrderSaleModal";
 import { ManualDeliveryModal } from "./ManualDeliveryModal";
 import { ProductQuickViewButton } from "../ProductQuickView";
 import { notifyAdminCalendarReload } from "@/lib/admin/calendarReload";
+import { notifyAdminProductsCatalogChanged } from "@/lib/admin/productsCatalogReload";
 import { canRecordProductSale } from "@/lib/admin/recordProductSale";
 import type { NormalizedSupplierOrderRow } from "@/lib/admin/supplierOrderRow";
 import {
@@ -693,19 +694,12 @@ export default function SupplierOrdersHistoryPage() {
         </div>
       </Card>
 
-      {loading && (
-        <div className="flex items-center justify-center py-10 text-sm font-medium text-slate-500 gap-2">
-          <RefreshCw className="h-4 w-4 animate-spin" />
-          Зареждане…
-        </div>
-      )}
-
       {!loading && error && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">{error}</div>
       )}
 
       <div className="hidden md:block min-w-0">
-        <Table tableClassName="w-full min-w-[1180px]">
+        <Table loading={loading} tableClassName="w-full min-w-[1180px]">
           <thead>
             <tr>
               <SortableTh label="Продукт" field="product" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className={`${ORDER_TABLE_TH} min-w-[11rem]`} />
@@ -790,12 +784,15 @@ export default function SupplierOrdersHistoryPage() {
       </div>
 
       <div className="space-y-2 md:hidden">
-        {items.length === 0 && (
+        {loading ? (
+          <AdminTableLoading />
+        ) : items.length === 0 ? (
           <div className="rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-500">
             {section === "new" ? "Няма поръчки на нови продукти." : "Няма поръчки на втора употреба."}
           </div>
-        )}
-        {items.map((row) => (
+        ) : null}
+        {!loading &&
+        items.map((row) => (
           <div key={row.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-2 flex items-start justify-between gap-2">
               <div className="min-w-0">
@@ -877,12 +874,14 @@ export default function SupplierOrdersHistoryPage() {
             setDetailId(null);
             void load();
             notifyAdminCalendarReload();
+            notifyAdminProductsCatalogChanged();
           }}
           onUpdated={() => void load()}
           onFulfilled={() => {
             setDetailId(null);
             void load();
             notifyAdminCalendarReload();
+            notifyAdminProductsCatalogChanged();
           }}
           onRequestSale={(order) => {
             setDetailId(null);
@@ -898,6 +897,7 @@ export default function SupplierOrdersHistoryPage() {
           onSuccess={() => {
             void load();
             notifyAdminCalendarReload();
+            notifyAdminProductsCatalogChanged();
           }}
         />
       )}

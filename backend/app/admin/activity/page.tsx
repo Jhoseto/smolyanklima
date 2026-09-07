@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { RefreshCw, FilterX } from "lucide-react";
-import { Button, Card, Input, Select, SectionTitle, Table, Td, Th } from "../ui";
+import { Button, Card, Input, Select, SectionTitle, Table, Td, Th, AdminTableLoading } from "../ui";
 import { useDebounce } from "@/lib/hooks/useDebounce";
 import { describeActivityLog, formatActivityUser } from "@/lib/admin/activityLogLabels";
 
@@ -153,7 +153,7 @@ export default function AdminActivityPage() {
 
       {/* Desktop table */}
       <div className="hidden md:block">
-        <Table>
+        <Table loading={loading}>
           <thead>
             <tr>
               <Th>Действие</Th>
@@ -198,26 +198,19 @@ export default function AdminActivityPage() {
                 </Td>
               </tr>
             )}
-            {loading && (
-              <tr>
-                <Td colSpan={5} className="text-center py-8 text-slate-500">
-                  Зареждане...
-                </Td>
-              </tr>
-            )}
           </tbody>
         </Table>
       </div>
 
       {/* Mobile card list */}
       <div className="md:hidden space-y-2">
-        {loading && <div className="text-center py-10 text-slate-500 text-sm">Зареждане...</div>}
-        {!loading && items.length === 0 && (
+        {loading ? (
+          <AdminTableLoading />
+        ) : items.length === 0 ? (
           <div className="bg-white rounded-xl border border-slate-200 p-6 text-center text-slate-500 text-sm">
             Няма намерени записи.
           </div>
-        )}
-        {!loading &&
+        ) : (
           items.map((row) => {
             const described = describeActivityLog(row);
             const user = formatActivityUser(row.admin_users);
@@ -246,7 +239,8 @@ export default function AdminActivityPage() {
                 )}
               </div>
             );
-          })}
+          })
+        )}
       </div>
 
       <div className="flex justify-between items-center">

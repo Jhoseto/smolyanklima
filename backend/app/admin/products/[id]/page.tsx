@@ -11,6 +11,7 @@ import {
   type AdminProductForm,
 } from "../ProductForm";
 import { HelpRow, SectionTitle, HelpCard, Card, Button } from "../../ui";
+import { notifyAdminProductsCatalogChanged } from "@/lib/admin/productsCatalogReload";
 import { Save, Trash2 } from "lucide-react";
 
 type Brand = { id: string; name: string };
@@ -148,6 +149,7 @@ export default function EditProductPage() {
     Boolean(form.indoorUnitSerial.trim() && form.outdoorUnitSerial.trim());
 
   function returnToProductsTable(productId: string) {
+    notifyAdminProductsCatalogChanged();
     router.replace(`/admin/products?focusProductId=${encodeURIComponent(productId)}`);
   }
 
@@ -399,7 +401,10 @@ export default function EditProductPage() {
       return;
     }
     if (!res.ok) setError(json.error || "Грешка");
-    else router.push("/admin/products");
+    else {
+      notifyAdminProductsCatalogChanged();
+      router.push("/admin/products");
+    }
   }
 
   if (loading) {
