@@ -30,6 +30,8 @@ interface Props {
   role: AdminRole;
   onClose: () => void;
   onEdit: () => void;
+  /** Отворен върху друг modal (напр. детайли на продажба) — по-светъл фон, леко вдясно на desktop. */
+  stacked?: boolean;
 }
 
 interface ProtocolRow {
@@ -87,6 +89,7 @@ export function ProtocolPreview({
   role,
   onClose,
   onEdit,
+  stacked = false,
 }: Props) {
   const [row, setRow] = useState<ProtocolRow | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
@@ -222,12 +225,22 @@ export function ProtocolPreview({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex flex-col bg-black/45 backdrop-blur-[2px]"
+      className={
+        stacked
+          ? "fixed inset-0 z-[70] flex flex-col bg-black/25 md:flex-row md:justify-end md:pl-[min(34%,360px)]"
+          : "fixed inset-0 z-[60] flex flex-col bg-black/45 backdrop-blur-[2px]"
+      }
       role="dialog"
       aria-modal="true"
       aria-label="Преглед на протокол"
     >
-      <div className="flex flex-1 flex-col bg-slate-100 w-full h-full md:max-w-3xl md:mx-auto md:my-3 md:rounded-2xl md:shadow-2xl md:max-h-[calc(100vh-1.5rem)] overflow-hidden border border-slate-200 md:border-0">
+      <div
+        className={
+          stacked
+            ? "flex flex-1 flex-col bg-slate-100 w-full h-full md:max-w-2xl md:shadow-2xl md:max-h-[calc(100vh-1.5rem)] md:my-3 md:mr-3 overflow-hidden border border-slate-200 md:rounded-2xl"
+            : "flex flex-1 flex-col bg-slate-100 w-full h-full md:max-w-3xl md:mx-auto md:my-3 md:rounded-2xl md:shadow-2xl md:max-h-[calc(100vh-1.5rem)] overflow-hidden border border-slate-200 md:border-0"
+        }
+      >
         {/* Лента */}
         <div className="border-b border-slate-200 bg-white shrink-0 safe-top">
           <div className="flex flex-wrap items-center gap-2 px-3 py-3 sm:px-4">

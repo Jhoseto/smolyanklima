@@ -9,6 +9,10 @@ import { CatalogProductImage } from "../components/CatalogProductImage";
 import { saleCancelReasonLabel } from "@/lib/admin/saleCancelReason";
 import { saleSupplierInvoice, saleSupplierName } from "@/lib/admin/saleWorkItemMeta";
 import { useAdminBackHandler } from "@/lib/admin/useAdminBackHandler";
+import type { AdminRole } from "@/lib/admin/db";
+import { ProtocolPreview } from "../service/documents/acceptance/ProtocolPreview";
+import { ServiceProtocolPreview } from "../service/documents/service/ServiceProtocolPreview";
+import { SERVICE_KIND_LABEL, type RepairServiceKind } from "@/lib/repair-protocol-fields";
 
 type ProductEmbed = {
   id: string;
@@ -22,6 +26,8 @@ type ProductEmbed = {
   indoor_unit_serial?: string | null;
   outdoor_unit_serial?: string | null;
   stock_status?: string | null;
+  container_id?: string | null;
+  containers?: { id?: string; name?: string | null } | { id?: string; name?: string | null }[] | null;
   supplier_invoice_number?: string | null;
   brands?: { name?: string | null } | null;
   product_types?: { name?: string | null } | null;
@@ -77,6 +83,24 @@ type LinkedProtocol = {
   status: string;
   date?: string | null;
 };
+
+type LinkedServiceProtocol = {
+  id: string;
+  protocol_number: string;
+  status: string;
+  date?: string | null;
+  service_kind?: RepairServiceKind | string | null;
+  ac_brand?: string | null;
+  ac_model?: string | null;
+  client_name?: string | null;
+};
+
+function protocolStatusLabel(status: string): string {
+  if (status === "signed") return "Подписан";
+  if (status === "in_progress") return "В процес";
+  if (status === "prepared") return "Подготвен";
+  return status;
+}
 
 function asOne<T>(value: T | T[] | null | undefined): T | null {
   if (!value) return null;
@@ -191,6 +215,10 @@ export function SaleDetailModal({ saleId, onClose, onChanged }: Props) {
   const [sale, setSale] = useState<SaleWorkRow | null>(null);
   const [installation, setInstallation] = useState<LinkedInstallation | null>(null);
   const [protocol, setProtocol] = useState<LinkedProtocol | null>(null);
+  const [serviceProtocol, setServiceProtocol] = useState<LinkedServiceProtocol | null>(null);
+  const [previewAcceptance, setPreviewAcceptance] = useState(false);
+  const [previewService, setPreviewService] = useState(false);
+  const [adminRole, setAdminRole] = useState<AdminRole>("office_staff");
   const [isMasterAdmin, setIsMasterAdmin] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
@@ -198,7 +226,7 @@ export function SaleDetailModal({ saleId, onClose, onChanged }: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  useAdminBackHandler(Boolean(saleId), onClose, saleId ? `sale-detail-${saleId}` : undefined);
+  useAdminBackHandler(Boolean(saleId && !previewAcceptance && !previewService), onClose, saleId ? `sale-detail-${saleId}` : undefined);
   useAdminBackHandler(Boolean(saleId && confirmDelete), () => setConfirmDelete(false), saleId ? `sale-delete-${saleId}` : undefined);
 
   const load = useCallback(async () => {
@@ -206,6 +234,7 @@ export function SaleDetailModal({ saleId, onClose, onChanged }: Props) {
       setSale(null);
       setInstallation(null);
       setProtocol(null);
+      setServiceProtocol(null);
       return;
     }
     setLoading(true);
@@ -218,17 +247,20 @@ export function SaleDetailModal({ saleId, onClose, onChanged }: Props) {
           work_item: SaleWorkRow;
           linked_installation: LinkedInstallation | null;
           linked_protocol: LinkedProtocol | null;
+          linked_service_protocol: LinkedServiceProtocol | null;
         };
       };
       if (!res.ok) throw new Error(json.error || "Грешка при зареждане");
       setSale(json.data?.work_item ?? null);
       setInstallation(json.data?.linked_installation ?? null);
       setProtocol(json.data?.linked_protocol ?? null);
+      setServiceProtocol(json.data?.linked_service_protocol ?? null);
     } catch (e: unknown) {
       setError(String(e instanceof Error ? e.message : e));
       setSale(null);
       setInstallation(null);
       setProtocol(null);
+      setServiceProtocol(null);
     } finally {
       setLoading(false);
     }
@@ -245,7 +277,9 @@ export function SaleDetailModal({ saleId, onClose, onChanged }: Props) {
         const res = await fetch("/api/admin/whoami", { credentials: "include" });
         const json = (await res.json().catch(() => ({}))) as { data?: { admin?: { role?: string } | null } };
         if (!cancelled && res.ok) {
-          setIsMasterAdmin(json.data?.admin?.role === "master_admin");
+          const role = json.data?.admin?.role as AdminRole | undefined;
+          setAdminRole(role === "master_admin" || role === "office_staff" || role === "service_staff" ? role : "office_staff");
+          setIsMasterAdmin(role === "master_admin");
         }
       } catch {
         if (!cancelled) setIsMasterAdmin(false);
@@ -260,6 +294,8 @@ export function SaleDetailModal({ saleId, onClose, onChanged }: Props) {
     setEditing(false);
     setEditForm(null);
     setConfirmDelete(false);
+    setPreviewAcceptance(false);
+    setPreviewService(false);
     setError(null);
   }, [saleId]);
 
@@ -347,6 +383,10 @@ export function SaleDetailModal({ saleId, onClose, onChanged }: Props) {
   const product = asOne(sale?.products ?? null);
   const contact = asOne(sale?.contacts ?? null);
   const imageUrl = pickMainImage(product);
+  const containerEmbed = product?.containers;
+  const containerLabel = containerEmbed
+    ? (Array.isArray(containerEmbed) ? containerEmbed[0] : containerEmbed)?.name?.trim() || null
+    : null;
   const amount = sale?.total_amount ?? sale?.unit_price ?? null;
   const purchaseAmount = sale?.purchase_price ?? product?.purchase_price ?? null;
   const supplier = sale
@@ -363,6 +403,7 @@ export function SaleDetailModal({ saleId, onClose, onChanged }: Props) {
   const cancelLabel = saleCancelReasonLabel(sale?.cancel_reason);
 
   return (
+    <>
     <div
       className="fixed inset-0 z-[60] flex items-end md:items-center justify-center bg-slate-950/55 p-0 md:p-4 backdrop-blur-md"
       data-admin-overlay="true"
@@ -467,6 +508,12 @@ export function SaleDetailModal({ saleId, onClose, onChanged }: Props) {
                         <span className="text-slate-500">SN външно:</span>{" "}
                         <span className="font-mono">{product.outdoor_unit_serial || "—"}</span>
                       </div>
+                    </div>
+                  )}
+                  {containerLabel && (
+                    <div className="mt-3 pt-3 border-t border-slate-200 text-xs text-slate-700">
+                      <span className="text-slate-500">Контейнер:</span>{" "}
+                      <span className="font-semibold text-amber-900">{containerLabel}</span>
                     </div>
                   )}
                 </Card>
@@ -586,16 +633,45 @@ export function SaleDetailModal({ saleId, onClose, onChanged }: Props) {
                   <div className="text-xs font-black uppercase tracking-wide text-violet-800 mb-2">Приемно-предавателен протокол</div>
                   <div className="text-sm font-semibold text-slate-900">{protocol.protocol_number}</div>
                   <div className="text-xs text-slate-600 mt-1">
-                    Дата: {fmtBgDate(protocol.date)} · Статус: {protocol.status}
+                    Дата: {fmtBgDate(protocol.date)} · Статус: {protocolStatusLabel(protocol.status)}
                   </div>
                   <div className="mt-3">
-                    <Link
-                      href={`/admin/service/documents/acceptance?edit=${protocol.id}`}
+                    <button
+                      type="button"
+                      onClick={() => setPreviewAcceptance(true)}
                       className="inline-flex items-center gap-1.5 text-xs font-bold text-violet-800 hover:underline"
                     >
                       <FileText className="w-3.5 h-3.5" />
-                      Отвори протокола
-                    </Link>
+                      Преглед на протокола
+                    </button>
+                  </div>
+                </Card>
+              )}
+
+              {serviceProtocol && (
+                <Card className="p-4 border-amber-100 bg-amber-50/40">
+                  <div className="text-xs font-black uppercase tracking-wide text-amber-900 mb-2">Сервизен протокол</div>
+                  <div className="text-sm font-semibold text-slate-900">{serviceProtocol.protocol_number}</div>
+                  <div className="text-xs text-slate-600 mt-1">
+                    {serviceProtocol.service_kind && SERVICE_KIND_LABEL[serviceProtocol.service_kind as RepairServiceKind]
+                      ? `${SERVICE_KIND_LABEL[serviceProtocol.service_kind as RepairServiceKind]} · `
+                      : ""}
+                    Дата: {fmtBgDate(serviceProtocol.date)} · Статус: {protocolStatusLabel(serviceProtocol.status)}
+                  </div>
+                  {(serviceProtocol.ac_brand || serviceProtocol.ac_model) && (
+                    <div className="text-xs text-slate-600 mt-1">
+                      {[serviceProtocol.ac_brand, serviceProtocol.ac_model].filter(Boolean).join(" ")}
+                    </div>
+                  )}
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewService(true)}
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-900 hover:underline"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      Преглед на протокола
+                    </button>
                   </div>
                 </Card>
               )}
@@ -670,5 +746,42 @@ export function SaleDetailModal({ saleId, onClose, onChanged }: Props) {
         </div>
       )}
     </div>
+
+    {previewAcceptance && protocol && (
+      <ProtocolPreview
+        stacked
+        protocolId={protocol.id}
+        protocolNumber={protocol.protocol_number}
+        clientLabel={product?.name ?? sale?.customer_name ?? "—"}
+        dateLabel={fmtBgDate(protocol.date)}
+        role={adminRole}
+        onClose={() => setPreviewAcceptance(false)}
+        onEdit={() => {
+          window.open(`/admin/service/documents/acceptance?edit=${protocol.id}`, "_blank", "noopener,noreferrer");
+        }}
+      />
+    )}
+
+    {previewService && serviceProtocol && (
+      <ServiceProtocolPreview
+        stacked
+        protocolId={serviceProtocol.id}
+        protocolNumber={serviceProtocol.protocol_number}
+        clientLabel={(() => {
+          const brandModel = [serviceProtocol.ac_brand, serviceProtocol.ac_model].filter(Boolean).join(" ");
+          if (serviceProtocol.service_kind === "recycle") {
+            return [SERVICE_KIND_LABEL.recycle, brandModel].filter(Boolean).join(" · ") || "—";
+          }
+          return [serviceProtocol.client_name, brandModel].filter(Boolean).join(" · ") || product?.name || "—";
+        })()}
+        dateLabel={fmtBgDate(serviceProtocol.date)}
+        role={adminRole}
+        onClose={() => setPreviewService(false)}
+        onEdit={() => {
+          window.open(`/admin/service/documents/service?edit=${serviceProtocol.id}`, "_blank", "noopener,noreferrer");
+        }}
+      />
+    )}
+    </>
   );
 }

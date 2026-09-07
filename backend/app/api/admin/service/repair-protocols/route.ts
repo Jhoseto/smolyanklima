@@ -12,8 +12,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
-import { buildAdminSearchOrFilter } from "@/lib/admin/phoneSearchPattern";
+import { applyAdminRepairProtocolSearchFilter } from "@/lib/admin/productSearchFilter";
 import { applyRecycleSerialsToProduct } from "@/lib/admin/recycleProtocolProductLink";
+import { combineLegacySerialField } from "@/lib/protocol-contact-fields";
 
 const QuerySchema = z.object({
   page:     z.coerce.number().int().min(1).optional().default(1),
@@ -124,7 +125,7 @@ export async function GET(req: NextRequest) {
   const selectLegacy =
     "id,protocol_number,date,client_name,client_phone,ac_model,serial_number,address,is_japanese_brand,freon_charge_method,status,created_at,created_by,service_rating";
 
-  const runList = async (cols: string) => {
+  const runList = async (cols: string, searchOpts?: { includeBrand?: boolean; includeRecycleSerials?: boolean }) => {
     let listQuery = session.db
       .from("service_repair_protocols")
       .select(cols, { count: "exact" })
@@ -142,26 +143,32 @@ export async function GET(req: NextRequest) {
     if (dateFrom) listQuery = listQuery.gte("date", dateFrom);
     if (dateTo) listQuery = listQuery.lte("date", dateTo);
     if (q?.trim()) {
-      const textFields = cols.includes("ac_brand")
-        ? ["client_name", "protocol_number", "ac_brand", "ac_model", "address", "serial_number"]
-        : ["client_name", "protocol_number", "ac_model", "address", "serial_number"];
-      const orClause = buildAdminSearchOrFilter(q, {
-        textFields,
-        phoneFields: ["client_phone"],
-      });
-      if (orClause) listQuery = listQuery.or(orClause);
+      listQuery = applyAdminRepairProtocolSearchFilter(listQuery, q, searchOpts);
     }
     return listQuery;
   };
 
-  let { data, error, count } = await runList(selectWithKind);
+  let { data, error, count } = await runList(selectWithKind, { includeBrand: true, includeRecycleSerials: true });
+
+  const missingRecycleSerialColumn =
+    !!error &&
+    /indoor_unit_serial|outdoor_unit_serial|42703|does not exist|undefined_column/i.test(
+      `${error.message} ${(error as { code?: string }).code ?? ""}`,
+    );
+  if (missingRecycleSerialColumn) {
+    const retry = await runList(selectWithKind, { includeBrand: true, includeRecycleSerials: false });
+    data = retry.data;
+    error = retry.error;
+    count = retry.count;
+  }
+
   const missingKind =
     !!error &&
     /service_kind|42703|does not exist|undefined_column/i.test(
       `${error.message} ${(error as { code?: string }).code ?? ""}`,
     );
   if (missingKind) {
-    const retry = await runList(selectWithBrand);
+    const retry = await runList(selectWithBrand, { includeBrand: true, includeRecycleSerials: true });
     data = retry.data;
     error = retry.error;
     count = retry.count;
@@ -179,7 +186,7 @@ export async function GET(req: NextRequest) {
       `${error.message} ${(error as { code?: string }).code ?? ""}`,
     );
   if (missingBrandColumn) {
-    const retry = await runList(selectLegacy);
+    const retry = await runList(selectLegacy, { includeBrand: false, includeRecycleSerials: false });
     data = retry.data;
     error = retry.error;
     count = retry.count;
@@ -253,6 +260,8 @@ export async function POST(req: NextRequest) {
   }
 
   const isRecycle = d.service_kind === "recycle";
+  const clientIndoor = d.indoor_unit_serial?.trim() || null;
+  const clientOutdoor = d.outdoor_unit_serial?.trim() || null;
 
   const payload: Record<string, unknown> = {
     protocol_number:  protocolNumber,
@@ -263,15 +272,17 @@ export async function POST(req: NextRequest) {
     client_name:      isRecycle ? null : (d.client_name?.trim() || null),
     ac_brand:         d.ac_brand ?? null,
     ac_model:         d.ac_model ?? null,
-    serial_number:    isRecycle ? null : (d.serial_number?.trim() || null),
+    serial_number:    isRecycle
+      ? null
+      : (combineLegacySerialField(clientIndoor, clientOutdoor) ?? (d.serial_number?.trim() || null)),
     address:          isRecycle ? null : (d.address?.trim() || null),
     paid_amount:      d.paid_amount ?? null,
     client_email:     isRecycle ? null : (d.client_email || null),
     client_phone:     isRecycle ? null : (d.client_phone?.trim() || null),
 
-    product_id:          isRecycle ? (d.product_id ?? null) : null,
-    indoor_unit_serial:  isRecycle ? (d.indoor_unit_serial?.trim() || null) : null,
-    outdoor_unit_serial: isRecycle ? (d.outdoor_unit_serial?.trim() || null) : null,
+    product_id:          d.product_id ?? null,
+    indoor_unit_serial:  isRecycle ? clientIndoor : clientIndoor,
+    outdoor_unit_serial: isRecycle ? clientOutdoor : clientOutdoor,
 
     is_japanese_brand:   d.is_japanese_brand ?? (isRecycle ? true : null),
     freon_charge_method: d.freon_charge_method ?? null,

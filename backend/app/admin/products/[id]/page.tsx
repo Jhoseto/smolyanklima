@@ -48,8 +48,10 @@ export default function EditProductPage() {
   const [pendingPhotosConfirm, setPendingPhotosConfirm] = useState<null | { proceed: () => void }>(null);
   const [isDeliveredInstance, setIsDeliveredInstance] = useState(false);
   // Допълнителни еднакви бройки (втора употреба, без сериен №) за добавяне
-  // към партидата при запис на тази бройка — виж isBulkUsedBatch по-долу.
+  // към партидата при запис на тази бройка — виж isBatchStubNoSerials по-долу.
   const [bulkExtraQuantity, setBulkExtraQuantity] = useState("0");
+  /** Заредена като анонимна бройка от партида (втора употреба, без серийни №). */
+  const [loadedAsBatchStub, setLoadedAsBatchStub] = useState(false);
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 2200);
@@ -108,6 +110,11 @@ export default function EditProductPage() {
         }
       }
       setForm(nextForm);
+      setLoadedAsBatchStub(
+        nextForm.productCondition === "used" &&
+          !nextForm.indoorUnitSerial.trim() &&
+          !nextForm.outdoorUnitSerial.trim(),
+      );
       setIsDeliveredInstance(Boolean(orderWorkItemId));
     })()
       .catch((e) => setError(String(e?.message ?? e)))
@@ -125,6 +132,20 @@ export default function EditProductPage() {
   }
 
   const isOnOrderTemplateLive = !isDeliveredInstance && form.stockStatus === "on_order";
+
+  const readOnly = role === "service_staff";
+  /** Партиден stub: втора употреба без серийни номера — може да се добавят още бройки при запис. */
+  const isBatchStubNoSerials =
+    form.productCondition === "used" &&
+    !form.indoorUnitSerial.trim() &&
+    !form.outdoorUnitSerial.trim();
+  const canManageUsedBulkQuantity = !readOnly && form.productCondition === "used";
+  const effectiveExtraQuantity = isBatchStubNoSerials
+    ? Math.min(MAX_BULK_QUANTITY, Math.max(0, parseInt(bulkExtraQuantity, 10) || 0))
+    : 0;
+  const awaitingBatchFinalize =
+    loadedAsBatchStub &&
+    Boolean(form.indoorUnitSerial.trim() && form.outdoorUnitSerial.trim());
 
   function returnToProductsTable(productId: string) {
     router.replace(`/admin/products?focusProductId=${encodeURIComponent(productId)}`);
@@ -198,7 +219,10 @@ export default function EditProductPage() {
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
-          buildPutBody(form, { omitDeliveryFields: isOnOrderTemplateLive }),
+          buildPutBody(form, {
+            omitDeliveryFields: isOnOrderTemplateLive,
+            omitSerialFields: loadedAsBatchStub,
+          }),
         ),
       });
       const json = await res.json().catch(() => ({}));
@@ -211,7 +235,7 @@ export default function EditProductPage() {
 
       // Партиден stub (втора употреба, без сериен №) + поискани допълнителни
       // бройки → добавяме толкова еднакви нови редове в наличност.
-      if (isBulkUsedBatch && effectiveExtraQuantity > 0) {
+      if (isBatchStubNoSerials && effectiveExtraQuantity > 0) {
         const extraBody = buildPostBody(form);
         let createdExtra = 0;
         for (let i = 0; i < effectiveExtraQuantity; i++) {
@@ -241,6 +265,60 @@ export default function EditProductPage() {
       }
 
       setToast({ kind: "ok", text: "Промените са запазени." });
+      returnToProductsTable(id);
+      return json;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function doFinalizeAsInstance() {
+    setError(null);
+    if (!validateRequiredFields()) return;
+    if (!loadedAsBatchStub) return;
+
+    if (!form.indoorUnitSerial.trim()) {
+      setError("Въведете сериен номер на вътрешното тяло.");
+      setToast({ kind: "err", text: "Въведете сериен номер на вътрешното тяло." });
+      return;
+    }
+    if (!form.outdoorUnitSerial.trim()) {
+      setError("Въведете сериен номер на външното тяло.");
+      setToast({ kind: "err", text: "Въведете сериен номер на външното тяло." });
+      return;
+    }
+
+    const [indoorDup, outdoorDup] = await Promise.all([
+      checkSerialDup(form.indoorUnitSerial),
+      checkSerialDup(form.outdoorUnitSerial),
+    ]);
+    if (indoorDup || outdoorDup) {
+      const msg = "Сериен номерът вече е записан при друг продукт.";
+      setError(msg);
+      setToast({ kind: "err", text: msg });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/products/${id}`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildPutBody(form, { finalizeUsedBatchStub: true })),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg = (json as any)?.error || "Грешка при финализиране";
+        setError(msg);
+        setToast({ kind: "err", text: msg });
+        return json;
+      }
+      setLoadedAsBatchStub(false);
+      setToast({
+        kind: "ok",
+        text: "Бройката е финализирана като инстанция с серийни номера. От анонимната партида остават по-малко бройки без сериен №.",
+      });
       returnToProductsTable(id);
       return json;
     } finally {
@@ -291,6 +369,14 @@ export default function EditProductPage() {
     void doSaveChanges();
   }
 
+  function finalizeAsInstance() {
+    if (pendingPhotos > 0) {
+      setPendingPhotosConfirm({ proceed: () => void doFinalizeAsInstance() });
+      return;
+    }
+    void doFinalizeAsInstance();
+  }
+
   function saveAsNewInstance() {
     if (pendingPhotos > 0) {
       setPendingPhotosConfirm({ proceed: () => void doSaveAsNewInstance() });
@@ -323,19 +409,6 @@ export default function EditProductPage() {
       </div>
     );
   }
-
-  const readOnly = role === "service_staff";
-  // Партиден "stub" за втора употреба (все още без сериен №) — за такива
-  // бройки полето „Количество“ позволява добавяне на още еднакви бройки
-  // директно от екрана за редакция (вж. bulkExtraQuantity).
-  const isBulkUsedBatch =
-    !readOnly &&
-    form.productCondition === "used" &&
-    !form.indoorUnitSerial.trim() &&
-    !form.outdoorUnitSerial.trim();
-  const effectiveExtraQuantity = isBulkUsedBatch
-    ? Math.min(MAX_BULK_QUANTITY, Math.max(0, parseInt(bulkExtraQuantity, 10) || 0))
-    : 0;
 
   return (
     <div className="w-full max-w-none space-y-3 pb-24 md:space-y-4 md:pb-4">
@@ -373,6 +446,23 @@ export default function EditProductPage() {
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg md:rounded-xl p-3 text-sm font-medium">
           {error}
+        </div>
+      )}
+
+      {!readOnly && loadedAsBatchStub && (
+        <div className="flex items-start gap-3 rounded-xl border-2 border-brand-orange-300 bg-brand-orange-50 p-4 shadow-sm">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-orange-600 text-white text-lg font-black">
+            №
+          </div>
+          <div>
+            <div className="text-sm font-bold text-brand-orange-950">Анонимна бройка от партида (склад)</div>
+            <div className="mt-1 text-xs text-brand-orange-900 leading-relaxed">
+              Тази бройка е част от общата партида <strong>без серийни номера</strong> — така следите колко броя от модела са
+              още в склада. Когато уредът дойде в магазина (рециклиране или showroom) и видите серийните номера, попълнете
+              ги по-долу и натиснете <strong>Запази като инстанция</strong> — не „Запази промените“. Така бройката става
+              конкретна инстанция и <strong>отпада от анонимните</strong> за този модел.
+            </div>
+          </div>
         </div>
       )}
 
@@ -423,8 +513,8 @@ export default function EditProductPage() {
           readOnly={readOnly}
           highlightDelivery={highlightDelivery || isDeliveredInstance}
           highlightRequired={highlightRequired}
-          bulkQuantityValue={isBulkUsedBatch ? bulkExtraQuantity : undefined}
-          onBulkQuantityChange={isBulkUsedBatch ? setBulkExtraQuantity : undefined}
+          bulkQuantityValue={canManageUsedBulkQuantity ? bulkExtraQuantity : undefined}
+          onBulkQuantityChange={canManageUsedBulkQuantity ? setBulkExtraQuantity : undefined}
           bulkQuantityMax={MAX_BULK_QUANTITY}
           bulkQuantityIsAdditive
         />
@@ -439,7 +529,11 @@ export default function EditProductPage() {
             </Button>
             <div className="flex items-center gap-2">
               <Button
-                variant={isOnOrderTemplateLive ? "secondary" : "primary"}
+                variant={
+                  isOnOrderTemplateLive || (loadedAsBatchStub && awaitingBatchFinalize)
+                    ? "secondary"
+                    : "primary"
+                }
                 size="lg"
                 onClick={saveChanges}
                 disabled={saving}
@@ -456,6 +550,23 @@ export default function EditProductPage() {
                 <Button variant="primary" size="lg" onClick={saveAsNewInstance} disabled={saving} className="gap-2 shadow-sm">
                   <Save className="w-5 h-5" />
                   {saving ? "Запазвам..." : "Запази като нова бройка"}
+                </Button>
+              )}
+              {loadedAsBatchStub && (
+                <Button
+                  variant="primary"
+                  size="lg"
+                  onClick={finalizeAsInstance}
+                  disabled={saving || !awaitingBatchFinalize}
+                  className="gap-2 shadow-sm"
+                  title={
+                    awaitingBatchFinalize
+                      ? "Финализира тази бройка с серийни номера"
+                      : "Попълнете двата серийни номера (вътрешно и външно тяло)"
+                  }
+                >
+                  <Save className="w-5 h-5" />
+                  {saving ? "Запазвам..." : "Запази като инстанция"}
                 </Button>
               )}
             </div>
@@ -488,8 +599,34 @@ export default function EditProductPage() {
                     {saving ? "…" : "Нова бройка"}
                   </Button>
                 </>
+              ) : loadedAsBatchStub ? (
+                <>
+                  <Button
+                    variant="secondary"
+                    className="flex-1 justify-center gap-1.5 !py-3 text-xs font-bold rounded-xl"
+                    onClick={saveChanges}
+                    disabled={saving}
+                  >
+                    <Save className="w-4 h-4" />
+                    {saving ? "…" : effectiveExtraQuantity > 0 ? `+ ${effectiveExtraQuantity}` : "Промените"}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    className="flex-1 justify-center gap-1.5 !py-3 text-xs font-bold rounded-xl"
+                    onClick={finalizeAsInstance}
+                    disabled={saving || !awaitingBatchFinalize}
+                  >
+                    <Save className="w-4 h-4" />
+                    {saving ? "…" : "Инстанция"}
+                  </Button>
+                </>
               ) : (
-                <Button variant="primary" className="flex-1 justify-center gap-2 !py-3 text-sm font-bold rounded-xl" onClick={saveChanges} disabled={saving}>
+                <Button
+                  variant="primary"
+                  className="flex-1 justify-center gap-2 !py-3 text-sm font-bold rounded-xl"
+                  onClick={saveChanges}
+                  disabled={saving}
+                >
                   <Save className="w-4 h-4" />
                   {saving
                     ? "Запазвам..."

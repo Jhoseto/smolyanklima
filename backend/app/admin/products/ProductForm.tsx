@@ -76,7 +76,7 @@ export type AdminProductForm = {
   purchasePrice: string;
   isFeatured: boolean;
   showInPublicCatalog: boolean;
-  stockStatus: "in_stock" | "out_of_stock" | "on_order" | "reserved";
+  stockStatus: "in_stock" | "out_of_stock" | "on_order" | "reserved" | "scrapped";
   /** Витрина (магазин) или склад — вътрешно, не е публичният stock_status. */
   stockLocation: ProductStockLocation;
   /** EUROPE / JAPAN в БД: europe / japan */
@@ -490,7 +490,13 @@ export function buildPostBody(form: AdminProductForm) {
 
 export function buildPutBody(
   form: AdminProductForm,
-  opts?: { createInstanceFromOnOrder?: boolean; omitDeliveryFields?: boolean },
+  opts?: {
+    createInstanceFromOnOrder?: boolean;
+    omitDeliveryFields?: boolean;
+    finalizeUsedBatchStub?: boolean;
+    /** Не изпращай серийни № (stub — запис на други полета преди финализиране). */
+    omitSerialFields?: boolean;
+  },
 ) {
   const pwm = strNum(form.priceWithMount);
   const pp = strNum(form.purchasePrice);
@@ -524,8 +530,10 @@ export function buildPutBody(
       })),
   };
   if (!opts?.omitDeliveryFields) {
-    body.indoorUnitSerial = form.indoorUnitSerial.trim() || null;
-    body.outdoorUnitSerial = form.outdoorUnitSerial.trim() || null;
+    if (!opts?.omitSerialFields) {
+      body.indoorUnitSerial = form.indoorUnitSerial.trim() || null;
+      body.outdoorUnitSerial = form.outdoorUnitSerial.trim() || null;
+    }
     body.supplierId = form.supplierId.trim() || null;
     body.purchasedAt = form.purchasedAt.trim() || null;
     body.supplierInvoiceNumber = form.supplierInvoiceNumber.trim() || null;
@@ -533,6 +541,9 @@ export function buildPutBody(
   }
   if (opts?.createInstanceFromOnOrder) {
     body.createInstanceFromOnOrder = true;
+  }
+  if (opts?.finalizeUsedBatchStub) {
+    body.finalizeUsedBatchStub = true;
   }
   return body;
 }
@@ -593,7 +604,7 @@ export function mapLoadedProductToForm(p: {
     isFeatured: Boolean(p.is_featured),
     showInPublicCatalog: Boolean(p.show_in_public_catalog),
     stockStatus:
-      p.stock_status === "out_of_stock" || p.stock_status === "on_order" || p.stock_status === "reserved"
+      p.stock_status === "out_of_stock" || p.stock_status === "on_order" || p.stock_status === "reserved" || p.stock_status === "scrapped"
         ? p.stock_status
         : "in_stock",
     stockLocation: normalizeProductStockLocation(p.stock_location),
@@ -775,7 +786,21 @@ export function ProductFormFields({
   bulkQuantityMax = 50,
   bulkQuantityIsAdditive = false,
 }: Props) {
-  const bulkQuantityMode = form.productCondition === "used" && onBulkQuantityChange != null;
+  /** Партиден stub: втора употреба, все още без серийни номера. */
+  const isUsedBatchStub =
+    form.productCondition === "used" &&
+    !form.indoorUnitSerial.trim() &&
+    !form.outdoorUnitSerial.trim();
+  /** Редактируемо поле за бройки — нов продукт (общ брой) или редакция на stub (добавяне). */
+  const bulkQuantityMode =
+    onBulkQuantityChange != null &&
+    (bulkQuantityIsAdditive ? isUsedBatchStub : form.productCondition === "used");
+  /** Редакция на вече финализирана бройка (има серийни) — показваме защо не може да се добавя. */
+  const bulkQuantityBlockedOnEdit =
+    bulkQuantityIsAdditive &&
+    onBulkQuantityChange != null &&
+    form.productCondition === "used" &&
+    !isUsedBatchStub;
   const ro = Boolean(readOnly);
   /** Локален overlay за марки, създадени по време на тази сесия чрез
    *  „+ Създай нова марка“ в BrandCombobox. Parent prop-ът може да не се
@@ -1858,17 +1883,23 @@ export function ProductFormFields({
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
               <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-1">Статус</div>
+              {form.stockStatus === "out_of_stock" ? (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm font-medium text-rose-800 min-h-[44px] flex items-center">
+                  Продаден — виж отчета в <strong className="mx-1">Продажби</strong>
+                </div>
+              ) : (
               <Select value={form.stockStatus} onChange={(e) => setForm({ ...form, stockStatus: e.target.value as AdminProductForm["stockStatus"] })}>
                 <option value="in_stock">В наличност</option>
                 <option value="reserved">Резервиран</option>
-                <option value="out_of_stock">Изчерпан</option>
+                <option value="scrapped">Бракуван</option>
                 <option value="on_order">По поръчка</option>
               </Select>
+              )}
             </label>
             <div className="block">
               <div className="flex items-center justify-between gap-1 mb-1">
                 <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wide leading-tight">
-                  Количество
+                  {bulkQuantityIsAdditive && isUsedBatchStub ? "Добави още" : "Количество"}
                 </div>
                 {bulkQuantityMode ? (
                   <span
@@ -1890,43 +1921,54 @@ export function ProductFormFields({
                   </span>
                 )}
               </div>
-              {bulkQuantityMode ? (
-                <Input
-                  type="number"
-                  min={bulkQuantityIsAdditive ? 0 : 1}
-                  max={bulkQuantityMax}
-                  value={bulkQuantityValue ?? (bulkQuantityIsAdditive ? "0" : "1")}
-                  onChange={(e) => onBulkQuantityChange?.(e.target.value)}
-                  title={
-                    bulkQuantityIsAdditive
-                      ? "Брой ДОПЪЛНИТЕЛНИ еднакви бройки за добавяне при запис (без серийни номера — въвеждат се по-късно, при продажба/сервиз)."
-                      : "Брой еднакви бройки за създаване наведнъж (без серийни номера — въвеждат се по-късно, при продажба/сервиз)."
-                  }
-                />
-              ) : (
-                (() => {
-                  // Display value:
-                  //  - preview е достъпен и моделът е попълнен → ползваме nextInStock;
-                  //  - в противен случай показваме стойността от базата (form.stockQuantity).
-                  const displayQty =
-                    modelStockPreview && form.brandId && form.modelCode.trim()
-                      ? modelStockPreview.nextInStock
-                      : form.stockQuantity;
+              {(() => {
+                const displayQty =
+                  modelStockPreview && form.brandId && form.modelCode.trim()
+                    ? modelStockPreview.nextInStock
+                    : form.stockQuantity;
+
+                if (bulkQuantityMode) {
                   return (
                     <Input
                       type="number"
-                      min={0}
-                      value={displayQty}
-                      readOnly
-                      tabIndex={-1}
-                      className="bg-slate-100 text-slate-700 cursor-not-allowed border-slate-200"
-                      title="Полето е автоматично — броят на инстанциите със същия модел в наличност."
+                      min={bulkQuantityIsAdditive ? 0 : 1}
+                      max={bulkQuantityMax}
+                      value={bulkQuantityValue ?? (bulkQuantityIsAdditive ? "0" : "1")}
+                      onChange={(e) => onBulkQuantityChange?.(e.target.value)}
+                      title={
+                        bulkQuantityIsAdditive
+                          ? "Колко допълнителни еднакви бройки да се добавят при запис (без серийни номера)."
+                          : "Брой еднакви бройки за създаване наведнъж (без серийни номера)."
+                      }
                     />
                   );
-                })()
-              )}
+                }
+
+                return (
+                  <Input
+                    type="number"
+                    min={0}
+                    value={displayQty}
+                    readOnly
+                    tabIndex={-1}
+                    className="bg-slate-100 text-slate-700 cursor-not-allowed border-slate-200"
+                    title="Полето е автоматично — броят на инстанциите със същия модел в наличност."
+                  />
+                );
+              })()}
             </div>
           </div>
+          {bulkQuantityIsAdditive && isUsedBatchStub && onBulkQuantityChange != null && (
+            <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[10.5px] leading-snug text-slate-600">
+              В наличност за този модел:{" "}
+              <strong className="text-slate-800">
+                {modelStockPreview && form.brandId && form.modelCode.trim()
+                  ? modelStockPreview.nextInStock
+                  : form.stockQuantity}
+              </strong>{" "}
+              бр. (автоматично). По-долу добавяте <strong>още</strong> еднакви бройки без сериен №.
+            </div>
+          )}
           {bulkQuantityMode && (
             <div className="-mt-1 rounded-lg border border-brand-orange-200 bg-brand-orange-50/60 px-2.5 py-1.5 text-[10.5px] leading-snug text-brand-orange-900">
               {bulkQuantityIsAdditive ? (
@@ -1938,7 +1980,7 @@ export function ProductFormFields({
                       {extra === 1 ? "бройка" : "бройки"} (без сериен №) към тази партида.
                     </>
                   ) : (
-                    <>Остави на 0, ако не искаш да добавяш още бройки — само тази ще се запази.</>
+                    <>Оставете <strong>0</strong>, ако само запазвате тази бройка без да добавяте още.</>
                   );
                 })()
               ) : (
@@ -1948,7 +1990,20 @@ export function ProductFormFields({
                 </>
               )}{" "}
               Серийните номера (вътрешно/външно тяло) се въвеждат по-късно,
-              индивидуално за всеки уред — при <strong>продажба</strong> или <strong>прибиране в сервиз</strong>.
+              индивидуално за всеки уред — при <strong>сервиз рециклиране</strong> или <strong>продажба</strong>.
+            </div>
+          )}
+          {bulkQuantityBlockedOnEdit && (
+            <div className="-mt-1 rounded-lg border border-amber-200 bg-amber-50/70 px-2.5 py-1.5 text-[10.5px] leading-snug text-amber-900">
+              Тази бройка вече има серийни номера — не може да се добавят още от тук. За нова партида без сериен №
+              отворете друга бройка от същия модел <strong>без серийни номера</strong>, или създайте от{" "}
+              <strong>Нов климатик → Втора употреба</strong>.
+            </div>
+          )}
+          {!bulkQuantityMode && !bulkQuantityBlockedOnEdit && form.productCondition === "new" && onBulkQuantityChange != null && (
+            <div className="-mt-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[10.5px] leading-snug text-slate-600">
+              За партида еднакви климатици <strong>без серийни номера</strong> изберете{" "}
+              <strong>„Втора употреба“</strong> горе — тогава полето „Количество“ става редактируемо.
             </div>
           )}
 

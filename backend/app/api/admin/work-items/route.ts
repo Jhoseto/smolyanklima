@@ -50,6 +50,8 @@ const QuerySchema = z.object({
   hasSupplierInvoice: z.enum(["yes", "no"]).optional(),
   hasPurchasePrice: z.enum(["yes", "no"]).optional(),
   brandId: z.string().uuid().optional(),
+  /** Панел „Продажби“: продадени от конкретен контейнер (втора употреба). */
+  containerId: z.string().uuid().optional(),
   productRegion: z.enum(["europe", "japan"]).optional(),
   amountMin: z.coerce.number().nonnegative().optional(),
   amountMax: z.coerce.number().nonnegative().optional(),
@@ -144,6 +146,7 @@ export async function GET(req: NextRequest) {
     supplierName,
     supplierKey,
     brandId,
+    containerId,
     productRegion,
     amountMin,
     amountMax,
@@ -157,9 +160,9 @@ export async function GET(req: NextRequest) {
   const ascending = sortDir === "asc";
   const supabase = await adminDb();
   const mountPhases = parseMountPhaseCsv(mountPhase);
-  const needsProductInner = Boolean(brandId || productRegion);
+  const needsProductInner = Boolean(brandId || productRegion || containerId);
   const productFields =
-    "id,slug,name,model_code,price,product_condition,product_region,supplier_invoice_number,indoor_unit_serial,outdoor_unit_serial,brands:brand_id(name)";
+    "id,slug,name,model_code,price,product_condition,product_region,container_id,supplier_invoice_number,indoor_unit_serial,outdoor_unit_serial,brands:brand_id(name),containers:container_id(id,name)";
   const productEmbed = needsProductInner
     ? `products:product_id!inner(${productFields})`
     : `products:product_id(${productFields})`;
@@ -305,6 +308,7 @@ export async function GET(req: NextRequest) {
     }
   }
   if (brandId) query = query.eq("products.brand_id", brandId);
+  if (containerId) query = query.eq("products.container_id", containerId);
   if (productRegion) query = query.eq("products.product_region", productRegion);
   const supplierFilterRaw = (supplierKey ?? supplierName)?.trim();
   if (supplierFilterRaw) {

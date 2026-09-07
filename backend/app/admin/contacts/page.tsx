@@ -4,8 +4,9 @@ import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSessionDraft } from "@/lib/admin/useSessionDraft";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Card, Input, Select, Textarea, Button, Table, Th, Td, AdminContactSuggestRow, useAdminBackHandler } from "../ui";
-import { ChevronDown, ChevronUp, UserPlus, Users, Activity, FileText, Phone, Mail, MapPin, X, Truck, Plus, Trash2, Save, Pencil, Package } from "lucide-react";
+import { ChevronDown, ChevronUp, UserPlus, Users, Activity, FileText, Phone, Mail, MapPin, X, Truck, Plus, Trash2, Save, Pencil, Package, Eye } from "lucide-react";
 import { ProductQuickViewButton } from "../ProductQuickView";
+import { SaleDetailModal } from "../history/SaleDetailModal";
 import { useDebounce } from "@/lib/hooks/useDebounce";
 import { assertNoContactPrimaryPhoneDuplicate } from "@/lib/admin/contactPhoneConflictClient";
 import { inquiryServiceTypeLabel } from "@/lib/inquiry/serviceTypeLabels";
@@ -192,6 +193,17 @@ function statusLabel(status: ContactHistoryRow["status"]): string {
   return status;
 }
 
+function isContactHistorySale(row: ContactHistoryRow): boolean {
+  return row.source !== "inquiry" && (row.event_code ?? "") === "sale";
+}
+
+function contactHistorySaleId(row: ContactHistoryRow): string | null {
+  if (!isContactHistorySale(row)) return null;
+  const raw = row.id.trim();
+  if (raw.startsWith("work:")) return raw.slice("work:".length);
+  return raw;
+}
+
 function customerStatusLabel(status: ContactRow["customer_status"]): string {
   if (status === "vip") return "VIP клиент";
   if (status === "active") return "Активен клиент";
@@ -302,6 +314,7 @@ function AdminContactsPageInner() {
   const [merging, setMerging] = useState(false);
   const [confirmMerge, setConfirmMerge] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [detailSaleId, setDetailSaleId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [showMerge, setShowMerge] = useState(false);
 
@@ -606,6 +619,17 @@ function AdminContactsPageInner() {
   const detailCallBtnClass = detailKind === "client"
     ? "bg-brand-blue-100 text-brand-blue-700 active:bg-brand-blue-200"
     : "bg-brand-orange-100 text-brand-orange-700 active:bg-brand-orange-200";
+
+  const saleIdByProductId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const row of history) {
+      const saleId = contactHistorySaleId(row);
+      if (!saleId) continue;
+      const pid = row.products?.id;
+      if (pid) map.set(pid, saleId);
+    }
+    return map;
+  }, [history]);
 
   return (
     <div className={`w-full space-y-3 -mx-3 px-3 py-2 rounded-2xl transition-colors duration-200 ${theme.pageBg}`}>
@@ -1028,10 +1052,13 @@ function AdminContactsPageInner() {
                             <Th>Продажна</Th>
                             <Th>Закупна</Th>
                             <Th>Наличност</Th>
+                            <Th className="text-center">Действия</Th>
                           </tr>
                         </thead>
                         <tbody>
-                          {linkedProducts.map((p) => (
+                          {linkedProducts.map((p) => {
+                            const linkedSaleId = p.kind === "product" ? saleIdByProductId.get(p.id) : undefined;
+                            return (
                             <tr key={`${p.kind}:${p.id}`} className="hover:bg-slate-50 transition-colors">
                               <Td className="font-medium text-slate-900">
                                 {p.kind === "product" ? (
@@ -1048,13 +1075,31 @@ function AdminContactsPageInner() {
                               <Td className="font-semibold tabular-nums">{fmtEuro(p.price)}</Td>
                               <Td className="font-semibold tabular-nums text-slate-700">{fmtEuro(p.purchase_price)}</Td>
                               <Td className="text-xs text-slate-600">{p.stock_status ?? "—"}</Td>
+                              <Td className="text-center">
+                                {linkedSaleId ? (
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    className="!text-[11px] font-bold whitespace-nowrap"
+                                    onClick={() => setDetailSaleId(linkedSaleId)}
+                                  >
+                                    <Eye className="w-3.5 h-3.5 inline mr-1" />
+                                    Детайли
+                                  </Button>
+                                ) : (
+                                  <span className="text-slate-400 text-xs">—</span>
+                                )}
+                              </Td>
                             </tr>
-                          ))}
+                            );
+                          })}
                         </tbody>
                       </Table>
                     </div>
                     <div className="md:hidden space-y-2">
-                      {linkedProducts.map((p) => (
+                      {linkedProducts.map((p) => {
+                        const linkedSaleId = p.kind === "product" ? saleIdByProductId.get(p.id) : undefined;
+                        return (
                         <div key={`${p.kind}:${p.id}`} className="bg-white rounded-xl border border-slate-200 p-3">
                           <div className="font-semibold text-slate-900 text-sm leading-snug mb-1">
                             {p.kind === "product" ? (
@@ -1072,8 +1117,20 @@ function AdminContactsPageInner() {
                               Закупна: {fmtEuro(p.purchase_price)}
                             </div>
                           )}
+                          {linkedSaleId && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className="mt-2 w-full !text-xs font-bold"
+                              onClick={() => setDetailSaleId(linkedSaleId)}
+                            >
+                              <Eye className="w-3.5 h-3.5 inline mr-1" />
+                              Детайли продажба
+                            </Button>
+                          )}
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </>
                 )}
@@ -1098,6 +1155,7 @@ function AdminContactsPageInner() {
                         <Th>Продукт</Th>
                         <Th>Сума</Th>
                         <Th>Дата</Th>
+                        <Th className="text-center">Действия</Th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1121,10 +1179,28 @@ function AdminContactsPageInner() {
                             {r.total_amount != null ? fmtEuro(r.total_amount) : "—"}
                           </Td>
                           <Td className="text-xs">{new Date(r.due_date || r.created_at).toLocaleString()}</Td>
+                          <Td className="text-center">
+                            {isContactHistorySale(r) ? (
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                className="!text-[11px] font-bold whitespace-nowrap"
+                                onClick={() => {
+                                  const saleId = contactHistorySaleId(r);
+                                  if (saleId) setDetailSaleId(saleId);
+                                }}
+                              >
+                                <Eye className="w-3.5 h-3.5 inline mr-1" />
+                                Детайли
+                              </Button>
+                            ) : (
+                              <span className="text-slate-400 text-xs">—</span>
+                            )}
+                          </Td>
                         </tr>
                       ))}
                       {history.length === 0 && (
-                        <tr><Td colSpan={6} className="text-center py-8 text-slate-500">Няма събития за този контакт.</Td></tr>
+                        <tr><Td colSpan={7} className="text-center py-8 text-slate-500">Няма събития за този контакт.</Td></tr>
                       )}
                     </tbody>
                   </Table>
@@ -1154,6 +1230,20 @@ function AdminContactsPageInner() {
                         {r.products?.name && <ProductQuickViewButton productId={r.products.id} productName={r.products.name} />}
                         <span className="text-[10px] text-slate-400 ml-auto">{new Date(r.due_date || r.created_at).toLocaleDateString("bg-BG")}</span>
                       </div>
+                      {isContactHistorySale(r) && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="mt-2 w-full !text-xs font-bold"
+                          onClick={() => {
+                            const saleId = contactHistorySaleId(r);
+                            if (saleId) setDetailSaleId(saleId);
+                          }}
+                        >
+                          <Eye className="w-3.5 h-3.5 inline mr-1" />
+                          Детайли продажба
+                        </Button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1300,6 +1390,14 @@ function AdminContactsPageInner() {
           </div>
         </div>
       )}
+
+      <SaleDetailModal
+        saleId={detailSaleId}
+        onClose={() => setDetailSaleId(null)}
+        onChanged={() => {
+          if (selected) void loadDetail(selected);
+        }}
+      />
     </div>
   );
 }

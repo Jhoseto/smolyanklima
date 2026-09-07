@@ -3,15 +3,11 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import {
   ChevronLeft, ChevronRight, Download,
-  PenLine, Trash2, X, Loader2, CheckCircle2, Star,
+  PenLine, Trash2, X, Loader2, CheckCircle2, Star, Save,
 } from "lucide-react";
 import { SignatureCanvas } from "../acceptance/SignatureCanvas";
-import {
-  ProductAutocomplete,
-  splitProductSelection,
-  type ProductSuggestion,
-} from "../acceptance/ProductAutocomplete";
 import { RecycleBatchPicker, type RecycleBatchGroup } from "./RecycleBatchPicker";
+import { ProtocolProductLinkPanel } from "./ProtocolProductLinkPanel";
 import { ContactAutocomplete, type ContactSuggestion } from "../acceptance/ContactAutocomplete";
 import type { AdminRole } from "@/lib/admin/db";
 import {
@@ -21,6 +17,10 @@ import {
   type FreonChargeMethod, type BearingsState, type NoiseLevel,
   type RepairServiceKind,
 } from "@/lib/repair-protocol-fields";
+import { combineLegacySerialField } from "@/lib/protocol-contact-fields";
+import { hydrateRepairProtocolClientFields } from "@/lib/admin/matchRepairProtocolProduct";
+import { ProtocolBrandModelFields } from "./ProtocolBrandModelFields";
+import { useAdminBackHandler } from "@/lib/admin/useAdminBackHandler";
 
 // ─── Типове ──────────────────────────────────────────────────────────────────
 
@@ -145,6 +145,30 @@ const STEPS = [
 const inputCls =
   "w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-blue-400 disabled:opacity-60 disabled:cursor-not-allowed";
 
+function formHasDraftContent(data: FormData): boolean {
+  return Boolean(
+    data.client_name || data.client_phone || data.address || data.serial_number ||
+    data.product_id || data.indoor_unit_serial || data.outdoor_unit_serial ||
+    data.ac_brand || data.ac_model ||
+    data.is_japanese_brand !== null || data.freon_charge_method !== null ||
+    data.refrigerant_type || data.refrigerant_amount_g ||
+    data.vacuum_cleaning_done !== null || data.valves_ok !== null ||
+    data.outdoor_bearings_state !== null || data.indoor_bearings_state !== null ||
+    data.pressure_cold_bar || data.pressure_hot_bar ||
+    data.consumption_cold_kw || data.consumption_hot_kw ||
+    data.original_remote !== null || data.outdoor_noise_level !== null ||
+    data.welds_indoor_heat_exchanger !== null ||
+    data.welds_outdoor_heat_exchanger !== null || data.welds_pipes !== null ||
+    data.indoor_mechanism_repaired !== null || data.broken_turbine !== null ||
+    data.service_rating !== null || data.notes ||
+    data.signature_team,
+  );
+}
+
+function serializeFormSnapshot(data: FormData): string {
+  return JSON.stringify(data);
+}
+
 // ─── Главен компонент ────────────────────────────────────────────────────────
 
 export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClose, onSaved }: Props) {
@@ -156,8 +180,9 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClo
   const [error, setError]    = useState<string | null>(null);
   const [linkWarning, setLinkWarning] = useState<string | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
-  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const baselineFormRef = useRef(serializeFormSnapshot({ ...defaultForm(), ...initialData }));
   const isSignedRef = useRef(false);
+  const persistRef = useRef<Promise<unknown> | null>(null);
 
   // master/office могат да коригират signed; service_staff — само преглед
   const canEditSigned = role === "master_admin" || role === "office_staff";
@@ -192,55 +217,66 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClo
   }, [protocolId]);
 
   const applyServerData = useCallback((data: Record<string, unknown>) => {
-    setForm(prev => ({
-      ...prev,
-      date:             (data.date as string) ?? prev.date,
-      work_item_id:     (data.work_item_id as string | null) ?? null,
-      service_kind:     ((data.service_kind as RepairServiceKind) === "recycle" ? "recycle" : "client"),
+    const hydrated = hydrateRepairProtocolClientFields({
+      ac_brand: (data.ac_brand as string | null) ?? "",
+      ac_model: (data.ac_model as string | null) ?? "",
+      serial_number: (data.serial_number as string | null) ?? "",
+      indoor_unit_serial: (data.indoor_unit_serial as string | null) ?? "",
+      outdoor_unit_serial: (data.outdoor_unit_serial as string | null) ?? "",
+    });
+    setForm(prev => {
+      const next: FormData = {
+        ...prev,
+        date:             (data.date as string) ?? prev.date,
+        work_item_id:     (data.work_item_id as string | null) ?? null,
+        service_kind:     ((data.service_kind as RepairServiceKind) === "recycle" ? "recycle" : "client"),
 
-      client_name:      (data.client_name as string) ?? "",
-      client_phone:     (data.client_phone as string) ?? "",
-      client_email:     (data.client_email as string) ?? "",
-      address:          (data.address as string) ?? "",
-      serial_number:    (data.serial_number as string) ?? "",
+        client_name:      (data.client_name as string) ?? "",
+        client_phone:     (data.client_phone as string) ?? "",
+        client_email:     (data.client_email as string) ?? "",
+        address:          (data.address as string) ?? "",
+        serial_number:    (data.serial_number as string) ?? "",
 
-      product_id:           (data.product_id as string | null) ?? null,
-      indoor_unit_serial:   (data.indoor_unit_serial as string) ?? "",
-      outdoor_unit_serial:  (data.outdoor_unit_serial as string) ?? "",
+        product_id:           (data.product_id as string | null) ?? null,
+        indoor_unit_serial:   hydrated.indoor_unit_serial,
+        outdoor_unit_serial:  hydrated.outdoor_unit_serial,
 
-      ac_brand:         (data.ac_brand as string) ?? "",
-      ac_model:         (data.ac_model as string) ?? "",
+        ac_brand:         hydrated.ac_brand,
+        ac_model:         hydrated.ac_model,
 
-      is_japanese_brand:   (data.is_japanese_brand as boolean | null) ?? null,
-      freon_charge_method: (data.freon_charge_method as FreonChargeMethod | null) ?? null,
-      refrigerant_type:     (data.refrigerant_type as string) ?? "",
-      refrigerant_amount_g: data.refrigerant_amount_g != null ? String(data.refrigerant_amount_g) : "",
+        is_japanese_brand:   (data.is_japanese_brand as boolean | null) ?? null,
+        freon_charge_method: (data.freon_charge_method as FreonChargeMethod | null) ?? null,
+        refrigerant_type:     (data.refrigerant_type as string) ?? "",
+        refrigerant_amount_g: data.refrigerant_amount_g != null ? String(data.refrigerant_amount_g) : "",
 
-      vacuum_cleaning_done:   (data.vacuum_cleaning_done as boolean | null) ?? null,
-      valves_ok:              (data.valves_ok as boolean | null) ?? null,
-      outdoor_bearings_state: (data.outdoor_bearings_state as BearingsState | null) ?? null,
-      indoor_bearings_state:  (data.indoor_bearings_state as BearingsState | null) ?? null,
+        vacuum_cleaning_done:   (data.vacuum_cleaning_done as boolean | null) ?? null,
+        valves_ok:              (data.valves_ok as boolean | null) ?? null,
+        outdoor_bearings_state: (data.outdoor_bearings_state as BearingsState | null) ?? null,
+        indoor_bearings_state:  (data.indoor_bearings_state as BearingsState | null) ?? null,
 
-      pressure_cold_bar:   data.pressure_cold_bar != null ? String(data.pressure_cold_bar) : "",
-      pressure_hot_bar:    data.pressure_hot_bar != null ? String(data.pressure_hot_bar) : "",
-      consumption_cold_kw: data.consumption_cold_kw != null ? String(data.consumption_cold_kw) : "",
-      consumption_hot_kw:  data.consumption_hot_kw != null ? String(data.consumption_hot_kw) : "",
+        pressure_cold_bar:   data.pressure_cold_bar != null ? String(data.pressure_cold_bar) : "",
+        pressure_hot_bar:    data.pressure_hot_bar != null ? String(data.pressure_hot_bar) : "",
+        consumption_cold_kw: data.consumption_cold_kw != null ? String(data.consumption_cold_kw) : "",
+        consumption_hot_kw:  data.consumption_hot_kw != null ? String(data.consumption_hot_kw) : "",
 
-      original_remote:     (data.original_remote as boolean | null) ?? null,
-      outdoor_noise_level: (data.outdoor_noise_level as NoiseLevel | null) ?? null,
+        original_remote:     (data.original_remote as boolean | null) ?? null,
+        outdoor_noise_level: (data.outdoor_noise_level as NoiseLevel | null) ?? null,
 
-      welds_indoor_heat_exchanger:  (data.welds_indoor_heat_exchanger as boolean | null) ?? null,
-      welds_outdoor_heat_exchanger: (data.welds_outdoor_heat_exchanger as boolean | null) ?? null,
-      welds_pipes:                  (data.welds_pipes as boolean | null) ?? null,
-      indoor_mechanism_repaired:    (data.indoor_mechanism_repaired as boolean | null) ?? null,
-      broken_turbine:               (data.broken_turbine as boolean | null) ?? null,
+        welds_indoor_heat_exchanger:  (data.welds_indoor_heat_exchanger as boolean | null) ?? null,
+        welds_outdoor_heat_exchanger: (data.welds_outdoor_heat_exchanger as boolean | null) ?? null,
+        welds_pipes:                  (data.welds_pipes as boolean | null) ?? null,
+        indoor_mechanism_repaired:    (data.indoor_mechanism_repaired as boolean | null) ?? null,
+        broken_turbine:               (data.broken_turbine as boolean | null) ?? null,
 
-      service_rating: (data.service_rating as number | null) ?? null,
+        service_rating: (data.service_rating as number | null) ?? null,
 
-      notes:            (data.notes as string) ?? "",
-      signature_team:   (data.signature_team as string | null) ?? null,
-      status:           (data.status as FormData["status"]) ?? prev.status,
-    }));
+        notes:            (data.notes as string) ?? "",
+        signature_team:   (data.signature_team as string | null) ?? null,
+        status:           (data.status as FormData["status"]) ?? prev.status,
+      };
+      baselineFormRef.current = serializeFormSnapshot(next);
+      return next;
+    });
   }, []);
 
   // Auto-detect японска марка
@@ -254,51 +290,52 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.ac_brand, form.ac_model]);
 
-  const persistRef = useRef<Promise<unknown> | null>(null);
-
-  useEffect(() => () => {
-    if (autoSaveTimer.current) {
-      clearTimeout(autoSaveTimer.current);
-      autoSaveTimer.current = null;
-    }
-  }, []);
-
-  const autoSave = useCallback(async (data: FormData, id: string | null) => {
-    if (isSignedRef.current) return;
-
-    const hasContent =
-      data.client_name || data.client_phone || data.address || data.serial_number ||
-      data.product_id || data.indoor_unit_serial || data.outdoor_unit_serial ||
-      data.ac_brand || data.ac_model ||
-      data.is_japanese_brand !== null || data.freon_charge_method !== null ||
-      data.refrigerant_type || data.refrigerant_amount_g ||
-      data.vacuum_cleaning_done !== null || data.valves_ok !== null ||
-      data.outdoor_bearings_state !== null || data.indoor_bearings_state !== null ||
-      data.pressure_cold_bar || data.pressure_hot_bar ||
-      data.consumption_cold_kw || data.consumption_hot_kw ||
-      data.original_remote !== null || data.outdoor_noise_level !== null ||
-      data.welds_indoor_heat_exchanger !== null ||
-      data.welds_outdoor_heat_exchanger !== null || data.welds_pipes !== null ||
-      data.indoor_mechanism_repaired !== null || data.broken_turbine !== null ||
-      data.service_rating !== null || data.notes ||
-      data.signature_team;
-    if (!hasContent && !id) return;
-
-    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
-    autoSaveTimer.current = setTimeout(async () => {
-      if (isSignedRef.current) return;
-      await persistForm(data, id, false);
-    }, 2000);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const isFormDirty = useCallback(() => {
+    return serializeFormSnapshot(form) !== baselineFormRef.current;
+  }, [form]);
 
   const update = useCallback(<K extends keyof FormData>(key: K, val: FormData[K]) => {
     if (isSignedRef.current) return;
-    setForm(prev => {
-      const next = { ...prev, [key]: val };
-      autoSave(next, savedId);
-      return next;
-    });
-  }, [savedId, autoSave]);
+    setForm(prev => ({ ...prev, [key]: val }));
+  }, []);
+
+  const markSavedBaseline = useCallback((data: FormData) => {
+    baselineFormRef.current = serializeFormSnapshot(data);
+  }, []);
+
+  const handleCancel = useCallback(() => {
+    if (isSigned) {
+      onClose();
+      return;
+    }
+    if (isFormDirty()) {
+      const ok = window.confirm(
+        "Откажи без запазване?\n\nВъведените промени няма да бъдат запазени.",
+      );
+      if (!ok) return;
+    }
+    onClose();
+  }, [isSigned, isFormDirty, onClose]);
+
+  useAdminBackHandler(true, handleCancel, "service-protocol-wizard");
+
+  const saveDraft = async (closeAfter = false) => {
+    if (isSigned) {
+      if (closeAfter) onClose();
+      return;
+    }
+    if (!formHasDraftContent(form) && !savedId) {
+      if (closeAfter) onClose();
+      return;
+    }
+    setError(null);
+    const id = await persistForm(form, savedId, true);
+    if (id == null) return;
+    setSavedId(id);
+    markSavedBaseline(form);
+    onSaved(id);
+    if (closeAfter) onClose();
+  };
 
   // ── Запазване в API ─────────────────────────────────────────────────────
 
@@ -326,6 +363,9 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClo
         return Number.isFinite(n) ? n : null;
       };
 
+      const clientIndoor = data.indoor_unit_serial.trim() || null;
+      const clientOutdoor = data.outdoor_unit_serial.trim() || null;
+
       const payload = {
         work_item_id:     data.work_item_id,
         date:             data.date || new Date().toISOString().slice(0, 10),
@@ -335,12 +375,18 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClo
         client_phone:     data.service_kind === "recycle" ? null : (data.client_phone.trim() || null),
         client_email:     data.service_kind === "recycle" ? null : (data.client_email.trim() || null),
         address:          data.service_kind === "recycle" ? null : (data.address.trim() || null),
-        serial_number:    data.service_kind === "recycle" ? null : (data.serial_number.trim() || null),
+        serial_number:    data.service_kind === "recycle"
+          ? null
+          : (combineLegacySerialField(clientIndoor, clientOutdoor) ?? (data.serial_number.trim() || null)),
         paid_amount:      null,
 
-        product_id:           data.service_kind === "recycle" ? data.product_id : null,
-        indoor_unit_serial:   data.service_kind === "recycle" ? (data.indoor_unit_serial.trim() || null) : null,
-        outdoor_unit_serial:  data.service_kind === "recycle" ? (data.outdoor_unit_serial.trim() || null) : null,
+        product_id:           data.product_id ?? null,
+        indoor_unit_serial:   data.service_kind === "recycle"
+          ? (data.indoor_unit_serial.trim() || null)
+          : clientIndoor,
+        outdoor_unit_serial:  data.service_kind === "recycle"
+          ? (data.outdoor_unit_serial.trim() || null)
+          : clientOutdoor,
 
         ac_brand:         data.ac_brand || null,
         ac_model:         data.ac_model || null,
@@ -412,7 +458,8 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClo
           setForm(prev => ({ ...prev, status: json.data!.status! }));
         }
         setLinkWarning(json.productLinkWarning ?? null);
-        onSaved(newId);
+        // onSaved само при явно запазване — auto-save не трябва да затваря wizard-а.
+        if (showSaving) onSaved(newId);
         return newId;
       }
     } catch (e: unknown) {
@@ -426,7 +473,11 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClo
   const finalize = async () => {
     if (isSigned) return;
     const id = await persistForm(form, savedId, true);
-    if (id) setSavedId(id);
+    if (id) {
+      setSavedId(id);
+      markSavedBaseline(form);
+      onSaved(id);
+    }
   };
 
   const downloadPdf = async () => {
@@ -464,7 +515,11 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClo
       {/* ── Хедър с прогрес ── */}
       <div className="bg-white border-b border-slate-200 shrink-0">
         <div className="flex items-center gap-3 px-4 py-3">
-          <button onClick={onClose} className="text-slate-500 active:text-slate-800 p-1 -ml-1" title="Затвори">
+          <button
+            onClick={handleCancel}
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 active:bg-slate-200 transition-colors -ml-1 shrink-0"
+            title="Откажи без запазване"
+          >
             <X className="w-5 h-5" />
           </button>
           <div className="flex-1 min-w-0">
@@ -476,7 +531,19 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClo
               Само преглед
             </span>
           )}
-          {saving && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
+          {!isSigned && (
+            <button
+              type="button"
+              onClick={() => void saveDraft(false)}
+              disabled={saving}
+              className="flex items-center gap-1.5 px-3 min-h-[44px] rounded-xl border-2 border-brand-blue-200 text-brand-blue-800 font-semibold text-sm hover:bg-brand-blue-50 active:bg-brand-blue-100 disabled:opacity-50 shrink-0 transition-colors"
+              title="Запази черновата — може да довършите по-късно"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              <span className="text-xs font-bold">Запази</span>
+            </button>
+          )}
+          {saving && isSigned && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
         </div>
         <div className="h-1 bg-slate-100">
           <div
@@ -536,7 +603,6 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClo
                                     outdoor_unit_serial: "",
                                   }),
                             };
-                            autoSave(next, savedId);
                             return next;
                           });
                         }}
@@ -585,7 +651,6 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClo
                             address:      contact.address ?? prev.address,
                           } : {}),
                         };
-                        autoSave(next, savedId);
                         return next;
                       });
                     }}
@@ -613,50 +678,61 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClo
                     />
                   </Field>
 
-                  <ProductAutocomplete
-                    label="Марка и модел"
-                    value={[form.ac_brand, form.ac_model].filter(Boolean).join(" ")}
+                  <ProtocolBrandModelFields
+                    value={{ ac_brand: form.ac_brand, ac_model: form.ac_model }}
                     disabled={isSigned}
-                    placeholder="Търси в каталога или въведи ръчно"
-                    onChange={(label, product?: ProductSuggestion) => {
+                    onChange={(next) => {
                       if (isSignedRef.current) return;
                       setForm(prev => {
-                        let ac_brand = "";
-                        let ac_model = label.trim();
-                        if (product) {
-                          const split = splitProductSelection(product);
-                          ac_brand = split.brand;
-                          ac_model = split.model;
-                        }
-                        const serialFromProduct = product
-                          ? [product.indoor_unit_serial, product.outdoor_unit_serial]
-                              .filter(Boolean)
-                              .join(" / ")
-                          : "";
-                        const next = {
+                        const merged = {
                           ...prev,
-                          ac_brand,
-                          ac_model,
-                          ...(serialFromProduct && !prev.serial_number.trim()
-                            ? { serial_number: serialFromProduct }
+                          ac_brand: next.ac_brand,
+                          ac_model: next.ac_model,
+                          product_id: next.product_id,
+                          ...(next.indoor_unit_serial && !prev.indoor_unit_serial.trim()
+                            ? { indoor_unit_serial: next.indoor_unit_serial }
+                            : {}),
+                          ...(next.outdoor_unit_serial && !prev.outdoor_unit_serial.trim()
+                            ? { outdoor_unit_serial: next.outdoor_unit_serial }
                             : {}),
                         };
-                        autoSave(next, savedId);
-                        return next;
+                        return merged;
                       });
                     }}
                   />
 
-                  <Field label="Сериен номер">
-                    <input
-                      type="text"
-                      value={form.serial_number}
-                      onChange={e => update("serial_number", e.target.value)}
-                      placeholder="От табелката на тялото"
-                      disabled={isSigned}
-                      className={inputCls}
-                    />
-                  </Field>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Field label="Сериен № вътрешно тяло">
+                      <input
+                        type="text"
+                        value={form.indoor_unit_serial}
+                        onChange={e => update("indoor_unit_serial", e.target.value)}
+                        placeholder="От табелката на вътрешното тяло"
+                        disabled={isSigned}
+                        className={inputCls}
+                      />
+                    </Field>
+                    <Field label="Сериен № външно тяло">
+                      <input
+                        type="text"
+                        value={form.outdoor_unit_serial}
+                        onChange={e => update("outdoor_unit_serial", e.target.value)}
+                        placeholder="От табелката на външното тяло"
+                        disabled={isSigned}
+                        className={inputCls}
+                      />
+                    </Field>
+                  </div>
+
+                  <ProtocolProductLinkPanel
+                    protocolId={savedId}
+                    productId={form.product_id}
+                    disabled={isSigned}
+                    onLink={(productId) => {
+                      if (isSignedRef.current) return;
+                      setForm(prev => ({ ...prev, product_id: productId }));
+                    }}
+                  />
                 </>
               )}
 
@@ -677,9 +753,7 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClo
                       setForm(prev => {
                         const ac_brand = group ? group.brand : prev.ac_brand;
                         const ac_model = group ? group.model : prev.ac_model;
-                        const next = { ...prev, product_id: productId, ac_brand, ac_model };
-                        autoSave(next, savedId);
-                        return next;
+                        return { ...prev, product_id: productId, ac_brand, ac_model };
                       });
                     }}
                   />
@@ -1041,8 +1115,27 @@ export function ServiceProtocolFormWizard({ protocolId, initialData, role, onClo
             <ChevronLeft className="w-4 h-4" />
             Назад
           </button>
+          {!isSigned && (
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="px-4 py-2.5 rounded-xl border-2 border-slate-200 text-slate-700 font-semibold text-sm hover:bg-slate-50 active:bg-slate-100"
+            >
+              Откажи
+            </button>
+          )}
+          {!isSigned && (
+            <button
+              type="button"
+              onClick={() => void saveDraft(false)}
+              disabled={saving}
+              className="px-4 py-2.5 rounded-xl border-2 border-brand-blue-200 text-brand-blue-800 font-semibold text-sm hover:bg-brand-blue-50 active:bg-brand-blue-100 disabled:opacity-50"
+            >
+              Запази
+            </button>
+          )}
           <button
-            onClick={() => isLastStep ? onClose() : setStep(s => s + 1)}
+            onClick={() => isLastStep ? handleCancel() : setStep(s => s + 1)}
             className="flex-1 flex items-center justify-center gap-1 px-4 py-2.5 bg-brand-blue-700 text-white rounded-xl font-semibold text-sm hover:bg-brand-blue-800 active:bg-brand-blue-900"
           >
             {isLastStep ? "Затвори" : "Напред"}

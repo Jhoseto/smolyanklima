@@ -50,6 +50,8 @@ type EventCode =
   | "service_in_shop"
   | "consultation";
 
+type ContainerEmbed = { id?: string; name?: string | null };
+
 type WorkRow = {
   id: string;
   type: "sale" | "service" | "stock_in" | "stock_out" | "task";
@@ -85,8 +87,18 @@ type WorkRow = {
     supplier_invoice_number?: string | null;
     indoor_unit_serial?: string | null;
     outdoor_unit_serial?: string | null;
+    container_id?: string | null;
+    containers?: ContainerEmbed | ContainerEmbed[] | null;
   } | null;
 };
+
+function saleContainerLabel(products: WorkRow["products"]): string | null {
+  if (!products) return null;
+  const c = products.containers;
+  if (!c) return null;
+  const row = Array.isArray(c) ? c[0] : c;
+  return row?.name?.trim() || null;
+}
 
 function contactTargetFromRow(row: WorkRow): ContactHistoryTarget {
   const embedded = Array.isArray(row.contacts) ? row.contacts[0] : row.contacts;
@@ -135,22 +147,25 @@ const SALE_TABLE_TH = "text-center whitespace-nowrap !text-xs !px-2 !py-2.5";
 const SALE_TABLE_TD = "!px-2.5 !py-2 align-middle text-xs";
 
 const SALE_SERIAL_TD =
-  `${SALE_TABLE_TD} text-center font-mono text-[11px] text-slate-600 truncate max-w-[7rem]`;
+  `${SALE_TABLE_TD} text-center font-mono text-[11px] text-slate-600 truncate max-w-[5.5rem]`;
 
 const SALE_PRICE_TD =
-  `${SALE_TABLE_TD} text-center tabular-nums font-semibold whitespace-nowrap min-w-[5.5rem]`;
+  `${SALE_TABLE_TD} text-center tabular-nums font-semibold whitespace-nowrap min-w-[4.75rem]`;
+
+const SALE_DATE_TD =
+  `${SALE_TABLE_TD} text-center text-slate-500 font-medium whitespace-nowrap tabular-nums min-w-[4.75rem]`;
 
 const SALE_STICKY_ACTIONS =
-  "sticky right-0 z-20 bg-white shadow-[-6px_0_8px_-4px_rgba(15,23,42,0.12)] !px-2 !py-2 w-[8.5rem] min-w-[8.5rem] text-center";
+  "sticky right-0 z-20 bg-white shadow-[-6px_0_8px_-4px_rgba(15,23,42,0.12)] !px-1.5 !py-2 w-[7.75rem] min-w-[7.75rem] text-center";
 
 const SALE_STICKY_ACTIONS_HEAD = `${SALE_STICKY_ACTIONS} bg-slate-50`;
 
 const SALE_COMPACT_PILL =
   "inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap border leading-tight";
 
-function SaleHeaderTh({ label, className = "" }: { label: string; className?: string }) {
+function SaleHeaderTh({ label, className = "", title }: { label: string; className?: string; title?: string }) {
   return (
-    <Th className={`${SALE_TABLE_TH} ${className}`}>
+    <Th className={`${SALE_TABLE_TH} ${className}`} title={title}>
       {label}
     </Th>
   );
@@ -341,7 +356,13 @@ function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-function emptySalesMessage(conditions: SaleProductConditionFilter[]): string {
+function emptySalesMessage(conditions: SaleProductConditionFilter[], containerName?: string | null): string {
+  if (containerName) {
+    if (conditions.length === 1 && conditions[0] === "used") {
+      return `Няма продажби на втора употреба от „${containerName}“.`;
+    }
+    return `Няма продажби от контейнер „${containerName}“ по избраните критерии.`;
+  }
   if (conditions.length === 1 && conditions[0] === "new") return "Няма продажби на нови продукти.";
   if (conditions.length === 1 && conditions[0] === "used") return "Няма продажби на втора употреба.";
   return "Няма продажби по избраните критерии.";
@@ -393,6 +414,7 @@ export default function AdminHistoryPage() {
   const [dataFlags, setDataFlags] = useState<SaleDataFlagFilter[]>([]);
   const [productRegion, setProductRegion] = useState<"" | ProductRegion>("");
   const [brandId, setBrandId] = useState("");
+  const [containerId, setContainerId] = useState("");
   const [supplierKey, setSupplierKey] = useState("");
   const [amountMin, setAmountMin] = useState("");
   const [amountMax, setAmountMax] = useState("");
@@ -400,6 +422,7 @@ export default function AdminHistoryPage() {
   const [toDate, setToDate] = useState("");
   const [periodPreset, setPeriodPreset] = useState("");
   const [brands, setBrands] = useState<{ id: string; name: string }[]>([]);
+  const [containers, setContainers] = useState<{ id: string; name: string }[]>([]);
   const [supplierOptions, setSupplierOptions] = useState<GroupedSupplier[]>([]);
   const [page, setPage] = useState(1);
   const [meta, setMeta] = useState({ page: 1, perPage: 30, total: 0 });
@@ -442,11 +465,13 @@ export default function AdminHistoryPage() {
   useEffect(() => {
     void Promise.all([
       fetch("/api/admin/meta/brands?usedInProducts=1", { credentials: "include" }).then((r) => r.json()),
+      fetch("/api/admin/containers?perPage=200", { credentials: "include" }).then((r) => r.json()),
       fetch("/api/admin/contacts?kind=supplier&perPage=500", { credentials: "include" }).then((r) => r.json()),
       fetch("/api/admin/meta/sale-suppliers", { credentials: "include" }).then((r) => r.json()),
     ])
-      .then(([brandsJson, contactsJson, saleSuppliersJson]) => {
+      .then(([brandsJson, containersJson, contactsJson, saleSuppliersJson]) => {
         setBrands((brandsJson as { data?: { id: string; name: string }[] }).data ?? []);
+        setContainers((containersJson as { data?: { id: string; name: string }[] }).data ?? []);
         const contactNames: string[] = [];
         for (const row of (contactsJson as { data?: { full_name?: string }[] }).data ?? []) {
           const n = (row.full_name ?? "").trim();
@@ -457,6 +482,7 @@ export default function AdminHistoryPage() {
       })
       .catch(() => {
         setBrands([]);
+        setContainers([]);
         setSupplierOptions([]);
       });
   }, []);
@@ -472,6 +498,7 @@ export default function AdminHistoryPage() {
       if (dataFlags.length) n += dataFlags.length;
       if (productRegion) n += 1;
       if (brandId) n += 1;
+      if (containerId) n += 1;
       if (supplierKey) n += 1;
     } else if (serviceStatuses.length) {
       n += 1;
@@ -481,7 +508,7 @@ export default function AdminHistoryPage() {
     if (fromDate || toDate) n += 1;
     if (debouncedQ.trim()) n += 1;
     return n;
-  }, [isProductSales, productConditions, mountPhases, dataFlags, productRegion, brandId, supplierKey, serviceStatuses, amountMin, amountMax, fromDate, toDate, debouncedQ]);
+  }, [isProductSales, productConditions, mountPhases, dataFlags, productRegion, brandId, containerId, supplierKey, serviceStatuses, amountMin, amountMax, fromDate, toDate, debouncedQ]);
 
   function switchSalesTab(tab: SalesPanelTabId) {
     setPage(1);
@@ -508,6 +535,7 @@ export default function AdminHistoryPage() {
     setDataFlags([]);
     setProductRegion("");
     setBrandId("");
+    setContainerId("");
     setSupplierKey("");
     setServiceStatuses([]);
     setAmountMin("");
@@ -546,6 +574,7 @@ export default function AdminHistoryPage() {
       if (dataFlags.includes("purchase")) sp.set("hasPurchasePrice", "yes");
       if (productRegion) sp.set("productRegion", productRegion);
       if (brandId) sp.set("brandId", brandId);
+      if (containerId) sp.set("containerId", containerId);
       const conditionCsv = productConditionCsv(productConditions);
       if (conditionCsv) sp.set("productCondition", conditionCsv);
     } else if (serviceStatuses.length > 0) {
@@ -562,7 +591,7 @@ export default function AdminHistoryPage() {
     sp.set("sortBy", sortBy);
     sp.set("sortDir", sortDir);
     return sp.toString();
-  }, [debouncedQ, salesTab, isProductSales, mountPhases, dataFlags, productRegion, brandId, supplierKey, amountMin, amountMax, fromDate, toDate, page, productConditions, serviceStatuses, sortBy, sortDir]);
+  }, [debouncedQ, salesTab, isProductSales, mountPhases, dataFlags, productRegion, brandId, containerId, supplierKey, amountMin, amountMax, fromDate, toDate, page, productConditions, serviceStatuses, sortBy, sortDir]);
 
   const reportQs = useMemo(() => {
     const sp = new URLSearchParams();
@@ -574,6 +603,7 @@ export default function AdminHistoryPage() {
     if (dataFlags.includes("purchase")) sp.set("hasPurchasePrice", "yes");
     if (productRegion) sp.set("productRegion", productRegion);
     if (brandId) sp.set("brandId", brandId);
+    if (containerId) sp.set("containerId", containerId);
     const min = amountMin.trim() ? Number(amountMin.replace(",", ".")) : NaN;
     const max = amountMax.trim() ? Number(amountMax.replace(",", ".")) : NaN;
     if (Number.isFinite(min)) sp.set("amountMin", String(min));
@@ -583,7 +613,7 @@ export default function AdminHistoryPage() {
     const conditionCsv = productConditionCsv(productConditions);
     if (conditionCsv) sp.set("productCondition", conditionCsv);
     return sp.toString();
-  }, [debouncedQ, mountPhases, dataFlags, productRegion, brandId, supplierKey, amountMin, amountMax, fromDate, toDate, productConditions]);
+  }, [debouncedQ, mountPhases, dataFlags, productRegion, brandId, containerId, supplierKey, amountMin, amountMax, fromDate, toDate, productConditions]);
 
   const reportFiltersHint = useMemo(() => {
     const parts: string[] = [saleProductConditionFilterLabel(productConditions)];
@@ -601,6 +631,10 @@ export default function AdminHistoryPage() {
     if (brandId) {
       const b = brands.find((x) => x.id === brandId);
       if (b) parts.push(`Марка: ${b.name}`);
+    }
+    if (containerId) {
+      const c = containers.find((x) => x.id === containerId);
+      if (c) parts.push(`Контейнер: ${c.name}`);
     }
     if (supplierKey) {
       const s = supplierOptions.find((x) => x.key === supplierKey);
@@ -621,6 +655,8 @@ export default function AdminHistoryPage() {
     mountPhases,
     brandId,
     brands,
+    containerId,
+    containers,
     supplierKey,
     supplierOptions,
     productRegion,
@@ -699,6 +735,7 @@ export default function AdminHistoryPage() {
   }
 
   const pages = Math.max(1, Math.ceil(meta.total / meta.perPage));
+  const containerName = containerId ? containers.find((c) => c.id === containerId)?.name ?? null : null;
 
   const canPendingActions = (row: WorkRow) =>
     row.sale_install_state === "pending_mount" && row.status !== "cancelled";
@@ -978,6 +1015,22 @@ export default function AdminHistoryPage() {
             ))}
           </Select>
           <Select
+            value={containerId}
+            onChange={(e) => {
+              setPage(1);
+              setContainerId(e.target.value);
+            }}
+            className={`!w-auto min-w-[8rem] max-w-[11rem] !py-1 !text-xs ${isProductSales ? "" : "hidden"}`}
+            title="Контейнер (втора употреба)"
+          >
+            <option value="">Контейнер</option>
+            {containers.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </Select>
+          <Select
             value={supplierKey}
             onChange={(e) => {
               setPage(1);
@@ -1050,32 +1103,34 @@ export default function AdminHistoryPage() {
         <>
       {/* Desktop table */}
       <div className="hidden md:block min-w-0">
-        <Table tableClassName="w-full min-w-[1180px]">
+        <Table tableClassName="w-full min-w-[1120px]">
           <thead>
             <tr>
-              <SortableTh label="Продукт" field="product" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[11rem]`} />
-              <SortableTh label="Монтаж" field="sale_install_state" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[5.5rem]`} />
-              <SortableTh label="Статус" field="status" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[5.5rem]`} />
-              <SortableTh label="Контакт" field="customer_name" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[8rem]`} />
-              <SortableTh label="Телефон" field="customer_phone" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[6.5rem]`} />
-              <SaleHeaderTh label="Вътрешно" className="min-w-[6.5rem]" />
-              <SaleHeaderTh label="Външно" className="min-w-[6.5rem]" />
-              <SortableTh label="Доставчик" field="supplier" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[7rem]`} />
-              <SortableTh label="Фактура" field="supplier_invoice" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[6.5rem]`} />
-              <SortableTh label="Доставна" field="purchase_price" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[5.5rem]`} />
-              <SortableTh label="Продажна" field="total_amount" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[5.5rem]`} />
-              <SortableTh label="Дата" field="sale_date" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[5.5rem]`} />
+              <SortableTh label="Продукт" field="product" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[8.5rem]`} />
+              <SortableTh label="Монтаж" field="sale_install_state" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[4.75rem]`} />
+              <SortableTh label="Статус" field="status" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[4.75rem]`} />
+              <SortableTh label="Контакт" field="customer_name" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[6.5rem]`} />
+              <SortableTh label="Телефон" field="customer_phone" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[5.5rem]`} />
+              <SaleHeaderTh label="Вътр." className="min-w-[5rem]" title="Сериен № вътрешно" />
+              <SaleHeaderTh label="Външ." className="min-w-[5rem]" title="Сериен № външно" />
+              <SaleHeaderTh label="Конт." className="min-w-[5rem]" title="Контейнер" />
+              <SortableTh label="Доставчик" field="supplier" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[5.5rem]`} />
+              <SortableTh label="Фактура" field="supplier_invoice" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[5rem]`} />
+              <SortableTh label="Дата" field="sale_date" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[4.75rem]`} />
+              <SortableTh label="Доставна" field="purchase_price" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[4.75rem]`} />
+              <SortableTh label="Продажна" field="total_amount" sortBy={sortBy as SortField} sortDir={sortDir} onSort={handleSort} className={`${SALE_TABLE_TH} min-w-[4.75rem]`} />
               <SaleHeaderTh label="Действия" className={SALE_STICKY_ACTIONS_HEAD} />
             </tr>
           </thead>
           <tbody>
             {items.map((row) => {
               const productName = row.products?.name ?? "—";
+              const containerLabel = saleContainerLabel(row.products);
               const showActions = canPendingActions(row);
               const cancelLabel = saleCancelReasonLabel(row.cancel_reason);
               return (
                 <tr key={row.id} className="hover:bg-slate-50 transition-colors group">
-                  <Td className={`${SALE_TABLE_TD} max-w-[14rem]`}>
+                  <Td className={`${SALE_TABLE_TD} max-w-[11rem]`}>
                     <ProductQuickViewButton
                       productId={row.products?.id}
                       productName={productName}
@@ -1093,7 +1148,7 @@ export default function AdminHistoryPage() {
                   <Td className={`${SALE_TABLE_TD} text-center`}>
                     <span className={tableStatusPillClass(row.status)}>{TABLE_STATUS_TEXT[row.status]}</span>
                   </Td>
-                  <Td className={`${SALE_TABLE_TD} max-w-[10rem]`}>
+                  <Td className={`${SALE_TABLE_TD} max-w-[8rem]`}>
                     <ContactNameButton
                       name={row.customer_name}
                       contactId={contactTargetFromRow(row).contactId}
@@ -1111,11 +1166,17 @@ export default function AdminHistoryPage() {
                   <Td className={SALE_SERIAL_TD} title={row.products?.outdoor_unit_serial ?? ""}>
                     {row.products?.outdoor_unit_serial?.trim() || "—"}
                   </Td>
-                  <Td className={`${SALE_TABLE_TD} max-w-[9rem] truncate text-left text-slate-600`} title={saleSupplierName(row) ?? ""}>
+                  <Td className={`${SALE_TABLE_TD} max-w-[6rem] truncate text-center text-slate-600`} title={containerLabel ?? ""}>
+                    {containerLabel || "—"}
+                  </Td>
+                  <Td className={`${SALE_TABLE_TD} max-w-[7rem] truncate text-left text-slate-600`} title={saleSupplierName(row) ?? ""}>
                     {saleSupplierName(row) || "—"}
                   </Td>
-                  <Td className={`${SALE_TABLE_TD} max-w-[8rem] truncate font-mono text-[11px] text-center text-slate-700`} title={saleSupplierInvoice(row) ?? ""}>
+                  <Td className={`${SALE_TABLE_TD} max-w-[6rem] truncate font-mono text-[11px] text-center text-slate-700`} title={saleSupplierInvoice(row) ?? ""}>
                     {saleSupplierInvoice(row) || "—"}
+                  </Td>
+                  <Td className={SALE_DATE_TD}>
+                    {saleDateDisplay(row)}
                   </Td>
                   <Td className={`${SALE_PRICE_TD} text-slate-700`}>
                     {row.purchase_price != null ? `€${Number(row.purchase_price).toLocaleString()}` : "—"}
@@ -1126,9 +1187,6 @@ export default function AdminHistoryPage() {
                       : row.unit_price != null
                         ? `€${Number(row.unit_price).toLocaleString()}`
                         : "—"}
-                  </Td>
-                  <Td className={`${SALE_TABLE_TD} text-center text-slate-500 font-medium whitespace-nowrap tabular-nums`}>
-                    {saleDateDisplay(row)}
                   </Td>
                   <Td className={`${SALE_STICKY_ACTIONS} group-hover:bg-slate-50`}>
                     <div className="flex flex-col items-center gap-1">
@@ -1172,8 +1230,8 @@ export default function AdminHistoryPage() {
             })}
             {items.length === 0 && (
               <tr>
-                <Td colSpan={13} className="text-center py-8 text-slate-500">
-                  {emptySalesMessage(productConditions)}
+                <Td colSpan={14} className="text-center py-8 text-slate-500">
+                  {emptySalesMessage(productConditions, containerName)}
                 </Td>
               </tr>
             )}
@@ -1185,12 +1243,13 @@ export default function AdminHistoryPage() {
       <div className="md:hidden space-y-2">
         {items.length === 0 && (
           <div className="bg-white rounded-xl border border-slate-200 p-6 text-center text-slate-500 text-sm">
-            {emptySalesMessage(productConditions)}
+            {emptySalesMessage(productConditions, containerName)}
           </div>
         )}
         {items.map((row) => {
           const amount = row.total_amount != null ? row.total_amount : row.unit_price;
           const productName = row.products?.name ?? "—";
+          const containerLabel = saleContainerLabel(row.products);
           const showActions = canPendingActions(row);
           const cancelLabel = saleCancelReasonLabel(row.cancel_reason);
           return (
@@ -1228,6 +1287,11 @@ export default function AdminHistoryPage() {
                           Вн: {row.products.outdoor_unit_serial.trim()}
                         </span>
                       )}
+                    </div>
+                  )}
+                  {containerLabel && (
+                    <div className="text-[10px] font-semibold text-amber-800 mt-0.5 truncate" title={containerLabel}>
+                      {containerLabel}
                     </div>
                   )}
                   {cancelLabel && <div className="text-[11px] text-red-700 font-semibold mt-1">{cancelLabel}</div>}

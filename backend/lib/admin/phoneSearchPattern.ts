@@ -119,6 +119,18 @@ export function serialCompactIlikePatterns(raw: string): string[] {
   return [containsIlikePattern(compact)];
 }
 
+/**
+ * ILIKE шаблон за PostgREST: букви/цифри следват подред, между тях може
+ * произволен интервал или символ (/ - . и т.н.). Case-insensitive (ilike).
+ * „Panasonic563“ намира „Panasonic 563CEX2“, „PANASONIC-563“ и т.н.
+ */
+export function alphanumericFlexibleIlikePattern(raw: string): string | null {
+  const compact = raw.replace(/[^a-zA-Z0-9\u0400-\u04FF]/gi, "");
+  if (!compact) return null;
+  if (compact.length < 2 && !/\d/.test(compact)) return null;
+  return formatPostgrestIlikeValue(`*${compact.split("").join("*")}*`);
+}
+
 /** Търсене прилича на телефон (цифри/+/интервали), не сериен № с букви. */
 export function queryLooksLikePhone(raw: string): boolean {
   const trimmed = raw.trim();

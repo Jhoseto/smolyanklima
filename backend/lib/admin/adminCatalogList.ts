@@ -5,11 +5,11 @@ export type AdminCatalogKind = "climatics" | "accessories" | "all";
 
 export type AdminCatalogListFilters = {
   q?: string;
-  stockStatuses?: ("in_stock" | "out_of_stock" | "on_order" | "reserved")[];
+  stockStatuses?: ("in_stock" | "on_order" | "reserved" | "scrapped")[];
   brandId?: string;
   priceMin?: number;
   priceMax?: number;
-  sortBy: "name" | "price" | "purchase_price" | "product_condition" | "purchased_at";
+  sortBy: "name" | "price" | "purchase_price" | "product_condition" | "purchased_at" | "stock_location";
   sortDir: "asc" | "desc";
   page: number;
   perPage: number;
@@ -127,6 +127,7 @@ type MergeStub = {
   product_condition?: string | null;
   purchased_at?: string | null;
   created_at?: string | null;
+  stock_location?: string | null;
 };
 
 function sortValue(row: MergeStub, sortBy: AdminCatalogListFilters["sortBy"]): string | number {
@@ -137,6 +138,8 @@ function sortValue(row: MergeStub, sortBy: AdminCatalogListFilters["sortBy"]): s
       return row.product_condition ?? "";
     case "purchased_at":
       return row.purchased_at ?? "";
+    case "stock_location":
+      return row.stock_location ?? "";
     default:
       return row.name;
   }

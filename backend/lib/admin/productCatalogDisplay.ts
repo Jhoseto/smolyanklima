@@ -1,5 +1,7 @@
 /** UI-only helpers for the admin products catalog list (Approach A). */
 
+import type { StockStatusFilter } from "@/lib/admin/productListQueryFilters";
+
 export type ProductCatalogListRow = {
   id: string;
   name: string;
@@ -28,9 +30,18 @@ function isExhaustedProduct(p: ProductCatalogListRow): boolean {
   return !isAccessoryRow(p) && p.stock_status === "out_of_stock";
 }
 
-/** Продадени климатици (изчерпани) — само в Продажби, не в таблицата Продукти. */
+function isScrappedProduct(p: ProductCatalogListRow): boolean {
+  return !isAccessoryRow(p) && p.stock_status === "scrapped";
+}
+
+/** Продадени климатици (изчерпани) — скрити от таблицата по подразбиране. */
 export function isHiddenSoldProductFromAdminList(p: ProductCatalogListRow): boolean {
   return isExhaustedProduct(p);
+}
+
+/** Бракувани — скрити от таблицата по подразбиране. */
+export function isHiddenScrappedProductFromAdminList(p: ProductCatalogListRow): boolean {
+  return isScrappedProduct(p);
 }
 
 /** @deprecated Използвай isHiddenSoldProductFromAdminList. */
@@ -39,14 +50,36 @@ export function isHiddenExhaustedUsedProduct(p: ProductCatalogListRow): boolean 
 }
 
 /**
- * PostgREST filter за админ таблица Продукти: само налични и по поръчка.
- * Изчерпаните (продадени) записи са само в Продажби.
+ * PostgREST filter за админ таблица Продукти, когато НЯМА избран филтър по наличност.
+ * Скрива продадени (out_of_stock — само в Продажби) и бракувани (филтър „Бракувани“).
  */
-export const CATALOG_VISIBLE_PRODUCTS_OR_FILTER =
-  "stock_status.eq.in_stock,stock_status.eq.on_order";
+export const CATALOG_DEFAULT_VISIBLE_STOCK_OR_FILTER =
+  "stock_status.eq.in_stock,stock_status.eq.on_order,stock_status.eq.reserved";
 
-export function filterProductsCatalogItems<T extends ProductCatalogListRow>(items: T[]): T[] {
-  return items.filter((row) => !isHiddenSoldProductFromAdminList(row));
+/** @deprecated Използвай adminProductsStockOrFilter(). */
+export const CATALOG_VISIBLE_PRODUCTS_OR_FILTER = CATALOG_DEFAULT_VISIBLE_STOCK_OR_FILTER;
+
+/** Връща OR filter за stock_status или null, ако потребителят е избрал конкретни статуси. */
+export function adminProductsStockOrFilter(stockStatuses: readonly StockStatusFilter[]): string | null {
+  if (stockStatuses.length > 0) return null;
+  return CATALOG_DEFAULT_VISIBLE_STOCK_OR_FILTER;
+}
+
+export type FilterProductsCatalogItemsOpts = {
+  showScrapped?: boolean;
+};
+
+export function filterProductsCatalogItems<T extends ProductCatalogListRow>(
+  items: T[],
+  opts?: FilterProductsCatalogItemsOpts,
+): T[] {
+  return items.filter((row) => {
+    if (isAccessoryRow(row)) return true;
+    // Продадени (out_of_stock) — само в Продажби, никога в таблица Продукти.
+    if (isExhaustedProduct(row)) return false;
+    if (isScrappedProduct(row)) return opts?.showScrapped ?? false;
+    return true;
+  });
 }
 
 /** Group key: brand + model (or name fallback) + condition. */

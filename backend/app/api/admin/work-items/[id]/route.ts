@@ -20,6 +20,7 @@ import {
 import { syncConsultationContactFollowUp } from "@/lib/work-items/consultation-contact";
 import { isSaleCancelReason } from "@/lib/admin/saleCancelReason";
 import { cascadeDeleteBeforeSaleWorkItem } from "@/lib/admin/deleteSaleWorkItemCascade";
+import { findRepairProtocolForSale } from "@/lib/admin/matchRepairProtocolProduct";
 
 const WORK_ITEM_EVENT_CODES = [
   "item_added",
@@ -95,8 +96,10 @@ const WORK_ITEM_DETAIL_SELECT = [
   `products:product_id (
     id, name, slug, model_code, price, price_with_mount, purchase_price, product_condition,
     indoor_unit_serial, outdoor_unit_serial, stock_status, stock_quantity, supplier_invoice_number,
+    container_id,
     brands:brand_id (name),
     product_types:type_id (name),
+    containers:container_id (id, name),
     product_images (url, is_main, sort_order)
   )`,
   `contacts:contact_id (id, full_name, phone, email, address)`,
@@ -146,8 +149,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   }
 
   let linkedProtocol = null;
+  let linkedServiceProtocol = null;
   const protocolWorkItemId =
     eventCode === "service_installation" ? id : eventCode === "sale" ? installIdFromSale : null;
+  const saleProductId = (workItem as { product_id?: string | null }).product_id ?? null;
   if (protocolWorkItemId) {
     try {
       linkedProtocol = await findAcceptanceProtocolByWorkItem(supabase, protocolWorkItemId);
@@ -167,6 +172,30 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     }
   }
 
+  try {
+    const productsEmbed = (workItem as { products?: Record<string, unknown> | null }).products;
+    const brandsEmbed = productsEmbed?.brands as { name?: string | null } | null | undefined;
+    linkedServiceProtocol = await findRepairProtocolForSale(supabase, {
+      saleProductId,
+      installWorkItemId: protocolWorkItemId,
+      product: productsEmbed
+        ? {
+            indoor_unit_serial: (productsEmbed.indoor_unit_serial as string | null) ?? null,
+            outdoor_unit_serial: (productsEmbed.outdoor_unit_serial as string | null) ?? null,
+            brand_name: brandsEmbed?.name ?? null,
+            model_code: (productsEmbed.model_code as string | null) ?? null,
+            name: (productsEmbed.name as string | null) ?? null,
+          }
+        : null,
+    });
+  } catch (e: unknown) {
+    console.error(
+      "[work-items GET] service repair protocol lookup failed:",
+      e instanceof Error ? e.message : e,
+    );
+    linkedServiceProtocol = null;
+  }
+
   return withCors(
     req,
     NextResponse.json({
@@ -175,6 +204,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
         linked_sale: linkedSale,
         linked_installation: linkedInstallation,
         linked_protocol: linkedProtocol,
+        linked_service_protocol: linkedServiceProtocol,
       },
     }),
   );

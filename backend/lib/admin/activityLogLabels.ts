@@ -300,9 +300,10 @@ const INQUIRY_STATUS: Record<string, string> = {
 
 const STOCK_STATUS: Record<string, string> = {
   in_stock: "В наличност",
-  out_of_stock: "Няма наличност",
+  out_of_stock: "Продаден",
   on_order: "По поръчка",
   reserved: "Резервиран",
+  scrapped: "Бракуван",
 };
 
 const PRODUCT_CONDITION: Record<string, string> = {

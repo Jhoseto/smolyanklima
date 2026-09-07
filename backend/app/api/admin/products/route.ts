@@ -13,7 +13,7 @@ import { replaceProductImages, upsertProductSpecs, type ImageInput, type SpecsIn
 import * as catalogBtu from "@/lib/catalog/productBtu";
 import { listAdminAccessories, listAdminCatalogMerged } from "@/lib/admin/adminCatalogList";
 import { applyAdminProductListChipFilters, parseProductListChipFilters } from "@/lib/admin/productListQueryFilters";
-import { CATALOG_VISIBLE_PRODUCTS_OR_FILTER } from "@/lib/admin/productCatalogDisplay";
+import { adminProductsStockOrFilter } from "@/lib/admin/productCatalogDisplay";
 import { applyAdminProductSearchFilter } from "@/lib/admin/productSearchFilter";
 import { resolveFallbackBrandId, resolveFallbackTypeId } from "@/lib/admin/productFallbackRefs";
 
@@ -113,7 +113,7 @@ const QuerySchema = z.object({
   // Поддържаните полета са онези, които стоят като колони в админ таблицата
   // и могат да се сортират директно (без join към друга таблица).
   sortBy: z
-    .enum(["name", "price", "purchase_price", "product_condition", "purchased_at"])
+    .enum(["name", "price", "purchase_price", "product_condition", "purchased_at", "stock_location"])
     .optional()
     .default("name"),
   sortDir: z.enum(["asc", "desc"]).optional().default("asc"),
@@ -151,7 +151,7 @@ const CreateSchema = z.object({
   purchasePrice: z.number().nonnegative().optional().nullable(),
   isFeatured: z.boolean().optional().default(false),
   showInPublicCatalog: z.boolean().optional().default(false),
-  stockStatus: z.enum(["in_stock", "out_of_stock", "on_order", "reserved"]).optional().default("in_stock"),
+  stockStatus: z.enum(["in_stock", "out_of_stock", "on_order", "reserved", "scrapped"]).optional().default("in_stock"),
   stockQuantity: z.number().int().nonnegative().optional().default(0),
   soldQuantity: z.number().int().nonnegative().optional().default(0),
   stockLocation: z.enum(["showroom", "warehouse", "service"]).optional().default("warehouse"),
@@ -200,7 +200,7 @@ export async function GET(req: NextRequest) {
     featured,
     publicCatalog,
   });
-  chipFilters.stockStatuses = chipFilters.stockStatuses.filter((s) => s !== "out_of_stock");
+  const stockOrFilter = adminProductsStockOrFilter(chipFilters.stockStatuses);
   const btuFilters = catalogBtu.parseBtuCsvParam(btuRaw);
   const supabase = await adminDb();
 
@@ -221,7 +221,8 @@ export async function GET(req: NextRequest) {
   const sharedListFilters = {
     q,
     stockStatuses:
-      chipFilters.stockStatuses.length > 0 && chipFilters.stockStatuses.length < 3
+      chipFilters.stockStatuses.length > 0 &&
+      chipFilters.stockStatuses.length < 4
         ? chipFilters.stockStatuses
         : undefined,
     brandId,
@@ -254,7 +255,7 @@ export async function GET(req: NextRequest) {
       query = applyAdminProductSearchFilter(query, q, applySupplyFields);
     }
     query = applyAdminProductListChipFilters(query, chipFilters) as typeof query;
-    query = query.or(CATALOG_VISIBLE_PRODUCTS_OR_FILTER);
+    if (stockOrFilter) query = query.or(stockOrFilter);
     if (applyStockLocationFilter && stockLocation) query = query.eq("stock_location", stockLocation);
     if (applyRegionFilter && regionFilter) query = query.eq("product_region", regionFilter);
     if (brandId) query = query.eq("brand_id", brandId);
@@ -290,14 +291,14 @@ export async function GET(req: NextRequest) {
 
   if (catalogKind === "all") {
     try {
-      const stubSelect = "id,name,price,product_condition,purchased_at";
+      const stubSelect = "id,name,price,product_condition,purchased_at,stock_location";
       let stubQuery = supabase.from("products").select(stubSelect, { count: "exact" });
       if (btuProductIds) stubQuery = stubQuery.in("id", btuProductIds);
       if (q?.trim()) {
         stubQuery = applyAdminProductSearchFilter(stubQuery, q, true);
       }
       stubQuery = applyAdminProductListChipFilters(stubQuery, chipFilters) as typeof stubQuery;
-      stubQuery = stubQuery.or(CATALOG_VISIBLE_PRODUCTS_OR_FILTER);
+      if (stockOrFilter) stubQuery = stubQuery.or(stockOrFilter);
       if (stockLocation) stubQuery = stubQuery.eq("stock_location", stockLocation);
       if (regionFilter) stubQuery = stubQuery.eq("product_region", regionFilter);
       if (brandId) stubQuery = stubQuery.eq("brand_id", brandId);
@@ -318,7 +319,7 @@ export async function GET(req: NextRequest) {
       if (purchasedTo) stubQuery = stubQuery.lte("purchased_at", purchasedTo);
       const stubRes = await stubQuery.limit(4000);
       if (stubRes.error) return withCors(req, NextResponse.json({ error: stubRes.error.message }, { status: 500 }));
-      const productStubs = ((stubRes.data ?? []) as { id: string; name: string; price: number; product_condition: string; purchased_at: string | null }[]).map(
+      const productStubs = ((stubRes.data ?? []) as { id: string; name: string; price: number; product_condition: string; purchased_at: string | null; stock_location?: string | null }[]).map(
         (r) => ({
           catalog_item: "product" as const,
           id: r.id,
@@ -326,6 +327,7 @@ export async function GET(req: NextRequest) {
           price: r.price,
           product_condition: r.product_condition,
           purchased_at: r.purchased_at,
+          stock_location: r.stock_location ?? null,
         }),
       );
       const productTotal = btuProductIds && btuProductIds.length === 0 ? 0 : (stubRes.count ?? 0);

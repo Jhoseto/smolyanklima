@@ -40,13 +40,28 @@ import {
   Bookmark,
   BookmarkX,
   X,
+  Ban,
+  Wrench,
+  Loader2,
 } from "lucide-react";
 import { ShareToChatModal } from "../chat/ShareToChatModal";
+import { ServiceProtocolFormWizard } from "../service/documents/service/ServiceProtocolFormWizard";
+import { ServiceProtocolPreview } from "../service/documents/service/ServiceProtocolPreview";
+import { SERVICE_KIND_LABEL } from "@/lib/repair-protocol-fields";
+import type { AdminRole } from "@/lib/admin/db";
+import {
+  canProductServiceProtocol,
+  productToServiceProtocolInitialData,
+  serviceProtocolButtonTitle,
+  serviceProtocolButtonClass,
+  type LinkedRepairProtocolSummary,
+} from "@/lib/admin/productServiceProtocol";
 import { useAdminBackHandler } from "@/lib/admin/useAdminBackHandler";
 import { CatalogItemQuickViewButton } from "../ProductQuickView";
 import { FeaturedSlotModal } from "./FeaturedSlotModal";
 import { ProductCatalogSettingsModal } from "./ProductCatalogSettingsModal";
 import { ProductSupplierOrderModal } from "./ProductSupplierOrderModal";
+import { StockLocationCell } from "./StockLocationCell";
 import { ProductReservationModal } from "./ProductReservationModal";
 import { formatAdminPriceEuro, formatAdminDateOnly } from "@/lib/admin/formatEuro";
 import {
@@ -68,9 +83,7 @@ import { notifyAdminCalendarReload } from "@/lib/admin/calendarReload";
 import { recordProductSale } from "@/lib/admin/recordProductSale";
 import {
   normalizeProductStockLocation,
-  productStockLocationLabel,
   productStockLocationLabelCompact,
-  productStockLocationBadgeClass,
   type ProductStockLocation,
 } from "@/lib/admin/productStockLocation";
 import {
@@ -148,6 +161,17 @@ type ContactChoice = { id: string; full_name: string; phone: string; email?: str
 function isAccessoryRow(p: Pick<ProductRow, "catalog_item">): boolean {
   return p.catalog_item === "accessory";
 }
+
+/** Единен icon бутон в колона „Действия“ (продажбата остава отделно). */
+const PRODUCT_ROW_ICON_BTN =
+  "inline-flex items-center justify-center w-[34px] h-[34px] rounded-xl border shrink-0 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-1 active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed";
+
+/** Редакция — леко по-голям, защото се ползва най-често. */
+const PRODUCT_ROW_EDIT_BTN =
+  "inline-flex items-center justify-center w-[38px] h-[38px] rounded-xl border shrink-0 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-1 active:scale-[0.97]";
+
+const PRODUCT_ROW_ICON = "w-3.5 h-3.5 shrink-0";
+const PRODUCT_ROW_EDIT_ICON = "w-4 h-4 shrink-0";
 
 function catalogEditHref(p: Pick<ProductRow, "id" | "catalog_item">): string {
   return isAccessoryRow(p) ? `/admin/accessories/${p.id}` : `/admin/products/${p.id}`;
@@ -250,6 +274,7 @@ function isProductReserved(p: ProductRow) {
 function saleButtonTitle(p: ProductRow): string {
   if (p.stock_status === "on_order") return "Поръчай от доставчик";
   if (p.stock_status === "reserved") return "Резервиран — продажба след отмяна на резервацията";
+  if (p.stock_status === "scrapped") return "Бракуван — продажба не е възможна";
   if (p.stock_status === "out_of_stock") return "Изчерпан — продажба не е възможна";
   if (canRecordSale(p)) return "Продажба";
   return "Продажба не е възможна";
@@ -310,21 +335,21 @@ function fmtPurchaseDate(value: string | null | undefined): string {
 function catalogStockBadgeText(status: string, compact = false) {
   if (compact) {
     if (status === "in_stock") return "Наличен";
-    if (status === "out_of_stock") return "Изчерпан";
     if (status === "on_order") return "По поръчка";
     if (status === "reserved") return "Резервиран";
+    if (status === "scrapped") return "Бракуван";
     return status || "—";
   }
   if (status === "in_stock") return "В наличност";
-  if (status === "out_of_stock") return "Изчерпан";
   if (status === "on_order") return "По поръчка";
   if (status === "reserved") return "Резервиран";
+  if (status === "scrapped") return "Бракуван";
   return status || "—";
 }
 
 function catalogStockBadgeClass(status: string) {
   if (status === "in_stock") return "bg-emerald-100 text-emerald-800 border border-emerald-200/70";
-  if (status === "out_of_stock") return "bg-rose-50 text-rose-800 border border-rose-200/70";
+  if (status === "scrapped") return "bg-stone-200 text-stone-800 border border-stone-300/80";
   if (status === "on_order") return "bg-amber-50 text-amber-900 border border-amber-200/70";
   if (status === "reserved") return "bg-sky-50 text-sky-900 border border-sky-200/70";
   return "bg-slate-100 text-slate-700 border border-slate-200/70";
@@ -662,6 +687,15 @@ export default function AdminProductsPage() {
   const [canMutateProductRows, setCanMutateProductRows] = useState(true);
   /** Роля от whoami — за каталог настройки (сервиз: преглед). */
   const [adminRole, setAdminRole] = useState<string>("");
+  const [repairProtocolByProductId, setRepairProtocolByProductId] = useState<
+    Record<string, LinkedRepairProtocolSummary>
+  >({});
+  const [serviceProtocolWizard, setServiceProtocolWizard] = useState<{
+    editId?: string;
+    initialData?: ReturnType<typeof productToServiceProtocolInitialData>;
+  } | null>(null);
+  const [serviceProtocolPreview, setServiceProtocolPreview] = useState<LinkedRepairProtocolSummary | null>(null);
+  const [serviceProtocolBusyId, setServiceProtocolBusyId] = useState<string | null>(null);
 
   const debouncedQ = useDebounce(q, 350);
   /*
@@ -889,6 +923,70 @@ export default function AdminProductsPage() {
     return joined?.trim() || null;
   }
 
+  async function loadRepairProtocolMap(rows: ProductRow[]) {
+    const ids = rows
+      .filter((p) => !isAccessoryRow(p) && p.stock_status === "in_stock")
+      .map((p) => p.id);
+    if (ids.length === 0) {
+      setRepairProtocolByProductId({});
+      return;
+    }
+    try {
+      const res = await fetch(
+        `/api/admin/products/repair-protocol-ids?ids=${ids.join(",")}`,
+        { credentials: "include" },
+      );
+      if (!res.ok) return;
+      const json = await res.json() as { data?: Record<string, LinkedRepairProtocolSummary> };
+      setRepairProtocolByProductId(json.data ?? {});
+    } catch {
+      /* non-blocking */
+    }
+  }
+
+  async function openServiceProtocol(p: ProductRow) {
+    if (!canProductServiceProtocol(p)) return;
+    setServiceProtocolBusyId(p.id);
+    try {
+      const cached = repairProtocolByProductId[p.id];
+      if (cached) {
+        setServiceProtocolPreview(cached);
+        return;
+      }
+      const res = await fetch(`/api/admin/products/${p.id}/repair-protocol`, {
+        credentials: "include",
+      });
+      if (!res.ok) return;
+      const json = await res.json() as { data?: { protocol?: LinkedRepairProtocolSummary | null } };
+      const protocol = json.data?.protocol ?? null;
+      if (protocol) {
+        setRepairProtocolByProductId((prev) => ({ ...prev, [p.id]: protocol }));
+        setServiceProtocolPreview(protocol);
+      } else {
+        setServiceProtocolWizard({
+          initialData: productToServiceProtocolInitialData(p),
+        });
+      }
+    } finally {
+      setServiceProtocolBusyId(null);
+    }
+  }
+
+  function serviceProtocolPreviewLabel(p: LinkedRepairProtocolSummary): string {
+    const brandModel = [p.ac_brand, p.ac_model].filter(Boolean).join(" ");
+    if (p.service_kind === "recycle") {
+      return [SERVICE_KIND_LABEL.recycle, brandModel].filter(Boolean).join(" · ") || "—";
+    }
+    return [p.client_name, brandModel].filter(Boolean).join(" · ") || "—";
+  }
+
+  function formatProtocolDate(iso: string): string {
+    if (!iso) return "—";
+    const [y, m, d] = iso.slice(0, 10).split("-");
+    if (!y || !m || !d) return iso;
+    return `${d}.${m}.${y}`;
+  }
+
   async function load() {
     setLoading(true);
     setError(null);
@@ -896,9 +994,11 @@ export default function AdminProductsPage() {
       const res = await fetch(`/api/admin/products?${qs}`, { credentials: "include" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Грешка");
-      setItems(json.data ?? []);
-      setTotalCount(json.meta?.total ?? (json.data?.length ?? 0));
+      const rows: ProductRow[] = json.data ?? [];
+      setItems(rows);
+      setTotalCount(json.meta?.total ?? (rows.length ?? 0));
       setSelected([]);
+      void loadRepairProtocolMap(rows);
     } catch (e: any) {
       setError(String(e?.message ?? e));
     } finally {
@@ -1311,18 +1411,8 @@ export default function AdminProductsPage() {
     }
   }
 
-  const STOCK_LOCATION_CYCLE: Record<ProductStockLocation, ProductStockLocation> = {
-    showroom: "warehouse",
-    warehouse: "service",
-    service: "showroom",
-  };
-
-  function toggleStockLocation(p: ProductRow) {
+  function requestStockLocationChange(p: ProductRow, next: ProductStockLocation) {
     if (!canMutateProductRows) return;
-    const cur = normalizeProductStockLocation(p.stock_location);
-    const next: ProductStockLocation = STOCK_LOCATION_CYCLE[cur];
-    // Преди прибиране в сервиз трябва да сме сигурни точно кой уред е —
-    // ако още няма серийни номера, искаме потвърждение с попълването им.
     if (next === "service" && productMissingSerials(p)) {
       setServiceSerialIndoor("");
       setServiceSerialOutdoor("");
@@ -1426,7 +1516,11 @@ export default function AdminProductsPage() {
         ? "Няма налични употребявани климатици. Продадените — в Продажби."
         : "Няма намерени продукти."
       : "Няма видими продукти в този изглед.";
-  const catalogVisibleItems = useMemo(() => filterProductsCatalogItems(items), [items]);
+  const showScrappedInList = stockStatuses.includes("scrapped");
+  const catalogVisibleItems = useMemo(
+    () => filterProductsCatalogItems(items, { showScrapped: showScrappedInList }),
+    [items, showScrappedInList],
+  );
   const displayRows = useMemo(() => buildProductCatalogDisplayRows(catalogVisibleItems), [catalogVisibleItems]);
   const selectableDisplayIds = useMemo(
     () => displayRows.filter(isGroupedExhaustedSelectable).map((d) => d.row.id),
@@ -1485,7 +1579,9 @@ export default function AdminProductsPage() {
           ? "По поръчка"
           : status === "reserved"
             ? "Резервиран"
-            : "Изчерпан";
+            : status === "scrapped"
+              ? "Бракуван"
+              : status;
     activeFilters.push({
       key: `stockStatus-${status}`,
       label: `Наличност: ${label}`,
@@ -1714,6 +1810,13 @@ export default function AdminProductsPage() {
                 onClick={() => { setStockStatuses((prev) => toggleChipFilter(prev, "reserved")); }}
               >
                 <Bookmark className="w-3 h-3" /> Резервиран
+              </ChipToggle>
+              <ChipToggle
+                active={stockStatuses.includes("scrapped")}
+                tone="neutral"
+                onClick={() => { setStockStatuses((prev) => toggleChipFilter(prev, "scrapped")); }}
+              >
+                <Ban className="w-3 h-3" /> Бракувани
               </ChipToggle>
               <span className="hidden md:inline-block h-5 w-px bg-slate-200 mx-0.5" aria-hidden />
               <ChipToggle
@@ -1961,7 +2064,7 @@ export default function AdminProductsPage() {
               <Th className="text-center">Доставчик</Th>
               <Th className="text-center" title="Фактура доставчик">Фактура</Th>
               <Th className="text-center">Рег.</Th>
-              <Th className="text-center">Място</Th>
+              <SortableTh label="Място" field="stock_location" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} center />
               <Th className="text-center">Действия</Th>
             </tr>
           </thead>
@@ -2204,29 +2307,21 @@ export default function AdminProductsPage() {
                 <Td className="text-center align-middle whitespace-nowrap">
                   {isAccessoryRow(p) ? (
                     <span className="text-slate-400 text-[10px]">—</span>
-                  ) : canMutateProductRows ? (
-                  <button
-                    type="button"
-                    disabled={locationBusyId === p.id}
-                    onClick={() => toggleStockLocation(p)}
-                    title="Клик за смяна: магазин → склад → сервиз"
-                    className={`inline-flex items-center justify-center px-1 py-px rounded text-[10px] font-semibold border border-slate-200/80 cursor-pointer hover:opacity-90 disabled:opacity-60 ${productStockLocationBadgeClass(p.stock_location)}`}
-                  >
-                    {locationBusyId === p.id ? "…" : productStockLocationLabelCompact(p.stock_location)}
-                  </button>
                   ) : (
-                  <span
-                    className={`inline-flex items-center justify-center px-1 py-px rounded text-[10px] font-semibold border border-slate-200/80 ${productStockLocationBadgeClass(p.stock_location)}`}
-                  >
-                    {productStockLocationLabelCompact(p.stock_location)}
-                  </span>
+                    <StockLocationCell
+                      productId={p.id}
+                      stockLocation={p.stock_location}
+                      canEdit={canMutateProductRows}
+                      busy={locationBusyId === p.id}
+                      onConfirmChange={(next) => requestStockLocationChange(p, next)}
+                    />
                   )}
                 </Td>
                 <Td className="text-center align-middle whitespace-nowrap !px-0.5">
                   {isAccessoryRow(p) ? (
                     <span className="text-[10px] text-slate-500 font-medium">Аксесоар</span>
                   ) : canMutateProductRows ? (
-                  <div className="flex flex-nowrap items-center justify-center gap-0.5 min-w-0">
+                  <div className="flex flex-nowrap items-center justify-center gap-1 min-w-0">
                     {!isProductReserved(p) && (
                       <Button
                         variant="secondary"
@@ -2250,54 +2345,71 @@ export default function AdminProductsPage() {
                         {p.stock_status === "on_order" ? <Truck className="w-3 h-3" /> : <PackageCheck className="w-3 h-3" />}
                       </Button>
                     )}
-                    <Link href={catalogEditHref(p)} className="inline-flex items-center justify-center p-1 bg-brand-blue-50 text-brand-blue-700 hover:bg-brand-blue-100 rounded shrink-0" title="Редакция">
-                      <Edit className="w-3 h-3 shrink-0" />
+                    <Link
+                      href={catalogEditHref(p)}
+                      className={`${PRODUCT_ROW_EDIT_BTN} bg-brand-blue-50 text-brand-blue-700 border-brand-blue-200 hover:bg-brand-blue-100 focus:ring-brand-blue-200`}
+                      title="Редакция"
+                    >
+                      <Edit className={PRODUCT_ROW_EDIT_ICON} />
                     </Link>
+                    {!isAccessoryRow(p) && (
+                      <button
+                        type="button"
+                        disabled={!canProductServiceProtocol(p) || serviceProtocolBusyId === p.id}
+                        onClick={() => void openServiceProtocol(p)}
+                        title={serviceProtocolButtonTitle(p, repairProtocolByProductId[p.id])}
+                        className={serviceProtocolButtonClass(p, repairProtocolByProductId[p.id], "icon")}
+                      >
+                        {serviceProtocolBusyId === p.id
+                          ? <Loader2 className={`${PRODUCT_ROW_ICON} animate-spin`} />
+                          : <Wrench className={PRODUCT_ROW_ICON} />}
+                      </button>
+                    )}
                     {isProductReserved(p) ? (
-                      <Button
-                        variant="secondary"
-                        size="sm"
+                      <button
+                        type="button"
                         onClick={() => void cancelProductReservation(p)}
                         disabled={reserveCancelBusyId === p.id}
-                        className="!p-1 shrink-0 !text-sky-800 !border-sky-300 !bg-sky-50 hover:!bg-sky-100"
+                        className={`${PRODUCT_ROW_ICON_BTN} bg-white text-sky-800 border-sky-300 hover:bg-sky-50 focus:ring-sky-200`}
                         title="Отмени резервацията"
                       >
-                        <BookmarkX className="w-3 h-3" />
-                      </Button>
+                        <BookmarkX className={PRODUCT_ROW_ICON} />
+                      </button>
                     ) : (
                       canReserveProduct(p) && (
-                        <Button
-                          variant="secondary"
-                          size="sm"
+                        <button
+                          type="button"
                           onClick={() => setReserveFor(p)}
-                          className="!p-1 shrink-0 !text-sky-800 !border-sky-300 !bg-sky-50 hover:!bg-sky-100"
+                          className={`${PRODUCT_ROW_ICON_BTN} bg-white text-sky-800 border-sky-300 hover:bg-sky-50 focus:ring-sky-200`}
                           title="Резервирай за клиент"
                         >
-                          <Bookmark className="w-3 h-3" />
-                        </Button>
+                          <Bookmark className={PRODUCT_ROW_ICON} />
+                        </button>
                       )
                     )}
                     <button
+                      type="button"
                       onClick={() => setShareProduct(p)}
                       title="Сподели в чат"
-                      className="inline-flex items-center justify-center p-1 bg-brand-orange-50 text-brand-orange-600 hover:bg-brand-orange-100 rounded shrink-0"
+                      className={`${PRODUCT_ROW_ICON_BTN} bg-white text-brand-orange-600 border-orange-200 hover:bg-orange-50 focus:ring-orange-200`}
                     >
-                      <MessageCircle className="w-3 h-3" />
+                      <MessageCircle className={PRODUCT_ROW_ICON} />
                     </button>
                     <button
+                      type="button"
                       onClick={() => setFeaturedFor(p)}
                       title={
                         p.featured_position
                           ? `Топ продукти — позиция #${p.featured_position}`
                           : "Постави в Топ продукти на главната страница"
                       }
-                      className={`relative inline-flex items-center justify-center p-1 rounded shrink-0 ${
+                      className={`${PRODUCT_ROW_ICON_BTN} ${
                         p.featured_position
-                          ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
-                          : "bg-slate-100 text-slate-500 hover:bg-amber-50 hover:text-amber-600"
+                          ? "bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200 focus:ring-amber-200"
+                          : "bg-white text-slate-500 border-slate-300 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200 focus:ring-amber-200"
                       }`}
                     >
-                      <Star className={`w-3 h-3 ${p.featured_position ? "fill-current" : ""}`} />
+                      <Star className={`${PRODUCT_ROW_ICON} ${p.featured_position ? "fill-current" : ""}`} />
                     </button>
                   </div>
                   ) : (
@@ -2340,6 +2452,8 @@ export default function AdminProductsPage() {
             <option value="purchase_price:desc">Закупна ↓</option>
             <option value="purchased_at:desc">Дата ↓ (нови)</option>
             <option value="purchased_at:asc">Дата ↑ (стари)</option>
+            <option value="stock_location:asc">Място А→Я</option>
+            <option value="stock_location:desc">Място Я→А</option>
           </Select>
         </div>
         {loading && (
@@ -2537,18 +2651,17 @@ export default function AdminProductsPage() {
               <span className="text-slate-500 shrink-0">· {productRegionLabel(p.product_region)}</span>
               <span className="text-slate-500 shrink-0">
                 ·{" "}
-                {canMutateProductRows ? (
-                  <button
-                    type="button"
-                    disabled={locationBusyId === p.id}
-                    onClick={() => toggleStockLocation(p)}
-                    title="Клик за смяна: магазин → склад → сервиз"
-                    className="inline font-semibold text-slate-800 underline-offset-2 hover:underline disabled:opacity-50"
-                  >
-                    {locationBusyId === p.id ? "…" : productStockLocationLabel(p.stock_location)}
-                  </button>
+                {isAccessoryRow(p) ? (
+                  <span className="font-semibold text-slate-800">—</span>
                 ) : (
-                  <span className="font-semibold text-slate-800">{productStockLocationLabel(p.stock_location)}</span>
+                  <StockLocationCell
+                    productId={p.id}
+                    stockLocation={p.stock_location}
+                    canEdit={canMutateProductRows}
+                    busy={locationBusyId === p.id}
+                    compact={false}
+                    onConfirmChange={(next) => requestStockLocationChange(p, next)}
+                  />
                 )}
               </span>
               <span className="text-slate-400 shrink-0">· {fmtPurchaseDate(p.purchased_at)}</span>
@@ -2618,6 +2731,20 @@ export default function AdminProductsPage() {
                   <Edit className="w-3.5 h-3.5 shrink-0" />
                   <span className="leading-none">Ред.</span>
                 </Link>
+                {!isAccessoryRow(p) && (
+                  <button
+                    type="button"
+                    disabled={!canProductServiceProtocol(p) || serviceProtocolBusyId === p.id}
+                    onClick={() => void openServiceProtocol(p)}
+                    title={serviceProtocolButtonTitle(p, repairProtocolByProductId[p.id])}
+                    className={serviceProtocolButtonClass(p, repairProtocolByProductId[p.id], "mobile")}
+                  >
+                    {serviceProtocolBusyId === p.id
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <Wrench className="w-3.5 h-3.5 shrink-0" />}
+                    <span className="leading-none">Серв.</span>
+                  </button>
+                )}
                 {isProductReserved(p) ? (
                   <button
                     type="button"
@@ -3211,6 +3338,44 @@ export default function AdminProductsPage() {
           }}
           onClose={() => setFeaturedFor(null)}
           onSaved={() => { void load(); }}
+        />
+      )}
+
+      {serviceProtocolWizard && (
+        <ServiceProtocolFormWizard
+          protocolId={serviceProtocolWizard.editId}
+          initialData={serviceProtocolWizard.initialData}
+          role={(adminRole || "office_staff") as AdminRole}
+          onClose={() => {
+            setServiceProtocolWizard(null);
+            void loadRepairProtocolMap(items);
+          }}
+          onSaved={(id) => {
+            setServiceProtocolWizard((prev) =>
+              prev ? { ...prev, editId: id } : null,
+            );
+            void load();
+          }}
+        />
+      )}
+
+      {serviceProtocolPreview && (
+        <ServiceProtocolPreview
+          stacked
+          protocolId={serviceProtocolPreview.id}
+          protocolNumber={serviceProtocolPreview.protocol_number}
+          clientLabel={serviceProtocolPreviewLabel(serviceProtocolPreview)}
+          dateLabel={formatProtocolDate(serviceProtocolPreview.date)}
+          role={(adminRole || "office_staff") as AdminRole}
+          onClose={() => {
+            setServiceProtocolPreview(null);
+            void loadRepairProtocolMap(items);
+          }}
+          onEdit={() => {
+            const preview = serviceProtocolPreview;
+            setServiceProtocolPreview(null);
+            setServiceProtocolWizard({ editId: preview.id });
+          }}
         />
       )}
     </div>

@@ -18,7 +18,7 @@ const LEGACY_PER_PAGE_KEY = "admin-products-per-page";
 const LEGACY_FILTERS_V1_KEY = "sk-admin-products-list-filters-v1";
 
 export type CatalogKindFilter = "climatics" | "accessories" | "all";
-export type SortField = "name" | "price" | "purchase_price" | "product_condition" | "purchased_at";
+export type SortField = "name" | "price" | "purchase_price" | "product_condition" | "purchased_at" | "stock_location";
 export type SortDir = "asc" | "desc";
 export type AdminProductsListFiltersSnapshot = {
   version: 3;
@@ -73,7 +73,7 @@ function isCatalogKind(v: unknown): v is CatalogKindFilter {
 }
 
 function isSortField(v: unknown): v is SortField {
-  return v === "name" || v === "price" || v === "purchase_price" || v === "product_condition" || v === "purchased_at";
+  return v === "name" || v === "price" || v === "purchase_price" || v === "product_condition" || v === "purchased_at" || v === "stock_location";
 }
 
 function isSortDir(v: unknown): v is SortDir {
@@ -91,7 +91,8 @@ function parseConditionArray(raw: unknown): ProductConditionFilter[] {
 
 function parseStockStatusArray(raw: unknown): StockStatusFilter[] {
   return parseStringArray(raw).filter(
-    (x): x is StockStatusFilter => x === "in_stock" || x === "on_order",
+    (x): x is StockStatusFilter =>
+      x === "in_stock" || x === "on_order" || x === "reserved" || x === "scrapped",
   );
 }
 

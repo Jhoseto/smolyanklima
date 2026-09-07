@@ -14,7 +14,25 @@ export function tokenizeSearchQuery(raw: string, maxTokens = 10): string[] {
   if (!base) return [];
   const seen = new Set<string>();
   const tokens: string[] = [];
-  for (const part of base.toLowerCase().split(/[\s\-_/]+/)) {
+  for (const part of base.toLowerCase().split(/[\s\-_/.]+/)) {
+    const t = part.trim();
+    if (!t) continue;
+    if (t.length < 2 && !/\d/.test(t)) continue;
+    if (seen.has(t)) continue;
+    seen.add(t);
+    tokens.push(t);
+    if (tokens.length >= maxTokens) break;
+  }
+  return tokens;
+}
+
+/** Токени само от букви/цифри — произволен символ между тях е разделител. */
+export function tokenizeFlexibleSearchQuery(raw: string, maxTokens = 10): string[] {
+  const base = sanitizeIlikeTerm(raw, 200);
+  if (!base) return [];
+  const seen = new Set<string>();
+  const tokens: string[] = [];
+  for (const part of base.toLowerCase().split(/[^a-z0-9\u0400-\u04ff]+/)) {
     const t = part.trim();
     if (!t) continue;
     if (t.length < 2 && !/\d/.test(t)) continue;

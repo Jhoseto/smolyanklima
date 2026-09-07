@@ -8,6 +8,7 @@ import {
   FREON_CHARGE_LABEL, BEARINGS_LABEL, NOISE_LABEL, SERVICE_KIND_LABEL,
   type FreonChargeMethod, type BearingsState, type NoiseLevel, type RepairServiceKind,
 } from "@/lib/repair-protocol-fields";
+import { parseProtocolSerialPair } from "@/lib/admin/matchRepairProtocolProduct";
 
 interface Props {
   protocolId: string;
@@ -17,6 +18,7 @@ interface Props {
   role: AdminRole;
   onClose: () => void;
   onEdit: () => void;
+  stacked?: boolean;
 }
 
 interface ProtocolRow {
@@ -95,7 +97,7 @@ function boolLabel(v: boolean | null | undefined): string {
 
 export function ServiceProtocolPreview({
   protocolId, protocolNumber, clientLabel, dateLabel, role,
-  onClose, onEdit,
+  onClose, onEdit, stacked = false,
 }: Props) {
   const [row, setRow] = useState<ProtocolRow | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
@@ -167,12 +169,22 @@ export function ServiceProtocolPreview({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col bg-black/45 backdrop-blur-[2px]"
+      className={
+        stacked
+          ? "fixed inset-0 z-[70] flex flex-col bg-black/25 md:flex-row md:justify-end md:pl-[min(34%,360px)]"
+          : "fixed inset-0 z-50 flex flex-col bg-black/45 backdrop-blur-[2px]"
+      }
       role="dialog"
       aria-modal="true"
       aria-label="Преглед на сервизен протокол"
     >
-      <div className="flex flex-1 flex-col bg-slate-100 w-full h-full md:max-w-3xl md:mx-auto md:my-3 md:rounded-2xl md:shadow-2xl md:max-h-[calc(100vh-1.5rem)] overflow-hidden border border-slate-200 md:border-0">
+      <div
+        className={
+          stacked
+            ? "flex flex-1 flex-col bg-slate-100 w-full h-full md:max-w-2xl md:shadow-2xl md:max-h-[calc(100vh-1.5rem)] md:my-3 md:mr-3 overflow-hidden border border-slate-200 md:rounded-2xl"
+            : "flex flex-1 flex-col bg-slate-100 w-full h-full md:max-w-3xl md:mx-auto md:my-3 md:rounded-2xl md:shadow-2xl md:max-h-[calc(100vh-1.5rem)] overflow-hidden border border-slate-200 md:border-0"
+        }
+      >
         {/* ── Лента ── */}
         <div className="border-b border-slate-200 bg-white shrink-0 safe-top">
           <div className="flex flex-wrap items-center gap-2 px-3 py-3 sm:px-4">
@@ -332,9 +344,21 @@ export function ServiceProtocolPreview({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
                     <PreviewField label="Марка" value={row.ac_brand} />
                     <PreviewField label="Модел" value={row.ac_model} />
-                    {row.service_kind !== "recycle" && (
-                      <PreviewField label="Сериен №" value={row.serial_number} />
-                    )}
+                    {row.service_kind !== "recycle" && (() => {
+                      const legacySerials = parseProtocolSerialPair(row.serial_number);
+                      return (
+                        <>
+                          <PreviewField
+                            label="Сериен № вътрешно тяло"
+                            value={row.indoor_unit_serial ?? legacySerials.indoorHint}
+                          />
+                          <PreviewField
+                            label="Сериен № външно тяло"
+                            value={row.outdoor_unit_serial ?? legacySerials.outdoorHint}
+                          />
+                        </>
+                      );
+                    })()}
                     {row.service_kind === "recycle" && (
                       <>
                         <PreviewField label="Сериен № вътрешно тяло" value={row.indoor_unit_serial} />

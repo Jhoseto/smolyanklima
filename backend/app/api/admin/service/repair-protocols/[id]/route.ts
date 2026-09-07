@@ -13,6 +13,7 @@ import { adminSession, requireRole } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
 import { assertRepairProtocolVisible, assertRepairProtocolWritable } from "@/lib/admin/repairProtocolAccess";
 import { applyRecycleSerialsToProduct } from "@/lib/admin/recycleProtocolProductLink";
+import { combineLegacySerialField } from "@/lib/protocol-contact-fields";
 
 const UpdateSchema = z.object({
   date:             z.string().optional(),
@@ -179,11 +180,19 @@ export async function PUT(
     update.client_email = null;
     update.address = null;
     update.serial_number = null;
-  } else {
-    // product_id / indoor_unit_serial / outdoor_unit_serial са само за 'recycle'.
-    update.product_id = null;
-    update.indoor_unit_serial = null;
-    update.outdoor_unit_serial = null;
+  } else if (
+    parsed.data.indoor_unit_serial !== undefined ||
+    parsed.data.outdoor_unit_serial !== undefined
+  ) {
+    const indoor =
+      parsed.data.indoor_unit_serial !== undefined
+        ? parsed.data.indoor_unit_serial
+        : (c.indoor_unit_serial as string | null);
+    const outdoor =
+      parsed.data.outdoor_unit_serial !== undefined
+        ? parsed.data.outdoor_unit_serial
+        : (c.outdoor_unit_serial as string | null);
+    update.serial_number = combineLegacySerialField(indoor, outdoor);
   }
 
   // Автоматичен workflow на статуси (само ако клиентът НЕ изпраща явно status):

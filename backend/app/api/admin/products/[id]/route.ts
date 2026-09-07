@@ -27,6 +27,12 @@ import {
   stripTemplateOnlyFieldsFromPatch,
   validateOnOrderPartialDelivery,
 } from "@/lib/admin/productOnOrderInstancePut";
+import {
+  assertUsedBatchSerialsUnique,
+  shouldFinalizeUsedBatchStub,
+  validateUsedBatchSerialFields,
+  validateUsedBatchStubSerialPatch,
+} from "@/lib/admin/productUsedBatchStub";
 import { enforceStockStatusAfterSale } from "@/lib/admin/productSaleStock";
 import { findProductActiveLinks, productActiveLinkWarningMessage } from "@/lib/admin/productActiveLinksWarning";
 import { replaceProductImages, upsertProductSpecs, type ImageInput, type SpecsInput } from "@/lib/admin/syncProductChildren";
@@ -104,7 +110,7 @@ const UpdateSchema = z
   purchasePrice: z.number().nonnegative().optional().nullable(),
   isFeatured: z.boolean().optional(),
   showInPublicCatalog: z.boolean().optional(),
-  stockStatus: z.enum(["in_stock", "out_of_stock", "on_order", "reserved"]).optional(),
+  stockStatus: z.enum(["in_stock", "out_of_stock", "on_order", "reserved", "scrapped"]).optional(),
   stockLocation: z.enum(["showroom", "warehouse", "service"]).optional(),
   productRegion: z.enum(["europe", "japan"]).optional(),
   stockQuantity: z.number().int().nonnegative().optional(),
@@ -113,6 +119,8 @@ const UpdateSchema = z
   images: z.array(ImageSchema).max(MAX_IMAGES).optional(),
   /** Шаблон „по поръчка“: създава нова in_stock инстанция (не променя шаблона със серийни №). */
   createInstanceFromOnOrder: z.boolean().optional(),
+  /** Партида втора употреба без серийни №: финализира тази бройка с двата серийни номера. */
+  finalizeUsedBatchStub: z.boolean().optional(),
 })
   .superRefine((data, ctx) => {
     if (data.slug === undefined || data.slug === null) return;
@@ -280,11 +288,13 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     parsed.data.stockStatus !== undefined ||
     parsed.data.showInPublicCatalog !== undefined;
 
+  let didFinalizeUsedBatch = false;
+
   if (Object.keys(patch).length > 0 || touchesDelivery) {
     const { data: currentRow, error: curErr } = await supabase
       .from("products")
       .select(
-        "id,brand_id,model_code,stock_status,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,purchased_at,supplier_order_work_item_id,show_in_public_catalog",
+        "id,brand_id,model_code,stock_status,product_condition,indoor_unit_serial,outdoor_unit_serial,supplier_invoice_number,purchased_at,supplier_order_work_item_id,show_in_public_catalog",
       )
       .eq("id", id)
       .maybeSingle();
@@ -295,6 +305,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       brand_id: string | null;
       model_code: string | null;
       stock_status: string | null;
+      product_condition: string | null;
       indoor_unit_serial: string | null;
       outdoor_unit_serial: string | null;
       supplier_invoice_number: string | null;
@@ -302,6 +313,37 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       supplier_order_work_item_id: string | null;
       show_in_public_catalog: boolean | null;
     };
+
+    const stubSerialPatchErr = validateUsedBatchStubSerialPatch(current, parsed.data);
+    if (stubSerialPatchErr) {
+      return withCors(req, NextResponse.json({ error: stubSerialPatchErr }, { status: 400 }));
+    }
+
+    const finalizeUsedBatch = shouldFinalizeUsedBatchStub(current, parsed.data);
+    didFinalizeUsedBatch = finalizeUsedBatch;
+    if (parsed.data.finalizeUsedBatchStub === true && !finalizeUsedBatch) {
+      const mergedForStub = mergeDeliveryFields(current, parsed.data);
+      const serialErr = validateUsedBatchSerialFields(mergedForStub);
+      return withCors(
+        req,
+        NextResponse.json(
+          { error: serialErr ?? "Само анонимни бройки от партида „втора употреба“ могат да се финализират като инстанция." },
+          { status: 400 },
+        ),
+      );
+    }
+
+    if (finalizeUsedBatch) {
+      const mergedForStub = mergeDeliveryFields(current, parsed.data);
+      try {
+        const conflictErr = await assertUsedBatchSerialsUnique(supabase, mergedForStub, id);
+        if (conflictErr) {
+          return withCors(req, NextResponse.json({ error: conflictErr }, { status: 409 }));
+        }
+      } catch (e) {
+        return withCors(req, NextResponse.json({ error: String((e as Error).message) }, { status: 500 }));
+      }
+    }
 
     if (isDeliveredProductInstance(current) && parsed.data.showInPublicCatalog === true) {
       return withCors(
@@ -517,8 +559,15 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     changedFields[0] === "price" &&
     parsed.data.specs === undefined &&
     parsed.data.images === undefined;
+
+  const finalizeUsedBatch = didFinalizeUsedBatch;
+
   await logAdminActivity({
-    action: isPriceOnlyUpdate ? "product.price.update" : "product.update",
+    action: finalizeUsedBatch
+      ? "product.batch.finalize"
+      : isPriceOnlyUpdate
+        ? "product.price.update"
+        : "product.update",
     entityType: "product",
     entityId: id,
     details: {
@@ -527,8 +576,21 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       hasSpecsUpdate: Boolean(parsed.data.specs),
       hasImagesUpdate: Boolean(parsed.data.images),
       slug: out?.slug ?? null,
+      finalizedUsedBatchStub: finalizeUsedBatch || undefined,
     },
   });
+
+  if (finalizeUsedBatch) {
+    return withCors(
+      req,
+      NextResponse.json({
+        data: {
+          ...out,
+          finalizedUsedBatchStub: true,
+        },
+      }),
+    );
+  }
   return withCors(req, NextResponse.json({ data: out }));
 }
 

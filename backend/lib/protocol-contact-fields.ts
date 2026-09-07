@@ -35,3 +35,15 @@ export function combineUnitSerials(
   if (parts.length === 1) return parts[0];
   return `Вътр.: ${parts[0]} / Външ.: ${parts[1]}`;
 }
+
+/** Legacy формат в service_repair_protocols.serial_number — „ABC / DEF“. */
+export function combineLegacySerialField(
+  indoor: string | null | undefined,
+  outdoor: string | null | undefined,
+): string | null {
+  const i = indoor?.trim();
+  const o = outdoor?.trim();
+  if (!i && !o) return null;
+  if (i && o) return `${i} / ${o}`;
+  return i ?? o ?? null;
+}

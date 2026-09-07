@@ -14,6 +14,7 @@ export const SalesReportQuerySchema = z.object({
   hasSupplierInvoice: z.enum(["yes", "no"]).optional(),
   hasPurchasePrice: z.enum(["yes", "no"]).optional(),
   brandId: z.string().uuid().optional(),
+  containerId: z.string().uuid().optional(),
   productRegion: z.enum(["europe", "japan"]).optional(),
   amountMin: z.coerce.number().nonnegative().optional(),
   amountMax: z.coerce.number().nonnegative().optional(),
@@ -39,6 +40,7 @@ export async function fetchSalesHistoryReport(
     hasSupplierInvoice,
     hasPurchasePrice,
     brandId,
+    containerId,
     productRegion,
     amountMin,
     amountMax,
@@ -47,10 +49,12 @@ export async function fetchSalesHistoryReport(
   } = query;
 
   const mountPhases = parseMountPhaseCsv(mountPhase);
-  const needsProductInner = Boolean(brandId || productRegion);
+  const needsProductInner = Boolean(brandId || productRegion || containerId);
+  const productFields =
+    "name, model_code, container_id, indoor_unit_serial, outdoor_unit_serial, brands:brand_id(name), containers:container_id(id,name)";
   const productEmbed = needsProductInner
-    ? `products:product_id!inner(name, model_code, indoor_unit_serial, outdoor_unit_serial, brands:brand_id(name))`
-    : `products:product_id(name, model_code, indoor_unit_serial, outdoor_unit_serial, brands:brand_id(name))`;
+    ? `products:product_id!inner(${productFields})`
+    : `products:product_id(${productFields})`;
   const selectFields = [
     "id",
     "status",
@@ -105,6 +109,7 @@ export async function fetchSalesHistoryReport(
     }
   }
   if (brandId) dbQuery = dbQuery.eq("products.brand_id", brandId);
+  if (containerId) dbQuery = dbQuery.eq("products.container_id", containerId);
   if (productRegion) dbQuery = dbQuery.eq("products.product_region", productRegion);
 
   const supplierFilterRaw = (supplierKey ?? supplierName)?.trim();

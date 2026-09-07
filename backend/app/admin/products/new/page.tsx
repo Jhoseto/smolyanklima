@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ProductFormFields, emptyProductForm, buildPostBody, type AdminProductForm } from "../ProductForm";
 import { SectionTitle, Card, Button } from "../../ui";
 import { Save } from "lucide-react";
@@ -16,6 +16,9 @@ type ContainerRow = { id: string; name: string };
 
 export default function NewProductPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const prefillUsed = searchParams.get("condition") === "used";
+  const prefillContainerId = searchParams.get("containerId")?.trim() ?? "";
   const [brands, setBrands] = useState<Brand[]>([]);
   const [types, setTypes] = useState<ProductType[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierRow[]>([]);
@@ -79,14 +82,13 @@ export default function NewProductPage() {
         typesList[0];
       setForm((prev) => ({
         ...prev,
-        // Полето „Марка“ е празно по default — потребителят сам избира от
-        // комбобокса или го въвежда нов. (Преди тук се избираше първата
-        // марка автоматично, което създаваше confusion при нов продукт.)
         brandId: "",
         typeId: wallType?.id ?? "",
+        ...(prefillUsed ? { productCondition: "used" as const } : {}),
+        ...(prefillContainerId ? { containerId: prefillContainerId } : {}),
       }));
     })().catch((e) => setError(String(e?.message ?? e)));
-  }, []);
+  }, [prefillUsed, prefillContainerId]);
 
   /** Ефективен брой бройки за създаване. > 1 само при „Втора употреба“ —
    *  партида еднакви климатици без серийни номера (виж disableSerialFields). */
