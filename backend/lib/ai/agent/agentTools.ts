@@ -22,6 +22,18 @@ import {
 import { sanitizeIlikeTerm } from "@/lib/security/sanitizeSearchTerm";
 import { loadCatalogSyncRow } from "@/lib/ai/agent/agentTitle";
 import { describeActivityLog, formatActivityAction, formatActivityEntityType, formatActivityUser, humanizeAdminDisplayText } from "@/lib/admin/activityLogLabels";
+import { computeFleetSummary } from "@/lib/admin/fleetQueries";
+import { countContainersSummary } from "@/lib/admin/containerQueries";
+import {
+  executeAggregateContainerCosts,
+  executeAggregateFleetCosts,
+  executeGetContainerDetail,
+  executeGetFleetSummary,
+  executeGetFleetVehicleDetail,
+  executeQueryContainers,
+  executeQueryFleetComplianceAlerts,
+  executeQueryFleetVehicles,
+} from "@/lib/ai/agent/moduleAgentTools";
 
 export type ToolContext = {
   db: SupabaseClient;
@@ -101,7 +113,15 @@ function activityRangeIso(from?: string, to?: string): { from: string; to: strin
 
 export const AGENT_FUNCTION_DECLARATIONS = [
   { name: "describe_schema", description: "Column detail for one database table", parameters: { type: "OBJECT", properties: { table: { type: "STRING" } }, required: ["table"] } },
-  { name: "get_dashboard_summary", description: "KPI counts: products, new inquiries, work today/overdue, outbox", parameters: { type: "OBJECT", properties: {} } },
+  { name: "get_dashboard_summary", description: "KPI counts: products, inquiries, work, outbox, fleet alerts, containers", parameters: { type: "OBJECT", properties: {} } },
+  { name: "get_fleet_summary", description: "Fleet KPI: total vehicles, critical/warning compliance alerts, breakdown by kind", parameters: { type: "OBJECT", properties: {} } },
+  { name: "query_fleet_vehicles", description: "List fleet vehicles with filters: q, status, alertLevel, assignedAdmin, sort", parameters: { type: "OBJECT", properties: { q: { type: "STRING" }, status: { type: "STRING" }, alertLevel: { type: "STRING" }, assignedAdmin: { type: "STRING" }, sortBy: { type: "STRING" }, sortDir: { type: "STRING" }, limit: { type: "INTEGER" } } } },
+  { name: "get_fleet_vehicle_detail", description: "Vehicle detail by id or registrationNumber: compliance, maintenance, year costs", parameters: { type: "OBJECT", properties: { id: { type: "STRING" }, registrationNumber: { type: "STRING" }, year: { type: "INTEGER" } } } },
+  { name: "query_fleet_compliance_alerts", description: "Cross-fleet expiring/expired compliance by kind and daysAhead", parameters: { type: "OBJECT", properties: { kind: { type: "STRING" }, daysAhead: { type: "INTEGER" }, level: { type: "STRING" }, limit: { type: "INTEGER" } } } },
+  { name: "aggregate_fleet_costs", description: "Fleet costs by year/month/kind/vehicle: compliance, maintenance, repair", parameters: { type: "OBJECT", properties: { year: { type: "INTEGER" }, vehicleId: { type: "STRING" } } } },
+  { name: "query_containers", description: "List containers with product count and total cost; filters year, q", parameters: { type: "OBJECT", properties: { year: { type: "INTEGER" }, q: { type: "STRING" }, sortBy: { type: "STRING" }, sortDir: { type: "STRING" }, limit: { type: "INTEGER" } } } },
+  { name: "get_container_detail", description: "Container detail with products (name, serial, stock status)", parameters: { type: "OBJECT", properties: { id: { type: "STRING" } }, required: ["id"] } },
+  { name: "aggregate_container_costs", description: "Container cost summary by year, avg cost per unit", parameters: { type: "OBJECT", properties: { year: { type: "INTEGER" } } } },
   { name: "query_products", description: "List products with filters", parameters: { type: "OBJECT", properties: { q: { type: "STRING" }, stockStatus: { type: "STRING" }, brandName: { type: "STRING" }, limit: { type: "INTEGER" } } } },
   { name: "query_work_items", description: "Work items / sales / service / calendar", parameters: { type: "OBJECT", properties: { eventCode: { type: "STRING" }, status: { type: "STRING" }, from: { type: "STRING" }, to: { type: "STRING" }, q: { type: "STRING" }, limit: { type: "INTEGER" } } } },
   { name: "query_inquiries", description: "Customer inquiries with period summary for analysis", parameters: { type: "OBJECT", properties: { status: { type: "STRING" }, from: { type: "STRING" }, to: { type: "STRING" }, q: { type: "STRING" }, limit: { type: "INTEGER" } } } },
@@ -153,14 +173,27 @@ export async function executeAgentTool(
       if (ctx.dashboardCache && Date.now() - ctx.dashboardCache.at < DASHBOARD_CACHE_MS) {
         return truncateToolResult(ctx.dashboardCache.payload);
       }
-      const [products, inquiriesNew, workToday, workOverdue, outboxPending, outboxFailed] = await Promise.all([
-        ctx.db.from("products").select("id", { count: "exact", head: true }),
-        ctx.db.from("inquiries").select("id", { count: "exact", head: true }).eq("status", "new"),
-        ctx.db.from("work_items").select("id", { count: "exact", head: true }).eq("due_date", today).in("status", ["planned", "in_progress"]).neq("event_code", "supplier_order"),
-        ctx.db.from("work_items").select("id", { count: "exact", head: true }).lt("due_date", today).in("status", ["planned", "in_progress"]).neq("event_code", "supplier_order"),
-        ctx.db.from("email_outbox").select("id", { count: "exact", head: true }).eq("status", "pending"),
-        ctx.db.from("email_outbox").select("id", { count: "exact", head: true }).eq("status", "failed"),
-      ]);
+      const [products, inquiriesNew, workToday, workOverdue, outboxPending, outboxFailed, fleet, containers] =
+        await Promise.all([
+          ctx.db.from("products").select("id", { count: "exact", head: true }),
+          ctx.db.from("inquiries").select("id", { count: "exact", head: true }).eq("status", "new"),
+          ctx.db
+            .from("work_items")
+            .select("id", { count: "exact", head: true })
+            .eq("due_date", today)
+            .in("status", ["planned", "in_progress"])
+            .neq("event_code", "supplier_order"),
+          ctx.db
+            .from("work_items")
+            .select("id", { count: "exact", head: true })
+            .lt("due_date", today)
+            .in("status", ["planned", "in_progress"])
+            .neq("event_code", "supplier_order"),
+          ctx.db.from("email_outbox").select("id", { count: "exact", head: true }).eq("status", "pending"),
+          ctx.db.from("email_outbox").select("id", { count: "exact", head: true }).eq("status", "failed"),
+          computeFleetSummary(ctx.db),
+          countContainersSummary(ctx.db),
+        ]);
       const payload = {
         date: today,
         products: products.count ?? 0,
@@ -169,6 +202,17 @@ export async function executeAgentTool(
         workOverdue: workOverdue.count ?? 0,
         outboxPending: outboxPending.count ?? 0,
         outboxFailed: outboxFailed.count ?? 0,
+        fleet: {
+          total: fleet.total,
+          critical: fleet.critical,
+          warning: fleet.warning,
+          adminLink: "/admin/fleet",
+        },
+        containers: {
+          count: containers.count,
+          totalProducts: containers.totalProducts,
+          adminLink: "/admin/containers",
+        },
       };
       ctx.dashboardCache = { at: Date.now(), payload };
       return truncateToolResult(payload);
@@ -887,6 +931,30 @@ export async function executeAgentTool(
         data: (listRes.data ?? []).map((r) => ({ email: r.email, status: r.status, source: r.source, subscribed_at: r.subscribed_at })),
       });
     }
+
+    case "get_fleet_summary":
+      return executeGetFleetSummary(ctx.db);
+
+    case "query_fleet_vehicles":
+      return executeQueryFleetVehicles(ctx.db, args, limit);
+
+    case "get_fleet_vehicle_detail":
+      return executeGetFleetVehicleDetail(ctx.db, args);
+
+    case "query_fleet_compliance_alerts":
+      return executeQueryFleetComplianceAlerts(ctx.db, args, limit);
+
+    case "aggregate_fleet_costs":
+      return executeAggregateFleetCosts(ctx.db, args);
+
+    case "query_containers":
+      return executeQueryContainers(ctx.db, args, limit);
+
+    case "get_container_detail":
+      return executeGetContainerDetail(ctx.db, args);
+
+    case "aggregate_container_costs":
+      return executeAggregateContainerCosts(ctx.db, args);
 
     default:
       return { error: `Unknown tool: ${name}` };

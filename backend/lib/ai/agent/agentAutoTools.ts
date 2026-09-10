@@ -50,7 +50,7 @@ export function requiresToolData(message: string): boolean {
   if (!m || META_QUESTION.test(m)) return false;
   if (isAdminGuideQuestion(message)) return false;
 
-  return /анализ|активност|продаж|запитван|наличност|склад|монт|сервиз|протокол|отчет|статистик|колко|брой|седмиц|месец|годин|(?:последн|минал).*(?:ден|дни|седмиц|месец|годин)|фирм|компан|календар|доставчик|инвентар|рейтинг|имейл|бюлетин|backup|архив|одит|лог|действ|случил|направил|данни|kpi|показател|обобщ|преглед|продукт|климатик|клиент|контакт|crm|аксесоар|резервн|част|марка|btu|seer|scop|цена|поръчк|синхрон|каталог|блог|статия|чат|абонат|newsletter|екип|служител|персонал|staff|настройк|топ|най-|compare|сравн|препоръ|какво|колко|има ли|кои|where|къде/.test(
+  return /анализ|активност|продаж|запитван|наличност|склад|монт|сервиз|протокол|отчет|статистик|колко|брой|седмиц|месец|годин|(?:последн|минал).*(?:ден|дни|седмиц|месец|годин)|фирм|компан|календар|доставчик|инвентар|рейтинг|имейл|бюлетин|backup|архив|одит|лог|действ|случил|направил|данни|kpi|показател|обобщ|преглед|продукт|климатик|клиент|контакт|crm|аксесоар|резервн|част|марка|btu|seer|scop|цена|поръчк|синхрон|каталог|блог|статия|чат|абонат|newsletter|екип|служител|персонал|staff|настройк|топ|най-|compare|сравн|препоръ|какво|колко|има ли|кои|where|къде|автопарк|fleet|машин|машини|(?<![а-я])кол(?![а-я])|(?<![а-я])коли(?![а-я])|мотор|мпс|рег\.?\s*номер|винетк|гражданск|отговорност|каско|преглед|одomet|км\b|ремонт.*(?:кол|машин|авто)|разход.*(?:автопарк|кол|машин)|контейнер|container|япония|japan|доставк.*(?:япон|контейнер)|customs|мито|transport.*smolyan/.test(
     m,
   );
 }
@@ -81,8 +81,44 @@ export function planAutoTools(message: string): AutoToolPlan[] {
     addPlan(plans, seen, "get_dashboard_summary", {});
     addPlan(plans, seen, "query_inquiries", { from, to, limit: 50 });
     addPlan(plans, seen, "query_work_items", { from, to, limit: 50 });
+    addPlan(plans, seen, "get_fleet_summary", {});
+    addPlan(plans, seen, "query_containers", { limit: 30 });
     if (/активност|одит|лог|действ|админ/.test(m)) {
       addPlan(plans, seen, "query_activity_logs", { from, to, aggregate: true, limit: 500 });
+    }
+  }
+
+  // --- Fleet ---
+  if (/автопарк|fleet|машин|машини|(?<![а-я])кол(?![а-я])|(?<![а-я])коли(?![а-я])|мотор|мпс|винетк|гражданск|отговорност|каско|преглед|одomet|км\b/.test(m)) {
+    if (/разход|цен|cost|eur|€/.test(m)) {
+      addPlan(plans, seen, "aggregate_fleet_costs", { year: new Date().getFullYear() });
+    } else if (/срок|изтич|алерт|alert|критич|warning|винетк|гражданск|отговорност|преглед|каско/.test(m)) {
+      addPlan(plans, seen, "get_fleet_summary", {});
+      addPlan(plans, seen, "query_fleet_compliance_alerts", { daysAhead: 30, limit: 50 });
+    } else {
+      addPlan(plans, seen, "get_fleet_summary", {});
+      addPlan(plans, seen, "query_fleet_vehicles", { limit: 40 });
+    }
+  }
+
+  const regMatch = message.match(/\b([A-ZА-Я]{1,2}\s?\d{3,4}\s?[A-ZА-Я]{1,2})\b/i);
+  if (regMatch && /автопарк|fleet|машин|кол|мпс|истори|детайл|рег/.test(m)) {
+    addPlan(plans, seen, "get_fleet_vehicle_detail", { registrationNumber: regMatch[1].replace(/\s+/g, "") });
+  }
+
+  if (/ремонт.*(?:кол|машин|авто|автопарк)|поддръжк.*(?:кол|машин|авто|автопарк)/.test(m)) {
+    addPlan(plans, seen, "query_fleet_vehicles", { limit: 30 });
+    addPlan(plans, seen, "aggregate_fleet_costs", { year: new Date().getFullYear() });
+  }
+
+  // --- Containers ---
+  if (/контейнер|container|япония|japan|доставк.*(?:япон|контейнер)|customs|мито|transport.*smolyan/.test(m)) {
+    if (/разход|цен|cost|eur|€|скъп|най-/.test(m)) {
+      const yearMatch = m.match(/20\d{2}/);
+      addPlan(plans, seen, "aggregate_container_costs", yearMatch ? { year: Number(yearMatch[0]) } : {});
+    } else {
+      const yearMatch = m.match(/20\d{2}/);
+      addPlan(plans, seen, "query_containers", yearMatch ? { year: Number(yearMatch[0]), limit: 40 } : { limit: 40 });
     }
   }
 

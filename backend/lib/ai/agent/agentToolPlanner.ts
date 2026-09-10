@@ -25,6 +25,14 @@ const PLANNER_ALLOWED = new Set([
   "query_newsletter",
   "get_supplier_sync_status",
   "lookup_product_at_supplier",
+  "get_fleet_summary",
+  "query_fleet_vehicles",
+  "get_fleet_vehicle_detail",
+  "query_fleet_compliance_alerts",
+  "aggregate_fleet_costs",
+  "query_containers",
+  "get_container_detail",
+  "aggregate_container_costs",
 ]);
 
 function todayIso(): string {

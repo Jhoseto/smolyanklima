@@ -4,6 +4,7 @@ import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
 import { isPostgrestMissingColumn } from "@/lib/admin/pgMissingColumn";
+import { listContainers } from "@/lib/admin/containerQueries";
 import {
   CONTAINER_OPTIONAL_COLUMNS,
   buildContainerSelect,
@@ -57,54 +58,14 @@ export async function GET(req: NextRequest) {
   }
 
   const { year, q, sortBy, sortDir, page, perPage } = parsed.data;
-  const supabase = session.db;
-  const from = (page - 1) * perPage;
-  const to = from + perPage - 1;
 
-  async function runList(columns: readonly string[]) {
-    let query = supabase.from("containers").select(buildContainerSelect(columns), { count: "exact" });
-    if (year) query = query.eq("year", year);
-    if (q?.trim()) query = query.or(`name.ilike.%${q.trim()}%,notes.ilike.%${q.trim()}%`);
-    const res = await query
-      .order(sortBy, { ascending: sortDir === "asc" })
-      .order("id", { ascending: true })
-      .range(from, to);
-    return { data: res.data as ContainerDbRow[] | null, error: res.error as PgError, count: res.count };
+  try {
+    const { data, total } = await listContainers(session.db, { year, q, sortBy, sortDir, page, perPage });
+    return withCors(req, NextResponse.json({ data, meta: { page, perPage, total } }));
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Грешка при зареждане";
+    return withCors(req, NextResponse.json({ error: message }, { status: 500 }));
   }
-
-  let columns: readonly string[] = CONTAINER_OPTIONAL_COLUMNS;
-  let result = await runList(columns);
-  while (result.error) {
-    const missing = columns.find((c) => isPostgrestMissingColumn(result.error, c));
-    if (!missing) break;
-    columns = columns.filter((c) => c !== missing);
-    result = await runList(columns);
-  }
-  const { data, error, count } = result;
-
-  if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
-
-  const rows = data ?? [];
-  const ids = rows.map((r) => r.id);
-  const countsByContainer = new Map<string, number>();
-  if (ids.length) {
-    const { data: productRows } = await supabase
-      .from("products")
-      .select("container_id")
-      .in("container_id", ids);
-    for (const p of productRows ?? []) {
-      const cid = (p as { container_id?: string | null }).container_id;
-      if (!cid) continue;
-      countsByContainer.set(cid, (countsByContainer.get(cid) ?? 0) + 1);
-    }
-  }
-
-  const withCounts = rows.map((r) => ({
-    ...r,
-    product_count: countsByContainer.get(r.id) ?? 0,
-  }));
-
-  return withCors(req, NextResponse.json({ data: withCounts, meta: { page, perPage, total: count ?? 0 } }));
 }
 
 export async function POST(req: NextRequest) {

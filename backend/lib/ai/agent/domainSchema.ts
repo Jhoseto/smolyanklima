@@ -45,6 +45,43 @@ export const DOMAIN_SCHEMA_CATALOG = {
     admin_agent_messages: { purpose: "Съобщения в AI Agent чат", keys: ["role", "content", "conversation_id"] },
     admin_agent_query_templates: { purpose: "Запазени AI заявки (шаблони)", keys: ["title", "prompt", "admin_user_id"] },
     admin_agent_scheduled_reports: { purpose: "Планирани AI отчети", keys: ["frequency", "prompt", "next_run_at", "enabled"] },
+    fleet_vehicles: {
+      purpose: "Автопарк — МПС на фирмата",
+      keys: ["registration_number", "make", "model", "year", "vin", "fuel_type", "odometer_km", "status", "assigned_admin_user_id"],
+      status: { active: "Активно", inactive: "Неактивно", sold: "Продадено" },
+      admin: "/admin/fleet",
+    },
+    fleet_compliance_records: {
+      purpose: "Срокове по МПС: винетка, гражданска отговорност, преглед, каско",
+      keys: ["vehicle_id", "kind", "valid_from", "expires_on", "provider", "reference_number", "cost_eur"],
+      kinds: {
+        vignette: "Винетка",
+        civil_liability: "Гражданска отговорност",
+        technical_inspection: "Преглед",
+        kasko: "Каско",
+      },
+      admin: "/admin/fleet",
+    },
+    fleet_maintenance_events: {
+      purpose: "Поддръжки и ремонти по МПС",
+      keys: ["vehicle_id", "kind", "title", "performed_on", "odometer_km", "cost_eur", "parts_description", "parts_cost_eur", "labor_cost_eur", "vendor"],
+      kinds: {
+        scheduled_service: "Периодичен сервиз",
+        oil: "Смяна на масло",
+        filters: "Филтри",
+        tires_change: "Смяна на гуми",
+        tires_purchase: "Нови гуми",
+        consumables: "Консумативи",
+        repair: "Ремонт",
+      },
+      admin: "/admin/fleet",
+    },
+    containers: {
+      purpose: "Доставки климатици втора употреба от Япония",
+      keys: ["name", "year", "sequence_in_year", "arrival_date", "departure_date", "supplier_name", "japan_price", "customs_duty", "vat_amount", "transport_to_bulgaria", "transport_to_smolyan"],
+      links: { products: "products.container_id" },
+      admin: "/admin/containers",
+    },
   },
 } as const;
 

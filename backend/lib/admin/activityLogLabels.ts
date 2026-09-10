@@ -79,6 +79,19 @@ const ACTION_LABELS: Record<string, string> = {
   "agent_bulk_delete": "Групово изтриване на AI разговори",
   "agent_retention_cleanup": "Почистване на стари AI разговори",
   "agent_scheduled_reports_run": "Автоматичен AI отчет",
+  "fleet_vehicle.create": "Добавено МПС в автопарка",
+  "fleet_vehicle.update": "Редактирано МПС",
+  "fleet_vehicle.delete": "Изтрито МПС от автопарка",
+  "fleet_compliance.create": "Подновен срок (винетка/гражданска отговорност/преглед/каско)",
+  "fleet_compliance.update": "Редактиран срок (винетка/гражданска отговорност/преглед/каско)",
+  "fleet_compliance.delete": "Изтрит запис за срок",
+  "fleet_maintenance.create": "Добавена поддръжка по МПС",
+  "fleet_maintenance.update": "Редактирана поддръжка по МПС",
+  "fleet_maintenance.delete": "Изтрита поддръжка по МПС",
+  "fleet_repair.create": "Регистриран ремонт по МПС",
+  "container.create": "Създаден контейнер",
+  "container.update": "Редактиран контейнер",
+  "container.delete": "Изтрит контейнер",
 };
 
 const AI_TASK_LABELS: Record<string, string> = {
@@ -116,6 +129,10 @@ export const ENTITY_TYPE_LABELS: Record<string, string> = {
   supplier_order: "Поръчки",
   ai_agent: "AI асистент",
   supplier: "Доставчик",
+  fleet_vehicle: "Автопарк · МПС",
+  fleet_compliance: "Автопарк · срокове",
+  fleet_maintenance: "Автопарк · поддръжка",
+  container: "Контейнери",
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -824,6 +841,10 @@ function resolveEntityLabel(row: ActivityLogRow): string {
   if (entity_type === "article") return "Блог статия";
   if (entity_type === "brand") return "Марка";
   if (entity_type === "product_rating") return "Рейтинг";
+  if (entity_type === "fleet_vehicle") return "МПС";
+  if (entity_type === "fleet_compliance") return "Срок (гражданска отговорност/винетка/преглед)";
+  if (entity_type === "fleet_maintenance") return "Поддръжка/ремонт";
+  if (entity_type === "container") return "Контейнер";
 
   return formatActivityEntityType(entity_type);
 }

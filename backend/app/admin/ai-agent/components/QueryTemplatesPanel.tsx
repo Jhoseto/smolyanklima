@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { BookmarkPlus, Loader2, Trash2, X } from "lucide-react";
+import { DEFAULT_AGENT_QUERY_TEMPLATES } from "@/lib/ai/agent/defaultQueryTemplates";
 import { ADMIN_MODAL_BACKDROP, ADMIN_MODAL_PANEL, AdminModalDragHandle } from "../../ui";
 
 export type QueryTemplate = {
@@ -72,9 +73,46 @@ export function QueryTemplatesPanel({ onUseTemplate, draftPrompt = "" }: Props) 
     setTemplates((prev) => prev.filter((t) => t.id !== id));
   };
 
+  const handleSaveSuggested = async (template: (typeof DEFAULT_AGENT_QUERY_TEMPLATES)[number]) => {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/ai-agent/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: template.title, prompt: template.prompt, description: template.description ?? null }),
+      });
+      if (!res.ok) throw new Error("save failed");
+      await fetchTemplates();
+    } catch {
+      /* ignore */
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const savedPrompts = new Set(templates.map((t) => t.prompt.trim()));
+
   return (
     <>
       <div className="shrink-0 px-3 py-2 border-b border-slate-100">
+        <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1.5">Препоръчани шаблони</p>
+        <div className="flex flex-wrap gap-1 mb-2 max-h-20 overflow-y-auto">
+          {DEFAULT_AGENT_QUERY_TEMPLATES.map((t) => {
+            const alreadySaved = savedPrompts.has(t.prompt.trim());
+            return (
+              <button
+                key={t.title}
+                type="button"
+                disabled={saving || alreadySaved}
+                onClick={() => (alreadySaved ? onUseTemplate(t.prompt) : void handleSaveSuggested(t))}
+                className="px-2 py-1 rounded-lg text-[10px] font-semibold bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 disabled:opacity-40 truncate max-w-[160px]"
+                title={alreadySaved ? t.prompt : `${t.prompt} — клик за запазване`}
+              >
+                {alreadySaved ? t.title : `+ ${t.title}`}
+              </button>
+            );
+          })}
+        </div>
         <div className="flex items-center justify-between gap-2 mb-1.5">
           <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Запазени шаблони</p>
           <button

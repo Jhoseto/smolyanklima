@@ -4,6 +4,7 @@ import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
 import { isPostgrestMissingColumn } from "@/lib/admin/pgMissingColumn";
+import { getContainerById } from "@/lib/admin/containerQueries";
 import {
   CONTAINER_OPTIONAL_COLUMNS,
   buildContainerSelect,
@@ -42,31 +43,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   } catch {
     return withCors(req, NextResponse.json({ error: "Неоторизиран достъп" }, { status: 401 }));
   }
-  const supabase = session.db;
-
-  async function runGet(columns: readonly string[]) {
-    const res = await supabase.from("containers").select(buildContainerSelect(columns)).eq("id", id).maybeSingle();
-    return { data: res.data as ContainerDbRow | null, error: res.error as PgError };
+  try {
+    const data = await getContainerById(session.db, id);
+    if (!data) return withCors(req, NextResponse.json({ error: "Контейнерът не е намерен" }, { status: 404 }));
+    return withCors(req, NextResponse.json({ data }));
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Грешка при зареждане";
+    return withCors(req, NextResponse.json({ error: message }, { status: 500 }));
   }
-
-  let columns: readonly string[] = CONTAINER_OPTIONAL_COLUMNS;
-  let result = await runGet(columns);
-  while (result.error) {
-    const missing = columns.find((c) => isPostgrestMissingColumn(result.error, c));
-    if (!missing) break;
-    columns = columns.filter((c) => c !== missing);
-    result = await runGet(columns);
-  }
-  const { data, error } = result;
-  if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
-  if (!data) return withCors(req, NextResponse.json({ error: "Контейнерът не е намерен" }, { status: 404 }));
-
-  const { count } = await supabase
-    .from("products")
-    .select("id", { count: "exact", head: true })
-    .eq("container_id", id);
-
-  return withCors(req, NextResponse.json({ data: { ...data, product_count: count ?? 0 } }));
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
