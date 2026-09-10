@@ -89,6 +89,9 @@ const ACTION_LABELS: Record<string, string> = {
   "fleet_maintenance.update": "Редактирана поддръжка по МПС",
   "fleet_maintenance.delete": "Изтрита поддръжка по МПС",
   "fleet_repair.create": "Регистриран ремонт по МПС",
+  "fleet_misc_expense.create": "Добавен друг разход по МПС",
+  "fleet_misc_expense.update": "Редактиран друг разход по МПС",
+  "fleet_misc_expense.delete": "Изтрит друг разход по МПС",
   "container.create": "Създаден контейнер",
   "container.update": "Редактиран контейнер",
   "container.delete": "Изтрит контейнер",
@@ -132,6 +135,7 @@ export const ENTITY_TYPE_LABELS: Record<string, string> = {
   fleet_vehicle: "Автопарк · МПС",
   fleet_compliance: "Автопарк · срокове",
   fleet_maintenance: "Автопарк · поддръжка",
+  fleet_misc_expense: "Автопарк · други разходи",
   container: "Контейнери",
 };
 
@@ -844,6 +848,7 @@ function resolveEntityLabel(row: ActivityLogRow): string {
   if (entity_type === "fleet_vehicle") return "МПС";
   if (entity_type === "fleet_compliance") return "Срок (гражданска отговорност/винетка/преглед)";
   if (entity_type === "fleet_maintenance") return "Поддръжка/ремонт";
+  if (entity_type === "fleet_misc_expense") return "Друг разход";
   if (entity_type === "container") return "Контейнер";
 
   return formatActivityEntityType(entity_type);

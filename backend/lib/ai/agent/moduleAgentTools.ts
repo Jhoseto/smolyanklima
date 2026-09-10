@@ -6,6 +6,7 @@ import {
   computeFleetYearCosts,
   fetchFleetComplianceHistory,
   fetchFleetMaintenanceHistory,
+  fetchFleetMiscExpenses,
   getFleetVehicleById,
   getFleetVehicleByRegistration,
   listFleetComplianceAlerts,
@@ -16,6 +17,7 @@ import {
   fleetComplianceKindLabel,
   fleetFuelTypeLabel,
   fleetMaintenanceKindLabel,
+  fleetMiscExpenseCategoryLabel,
   fleetVehicleStatusLabel,
   type FleetComplianceKind,
   type FleetVehicleStatus,
@@ -23,6 +25,7 @@ import {
 import { fleetComplianceLevelLabel } from "@/lib/admin/fleetComplianceStatus";
 import {
   aggregateContainerCosts,
+  getContainerByExactName,
   getContainerWithProducts,
   listContainers,
 } from "@/lib/admin/containerQueries";
@@ -181,9 +184,10 @@ export async function executeGetFleetVehicleDetail(
   if (!vehicle) return { error: "МПС не е намерено. Провери id или registrationNumber." };
 
   const year = Number(args.year) || new Date().getFullYear();
-  const [complianceHistory, maintenanceHistory, yearCosts] = await Promise.all([
+  const [complianceHistory, maintenanceHistory, miscExpenses, yearCosts] = await Promise.all([
     fetchFleetComplianceHistory(db, vehicle.id),
     fetchFleetMaintenanceHistory(db, vehicle.id),
+    fetchFleetMiscExpenses(db, vehicle.id, year),
     computeFleetYearCosts(db, vehicle.id, year),
   ]);
 
@@ -234,10 +238,18 @@ export async function executeGetFleetVehicleDetail(
     complianceSummary,
     complianceHistory: compliance,
     maintenanceHistory: maintenance,
+    miscExpenses: miscExpenses.slice(0, 20).map((e) => ({
+      category: fleetMiscExpenseCategoryLabel(e.category),
+      title: e.title,
+      date: formatDateBg(e.expense_date),
+      cost: formatEur(e.cost_eur),
+    })),
     yearCosts: {
       year: yearCosts.year,
       compliance: formatEur(yearCosts.compliance_eur),
       maintenance: formatEur(yearCosts.maintenance_eur),
+      repair: formatEur(yearCosts.repair_eur),
+      misc: formatEur(yearCosts.misc_eur),
       total: formatEur(yearCosts.total_eur),
     },
   });
@@ -305,6 +317,7 @@ export async function executeAggregateFleetCosts(
     compliance: formatEur(m.compliance_eur),
     maintenance: formatEur(m.maintenance_eur),
     repair: formatEur(m.repair_eur),
+    misc: formatEur(m.misc_eur),
     total: formatEur(m.total_eur),
   }));
 
@@ -319,6 +332,7 @@ export async function executeAggregateFleetCosts(
       compliance: formatEur(agg.totals.compliance_eur),
       maintenance: formatEur(agg.totals.maintenance_eur),
       repair: formatEur(agg.totals.repair_eur),
+      misc: formatEur(agg.totals.misc_eur),
       total: formatEur(agg.totals.total_eur),
     },
     byMonth: byMonthFormatted,
@@ -328,6 +342,7 @@ export async function executeAggregateFleetCosts(
       compliance: formatEur(v.compliance_eur),
       maintenance: formatEur(v.maintenance_eur),
       repair: formatEur(v.repair_eur),
+      misc: formatEur(v.misc_eur),
       total: formatEur(v.total_eur),
       adminLink: "/admin/fleet",
     })),
@@ -403,8 +418,7 @@ export async function executeGetContainerDetail(
 
   let container = id ? await getContainerWithProducts(db, id) : null;
   if (!container && name) {
-    const { data } = await listContainers(db, { q: name, perPage: 5 });
-    const match = data.find((c) => c.name.toLowerCase() === name.toLowerCase()) ?? data[0];
+    const match = await getContainerByExactName(db, name);
     if (match) container = await getContainerWithProducts(db, match.id);
   }
   if (!container) return { error: "Контейнерът не е намерен." };
@@ -527,7 +541,7 @@ export const MODULE_AGENT_FUNCTION_DECLARATIONS = [
   },
   {
     name: "aggregate_fleet_costs",
-    description: "Fleet costs by year/month/kind/vehicle; compliance vs maintenance vs repair",
+    description: "Fleet costs by year/month/kind/vehicle; compliance vs maintenance vs repair vs misc",
     parameters: {
       type: "OBJECT",
       properties: {
@@ -579,24 +593,28 @@ export async function executeModuleAgentTool(
   db: SupabaseClient,
   limit: number,
 ): Promise<Record<string, unknown> | null> {
-  switch (name) {
-    case "get_fleet_summary":
-      return executeGetFleetSummary(db);
-    case "query_fleet_vehicles":
-      return executeQueryFleetVehicles(db, args, limit);
-    case "get_fleet_vehicle_detail":
-      return executeGetFleetVehicleDetail(db, args);
-    case "query_fleet_compliance_alerts":
-      return executeQueryFleetComplianceAlerts(db, args, limit);
-    case "aggregate_fleet_costs":
-      return executeAggregateFleetCosts(db, args);
-    case "query_containers":
-      return executeQueryContainers(db, args, limit);
-    case "get_container_detail":
-      return executeGetContainerDetail(db, args);
-    case "aggregate_container_costs":
-      return executeAggregateContainerCosts(db, args);
-    default:
-      return null;
+  try {
+    switch (name) {
+      case "get_fleet_summary":
+        return executeGetFleetSummary(db);
+      case "query_fleet_vehicles":
+        return executeQueryFleetVehicles(db, args, limit);
+      case "get_fleet_vehicle_detail":
+        return executeGetFleetVehicleDetail(db, args);
+      case "query_fleet_compliance_alerts":
+        return executeQueryFleetComplianceAlerts(db, args, limit);
+      case "aggregate_fleet_costs":
+        return executeAggregateFleetCosts(db, args);
+      case "query_containers":
+        return executeQueryContainers(db, args, limit);
+      case "get_container_detail":
+        return executeGetContainerDetail(db, args);
+      case "aggregate_container_costs":
+        return executeAggregateContainerCosts(db, args);
+      default:
+        return null;
+    }
+  } catch (e: unknown) {
+    return { error: String(e instanceof Error ? e.message : e) };
   }
 }

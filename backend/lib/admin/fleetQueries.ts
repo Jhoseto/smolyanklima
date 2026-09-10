@@ -11,7 +11,9 @@ import {
   type FleetComplianceRecordRow,
   type FleetMaintenanceEventRow,
   type FleetMaintenanceKind,
+  type FleetMiscExpenseRow,
   type FleetVehicleListRow,
+  fleetMiscExpenseCategoryLabel,
   type FleetVehicleRow,
   type FleetVehicleStatus,
 } from "./fleetTypes";
@@ -273,12 +275,41 @@ export async function computeFleetSummaryByKind(
   return breakdown;
 }
 
+function maintenanceEventCost(row: FleetMaintenanceEventRow): number {
+  const parts = Number(row.parts_cost_eur ?? 0);
+  const labor = Number(row.labor_cost_eur ?? 0);
+  if (row.kind === "repair" && (parts > 0 || labor > 0)) return parts + labor;
+  return Number(row.cost_eur ?? 0);
+}
+
 export type FleetYearCosts = {
   year: number;
   compliance_eur: number;
   maintenance_eur: number;
+  repair_eur: number;
+  misc_eur: number;
   total_eur: number;
 };
+
+export async function fetchFleetMiscExpenses(
+  supabase: SupabaseClient,
+  vehicleId: string,
+  year?: number,
+): Promise<FleetMiscExpenseRow[]> {
+  let query = supabase
+    .from("fleet_misc_expenses")
+    .select("*")
+    .eq("vehicle_id", vehicleId)
+    .order("expense_date", { ascending: false });
+
+  if (year != null) {
+    query = query.gte("expense_date", `${year}-01-01`).lte("expense_date", `${year}-12-31`);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []) as FleetMiscExpenseRow[];
+}
 
 export async function computeFleetYearCosts(
   supabase: SupabaseClient,
@@ -288,17 +319,23 @@ export async function computeFleetYearCosts(
   const yearStart = `${year}-01-01`;
   const yearEnd = `${year}-12-31`;
 
-  const [{ data: compliance }, { data: maintenance }] = await Promise.all([
+  const [{ data: compliance }, { data: maintenance }, { data: misc }] = await Promise.all([
     supabase
       .from("fleet_compliance_records")
       .select("cost_eur, valid_from, expires_on, created_at")
       .eq("vehicle_id", vehicleId),
     supabase
       .from("fleet_maintenance_events")
-      .select("cost_eur, performed_on")
+      .select("*")
       .eq("vehicle_id", vehicleId)
       .gte("performed_on", yearStart)
       .lte("performed_on", yearEnd),
+    supabase
+      .from("fleet_misc_expenses")
+      .select("cost_eur")
+      .eq("vehicle_id", vehicleId)
+      .gte("expense_date", yearStart)
+      .lte("expense_date", yearEnd),
   ]);
 
   const compliance_eur = (compliance ?? []).reduce((s, r) => {
@@ -306,13 +343,24 @@ export async function computeFleetYearCosts(
     if (!anchor || anchor < yearStart || anchor > yearEnd) return s;
     return s + Number(r.cost_eur ?? 0);
   }, 0);
-  const maintenance_eur = (maintenance ?? []).reduce((s, r) => s + Number(r.cost_eur ?? 0), 0);
+
+  let maintenance_eur = 0;
+  let repair_eur = 0;
+  for (const row of (maintenance ?? []) as FleetMaintenanceEventRow[]) {
+    const cost = maintenanceEventCost(row);
+    if (row.kind === "repair") repair_eur += cost;
+    else maintenance_eur += cost;
+  }
+
+  const misc_eur = (misc ?? []).reduce((s, r) => s + Number(r.cost_eur ?? 0), 0);
 
   return {
     year,
     compliance_eur,
     maintenance_eur,
-    total_eur: compliance_eur + maintenance_eur,
+    repair_eur,
+    misc_eur,
+    total_eur: compliance_eur + maintenance_eur + repair_eur + misc_eur,
   };
 }
 
@@ -341,27 +389,19 @@ export async function listFleetComplianceAlerts(
     kind === "all" ? [...FLEET_ALL_COMPLIANCE_KINDS] : [kind];
 
   const vehicles = await listFleetVehicles(supabase, { status: "active" });
-  const ids = vehicles.map((v) => v.id);
-  const complianceMap = await fetchFleetComplianceForVehicles(supabase, ids);
-
   const alerts: FleetComplianceAlertRow[] = [];
 
   for (const vehicle of vehicles) {
-    const records = complianceMap.get(vehicle.id) ?? [];
     for (const k of kinds) {
-      const latest = pickLatestComplianceByKind(records, k);
-      const expiresOn = latest?.expires_on ?? null;
-      const alertLevel = latest
-        ? complianceLevelFromExpiresOn(expiresOn)
-        : ("missing" as FleetComplianceLevel);
-      const daysLeft = expiresOn ? daysUntilExpiry(expiresOn) : null;
+      const item = vehicle.compliance_summary[k];
+      const expiresOn = item?.expires_on ?? null;
+      const alertLevel = item?.level ?? ("missing" as FleetComplianceLevel);
+      const daysLeft = item?.days_left ?? (expiresOn ? daysUntilExpiry(expiresOn) : null);
 
       const withinWindow =
         alertLevel === "missing" ||
         alertLevel === "expired" ||
-        alertLevel === "critical" ||
-        alertLevel === "warning" ||
-        (daysLeft !== null && daysLeft >= 0 && daysLeft <= daysAhead);
+        (daysLeft !== null && daysLeft <= daysAhead);
 
       if (!withinWindow) continue;
       if (!matchesAlertFilter(alertLevel, level === "all" ? "all" : level)) continue;
@@ -373,7 +413,7 @@ export async function listFleetComplianceAlerts(
         expires_on: expiresOn,
         level: alertLevel,
         days_left: daysLeft,
-        provider: latest?.provider ?? null,
+        provider: item?.provider ?? null,
       });
     }
   }
@@ -408,6 +448,7 @@ export type FleetCostAggregate = {
     compliance_eur: number;
     maintenance_eur: number;
     repair_eur: number;
+    misc_eur: number;
     total_eur: number;
   };
   byMonth: Array<{
@@ -415,6 +456,7 @@ export type FleetCostAggregate = {
     compliance_eur: number;
     maintenance_eur: number;
     repair_eur: number;
+    misc_eur: number;
     total_eur: number;
   }>;
   byKind: Array<{ kind: string; label: string; total_eur: number }>;
@@ -424,17 +466,10 @@ export type FleetCostAggregate = {
     compliance_eur: number;
     maintenance_eur: number;
     repair_eur: number;
+    misc_eur: number;
     total_eur: number;
   }>;
 };
-
-function maintenanceEventCost(row: FleetMaintenanceEventRow): number {
-  const base = Number(row.cost_eur ?? 0);
-  const parts = Number(row.parts_cost_eur ?? 0);
-  const labor = Number(row.labor_cost_eur ?? 0);
-  if (row.kind === "repair") return base + parts + labor;
-  return base;
-}
 
 export async function aggregateFleetCosts(
   supabase: SupabaseClient,
@@ -452,16 +487,19 @@ export async function aggregateFleetCosts(
   const vehicles = (vehicleRows ?? []) as Array<{ id: string; registration_number: string }>;
   const vehicleIds = vehicles.map((v) => v.id);
 
-  const byMonthMap = new Map<string, { compliance_eur: number; maintenance_eur: number; repair_eur: number }>();
+  const byMonthMap = new Map<
+    string,
+    { compliance_eur: number; maintenance_eur: number; repair_eur: number; misc_eur: number }
+  >();
   for (let m = 1; m <= 12; m++) {
     const key = `${year}-${String(m).padStart(2, "0")}`;
-    byMonthMap.set(key, { compliance_eur: 0, maintenance_eur: 0, repair_eur: 0 });
+    byMonthMap.set(key, { compliance_eur: 0, maintenance_eur: 0, repair_eur: 0, misc_eur: 0 });
   }
 
   const byKindMap = new Map<string, number>();
   const byVehicleMap = new Map<
     string,
-    { registration: string; compliance_eur: number; maintenance_eur: number; repair_eur: number }
+    { registration: string; compliance_eur: number; maintenance_eur: number; repair_eur: number; misc_eur: number }
   >();
   for (const v of vehicles) {
     byVehicleMap.set(v.id, {
@@ -469,13 +507,14 @@ export async function aggregateFleetCosts(
       compliance_eur: 0,
       maintenance_eur: 0,
       repair_eur: 0,
+      misc_eur: 0,
     });
   }
 
-  const totals = { compliance_eur: 0, maintenance_eur: 0, repair_eur: 0, total_eur: 0 };
+  const totals = { compliance_eur: 0, maintenance_eur: 0, repair_eur: 0, misc_eur: 0, total_eur: 0 };
 
   if (vehicleIds.length) {
-    const [{ data: compliance }, { data: maintenance }] = await Promise.all([
+    const [{ data: compliance }, { data: maintenance }, { data: miscExpenses }] = await Promise.all([
       supabase.from("fleet_compliance_records").select("*").in("vehicle_id", vehicleIds),
       supabase
         .from("fleet_maintenance_events")
@@ -483,6 +522,12 @@ export async function aggregateFleetCosts(
         .in("vehicle_id", vehicleIds)
         .gte("performed_on", yearStart)
         .lte("performed_on", yearEnd),
+      supabase
+        .from("fleet_misc_expenses")
+        .select("*")
+        .in("vehicle_id", vehicleIds)
+        .gte("expense_date", yearStart)
+        .lte("expense_date", yearEnd),
     ]);
 
     for (const row of (compliance ?? []) as FleetComplianceRecordRow[]) {
@@ -515,11 +560,26 @@ export async function aggregateFleetCosts(
         byKindMap.set(row.kind, (byKindMap.get(row.kind) ?? 0) + cost);
       }
     }
+
+    for (const row of (miscExpenses ?? []) as FleetMiscExpenseRow[]) {
+      const cost = Number(row.cost_eur ?? 0);
+      const month = row.expense_date.slice(0, 7);
+      const monthBucket = byMonthMap.get(month);
+      if (monthBucket) monthBucket.misc_eur += cost;
+      const kindKey = `misc_${row.category}`;
+      byKindMap.set(kindKey, (byKindMap.get(kindKey) ?? 0) + cost);
+      const vBucket = byVehicleMap.get(row.vehicle_id);
+      if (vBucket) vBucket.misc_eur += cost;
+      totals.misc_eur += cost;
+    }
   }
 
-  totals.total_eur = totals.compliance_eur + totals.maintenance_eur + totals.repair_eur;
+  totals.total_eur = totals.compliance_eur + totals.maintenance_eur + totals.repair_eur + totals.misc_eur;
 
   function kindLabel(kind: string): string {
+    if (kind.startsWith("misc_")) {
+      return fleetMiscExpenseCategoryLabel(kind.slice(5) as Parameters<typeof fleetMiscExpenseCategoryLabel>[0]);
+    }
     if (kind === "repair") return "Ремонт";
     if ((FLEET_ALL_COMPLIANCE_KINDS as string[]).includes(kind)) {
       return fleetComplianceKindLabel(kind as FleetComplianceKind);
@@ -533,7 +593,8 @@ export async function aggregateFleetCosts(
     byMonth: [...byMonthMap.entries()].map(([month, v]) => ({
       month,
       ...v,
-      total_eur: v.compliance_eur + v.maintenance_eur + v.repair_eur,
+      misc_eur: v.misc_eur,
+      total_eur: v.compliance_eur + v.maintenance_eur + v.repair_eur + v.misc_eur,
     })),
     byKind: [...byKindMap.entries()]
       .map(([kind, total_eur]) => ({
@@ -549,7 +610,8 @@ export async function aggregateFleetCosts(
         compliance_eur: v.compliance_eur,
         maintenance_eur: v.maintenance_eur,
         repair_eur: v.repair_eur,
-        total_eur: v.compliance_eur + v.maintenance_eur + v.repair_eur,
+        misc_eur: v.misc_eur,
+        total_eur: v.compliance_eur + v.maintenance_eur + v.repair_eur + v.misc_eur,
       }))
       .filter((v) => v.total_eur > 0 || vehicleId)
       .sort((a, b) => b.total_eur - a.total_eur),
@@ -568,25 +630,7 @@ export async function getFleetVehicleByRegistration(
     .eq("registration_number", normalized)
     .maybeSingle();
   if (error) throw error;
-  if (!data) {
-    const term = sanitizeIlikeTerm(registrationNumber.trim());
-    if (!term) return null;
-    const { data: fuzzy, error: fuzzyErr } = await supabase
-      .from("fleet_vehicles")
-      .select(VEHICLE_SELECT)
-      .ilike("registration_number", `%${term}%`)
-      .limit(1)
-      .maybeSingle();
-    if (fuzzyErr) throw fuzzyErr;
-    if (!fuzzy) return null;
-    const row = unwrapAdmin(fuzzy as FleetVehicleRow);
-    const { data: compliance } = await supabase
-      .from("fleet_compliance_records")
-      .select("*")
-      .eq("vehicle_id", row.id)
-      .order("expires_on", { ascending: false });
-    return enrichFleetVehicleRow(row, (compliance ?? []) as FleetComplianceRecordRow[]);
-  }
+  if (!data) return null;
   const row = unwrapAdmin(data as FleetVehicleRow);
   const { data: compliance } = await supabase
     .from("fleet_compliance_records")

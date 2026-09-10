@@ -24,16 +24,7 @@ import { loadCatalogSyncRow } from "@/lib/ai/agent/agentTitle";
 import { describeActivityLog, formatActivityAction, formatActivityEntityType, formatActivityUser, humanizeAdminDisplayText } from "@/lib/admin/activityLogLabels";
 import { computeFleetSummary } from "@/lib/admin/fleetQueries";
 import { countContainersSummary } from "@/lib/admin/containerQueries";
-import {
-  executeAggregateContainerCosts,
-  executeAggregateFleetCosts,
-  executeGetContainerDetail,
-  executeGetFleetSummary,
-  executeGetFleetVehicleDetail,
-  executeQueryContainers,
-  executeQueryFleetComplianceAlerts,
-  executeQueryFleetVehicles,
-} from "@/lib/ai/agent/moduleAgentTools";
+import { executeModuleAgentTool } from "@/lib/ai/agent/moduleAgentTools";
 
 export type ToolContext = {
   db: SupabaseClient;
@@ -118,9 +109,9 @@ export const AGENT_FUNCTION_DECLARATIONS = [
   { name: "query_fleet_vehicles", description: "List fleet vehicles with filters: q, status, alertLevel, assignedAdmin, sort", parameters: { type: "OBJECT", properties: { q: { type: "STRING" }, status: { type: "STRING" }, alertLevel: { type: "STRING" }, assignedAdmin: { type: "STRING" }, sortBy: { type: "STRING" }, sortDir: { type: "STRING" }, limit: { type: "INTEGER" } } } },
   { name: "get_fleet_vehicle_detail", description: "Vehicle detail by id or registrationNumber: compliance, maintenance, year costs", parameters: { type: "OBJECT", properties: { id: { type: "STRING" }, registrationNumber: { type: "STRING" }, year: { type: "INTEGER" } } } },
   { name: "query_fleet_compliance_alerts", description: "Cross-fleet expiring/expired compliance by kind and daysAhead", parameters: { type: "OBJECT", properties: { kind: { type: "STRING" }, daysAhead: { type: "INTEGER" }, level: { type: "STRING" }, limit: { type: "INTEGER" } } } },
-  { name: "aggregate_fleet_costs", description: "Fleet costs by year/month/kind/vehicle: compliance, maintenance, repair", parameters: { type: "OBJECT", properties: { year: { type: "INTEGER" }, vehicleId: { type: "STRING" } } } },
+  { name: "aggregate_fleet_costs", description: "Fleet costs by year/month/kind/vehicle: compliance, maintenance, repair, misc", parameters: { type: "OBJECT", properties: { year: { type: "INTEGER" }, vehicleId: { type: "STRING" } } } },
   { name: "query_containers", description: "List containers with product count and total cost; filters year, q", parameters: { type: "OBJECT", properties: { year: { type: "INTEGER" }, q: { type: "STRING" }, sortBy: { type: "STRING" }, sortDir: { type: "STRING" }, limit: { type: "INTEGER" } } } },
-  { name: "get_container_detail", description: "Container detail with products (name, serial, stock status)", parameters: { type: "OBJECT", properties: { id: { type: "STRING" } }, required: ["id"] } },
+  { name: "get_container_detail", description: "Container detail with products; lookup by id or exact name", parameters: { type: "OBJECT", properties: { id: { type: "STRING" }, name: { type: "STRING" } } } },
   { name: "aggregate_container_costs", description: "Container cost summary by year, avg cost per unit", parameters: { type: "OBJECT", properties: { year: { type: "INTEGER" } } } },
   { name: "query_products", description: "List products with filters", parameters: { type: "OBJECT", properties: { q: { type: "STRING" }, stockStatus: { type: "STRING" }, brandName: { type: "STRING" }, limit: { type: "INTEGER" } } } },
   { name: "query_work_items", description: "Work items / sales / service / calendar", parameters: { type: "OBJECT", properties: { eventCode: { type: "STRING" }, status: { type: "STRING" }, from: { type: "STRING" }, to: { type: "STRING" }, q: { type: "STRING" }, limit: { type: "INTEGER" } } } },
@@ -206,6 +197,8 @@ export async function executeAgentTool(
           total: fleet.total,
           critical: fleet.critical,
           warning: fleet.warning,
+          ok: fleet.ok,
+          missing: fleet.missing,
           adminLink: "/admin/fleet",
         },
         containers: {
@@ -933,28 +926,16 @@ export async function executeAgentTool(
     }
 
     case "get_fleet_summary":
-      return executeGetFleetSummary(ctx.db);
-
     case "query_fleet_vehicles":
-      return executeQueryFleetVehicles(ctx.db, args, limit);
-
     case "get_fleet_vehicle_detail":
-      return executeGetFleetVehicleDetail(ctx.db, args);
-
     case "query_fleet_compliance_alerts":
-      return executeQueryFleetComplianceAlerts(ctx.db, args, limit);
-
     case "aggregate_fleet_costs":
-      return executeAggregateFleetCosts(ctx.db, args);
-
     case "query_containers":
-      return executeQueryContainers(ctx.db, args, limit);
-
     case "get_container_detail":
-      return executeGetContainerDetail(ctx.db, args);
-
-    case "aggregate_container_costs":
-      return executeAggregateContainerCosts(ctx.db, args);
+    case "aggregate_container_costs": {
+      const modResult = await executeModuleAgentTool(name, args, ctx.db, limit);
+      return modResult ?? { error: `Unknown tool: ${name}` };
+    }
 
     default:
       return { error: `Unknown tool: ${name}` };

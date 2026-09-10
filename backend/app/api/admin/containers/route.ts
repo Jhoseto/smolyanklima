@@ -53,8 +53,11 @@ export async function GET(req: NextRequest) {
   let session;
   try {
     session = await adminSession();
-  } catch {
-    return withCors(req, NextResponse.json({ error: "Неоторизиран достъп" }, { status: 401 }));
+    requireRole(session, "master_admin", "office_staff");
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Неоторизиран достъп";
+    const status = msg === "FORBIDDEN" ? 403 : 401;
+    return withCors(req, NextResponse.json({ error: msg }, { status }));
   }
 
   const { year, q, sortBy, sortDir, page, perPage } = parsed.data;

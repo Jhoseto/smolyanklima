@@ -7,6 +7,7 @@ import { FleetStatusDot } from "./FleetStatusDot";
 import { FleetComplianceFormModal } from "./FleetComplianceFormModal";
 import { FleetMaintenanceFormModal } from "./FleetMaintenanceFormModal";
 import { FleetRepairFormModal } from "./FleetRepairFormModal";
+import { FleetMiscExpenseFormModal } from "./FleetMiscExpenseFormModal";
 import { FleetVehicleFormModal } from "./FleetVehicleFormModal";
 import {
   FLEET_ALL_COMPLIANCE_KINDS,
@@ -14,12 +15,14 @@ import {
   fleetComplianceKindLabel,
   fleetFuelTypeLabel,
   fleetMaintenanceKindLabel,
+  fleetMiscExpenseCategoryLabel,
   fleetAssignedAdminName,
   fleetVehicleStatusLabel,
   isFleetRepairKind,
   type FleetComplianceKind,
   type FleetComplianceRecordRow,
   type FleetMaintenanceEventRow,
+  type FleetMiscExpenseRow,
   type FleetVehicleListRow,
 } from "@/lib/admin/fleetTypes";
 import { fleetComplianceLevelClass, fleetComplianceLevelLabel } from "@/lib/admin/fleetComplianceStatus";
@@ -28,7 +31,8 @@ type DetailPayload = {
   vehicle: FleetVehicleListRow;
   compliance: FleetComplianceRecordRow[];
   maintenance: FleetMaintenanceEventRow[];
-  year_costs: { year: number; compliance_eur: number; maintenance_eur: number; total_eur: number };
+  misc_expenses: FleetMiscExpenseRow[];
+  year_costs: { year: number; compliance_eur: number; maintenance_eur: number; repair_eur: number; misc_eur: number; total_eur: number };
 };
 
 function fmtDate(iso: string | null | undefined): string {
@@ -70,6 +74,7 @@ export function FleetVehicleDrawer({
   const [complianceModal, setComplianceModal] = useState<{ kind: FleetComplianceKind; provider?: string } | null>(null);
   const [maintenanceOpen, setMaintenanceOpen] = useState(false);
   const [repairOpen, setRepairOpen] = useState(false);
+  const [miscExpenseOpen, setMiscExpenseOpen] = useState(false);
 
   useAdminBackHandler(true, onClose, "fleet-vehicle-drawer");
 
@@ -100,6 +105,7 @@ export function FleetVehicleDrawer({
     setComplianceModal(null);
     setMaintenanceOpen(false);
     setRepairOpen(false);
+    setMiscExpenseOpen(false);
   }, [vehicleId]);
 
   function handleSaved() {
@@ -321,14 +327,49 @@ export function FleetVehicleDrawer({
 
           {vehicle && !loading && tab === "costs" && detail && (
             <div className="space-y-4">
+              <Button type="button" className="w-full text-xs" onClick={() => setMiscExpenseOpen(true)}>
+                <Plus className="h-3.5 w-3.5 mr-1" /> Добави разход
+              </Button>
+
               <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="text-xs font-bold uppercase text-slate-500">{detail.year_costs.year} г.</div>
                 <div className="mt-3 space-y-2 text-sm">
                   <div className="flex justify-between"><span className="text-slate-600">Срокове (гражданска отговорност, винетка…)</span><span className="font-semibold tabular-nums">{fmtEuro(detail.year_costs.compliance_eur)}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-600">Поддръжки и ремонти</span><span className="font-semibold tabular-nums">{fmtEuro(detail.year_costs.maintenance_eur)}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-600">Поддръжки</span><span className="font-semibold tabular-nums">{fmtEuro(detail.year_costs.maintenance_eur)}</span></div>
+                  {detail.year_costs.repair_eur > 0 ? (
+                    <div className="flex justify-between"><span className="text-slate-600">Ремонти</span><span className="font-semibold tabular-nums">{fmtEuro(detail.year_costs.repair_eur)}</span></div>
+                  ) : null}
+                  {detail.year_costs.misc_eur > 0 ? (
+                    <div className="flex justify-between"><span className="text-slate-600">Други разходи</span><span className="font-semibold tabular-nums">{fmtEuro(detail.year_costs.misc_eur)}</span></div>
+                  ) : null}
                   <div className="flex justify-between border-t border-slate-100 pt-2 text-base"><span className="font-bold">Общо</span><span className="font-bold tabular-nums">{fmtEuro(detail.year_costs.total_eur)}</span></div>
                 </div>
               </div>
+
+              {detail.misc_expenses.length > 0 ? (
+                <div>
+                  <h3 className="text-xs font-bold uppercase text-slate-500 mb-2">Други разходи — {detail.year_costs.year}</h3>
+                  <ul className="space-y-2">
+                    {detail.misc_expenses.map((exp) => (
+                      <li key={exp.id} className="rounded-xl border border-slate-200 p-3">
+                        <div className="flex justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="font-semibold text-sm text-slate-900 truncate">{exp.title}</div>
+                            <div className="text-xs text-slate-500 mt-0.5">{fleetMiscExpenseCategoryLabel(exp.category)}</div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <div className="font-semibold text-sm tabular-nums">{fmtEuro(exp.cost_eur)}</div>
+                            <div className="text-xs text-slate-500">{fmtDate(exp.expense_date)}</div>
+                          </div>
+                        </div>
+                        {exp.notes && <p className="text-xs text-slate-500 mt-1">{exp.notes}</p>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500 text-center py-4">Няма други разходи за {detail.year_costs.year} г.</p>
+              )}
             </div>
           )}
         </div>
@@ -387,6 +428,15 @@ export function FleetVehicleDrawer({
           onSaved={handleSaved}
           vehicleId={vehicle.id}
           defaultOdometer={vehicle.odometer_km}
+        />
+      )}
+
+      {vehicle && miscExpenseOpen && (
+        <FleetMiscExpenseFormModal
+          open
+          onClose={() => setMiscExpenseOpen(false)}
+          onSaved={handleSaved}
+          vehicleId={vehicle.id}
         />
       )}
     </>

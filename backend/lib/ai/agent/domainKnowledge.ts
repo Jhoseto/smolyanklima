@@ -22,7 +22,7 @@ KPI Примери: conversion inquiry→sale, install backlog, overdue work rat
 - Следим: винетка, гражданска отговорност, технически преглед, каско (опционално).
 - Alert нива: expired (изтекло) / critical (≤7 дни) / warning (≤30 дни) / ok / missing (липсва запис).
 - Поддръжка (сервиз, масло, гуми…) vs ремонт (parts_cost + labor_cost + cost_eur).
-- KPI: % МПС с критични срокове, разходи YTD (compliance + maintenance + repair), cost per km (odometer).
+- KPI: % МПС с критични срокове, разходи YTD (compliance + maintenance + repair + misc) — tools: aggregate_fleet_costs, get_fleet_summary.
 - tools: get_fleet_summary, query_fleet_vehicles, query_fleet_compliance_alerts, aggregate_fleet_costs.
 
 КОНТЕЙНЕРИ (/admin/containers):

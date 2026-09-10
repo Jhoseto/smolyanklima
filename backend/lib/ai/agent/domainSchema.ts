@@ -76,6 +76,17 @@ export const DOMAIN_SCHEMA_CATALOG = {
       },
       admin: "/admin/fleet",
     },
+    fleet_misc_expenses: {
+      purpose: "Други разходи по МПС: глоби, пътни такси, паркинг",
+      keys: ["vehicle_id", "category", "title", "expense_date", "cost_eur", "notes"],
+      categories: {
+        fine: "Глоба",
+        toll: "Пътна такса",
+        parking: "Паркинг",
+        other: "Друго",
+      },
+      admin: "/admin/fleet",
+    },
     containers: {
       purpose: "Доставки климатици втора употреба от Япония",
       keys: ["name", "year", "sequence_in_year", "arrival_date", "departure_date", "supplier_name", "japan_price", "customs_duty", "vat_amount", "transport_to_bulgaria", "transport_to_smolyan"],

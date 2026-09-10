@@ -8,6 +8,7 @@ import {
   computeFleetYearCosts,
   fetchFleetComplianceHistory,
   fetchFleetMaintenanceHistory,
+  fetchFleetMiscExpenses,
   getFleetVehicleById,
 } from "@/lib/admin/fleetQueries";
 import { normalizeFleetRegistration } from "@/lib/admin/fleetTypes";
@@ -49,16 +50,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return withCors(req, NextResponse.json({ error: "МПС не е намерено" }, { status: 404 }));
     }
 
-    const [compliance, maintenance, yearCosts] = await Promise.all([
+    const year = new Date().getFullYear();
+    const [compliance, maintenance, miscExpenses, yearCosts] = await Promise.all([
       fetchFleetComplianceHistory(session.db, id),
       fetchFleetMaintenanceHistory(session.db, id),
-      computeFleetYearCosts(session.db, id),
+      fetchFleetMiscExpenses(session.db, id, year),
+      computeFleetYearCosts(session.db, id, year),
     ]);
 
     return withCors(
       req,
       NextResponse.json({
-        data: { vehicle, compliance, maintenance, year_costs: yearCosts },
+        data: { vehicle, compliance, maintenance, misc_expenses: miscExpenses, year_costs: yearCosts },
       }),
     );
   } catch (e: unknown) {

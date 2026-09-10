@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isPostgrestMissingColumn } from "@/lib/admin/pgMissingColumn";
+import { sanitizeIlikeTerm } from "@/lib/security/sanitizeSearchTerm";
 import {
   CONTAINER_OPTIONAL_COLUMNS,
   buildContainerSelect,
@@ -126,7 +127,10 @@ export async function listContainers(
   const { rows, count } = await fetchContainersWithColumns(supabase, async (columns) => {
     let query = supabase.from("containers").select(buildContainerSelect(columns), { count: "exact" });
     if (year) query = query.eq("year", year);
-    if (q?.trim()) query = query.or(`name.ilike.%${q.trim()}%,notes.ilike.%${q.trim()}%`);
+    if (q?.trim()) {
+      const term = sanitizeIlikeTerm(q.trim());
+      if (term) query = query.or(`name.ilike.%${term}%,notes.ilike.%${term}%`);
+    }
     const res = await query
       .order(sortBy, { ascending: sortDir === "asc" })
       .order("id", { ascending: true })
@@ -137,6 +141,29 @@ export async function listContainers(
   const counts = await attachProductCounts(supabase, rows);
   const data = rows.map((r) => enrichContainerRow(r, counts.get(r.id) ?? 0));
   return { data, total: count };
+}
+
+export async function getContainerByExactName(
+  supabase: SupabaseClient,
+  name: string,
+): Promise<ContainerListRow | null> {
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+
+  const { rows } = await fetchContainersWithColumns(supabase, async (columns) => {
+    const res = await supabase
+      .from("containers")
+      .select(buildContainerSelect(columns))
+      .ilike("name", trimmed)
+      .limit(2);
+    return { data: res.data as ContainerDbRow[] | null, error: res.error as PgError, count: res.data?.length ?? 0 };
+  });
+
+  const exact = rows.filter((r) => r.name.toLowerCase() === trimmed.toLowerCase());
+  if (exact.length !== 1) return null;
+
+  const counts = await attachProductCounts(supabase, [exact[0]]);
+  return enrichContainerRow(exact[0], counts.get(exact[0].id) ?? 0);
 }
 
 export async function getContainerById(
@@ -193,16 +220,24 @@ export async function aggregateContainerCosts(
   supabase: SupabaseClient,
   year?: number,
 ): Promise<ContainerCostAggregate> {
-  const { data } = await listContainers(supabase, {
-    year,
-    sortBy: "year",
-    sortDir: "desc",
-    perPage: 500,
-  });
+  const allData: ContainerListRow[] = [];
+  let page = 1;
+  while (true) {
+    const { data, total } = await listContainers(supabase, {
+      year,
+      sortBy: "year",
+      sortDir: "desc",
+      page,
+      perPage: 500,
+    });
+    allData.push(...data);
+    if (data.length === 0 || allData.length >= total) break;
+    page += 1;
+  }
 
   let totalCostEur = 0;
   let totalProducts = 0;
-  const byContainer = data.map((c) => {
+  const byContainer = allData.map((c) => {
     const cost = c.total_cost_eur ?? 0;
     totalCostEur += cost;
     totalProducts += c.product_count;
@@ -221,7 +256,7 @@ export async function aggregateContainerCosts(
 
   return {
     year: year ?? null,
-    containerCount: data.length,
+    containerCount: allData.length,
     totalProducts,
     totalCostEur,
     avgCostPerUnit: totalProducts > 0 ? totalCostEur / totalProducts : null,

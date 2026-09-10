@@ -162,6 +162,42 @@ export function fleetVehicleStatusLabel(status: FleetVehicleStatus): string {
   }
 }
 
+export type FleetMiscExpenseCategory = "fine" | "toll" | "parking" | "other";
+
+export const FLEET_MISC_EXPENSE_CATEGORIES: FleetMiscExpenseCategory[] = [
+  "fine",
+  "toll",
+  "parking",
+  "other",
+];
+
+export type FleetMiscExpenseRow = {
+  id: string;
+  vehicle_id: string;
+  category: FleetMiscExpenseCategory;
+  title: string;
+  expense_date: string;
+  cost_eur: number;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export function fleetMiscExpenseCategoryLabel(category: FleetMiscExpenseCategory): string {
+  switch (category) {
+    case "fine":
+      return "Глоба";
+    case "toll":
+      return "Пътна такса";
+    case "parking":
+      return "Паркинг";
+    case "other":
+      return "Друго";
+    default:
+      return category;
+  }
+}
+
 export function fleetFuelTypeLabel(fuel: FleetFuelType): string {
   switch (fuel) {
     case "petrol":
