@@ -116,6 +116,8 @@ function FleetPageInner() {
   }
 
   function openDelete(row: FleetVehicleListRow) {
+    setMenuId(null);
+    setSelectedId(null);
     setDeleteError(null);
     setDeleteVehicle(row);
   }
@@ -147,7 +149,7 @@ function FleetPageInner() {
         <div>
           <h1 className="text-lg md:text-xl font-bold text-slate-900 flex items-center gap-2">
             <Car className="h-5 w-5 text-brand-blue-600" />
-            <SectionTitle title="Автопарк" hint="Проследяване на винетка, GO, преглед и поддръжки по МПС." />
+            <SectionTitle title="Автопарк" hint="Проследяване на винетка, гражданска отговорност, преглед и поддръжки по МПС." />
           </h1>
         </div>
         <div className="flex gap-2">
@@ -243,7 +245,7 @@ function FleetPageInner() {
               <Th>Рег. №</Th>
               <Th>МПС</Th>
               <Th>Винетка</Th>
-              <Th>GO</Th>
+              <Th>Гражданска отговорност</Th>
               <Th>Преглед</Th>
               <Th>Пробег</Th>
               <Th>Отговорник</Th>
@@ -330,7 +332,7 @@ function FleetPageInner() {
               <div className="text-sm text-slate-600 mt-0.5">{row.make} {row.model}{row.year ? ` (${row.year})` : ""}</div>
               <div className="flex flex-wrap gap-1.5 mt-2">
                 <FleetComplianceMiniBadge shortLabel="В" item={row.compliance_summary.vignette} />
-                <FleetComplianceMiniBadge shortLabel="GO" item={row.compliance_summary.civil_liability} />
+                <FleetComplianceMiniBadge shortLabel="Гр. отг." item={row.compliance_summary.civil_liability} />
                 <FleetComplianceMiniBadge shortLabel="П" item={row.compliance_summary.technical_inspection} />
               </div>
               <div className="text-xs text-slate-500 mt-2 tabular-nums">{fmtKm(row.odometer_km)}</div>

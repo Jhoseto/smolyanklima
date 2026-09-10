@@ -324,7 +324,7 @@ export function FleetVehicleDrawer({
               <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="text-xs font-bold uppercase text-slate-500">{detail.year_costs.year} г.</div>
                 <div className="mt-3 space-y-2 text-sm">
-                  <div className="flex justify-between"><span className="text-slate-600">Срокове (GO, винетка…)</span><span className="font-semibold tabular-nums">{fmtEuro(detail.year_costs.compliance_eur)}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-600">Срокове (гражданска отговорност, винетка…)</span><span className="font-semibold tabular-nums">{fmtEuro(detail.year_costs.compliance_eur)}</span></div>
                   <div className="flex justify-between"><span className="text-slate-600">Поддръжки и ремонти</span><span className="font-semibold tabular-nums">{fmtEuro(detail.year_costs.maintenance_eur)}</span></div>
                   <div className="flex justify-between border-t border-slate-100 pt-2 text-base"><span className="font-bold">Общо</span><span className="font-bold tabular-nums">{fmtEuro(detail.year_costs.total_eur)}</span></div>
                 </div>

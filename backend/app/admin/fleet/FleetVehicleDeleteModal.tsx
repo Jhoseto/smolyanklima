@@ -7,6 +7,7 @@ import {
   useAdminBackHandler,
 } from "../ui";
 import { FLEET_MODAL_BACKDROP, FLEET_MODAL_PANEL } from "./fleetModalStyles";
+import { FleetModalPortal } from "./FleetModalPortal";
 
 export function FleetVehicleDeleteModal({
   open,
@@ -30,9 +31,10 @@ export function FleetVehicleDeleteModal({
   if (!open) return null;
 
   return (
+    <FleetModalPortal>
     <div className={FLEET_MODAL_BACKDROP} data-admin-overlay="true">
       <div className="absolute inset-0" onClick={() => !submitting && onClose()} aria-hidden />
-      <div className={`${FLEET_MODAL_PANEL} max-w-md`}>
+      <div className={`${FLEET_MODAL_PANEL} relative z-10 max-w-md`} onClick={(e) => e.stopPropagation()}>
         <AdminModalDragHandle />
         <div className="px-5 pt-5 pb-3">
           <div className="flex items-start gap-3">
@@ -50,7 +52,7 @@ export function FleetVehicleDeleteModal({
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 leading-relaxed">
             <p className="font-bold">Това действие е необратимо.</p>
             <p className="mt-1 text-red-800">
-              МПС-то ще бъде изтрито завинаги заедно с всички записи за винетка, GO, преглед, поддръжки и ремонти.
+              МПС-то ще бъде изтрито завинаги заедно с всички записи за винетка, гражданска отговорност, преглед, поддръжки и ремонти.
               Възстановяване не е възможно.
             </p>
           </div>
@@ -68,5 +70,6 @@ export function FleetVehicleDeleteModal({
         </div>
       </div>
     </div>
+    </FleetModalPortal>
   );
 }

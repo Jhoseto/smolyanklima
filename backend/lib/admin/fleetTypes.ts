@@ -118,7 +118,7 @@ export function fleetComplianceKindLabel(kind: FleetComplianceKind): string {
     case "vignette":
       return "Винетка";
     case "civil_liability":
-      return "GO";
+      return "Гражданска отговорност";
     case "technical_inspection":
       return "Преглед";
     case "kasko":

@@ -1,7 +1,7 @@
 "use client";
 
 import { createPortal } from "react-dom";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent } from "react";
 import { MoreVertical } from "lucide-react";
 
 const MENU_WIDTH = 168;
@@ -72,6 +72,17 @@ export function FleetRowActionsMenu({
   const itemClass =
     "block w-full px-3 py-2.5 text-left text-sm font-medium hover:bg-slate-50 text-slate-800";
 
+  function runMenuAction(action: () => void) {
+    action();
+    onOpenChange(false);
+  }
+
+  function handleMenuPointerDown(e: PointerEvent, action: () => void) {
+    e.preventDefault();
+    e.stopPropagation();
+    runMenuAction(action);
+  }
+
   const menu =
     open && pos && mounted
       ? createPortal(
@@ -85,10 +96,7 @@ export function FleetRowActionsMenu({
               type="button"
               role="menuitem"
               className={itemClass}
-              onClick={() => {
-                onOpenChange(false);
-                onDetails();
-              }}
+              onPointerDown={(e) => handleMenuPointerDown(e, onDetails)}
             >
               Детайли
             </button>
@@ -96,10 +104,7 @@ export function FleetRowActionsMenu({
               type="button"
               role="menuitem"
               className={itemClass}
-              onClick={() => {
-                onOpenChange(false);
-                onEdit();
-              }}
+              onPointerDown={(e) => handleMenuPointerDown(e, onEdit)}
             >
               Редакция
             </button>
@@ -110,10 +115,7 @@ export function FleetRowActionsMenu({
                   type="button"
                   role="menuitem"
                   className="block w-full px-3 py-2.5 text-left text-sm font-bold text-red-700 hover:bg-red-50"
-                  onClick={() => {
-                    onOpenChange(false);
-                    onDelete();
-                  }}
+                  onPointerDown={(e) => handleMenuPointerDown(e, onDelete)}
                 >
                   Изтрий…
                 </button>

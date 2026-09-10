@@ -55,7 +55,7 @@ export function FleetComplianceMiniBadge({
   return (
     <span
       className="inline-flex items-center gap-0.5 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-bold text-slate-600"
-      title={`${shortLabel}: ${item?.expires_on ?? "липсва"}`}
+      title={`${item?.kind ? fleetComplianceKindLabel(item.kind) : shortLabel}: ${item?.expires_on ?? "липсва"}`}
     >
       <FleetStatusDot level={level} size="sm" />
       {shortLabel}
