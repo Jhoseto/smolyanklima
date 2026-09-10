@@ -5,6 +5,7 @@ export type AdminNavIconKey =
   | "sales"
   | "orders"
   | "containers"
+  | "fleet"
   | "contacts"
   | "chat"
   | "inquiries"
@@ -27,6 +28,7 @@ export const ADMIN_NAV_ICON_STYLES: Record<AdminNavIconKey, NavIconStyle> = {
   sales: { box: "bg-brand-orange-100", icon: "text-brand-orange-700" },
   orders: { box: "bg-brand-blue-50", icon: "text-brand-blue-700" },
   containers: { box: "bg-brand-blue-100", icon: "text-brand-blue-800" },
+  fleet: { box: "bg-brand-blue-50", icon: "text-brand-blue-700" },
   contacts: { box: "bg-brand-blue-100", icon: "text-brand-blue-600" },
   chat: { box: "bg-brand-blue-50", icon: "text-brand-blue-500" },
   inquiries: { box: "bg-brand-orange-50", icon: "text-brand-orange-500" },

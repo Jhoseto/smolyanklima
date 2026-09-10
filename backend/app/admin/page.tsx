@@ -1,4 +1,7 @@
+import Link from "next/link";
+import { Car } from "lucide-react";
 import { adminSession } from "@/lib/admin/db";
+import { computeFleetSummary } from "@/lib/admin/fleetQueries";
 import { EmailOutboxStatus } from "./EmailOutboxStatus";
 import { SectionTitle, Card } from "./ui";
 import { DashboardPanel } from "./DashboardPanel";
@@ -29,6 +32,7 @@ export default async function AdminDashboardPage() {
     failedEmails,
     callPanelItems,
     supplierOrderCount,
+    fleetSummary,
   ] = await Promise.all([
     readOnlyDashboard
       ? Promise.resolve({ count: null, error: null })
@@ -83,6 +87,7 @@ export default async function AdminDashboardPage() {
       .select("id", { count: "exact", head: true })
       .eq("event_code", "supplier_order")
       .not("status", "in", '("done","cancelled")'),
+    readOnlyDashboard ? Promise.resolve(null) : computeFleetSummary(supabase).catch(() => null),
   ]);
 
   const dbError =
@@ -145,6 +150,27 @@ export default async function AdminDashboardPage() {
           </Card>
         ))}
       </div>
+
+      {!readOnlyDashboard && fleetSummary && fleetSummary.critical > 0 && (
+        <Link
+          href="/admin/fleet?alert=critical"
+          className="block rounded-xl border border-red-200 bg-red-50 px-4 py-3 shadow-sm ring-1 ring-red-100 transition hover:bg-red-100/80"
+        >
+          <div className="flex items-center gap-3">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-red-100 text-red-700">
+              <Car className="h-5 w-5" />
+            </span>
+            <div>
+              <div className="text-sm font-bold text-red-900">
+                Автопарк: {fleetSummary.critical} критични срока
+              </div>
+              <div className="text-xs text-red-700 mt-0.5">
+                Винетка, GO или преглед изтичат след ≤7 дни или са изтекли — виж детайли
+              </div>
+            </div>
+          </div>
+        </Link>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 items-stretch">
         <DashboardPanel

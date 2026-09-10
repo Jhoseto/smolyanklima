@@ -11,6 +11,7 @@ import {
   Receipt,
   Truck,
   Container,
+  Car,
   Bot,
   Headphones,
   MessageSquare,
@@ -86,6 +87,7 @@ function officeSectionLinks(role: AdminRole): AdminNavLinkDef[] {
 
   if (role === "master_admin" || role === "office_staff") {
     links.push({ href: "/admin/containers", label: "Контейнери", iconKey: "containers", Icon: Container });
+    links.push({ href: "/admin/fleet", label: "Автопарк", iconKey: "fleet", Icon: Car });
   }
 
   if (role === "office_staff") {

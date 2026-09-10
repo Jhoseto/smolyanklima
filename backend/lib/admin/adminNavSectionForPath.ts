@@ -15,7 +15,9 @@ export function adminNavSectionForPath(pathname: string, role: AdminRole): Admin
     pathname === "/admin/supplier-orders" ||
     pathname.startsWith("/admin/supplier-orders/") ||
     pathname === "/admin/containers" ||
-    pathname.startsWith("/admin/containers/")
+    pathname.startsWith("/admin/containers/") ||
+    pathname === "/admin/fleet" ||
+    pathname.startsWith("/admin/fleet/")
   ) {
     return "office";
   }
