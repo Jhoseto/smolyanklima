@@ -1,3 +1,4 @@
+import { BUSINESS_HOURS_JSON_LD } from '../../data/legal/businessHours';
 import { LEGAL_COMPANY } from '../../data/legal/company';
 import type { CatalogProduct } from '../../data/types/product';
 import { absoluteUrl, SITE_ORIGIN } from '../site';
@@ -43,10 +44,7 @@ export function localBusinessSchema(): JsonLd {
       { '@type': 'City', name: 'Чепеларе' },
       { '@type': 'AdministrativeArea', name: 'Област Смолян' },
     ],
-    openingHoursSpecification: [
-      { '@type': 'OpeningHoursSpecification', dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'], opens: '09:00', closes: '18:00' },
-      { '@type': 'OpeningHoursSpecification', dayOfWeek: 'Saturday', opens: '09:00', closes: '14:00' },
-    ],
+    openingHoursSpecification: BUSINESS_HOURS_JSON_LD,
     contactPoint: {
       '@type': 'ContactPoint',
       telephone: LEGAL_COMPANY.phoneE164,

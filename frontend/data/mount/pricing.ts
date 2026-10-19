@@ -2,6 +2,11 @@
  * Ценоразпис за монтаж и допълнителни услуги (източник: Ценоразпис.docx, корекция 05.01.2026).
  */
 
+import {
+  BUSINESS_HOURS_WEEKDAYS_LINE,
+  BUSINESS_HOURS_WEEKEND_LINE,
+} from '../legal/businessHours';
+
 export const MOUNT_PRICING_UPDATED = '05.01.2026 г.';
 
 export type StandardMountPackage = {
@@ -224,6 +229,6 @@ export const STANDARD_MOUNT_EXCLUDES: string[] = [
 ];
 
 export const MOUNT_WORKING_HOURS = {
-  weekdays: 'Понеделник – Петък: 9:00 – 18:00',
-  weekend: 'Събота и неделя: почивен ден',
+  weekdays: BUSINESS_HOURS_WEEKDAYS_LINE,
+  weekend: BUSINESS_HOURS_WEEKEND_LINE,
 } as const;

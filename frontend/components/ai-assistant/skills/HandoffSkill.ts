@@ -5,6 +5,7 @@
 
 import type { IntentType, SkillResult, SkillContext } from '../types';
 import { aiAnalytics } from '../analytics';
+import { BUSINESS_HOURS_AI_LINE, BUSINESS_HOURS_HANDOFF_MARKDOWN } from '../../../data/legal/businessHours';
 import { LEGAL_COMPANY } from '../../../data/legal/company';
 
 const PHONE = LEGAL_COMPANY.phone;
@@ -94,7 +95,7 @@ export class HandoffSkill {
       `Вашият въпрос изисква лично внимание от нашия сервизен екип.\n\n` +
       `**👨‍🔧 На разположение:**\n` +
       `• Телефон: ${PHONE}\n` +
-      `• Работно време: Пн-Пт 09:00-18:00, Събота 09:00-14:00, Неделя: Почивен ден\n\n` +
+      `• Работно време: ${BUSINESS_HOURS_AI_LINE}\n\n` +
       `**🚗 Опции:**\n` +
       `• Телефонна консултация (безплатна)\n` +
       `• Изпращане на техник на адрес\n` +
@@ -136,9 +137,7 @@ export class HandoffSkill {
       `**📞 На разположение сме:**\n` +
       `• Телефон: ${PHONE}\n\n` +
       `**⏰ Работно време:**\n` +
-      `• Понеделник - Петък: 09:00 - 18:00\n` +
-      `• Събота: 09:00 - 14:00 (до обяд)\n` +
-      `• Неделя: Почивен ден\n\n` +
+      `${BUSINESS_HOURS_HANDOFF_MARKDOWN}\n\n` +
       `**📍 Адрес:**\n` +
       `• ${ADDRESS}\n\n` +
       `Благодарим Ви, че използвахте AI асистента ни! Очакваме обаждането Ви. 🤝`;
@@ -154,8 +153,7 @@ export class HandoffSkill {
       `• Телефон: ${PHONE}\n` +
       `• Адрес: ${ADDRESS}\n\n` +
       `**⏰ Работно време:**\n` +
-      `• Понеделник-Петък: 9:00-18:00\n` +
-      `• Събота: 10:00-14:00\n\n` +
+      `${BUSINESS_HOURS_HANDOFF_MARKDOWN}\n\n` +
       `**📝 Записът на разговора е запазен** и ще бъде предаден на колегата.\n\n` +
       `Благодарим Ви за разбирането! Ще се радваме да Ви помогнем. 😊`;
   }
