@@ -50,9 +50,7 @@ export default function RootLayout({
   return (
     <html lang="bg" className={`${geistSans.variable} ${geistMono.variable}`} suppressHydrationWarning>
       <body suppressHydrationWarning>
-        <Script id="unpoison-public-sw-for-next" strategy="beforeInteractive">
-          {`(function(){try{if(!('serviceWorker' in navigator))return;navigator.serviceWorker.getRegistrations().then(function(rs){rs.forEach(function(r){var u=(r.active&&r.active.scriptURL)||(r.installing&&r.installing.scriptURL)||'';if(/\\/sw\\.js$/.test(u))r.unregister();});});if('caches' in window){caches.keys().then(function(ks){ks.forEach(function(k){if(k.indexOf('sk-public-')===0)caches.delete(k);});});}}catch(e){}})();`}
-        </Script>
+        <Script src="/unpoison-public-sw.js" strategy="beforeInteractive" />
         {children}
       </body>
     </html>

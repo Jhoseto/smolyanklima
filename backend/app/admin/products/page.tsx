@@ -614,7 +614,8 @@ function truncCell(s: string | null | undefined, max = 16) {
 }
 
 function bootstrapProductsPageSession() {
-  const filters = loadAdminProductsListFilters();
+  /** SSR + първи client render — само defaults; localStorage се зарежда в useEffect (без hydration mismatch). */
+  const filters = DEFAULT_ADMIN_PRODUCTS_LIST_FILTERS;
   const qs = buildAdminProductsListQueryString(filters, { page: 1 });
   return {
     filters,
@@ -707,7 +708,7 @@ export default function AdminProductsPage() {
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [bulkDeleteActiveLinkWarning, setBulkDeleteActiveLinkWarning] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(initialFilters.filtersOpen);
-  const [listFiltersReady, setListFiltersReady] = useState(true);
+  const [listFiltersReady, setListFiltersReady] = useState(false);
   const [catalogSettingsOpen, setCatalogSettingsOpen] = useState(false);
   const [locationBusyId, setLocationBusyId] = useState<string | null>(null);
   // Промяна на място в „Сервиз“ при продукт без серийни номера — изисква
@@ -1101,6 +1102,32 @@ export default function AdminProductsPage() {
     };
     return subscribeAdminProductsCatalogReload(syncFromServer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** localStorage филтри — след mount, за да съвпада SSR HTML с първия client render. */
+  useEffect(() => {
+    const saved = loadAdminProductsListFilters();
+    setQ(saved.q);
+    setCatalogKind(saved.catalogKind);
+    setConditions(saved.conditions);
+    setFeaturedFlags(saved.featuredFlags);
+    setPublicCatalogFlags(saved.publicCatalogFlags);
+    setStockStatuses(saved.stockStatuses);
+    setStockLocationFilter(saved.stockLocationFilter);
+    setProductRegionFilter(saved.productRegionFilter);
+    setBrandId(saved.brandId);
+    setBtuFilters(saved.btuFilters);
+    setTypeId(saved.typeId);
+    setSupplierId(saved.supplierId);
+    setPriceRange(saved.priceRange);
+    setHasSerial(saved.hasSerial);
+    setHasPurchasePrice(saved.hasPurchasePrice);
+    setPurchasedFrom(saved.purchasedFrom);
+    setPurchasedTo(saved.purchasedTo);
+    setSortBy(saved.sortBy);
+    setSortDir(saved.sortDir);
+    setFiltersOpen(saved.filtersOpen);
+    setListFiltersReady(true);
   }, []);
 
   /** Телефон / друг таб — при връщане на фокуса презареждаме тихо. */

@@ -37,14 +37,23 @@ export const ADMIN_PRODUCT_SEARCH_FIELDS_FULL = [
   "name",
   "slug",
   "model_code",
+  "source_url",
   "indoor_unit_serial",
   "outdoor_unit_serial",
   "supplier_invoice_number",
 ] as const;
 
-export const ADMIN_PRODUCT_SEARCH_FIELDS_BASIC = ["name", "slug", "model_code"] as const;
+export const ADMIN_PRODUCT_SEARCH_FIELDS_BASIC = ["name", "slug", "model_code", "source_url"] as const;
 
-export const ADMIN_ACCESSORY_SEARCH_FIELDS = ["name", "slug", "description"] as const;
+export const ADMIN_ACCESSORY_SEARCH_FIELDS = ["name", "slug", "description", "source_url"] as const;
+
+/** Модел / URL — букви+цифри; не телефон. */
+function queryLooksLikeProductModelRef(raw: string): boolean {
+  const trimmed = raw.trim();
+  if (!trimmed || queryLooksLikePhone(trimmed)) return false;
+  const compact = trimmed.replace(/[^a-zA-Z0-9]/g, "");
+  return compact.length >= 3 && /[a-zA-Z]/i.test(compact);
+}
 
 export function applyAdminProductSearchFilter<T extends PostgrestFilterBuilder<any, any, any, any, any>>(
   query: T,
@@ -54,6 +63,9 @@ export function applyAdminProductSearchFilter<T extends PostgrestFilterBuilder<a
   const fields = applySupplyFields
     ? [...ADMIN_PRODUCT_SEARCH_FIELDS_FULL]
     : [...ADMIN_PRODUCT_SEARCH_FIELDS_BASIC];
+  if (queryLooksLikeProductModelRef(q)) {
+    return applyAdminFlexibleTextSearchFilter(query, q, fields);
+  }
   return applyAdminTextSearchFilter(query, q, fields);
 }
 
@@ -61,7 +73,11 @@ export function applyAdminAccessorySearchFilter<T extends PostgrestFilterBuilder
   query: T,
   q: string,
 ): T {
-  return applyAdminTextSearchFilter(query, q, [...ADMIN_ACCESSORY_SEARCH_FIELDS]);
+  const fields = [...ADMIN_ACCESSORY_SEARCH_FIELDS];
+  if (queryLooksLikeProductModelRef(q)) {
+    return applyAdminFlexibleTextSearchFilter(query, q, fields);
+  }
+  return applyAdminTextSearchFilter(query, q, fields);
 }
 
 /**

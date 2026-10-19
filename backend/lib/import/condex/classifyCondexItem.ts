@@ -8,7 +8,14 @@ const RAC_ZA_DOMA_MULTI_LISTING =
 const RAC_MULTI_UNIT_LISTING =
   /diamond-srk-zsx|diamond-srk-zr|products-vatreshni-tela-srk|vatreshni-tela-(?:srk|zr|srf|srr|fdtc|fden|fdum)|vanshni-tela(?:-|$)/i;
 
-const ACCESSORY_LISTING_PATH = /products-vatreshni|products-vanshni|aksesoar|wi-fi|modul-wi/i;
+/** Само аксесоарни каталози — не „products-vatreshni-tela-srk-*“ (multi тела). */
+const ACCESSORY_LISTING_PATH = /aksesoar|wi-fi|modul-wi/i;
+
+/** Condex URL на вътрешно multi-split тяло (SRK 25 ZSX-WB), не RAC SRK/SRC комплект. */
+const CONDEX_MULTI_INNER_UNIT_URL =
+  /\/product-details\/srk-\d+-z[sxyr][a-z0-9-]*-w/i;
+
+const CONDEX_RAC_KIT_URL = /\/product-details\/srk-src-/i;
 
 const ACCESSORY_PRODUCT_URL = /aksesoar|wi-fi-modul|distancion|pompa|markuch|kabel-kanal/i;
 
@@ -46,6 +53,10 @@ export function classifyCondexCatalogItem(
   const url = sourceUrl.toLowerCase();
   const name = item.name;
   const pathHay = `${listingCategoryPath ?? ""} ${url}`.toLowerCase();
+
+  if (CONDEX_MULTI_INNER_UNIT_URL.test(url) && !CONDEX_RAC_KIT_URL.test(url)) {
+    return "climate";
+  }
 
   if (RAC_ZA_DOMA_MULTI_LISTING.test(pathHay) || RAC_MULTI_UNIT_LISTING.test(pathHay)) {
     return "climate";

@@ -152,6 +152,26 @@ async function uniqueSlug(supabase: SupabaseClient, base: string): Promise<strin
   return `${slug}-${Date.now()}`;
 }
 
+async function removeCondexAccessoryBySourceUrl(
+  supabase: SupabaseClient,
+  sourceUrl: string | null | undefined,
+): Promise<void> {
+  const src = sourceUrl?.trim();
+  if (!src) return;
+  const { data } = await supabase.from("accessories").select("id").eq("source_url", src).maybeSingle();
+  if (!data?.id) return;
+  await supabase.from("accessory_images").delete().eq("accessory_id", data.id);
+  await supabase.from("accessories").delete().eq("id", data.id);
+}
+
+function isCondexProductDetailsUrl(url: string | null | undefined): boolean {
+  return Boolean(url?.includes("condex.bg/product-details/"));
+}
+
+/**
+ * Condex: SRK 25 ZSX-WB (multi вътрешно) и SRK/SRC 25 ZSX-WB (RAC комплект) споделят model_code,
+ * но са различни URL — сливаме само по source_url (или legacy ред без URL).
+ */
 async function findExistingProduct(
   supabase: SupabaseClient,
   brandId: string,
@@ -168,6 +188,28 @@ async function findExistingProduct(
       .maybeSingle();
     if (bySource?.id) return bySource as { id: string };
   }
+
+  if (isCondexProductDetailsUrl(src)) {
+    if (modelCode) {
+      const { data: legacy } = await supabase
+        .from("products")
+        .select("id")
+        .eq("brand_id", brandId)
+        .ilike("model_code", modelCode)
+        .is("source_url", null)
+        .limit(1)
+        .maybeSingle();
+      if (legacy?.id) return legacy as { id: string };
+    }
+    const { data: byName } = await supabase
+      .from("products")
+      .select("id")
+      .eq("brand_id", brandId)
+      .eq("name", name)
+      .maybeSingle();
+    return (byName as { id: string } | null) ?? null;
+  }
+
   if (modelCode) {
     const { data } = await supabase
       .from("products")
@@ -419,6 +461,7 @@ export async function runCondexCatalogSync(
           else if (result === "updated") summary.accessoriesUpdated++;
         }
       } else {
+        await removeCondexAccessoryBySourceUrl(supabase, parsed.sourceUrl);
         result = await upsertOne(supabase, refs, parsed, syncedProductIds);
         summary[result]++;
         kindLabel = "климатик";
