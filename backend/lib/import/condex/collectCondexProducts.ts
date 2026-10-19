@@ -11,6 +11,9 @@ export const CONDEX_DEFAULT_SYNC_LISTING_URLS = [
   "https://condex.bg/products/smart-plus/",
   "https://condex.bg/products/seria-standart-zsp/",
   "https://condex.bg/products/kolonni-modeli/",
+  /** Hub-ове — разгръщат се в под-листинги (вътрешни/външни тела за multi-split). */
+  "https://condex.bg/products/vatreshni-tela-za-multi-split/",
+  "https://condex.bg/products/vanshni-tela-za-multi-split-sistemi/",
 ] as const;
 
 /** Серии от RAC hub (за дома и офиса) + multi-split поддърво. */
@@ -35,6 +38,14 @@ const EXCLUDED_LISTING_PATH =
 
 /** Вътрешни/външни тела само за RAC мултисплит (част от Za doma i ofisa). */
 const RAC_MULTI_SPLIT_LISTING = /vatreshni-tela-za-multi-split|vanshni-tela-za-multi-split-sistemi/;
+
+/** Hub страници с под-категории (не плоски продуктови листинги). */
+const MULTI_SPLIT_HUB_LISTING =
+  /\/products\/(?:multi-split|vatreshni-tela-za-multi-split|vanshni-tela-za-multi-split-sistemi)\/?$/i;
+
+/** Под-листинги за вътрешни/външни multi-split тела (от hub или breadcrumb). */
+const RAC_MULTI_UNIT_SUB_LISTING =
+  /diamond-srk-zsx|diamond-srk-zr|products-vatreshni-tela-srk|vatreshni-tela-(?:srk|zr|srf|srr|fdtc|fden|fdum)|vanshni-tela(?:-|$)/i;
 
 const CRAWL_DELAY_MS = Number(process.env.CONDEX_CRAWL_DELAY_MS) || 350;
 
@@ -184,8 +195,9 @@ function isSeriesListingUrl(url: string): boolean {
     if (p === "/products/za-doma-i-ofisa/" || p === "/products/za-doma-i-ofisa") return false;
     if (EXCLUDED_LISTING_PATH.test(p)) return false;
     if (RAC_MULTI_SPLIT_LISTING.test(p)) return true;
-    // Други vatreshni/vanshni каталози (извън RAC multi) — не
-    if (/vatreshni-tela|vanshni-tela/.test(p)) return false;
+    if (/vatreshni-tela|vanshni-tela/.test(p)) {
+      return RAC_MULTI_UNIT_SUB_LISTING.test(p);
+    }
     return true;
   } catch {
     return false;
@@ -210,6 +222,42 @@ function listingCategorySpecificity(path: string | null): number {
     return 3;
   }
   return 2;
+}
+
+function normalizeListingRootUrl(url: string): string {
+  return url.endsWith("/") ? url : `${url}/`;
+}
+
+/** От hub „Вътрешни тела за multi-split“ и др. — линкове към серийни листинги. */
+export function extractSeriesListingUrlsFromPage(html: string): string[] {
+  const roots = new Set<string>();
+  const re = /href=["'](https:\/\/condex\.bg\/products\/[^"'#?]+)["']/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    const u = normalizeListingRootUrl(m[1]!);
+    if (u.includes("/en/products/")) continue;
+    if (isSeriesListingUrl(u)) roots.add(u);
+  }
+  return [...roots];
+}
+
+async function expandMultiSplitHubListings(listingRoots: string[]): Promise<string[]> {
+  const expanded = new Set<string>();
+  for (const rootUrl of listingRoots) {
+    const norm = normalizeListingRootUrl(rootUrl);
+    expanded.add(norm);
+    if (!MULTI_SPLIT_HUB_LISTING.test(new URL(norm).pathname)) continue;
+    try {
+      const html = await fetchCondexHtml(norm);
+      for (const child of extractSeriesListingUrlsFromPage(html)) {
+        if (child !== norm) expanded.add(child);
+      }
+      await new Promise((r) => setTimeout(r, CRAWL_DELAY_MS));
+    } catch {
+      /* hub optional */
+    }
+  }
+  return [...expanded];
 }
 
 async function discoverListingRootsFromHub(): Promise<string[]> {
@@ -242,7 +290,16 @@ async function crawlCondexListingSeries(
   const listingRootUrl = listingPageUrl(new URL(rootUrl).origin, listingRootPath, 1);
   const listingPath = listingRootPath;
 
-  const seedHtml = await fetchCondexHtml(listingRootUrl);
+  let seedHtml: string;
+  try {
+    seedHtml = await fetchCondexHtml(listingRootUrl);
+  } catch (e: unknown) {
+    onProgress?.({
+      message: `Пропуснат листинг ${listingRootUrl}: ${e instanceof Error ? e.message : String(e)}`,
+      discovered: productEntries.size,
+    });
+    return false;
+  }
   const pageUrls = buildCondexListingPageUrls(listingRootUrl, seedHtml);
   onProgress?.({
     message: `Серия ${listingPath}: ${pageUrls.length} страници листинг`,
@@ -298,9 +355,9 @@ export async function collectCondexProductUrls(
 
   let listingRoots: string[];
   if (opts.listingUrls?.length) {
-    listingRoots = opts.listingUrls.map((u) => (u.endsWith("/") ? u : `${u}/`));
+    listingRoots = opts.listingUrls.map((u) => normalizeListingRootUrl(u));
     onProgress?.({
-      message: `Обхождане на ${listingRoots.length} серии: ${listingRoots.map((u) => new URL(u).pathname).join(", ")}`,
+      message: `Обхождане на ${listingRoots.length} серии (преди multi hub разгръщане)…`,
       discovered: 0,
     });
   } else {
@@ -308,6 +365,15 @@ export async function collectCondexProductUrls(
     listingRoots = await discoverListingRootsFromHub();
     onProgress?.({
       message: `Обхождане на ${listingRoots.length} листинга (RAC + multi-split)…`,
+      discovered: 0,
+    });
+  }
+
+  const beforeExpand = listingRoots.length;
+  listingRoots = await expandMultiSplitHubListings(listingRoots);
+  if (listingRoots.length > beforeExpand) {
+    onProgress?.({
+      message: `Multi-split hub: +${listingRoots.length - beforeExpand} под-листинга (общо ${listingRoots.length} серии)`,
       discovered: 0,
     });
   }

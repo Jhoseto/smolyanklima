@@ -4,12 +4,16 @@ import type { CondexParsedProduct } from "./parseCondexProduct";
 const RAC_ZA_DOMA_MULTI_LISTING =
   /vatreshni-tela-za-multi-split|vanshni-tela-za-multi-split-sistemi/;
 
+/** Под-листинги с вътрешни/външни тела (напр. Diamond SRK-ZSX за multi). */
+const RAC_MULTI_UNIT_LISTING =
+  /diamond-srk-zsx|diamond-srk-zr|products-vatreshni-tela-srk|vatreshni-tela-(?:srk|zr|srf|srr|fdtc|fden|fdum)|vanshni-tela(?:-|$)/i;
+
 const ACCESSORY_LISTING_PATH = /products-vatreshni|products-vanshni|aksesoar|wi-fi|modul-wi/i;
 
 const ACCESSORY_PRODUCT_URL = /aksesoar|wi-fi-modul|distancion|pompa|markuch|kabel-kanal/i;
 
 const KLIMA_NAME =
-  /\b(инверторен\s+)?климатик\b|сплит\s+система|мультисплит|мултисплит|multi[\s-]*split/i;
+  /\b(инверторен\s+)?климатик\b|сплит\s+система|мультисплит|мулти[\s-]*сплит|multi[\s-]*split/i;
 
 const CONDEX_UNIT_ONLY_NAME =
   /\bвътрешно\s+тяло\b|\bвъншно\s+тяло\b|\bвътрешен\s+агрегат\b|\bвъншен\s+агрегат\b/i;
@@ -43,7 +47,7 @@ export function classifyCondexCatalogItem(
   const name = item.name;
   const pathHay = `${listingCategoryPath ?? ""} ${url}`.toLowerCase();
 
-  if (RAC_ZA_DOMA_MULTI_LISTING.test(pathHay)) {
+  if (RAC_ZA_DOMA_MULTI_LISTING.test(pathHay) || RAC_MULTI_UNIT_LISTING.test(pathHay)) {
     return "climate";
   }
 
@@ -52,7 +56,13 @@ export function classifyCondexCatalogItem(
   }
 
   if (CONDEX_UNIT_ONLY_NAME.test(name)) {
-    if (KLIMA_NAME.test(name) || RAC_ZA_DOMA_MULTI_LISTING.test(pathHay)) return "climate";
+    if (
+      KLIMA_NAME.test(name) ||
+      RAC_ZA_DOMA_MULTI_LISTING.test(pathHay) ||
+      RAC_MULTI_UNIT_LISTING.test(pathHay)
+    ) {
+      return "climate";
+    }
     return "accessory";
   }
 

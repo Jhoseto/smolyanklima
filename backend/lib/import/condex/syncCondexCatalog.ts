@@ -303,7 +303,7 @@ export async function runCondexCatalogSync(
 
   emitCondexProgress(onProgress, {
     phase: "crawl",
-    message: "Обхождане на RAC сериите от condex.bg…",
+    message: "Обхождане на RAC + multi-split листингите от condex.bg…",
     discovered: 0,
     current: 0,
     total: 0,

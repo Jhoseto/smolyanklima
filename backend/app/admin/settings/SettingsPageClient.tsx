@@ -1700,11 +1700,16 @@ export default function SettingsPageClient() {
             <div className="min-w-0 flex-1">
               <div className="text-sm font-black text-slate-900 tracking-tight">Каталог от Кондекс (Condex)</div>
               <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                Mitsubishi Heavy Industries — шестте стенни RAC серии от{" "}
-                <a href="https://condex.bg/products/seria-diamond-zsx-zmx/" className="underline" target="_blank" rel="noreferrer">
-                  condex.bg
+                Mitsubishi Heavy Industries — стенни RAC серии и{" "}
+                <a
+                  href="https://condex.bg/products/vatreshni-tela-za-multi-split/"
+                  className="underline"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  вътрешни/външни тела за multi-split
                 </a>{" "}
-                (Diamond ZSX/ZR, Premium PRO/ZS, Smart Plus, Standard ZSP): цени, пълни технически таблици и до 16 снимки.
+                от condex.bg (Diamond, Premium, Smart Plus, Standard ZSP и др.): цени, таблици и до 16 снимки.
               </p>
             </div>
           </div>
