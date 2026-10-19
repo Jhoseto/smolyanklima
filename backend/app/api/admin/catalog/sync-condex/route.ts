@@ -6,7 +6,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { runCondexCatalogSync, type CondexSyncProgressEvent } from "@/lib/import/condex/syncCondexCatalog";
 import { createSseResponse } from "@/lib/http/sseStream";
 
-export const maxDuration = 300;
+export const maxDuration = 800;
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflight(req);

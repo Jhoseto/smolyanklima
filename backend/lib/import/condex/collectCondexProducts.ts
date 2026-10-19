@@ -14,6 +14,15 @@ export const CONDEX_DEFAULT_SYNC_LISTING_URLS = [
   /** Hub-ове — разгръщат се в под-листинги (вътрешни/външни тела за multi-split). */
   "https://condex.bg/products/vatreshni-tela-za-multi-split/",
   "https://condex.bg/products/vanshni-tela-za-multi-split-sistemi/",
+  /** Под-листинги (не разчитаме само на hub fetch — на сървъра понякога не се разгръщат). */
+  "https://condex.bg/products/%d1%81%d1%82%d0%b5%d0%bd%d0%b5%d0%bd-%d1%82%d0%b8%d0%bf-%d1%81%d0%b5%d1%80%d0%b8%d1%8f-diamond-srk-zsx/",
+  "https://condex.bg/products/products-vatreshni-tela-srk-zs/",
+  "https://condex.bg/products/vatreshni-tela-srk-zr/",
+  "https://condex.bg/products/vatreshni-tela-srf/",
+  "https://condex.bg/products/vatreshni-tela-fdtc/",
+  "https://condex.bg/products/vatreshni-tela-srr/",
+  "https://condex.bg/products/vatreshni-tela-fdum/",
+  "https://condex.bg/products/vatreshni-tela-fden/",
 ] as const;
 
 /** Серии от RAC hub (за дома и офиса) + multi-split поддърво. */
@@ -193,6 +202,7 @@ function isSeriesListingUrl(url: string): boolean {
     if (/\/page\/\d+/.test(p)) return false;
     if (p.endsWith("/feed") || p.includes("/feed/")) return false;
     if (p === "/products/za-doma-i-ofisa/" || p === "/products/za-doma-i-ofisa") return false;
+    if (/\/products\/za-\d+-stai\/?$/i.test(p)) return false;
     if (EXCLUDED_LISTING_PATH.test(p)) return false;
     if (RAC_MULTI_SPLIT_LISTING.test(p)) return true;
     if (/vatreshni-tela|vanshni-tela/.test(p)) {
@@ -253,11 +263,30 @@ async function expandMultiSplitHubListings(listingRoots: string[]): Promise<stri
         if (child !== norm) expanded.add(child);
       }
       await new Promise((r) => setTimeout(r, CRAWL_DELAY_MS));
-    } catch {
-      /* hub optional */
+    } catch (e: unknown) {
+      console.warn(
+        "[condex] Hub листинг пропуснат:",
+        norm,
+        e instanceof Error ? e.message : String(e),
+      );
     }
   }
   return [...expanded];
+}
+
+function listingCrawlPriority(url: string): number {
+  try {
+    const p = new URL(url).pathname;
+    if (RAC_MULTI_UNIT_SUB_LISTING.test(p)) return 0;
+    if (MULTI_SPLIT_HUB_LISTING.test(p)) return 1;
+    return 2;
+  } catch {
+    return 2;
+  }
+}
+
+function sortListingRootsForCrawl(roots: string[]): string[] {
+  return [...roots].sort((a, b) => listingCrawlPriority(a) - listingCrawlPriority(b));
 }
 
 async function discoverListingRootsFromHub(): Promise<string[]> {
@@ -377,6 +406,7 @@ export async function collectCondexProductUrls(
       discovered: 0,
     });
   }
+  listingRoots = sortListingRootsForCrawl(listingRoots);
 
   const productEntries = new Map<string, CondexCatalogEntry>();
 

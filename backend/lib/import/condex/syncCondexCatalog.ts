@@ -27,6 +27,8 @@ export type CondexSyncSummary = {
   skipped: number;
   errors: string[];
   productUrls: number;
+  /** Брой URL-и от multi-split вътрешни/външни листинги (диагностика). */
+  multiSplitProductUrls?: number;
   accessoriesCreated: number;
   accessoriesUpdated: number;
   supplierId: string | null;
@@ -155,7 +157,17 @@ async function findExistingProduct(
   brandId: string,
   modelCode: string | null,
   name: string,
+  sourceUrl?: string | null,
 ): Promise<{ id: string } | null> {
+  const src = sourceUrl?.trim();
+  if (src) {
+    const { data: bySource } = await supabase
+      .from("products")
+      .select("id")
+      .eq("source_url", src)
+      .maybeSingle();
+    if (bySource?.id) return bySource as { id: string };
+  }
   if (modelCode) {
     const { data } = await supabase
       .from("products")
@@ -205,7 +217,7 @@ async function upsertOne(
   const typeId = resolveTypeId(refs, item.typeHint);
   const categoryId = item.categorySlug ? (refs.categoryBySlug.get(item.categorySlug) ?? null) : null;
 
-  const existing = await findExistingProduct(supabase, brandId, item.modelCode, item.name);
+  const existing = await findExistingProduct(supabase, brandId, item.modelCode, item.name, item.sourceUrl);
   const baseSlug = slugifyBg(item.modelCode ?? item.name);
   const slug = existing?.id ? undefined : await uniqueSlug(supabase, baseSlug);
 
@@ -329,10 +341,16 @@ export async function runCondexCatalogSync(
       });
     },
   );
+  const multiUnitEntries = entries.filter((e) =>
+    /diamond-srk-zsx|vatreshni-tela|vanshni-tela|\/product-details\/srk-\d+-/i.test(
+      `${e.url} ${e.listingCategoryPath ?? ""}`,
+    ),
+  );
   summary.productUrls = entries.length;
+  summary.multiSplitProductUrls = multiUnitEntries.length;
   emitCondexProgress(onProgress, {
     phase: "import",
-    message: `Намерени ${entries.length} продукта — започва импорт…`,
+    message: `Намерени ${entries.length} продукта (multi-split тела: ${multiUnitEntries.length}) — започва импорт…`,
     discovered: entries.length,
     current: 0,
     total: entries.length,
@@ -386,7 +404,13 @@ export async function runCondexCatalogSync(
           result = "skipped";
           kindLabel = "аксесоар (марка?)";
         } else {
-          const misplaced = await findExistingProduct(supabase, brandId, parsed.modelCode, parsed.name);
+          const misplaced = await findExistingProduct(
+            supabase,
+            brandId,
+            parsed.modelCode,
+            parsed.name,
+            parsed.sourceUrl,
+          );
           if (misplaced) {
             await supabase.from("products").delete().eq("id", misplaced.id);
           }

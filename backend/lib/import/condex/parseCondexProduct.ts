@@ -87,6 +87,12 @@ export function extractCondexModelCode(name: string): string | null {
     const num = dualWall[3]!.replace(/[.,]/g, "");
     return `${dualWall[1]!.toUpperCase()}${num}${dualWall[4]!.replace(/\*/g, "").toUpperCase()}`;
   }
+  /** Multi вътрешно/външно тяло: „SRK 25 ZSX-WB“ (без SRK/SRC двойка). */
+  const singleUnit = name.match(/\b(SRK|SRC|SRR|SRF|SCM|FDTC|FDF|FDC)\s+(\d+(?:[.,]\d+)?)\s+([\w*-]+)/i);
+  if (singleUnit) {
+    const num = singleUnit[2]!.replace(/[.,]/g, "");
+    return `${singleUnit[1]!.toUpperCase()}${num}${singleUnit[3]!.replace(/\*/g, "").toUpperCase()}`;
+  }
   const kit = name.match(/\b(FDTC\d+[A-Z0-9]*)\s*\/\s*(SRC[\w*-]+)/i);
   if (kit) return `${kit[1]!.toUpperCase()}/${kit[2]!.replace(/\*/g, "").toUpperCase()}`;
   const fdfKit = name.match(/\b(FDF[\w*-]+)\s*\/\s*(FDC[\w*-]+)/i);
