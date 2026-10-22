@@ -112,6 +112,11 @@ function isPendingWorkItemStatus(status: string) {
   return status === "planned" || status === "in_progress";
 }
 
+function canCompleteFromCallFollowUpPanel(row: ContactWorkItemRow | null): boolean {
+  if (!row || !isPendingWorkItemStatus(row.status)) return false;
+  return row.event_code !== "sale";
+}
+
 function groupContactWorkItems(rows: ContactWorkItemRow[]): Map<string, ContactWorkItemRow[]> {
   const map = new Map<string, ContactWorkItemRow[]>();
   for (const row of rows) {
@@ -137,10 +142,11 @@ function mapContactFollowUpItem(
 ): DashboardPanelItem {
   const taskLabel = linkedTask ? workItemEventLabel(linkedTask.event_code) : null;
   const title = linkedTask?.title || contact.full_name;
+  const canCompleteLinkedTask = canCompleteFromCallFollowUpPanel(linkedTask);
   return {
     id: linkedTask ? `contact-task-${linkedTask.id}` : `contact-${contact.id}`,
     contactFollowUpId: contact.id,
-    followUpWorkItemId: linkedTask && isPendingWorkItemStatus(linkedTask.status) ? linkedTask.id : undefined,
+    followUpWorkItemId: canCompleteLinkedTask ? linkedTask?.id : undefined,
     consultationWorkItemId: linkedTask?.event_code === "consultation" && isPendingWorkItemStatus(linkedTask.status)
       ? linkedTask.id
       : undefined,
