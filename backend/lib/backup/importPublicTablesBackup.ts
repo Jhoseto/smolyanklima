@@ -76,6 +76,13 @@ export type RestoreResult = {
   tableResults: Record<string, { rows: number; error?: string }>;
 };
 
+export const REPLACE_RESTORE_DISABLED_MESSAGE =
+  "Пълно възстановяване (replace) е временно изключено, защото не може да се изпълни атомарно. Използвайте merge restore или възстановете архива ръчно в транзакция.";
+
+export type RestoreSafetyOptions = {
+  currentTables?: string[];
+};
+
 export function parseBackupFile(raw: unknown): BackupFilePayload {
   if (!raw || typeof raw !== "object") {
     throw new Error("Невалиден JSON файл.");
@@ -91,6 +98,70 @@ export function parseBackupFile(raw: unknown): BackupFilePayload {
     throw new Error(`Неподдържана версия: ${body.manifest.formatVersion}`);
   }
   return body;
+}
+
+function sortedUnique(values: string[]): string[] {
+  return [...new Set(values)].sort();
+}
+
+function diffTables(left: string[], right: string[]): string[] {
+  const rightSet = new Set(right);
+  return left.filter((table) => !rightSet.has(table));
+}
+
+function assertSameTableSet(actual: string[], expected: string[], message: string): void {
+  const missing = diffTables(expected, actual);
+  const extra = diffTables(actual, expected);
+  if (missing.length === 0 && extra.length === 0) return;
+
+  const parts = [];
+  if (missing.length) parts.push(`липсват: ${missing.join(", ")}`);
+  if (extra.length) parts.push(`неочаквани: ${extra.join(", ")}`);
+  throw new Error(`${message} (${parts.join("; ")}).`);
+}
+
+export function validateBackupPayloadForRestore(
+  payload: BackupFilePayload,
+  mode: RestoreMode,
+  options: RestoreSafetyOptions = {},
+): void {
+  const manifestTables = sortedUnique(payload.manifest.tables ?? []);
+  const dataTables = sortedUnique(Object.keys(payload.data ?? {}));
+  const tableErrors = payload.manifest.tableErrors ?? {};
+  const tableErrorNames = Object.keys(tableErrors);
+
+  if (mode === "replace") {
+    throw new Error(REPLACE_RESTORE_DISABLED_MESSAGE);
+  }
+
+  if (tableErrorNames.length > 0) {
+    throw new Error(
+      `Архивът е непълен и не може да бъде възстановен. Грешки при export: ${tableErrorNames.join(", ")}.`,
+    );
+  }
+
+  assertSameTableSet(dataTables, manifestTables, "Архивът не съответства на manifest.tables");
+
+  for (const table of manifestTables) {
+    const rows = payload.data[table];
+    if (!Array.isArray(rows)) {
+      throw new Error(`Архивът съдържа невалидни данни за таблица ${table}.`);
+    }
+    const expectedRows = payload.manifest.rowCounts?.[table];
+    if (typeof expectedRows === "number" && expectedRows !== rows.length) {
+      throw new Error(
+        `Архивът е непълен за таблица ${table}: manifest=${expectedRows}, data=${rows.length}.`,
+      );
+    }
+  }
+
+  if (options.currentTables) {
+    assertSameTableSet(
+      manifestTables,
+      sortedUnique(options.currentTables),
+      "Архивът не съответства на текущата схема",
+    );
+  }
 }
 
 function sortTablesForRestore(tables: string[]): string[] {
@@ -157,7 +228,10 @@ export async function importPublicTablesBackup(
   supabase: SupabaseClient,
   payload: BackupFilePayload,
   mode: RestoreMode,
+  options: RestoreSafetyOptions = {},
 ): Promise<RestoreResult> {
+  validateBackupPayloadForRestore(payload, mode, options);
+
   const tables = sortTablesForRestore(Object.keys(payload.data));
   const tableResults: RestoreResult["tableResults"] = {};
   let rowsInserted = 0;

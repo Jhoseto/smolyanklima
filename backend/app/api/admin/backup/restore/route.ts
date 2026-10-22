@@ -3,7 +3,11 @@ import { z } from "zod";
 import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
 import { logAdminActivity } from "@/lib/admin/audit";
-import { importPublicTablesBackup, parseBackupFile } from "@/lib/backup/importPublicTablesBackup";
+import {
+  importPublicTablesBackup,
+  parseBackupFile,
+  REPLACE_RESTORE_DISABLED_MESSAGE,
+} from "@/lib/backup/importPublicTablesBackup";
 
 export const maxDuration = 300;
 
@@ -49,6 +53,9 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       ),
     );
+  }
+  if (parsed.data.mode === "replace") {
+    return withCors(req, NextResponse.json({ error: REPLACE_RESTORE_DISABLED_MESSAGE }, { status: 400 }));
   }
 
   let payload;
