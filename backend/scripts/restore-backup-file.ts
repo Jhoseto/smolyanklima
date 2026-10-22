@@ -6,6 +6,7 @@ import fs from "node:fs";
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 import { importPublicTablesBackup, parseBackupFile } from "../lib/backup/importPublicTablesBackup";
+import { listPublicTablesForBackup } from "../lib/backup/listPublicTables";
 
 dotenv.config({ path: ".env.local", override: true });
 
@@ -35,7 +36,8 @@ async function main() {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const result = await importPublicTablesBackup(sb, payload, mode);
+  const currentTables = mode === "replace" ? await listPublicTablesForBackup(sb) : undefined;
+  const result = await importPublicTablesBackup(sb, payload, mode, { currentTables });
   console.log(JSON.stringify(result, null, 2));
 }
 
