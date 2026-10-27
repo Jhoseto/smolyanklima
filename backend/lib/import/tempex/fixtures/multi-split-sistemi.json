@@ -1,0 +1,229 @@
+{
+  "product": {
+    "id": 1070,
+    "name": "Инверторен мултисплит Fuji Electric ROG18LAC2",
+    "price_amount": 1175.97,
+    "price": "1175,97 €",
+    "show_price": "1",
+    "description": "<p>Мулти сплит система Fuji Electric ROG18LAC2 за климатизация на две помещения с едно външно тяло. В системата могат да се свържат стенни, подови, касетъчни и канални климатици до 24 000 Btu.</p>\n<table class=\"table table-responsive\"><caption>2-стайна мулти сплит система Fuji Electric ROG18LAC2</caption>\n<thead>\n<tr><th colspan=\"3\">Модел</th><th>ROG18LAC2</th></tr>\n</thead>\n<tbody>\n<tr>\n<td colspan=\"2\">Захранващо напрежение</td>\n<td>V/Ø/Hz</td>\n<td>230 / 1 / 50</td>\n</tr>\n<tr>\n<td rowspan=\"2\">Мощност</td>\n<td>Охлаждане</td>\n<td rowspan=\"2\">kW</td>\n<td>5.0 (1.7 - 5.6)</td>\n</tr>\n<tr>\n<td>Отопление</td>\n<td>5.6 (1.8 - 6.1)</td>\n</tr>\n<tr>\n<td rowspan=\"2\">Консумация</td>\n<td>Охлаждане</td>\n<td rowspan=\"2\">kW</td>\n<td>1.56 - 1.95</td>\n</tr>\n<tr>\n<td>Отопление</td>\n<td>1.41 - 1.90</td>\n</tr>\n<tr>\n<td rowspan=\"2\">Ток</td>\n<td>Охлаждане</td>\n<td rowspan=\"2\">A</td>\n<td>6.9 - 8.7</td>\n</tr>\n<tr>\n<td>Отопление</td>\n<td>6.3 - 9.2</td>\n</tr>\n<tr>\n<td>Енергиен клас</td>\n<td colspan=\"2\">Охлаждане</td>\n<td>A++</td>\n</tr>\n<tr>\n<td>Енергиен клас</td>\n<td colspan=\"2\">Отопление</td>\n<td>A+</td>\n</tr>\n<tr>\n<td>SEER</td>\n<td>Охлаждане</td>\n<td>W/W</td>\n<td>7.00</td>\n</tr>\n<tr>\n<td>SCOP</td>\n<td>Отопление</td>\n<td>W/W</td>\n<td>4.10</td>\n</tr>\n<tr>\n<td>EER</td>\n<td>Охлаждане</td>\n<td>W/W</td>\n<td>3.21</td>\n</tr>\n<tr>\n<td>COP</td>\n<td>Отопление</td>\n<td>W/W</td>\n<td>3.97</td>\n</tr>\n<tr>\n<td>Въздушен поток</td>\n<td>Охлаждане / Отопление</td>\n<td>m<sup>3</sup>/h</td>\n<td>2050 / 2050</td>\n</tr>\n<tr>\n<td rowspan=\"2\">Звуково налягане</td>\n<td>Охлаждане</td>\n<td rowspan=\"4\">dB(A)</td>\n<td>50</td>\n</tr>\n<tr>\n<td>Отопление</td>\n<td>51</td>\n</tr>\n<tr>\n<td rowspan=\"2\">Звукова мощност</td>\n<td>Охлаждане</td>\n<td>63</td>\n</tr>\n<tr>\n<td>Отопление</td>\n<td>64</td>\n</tr>\n<tr>\n<td colspan=\"2\" rowspan=\"2\">Размери В x Ш x Д<br />Тегло</td>\n<td>mm</td>\n<td>540 x 790 x 290</td>\n</tr>\n<tr>\n<td>kg</td>\n<td>38</td>\n</tr>\n<tr>\n<td colspan=\"2\">Тръбни връзки (малка / голяма)</td>\n<td>mm</td>\n<td>6.35 / 9.52; 12.70</td>\n</tr>\n<tr>\n<td colspan=\"2\">Максимална дължина (общо / всякa)</td>\n<td>m</td>\n<td>30 / 20</td>\n</tr>\n<tr>\n<td rowspan=\"2\">Максимална денивелация</td>\n<td>Между външното и всяко вътрешно тяло</td>\n<td rowspan=\"2\">m</td>\n<td>15</td>\n</tr>\n<tr>\n<td>Между вътрешните тела</td>\n<td>10</td>\n</tr>\n<tr>\n<td rowspan=\"2\">Работен диапазон</td>\n<td>Охлаждане</td>\n<td rowspan=\"2\">°C</td>\n<td>10 ~ 46</td>\n</tr>\n<tr>\n<td>Отопление</td>\n<td>-15 ~ 24</td>\n</tr>\n<tr>\n<td rowspan=\"2\">Фреон</td>\n<td colspan=\"2\">Тип</td>\n<td>R410A</td>\n</tr>\n<tr>\n<td>Фабрично зареждане</td>\n<td>kg</td>\n<td>1.3</td>\n</tr>\n</tbody>\n</table>",
+    "description_short": "<ul class=\"small-desc\">\n<li><span class=\"features\">Охлаждане</span><br />\n<div class=\"blockHead cooling\"><span class=\"blocktext\">5.00 kW</span></div>\n</li>\n<li><span class=\"features\">Отопление </span><br />\n<div class=\"blockHead heating\"><span class=\"blocktext\">5.60 kW</span></div>\n</li>\n<li><span class=\"features\">SEER</span><br />\n<div class=\"blockHead a2\"><span class=\"blocktext\">7.00 A++</span></div>\n</li>\n<li><span class=\"features\">SCOP</span><br />\n<div class=\"blockHead a1\"><span class=\"blocktext\">4.10 A+</span></div>\n</li>\n<li><span class=\"features\">Шум</span><br />\n<div class=\"blockHead noise\"><span class=\"blocktext\">50 dB</span></div>\n</li>\n</ul>",
+    "category": "vanshni-tela",
+    "category_name": "Външни тела",
+    "features": [
+      {
+        "name": "Серия",
+        "value": "LAC",
+        "id_feature": "3",
+        "position": "3"
+      },
+      {
+        "name": "Външно тяло",
+        "value": "ROG18LAC2",
+        "id_feature": "5",
+        "position": "5"
+      },
+      {
+        "name": "Захранване (V/ø/Hz)",
+        "value": "230 / 1 / 50",
+        "id_feature": "7",
+        "position": "8"
+      },
+      {
+        "name": "Капацитет (BTU)",
+        "value": "24 000 BTU",
+        "id_feature": "6",
+        "position": "9"
+      },
+      {
+        "name": "Мощност на охлаждане (kW)",
+        "value": "5.0 (1.7 - 5.6)",
+        "id_feature": "12",
+        "position": "11"
+      },
+      {
+        "name": "Мощност на отопление (kW)",
+        "value": "5.6 (1.8 - 6.1)",
+        "id_feature": "13",
+        "position": "12"
+      },
+      {
+        "name": "Консумация при охлаждане/отоплениe (kW)",
+        "value": "1.56 - 1.95 / 1.41 - 1.90",
+        "id_feature": "14",
+        "position": "14"
+      },
+      {
+        "name": "EER (енергийна ефективност при охлаждане)",
+        "value": "3.21",
+        "id_feature": "16",
+        "position": "20"
+      },
+      {
+        "name": "COP (енергийна ефективност при отопление)",
+        "value": "3.97",
+        "id_feature": "17",
+        "position": "21"
+      },
+      {
+        "name": "SEER (сезонна ефективност на охлаждане)",
+        "value": "7.00",
+        "id_feature": "18",
+        "position": "22"
+      },
+      {
+        "name": "SCOP (сезонна ефективност на отопление)",
+        "value": "4.10",
+        "id_feature": "19",
+        "position": "23"
+      },
+      {
+        "name": "Енергиен клас (охлаждане)",
+        "value": "A++",
+        "id_feature": "20",
+        "position": "25"
+      },
+      {
+        "name": "Енергиен клас (отопление)",
+        "value": "A+",
+        "id_feature": "21",
+        "position": "26"
+      },
+      {
+        "name": "Звуково налягане външно тяло - охлаждане/отопление dB(A)",
+        "value": "50 / 51",
+        "id_feature": "26",
+        "position": "36"
+      },
+      {
+        "name": "Звукова мощност външно тяло - охлаждане/отопление dB(A)",
+        "value": "63 / 64",
+        "id_feature": "43",
+        "position": "39"
+      },
+      {
+        "name": "Въздушен поток за външно тяло - охлаждане / отопление (m3/h)",
+        "value": "2050 / 2050",
+        "id_feature": "46",
+        "position": "45"
+      },
+      {
+        "name": "Размери външно тяло ШxВxД (мм)",
+        "value": "790 x 540 x 290",
+        "id_feature": "30",
+        "position": "50"
+      },
+      {
+        "name": "Тегло външно тяло (кг)",
+        "value": "38",
+        "id_feature": "32",
+        "position": "54"
+      },
+      {
+        "name": "Тръбни връзки - течност / газ (мм)",
+        "value": "6.35 / 9.52; 12.70",
+        "id_feature": "33",
+        "position": "56"
+      },
+      {
+        "name": "Максимална дължина на тръбите - общо / всякa (м)",
+        "value": "30 / 20",
+        "id_feature": "36",
+        "position": "59"
+      },
+      {
+        "name": "Максимална денивелация между външното и всяко вътрешно тяло (м)",
+        "value": "15",
+        "id_feature": "42",
+        "position": "63"
+      },
+      {
+        "name": "Максимална денивелация между вътрешните тела (м)",
+        "value": "10",
+        "id_feature": "37",
+        "position": "64"
+      },
+      {
+        "name": "Работен диапазон при охлаждане (°C)",
+        "value": "10 ~ 46",
+        "id_feature": "38",
+        "position": "65"
+      },
+      {
+        "name": "Работен диапазон при отопление (°C)",
+        "value": "-15 ~ 24",
+        "id_feature": "39",
+        "position": "66"
+      },
+      {
+        "name": "Фреон (тип)",
+        "value": "R410A",
+        "id_feature": "40",
+        "position": "70"
+      },
+      {
+        "name": "Гаранция",
+        "value": "3 години",
+        "id_feature": "108",
+        "position": "82"
+      }
+    ],
+    "images": [
+      {
+        "bySize": {
+          "cart_default": {
+            "url": "https://tempex.bg/4134-cart_default/invertoren-multisplit-fuji-electric-rog18lac2.jpg",
+            "width": 150,
+            "height": 150
+          },
+          "medium_default": {
+            "url": "https://tempex.bg/4134-medium_default/invertoren-multisplit-fuji-electric-rog18lac2.jpg",
+            "width": 300,
+            "height": 200
+          },
+          "small_default": {
+            "url": "https://tempex.bg/4134-small_default/invertoren-multisplit-fuji-electric-rog18lac2.jpg",
+            "width": 300,
+            "height": 200
+          },
+          "home_default": {
+            "url": "https://tempex.bg/4134-home_default/invertoren-multisplit-fuji-electric-rog18lac2.jpg",
+            "width": 300,
+            "height": 300
+          },
+          "thickbox_default": {
+            "url": "https://tempex.bg/4134-thickbox_default/invertoren-multisplit-fuji-electric-rog18lac2.jpg",
+            "width": 550,
+            "height": 550
+          },
+          "large_default": {
+            "url": "https://tempex.bg/4134-large_default/invertoren-multisplit-fuji-electric-rog18lac2.jpg",
+            "width": 900,
+            "height": 487
+          }
+        },
+        "small": {
+          "url": "https://tempex.bg/4134-cart_default/invertoren-multisplit-fuji-electric-rog18lac2.jpg",
+          "width": 150,
+          "height": 150
+        },
+        "medium": {
+          "url": "https://tempex.bg/4134-home_default/invertoren-multisplit-fuji-electric-rog18lac2.jpg",
+          "width": 300,
+          "height": 300
+        },
+        "large": {
+          "url": "https://tempex.bg/4134-large_default/invertoren-multisplit-fuji-electric-rog18lac2.jpg",
+          "width": 900,
+          "height": 487
+        },
+        "legend": "Инверторен мултисплит Fuji Electric ROG18LAC2",
+        "id_image": "4134",
+        "cover": "1",
+        "position": "1",
+        "associatedVariants": []
+      }
+    ],
+    "attachments": []
+  },
+  "icons": ""
+}

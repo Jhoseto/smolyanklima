@@ -78,6 +78,8 @@ steps:
       - --min-instances=0
       - --max-instances=2
       - --concurrency=80
+      # Full supplier catalog syncs use deliberately paced requests and can take 10–20 minutes.
+      - --timeout=1800
       - --quiet
       # update-* запазва ръчно добавени vars (напр. VAPID_*), set-* би ги изтрил
       - --update-env-vars=NODE_ENV=production,FRONTEND_ORIGIN=$_PUBLIC_URL,APP_URL=$_PUBLIC_URL,NEXT_PUBLIC_SITE_ORIGIN=$_PUBLIC_URL,GOOGLE_SITE_VERIFICATION=$_GOOGLE_SITE_VERIFICATION

@@ -44,6 +44,7 @@ const ACTION_LABELS: Record<string, string> = {
   "backup.full_restore": "Възстановен JSON backup в базата",
   "backup.business_export_xlsx": "Експортирани бизнес данни в Excel",
   "catalog.bittel_sync": "Синхронизация с Bittel",
+  "catalog.tempex_sync": "Синхронизация с Tempex",
   "catalog.bulclima_sync": "Синхронизация с Bulclima",
   "catalog.climacom_sync": "Синхронизация с Climacom",
   "catalog.condex_sync": "Синхронизация с Condex",

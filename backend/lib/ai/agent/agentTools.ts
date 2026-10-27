@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { readTempexSyncStatus } from "@/lib/import/tempex/tempexSyncStatus";
 import type { getEnv } from "@/lib/env";
 import { logAdminActivity } from "@/lib/admin/audit";
 import { DOMAIN_SCHEMA_CATALOG } from "@/lib/ai/agent/domainSchema";
@@ -596,6 +597,8 @@ export async function executeAgentTool(
     }
 
     case "get_supplier_sync_status": {
+      const tempex = await readTempexSyncStatus(ctx.db);
+      if (String(args.catalogSlug ?? "").trim() === "tempex") return truncateToolResult(tempex ?? { status: "idle" });
       const { data, error } = await ctx.db.from("product_catalog_settings").select("*").eq("id", 1).maybeSingle();
       if (error) return { error: error.message };
       const slug = String(args.catalogSlug ?? "").trim();
@@ -632,6 +635,7 @@ export async function executeAgentTool(
         climacom: { at: data?.climacom_last_sync_at, status: data?.climacom_last_sync_status },
         condex: { at: data?.condex_last_sync_at, status: data?.condex_last_sync_status },
         bittel: { at: data?.bittel_last_sync_at, status: data?.bittel_last_sync_status },
+        tempex,
       });
     }
 

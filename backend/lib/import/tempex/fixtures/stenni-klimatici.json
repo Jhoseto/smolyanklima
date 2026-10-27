@@ -1,0 +1,477 @@
+{
+  "product": {
+    "id": 27,
+    "name": "Инверторен стенен климатик Fuji Electric RSG12KMCE",
+    "price_amount": 799,
+    "price": "799,00 €",
+    "show_price": "1",
+    "description": "<h2>Стилен и елегантен дизайн</h2>\n<p>Тънкият и стилен правоъгълен дизайн е постигнат благодарение на компактния топлообменник и обновената вентилаторна турбина.</p>\n<h2>Хибриден топлообменник</h2>\n<p><img src=\"/img/cms/fuji-electric/km/hibriden-toploobmennik.jpg\" alt=\"\" /> <img src=\"/img/cms/fuji-electric/km/stilen-i-eleganten-dizain.jpg\" alt=\"\" /></p>\n<h2>Висока енергийна ефективност</h2>\n<p>Свръхвисоката сезонна ефективност е постигната благодарение на топлообменника с висока плътност и новия хладилен газ R32.</p>\n<p><img src=\"/img/cms/fuji-electric/km/kmcc_12_bg.jpg\" alt=\"\" width=\"1000\" height=\"500\" /></p>\n<h2>Комфортен въздушен поток и тиха работа</h2>\n<p>Благодарение на големите жалузи се постига по-широк въздушен поток, който може да бъде насочен вертикално надолу, като нивото на шум се запазва ниско, благодарение на обновения дизайн на вентилаторната турбина.</p>\n<p><img src=\"/img/cms/fuji-electric/km/komforten-vuzdushen-potok.jpg\" alt=\"\" /></p>\n<h2>Контрол през Wi-Fi (опционално)</h2>\n<p>Лесно можете да управлявате климатичната система чрез смартфон, таблет или компютър навсякъде и по всяко време.</p>\n<p><img src=\"/img/cms/fuji-electric/km/kontrol-prez-wi-fi.jpg\" alt=\"\" /></p>\n<h2>Wireless LAN интерфейс</h2>\n<p>Wi-Fi адаптерът позволява безжично управление от смартфон, таблет или компютър, независимо къде се намирате.</p>\n<p><img src=\"/img/cms/fuji-electric/km/km-sketch_1.png\" alt=\"\" width=\"1366\" height=\"768\" /></p>",
+    "description_short": "<ul class=\"small-desc\">\n<li><span class=\"features\">Охлаждане</span><br />\n<div class=\"blockHead cooling\"><span class=\"blocktext\">3.40 kW</span></div>\n</li>\n<li><span class=\"features\">Отопление</span><br />\n<div class=\"blockHead heating\"><span class=\"blocktext\">4.00 kW</span></div>\n</li>\n<li><span class=\"features\">SEER</span><br />\n<div class=\"blockHead a2\"><span class=\"blocktext\">7.30 A++</span></div>\n</li>\n<li><span class=\"features\">SCOP</span><br />\n<div class=\"blockHead a1\"><span class=\"blocktext\">4.40 A+</span></div>\n</li>\n<li><span class=\"features\">Шум</span><br />\n<div class=\"blockHead noise\"><span class=\"blocktext\">20 dB</span></div>\n</li>\n</ul>",
+    "category": "stenni-klimatici",
+    "category_name": "Стенни климатици",
+    "features": [
+      {
+        "name": "Производител",
+        "value": "Fuji Electric",
+        "id_feature": "8",
+        "position": "0"
+      },
+      {
+        "name": "Тип",
+        "value": "Стенни климатици",
+        "id_feature": "10",
+        "position": "1"
+      },
+      {
+        "name": "Технология",
+        "value": "Инвертор",
+        "id_feature": "9",
+        "position": "2"
+      },
+      {
+        "name": "Серия",
+        "value": "KM",
+        "id_feature": "3",
+        "position": "3"
+      },
+      {
+        "name": "Вътрешно тяло",
+        "value": "RSG12KMCE",
+        "id_feature": "4",
+        "position": "4"
+      },
+      {
+        "name": "Външно тяло",
+        "value": "ROG12KMCC",
+        "id_feature": "5",
+        "position": "5"
+      },
+      {
+        "name": "Захранване (V/ø/Hz)",
+        "value": "230 / 1 / 50",
+        "id_feature": "7",
+        "position": "8"
+      },
+      {
+        "name": "Капацитет (BTU)",
+        "value": "12 000 BTU",
+        "id_feature": "6",
+        "position": "9"
+      },
+      {
+        "name": "Мощност на охлаждане (kW)",
+        "value": "3.4 (0.9 - 3.9)",
+        "id_feature": "12",
+        "position": "11"
+      },
+      {
+        "name": "Мощност на отопление (kW)",
+        "value": "4.0 (0.9 - 5.3)",
+        "id_feature": "13",
+        "position": "12"
+      },
+      {
+        "name": "Консумация при охлаждане/отоплениe (kW)",
+        "value": "0.93 / 0.96",
+        "id_feature": "14",
+        "position": "14"
+      },
+      {
+        "name": "Проектен товар при охлаждане/отопление (-10°C) (kW)",
+        "value": "3.4 / 2.5",
+        "id_feature": "15",
+        "position": "18"
+      },
+      {
+        "name": "EER (енергийна ефективност при охлаждане)",
+        "value": "3.65",
+        "id_feature": "16",
+        "position": "20"
+      },
+      {
+        "name": "COP (енергийна ефективност при отопление)",
+        "value": "4.17",
+        "id_feature": "17",
+        "position": "21"
+      },
+      {
+        "name": "SEER (сезонна ефективност на охлаждане)",
+        "value": "7.30",
+        "id_feature": "18",
+        "position": "22"
+      },
+      {
+        "name": "SCOP (сезонна ефективност на отопление)",
+        "value": "4.40",
+        "id_feature": "19",
+        "position": "23"
+      },
+      {
+        "name": "Енергиен клас (охлаждане)",
+        "value": "A++",
+        "id_feature": "20",
+        "position": "25"
+      },
+      {
+        "name": "Енергиен клас (отопление)",
+        "value": "A+",
+        "id_feature": "21",
+        "position": "26"
+      },
+      {
+        "name": "Максимален работен ток при охлаждане/отопление (A)",
+        "value": "6.5 / 9.0",
+        "id_feature": "22",
+        "position": "28"
+      },
+      {
+        "name": "Изсушаване (l/h)",
+        "value": "1.8",
+        "id_feature": "23",
+        "position": "31"
+      },
+      {
+        "name": "Звуково налягане вътрешно тяло - охлаждане dB(A)",
+        "value": "40 / 35 / 30 / 20",
+        "id_feature": "24",
+        "position": "34"
+      },
+      {
+        "name": "Звуково налягане вътрешно тяло - отопление dB(A)",
+        "value": "42 / 38 / 33 / 22",
+        "id_feature": "25",
+        "position": "35"
+      },
+      {
+        "name": "Звуково налягане външно тяло - охлаждане/отопление dB(A)",
+        "value": "50 / 50",
+        "id_feature": "26",
+        "position": "36"
+      },
+      {
+        "name": "Звукова мощност вътрешно тяло - охлаждане/отопление dB(A)",
+        "value": "55 / 58",
+        "id_feature": "27",
+        "position": "38"
+      },
+      {
+        "name": "Звукова мощност външно тяло - охлаждане/отопление dB(A)",
+        "value": "65 / 65",
+        "id_feature": "43",
+        "position": "39"
+      },
+      {
+        "name": "Въздушен поток  за вътрешно/външно тяло - охлаждане (m3/h)",
+        "value": "700 / 1700",
+        "id_feature": "44",
+        "position": "41"
+      },
+      {
+        "name": "Въздушен поток  за вътрешно/външно тяло - отопление (m3/h)",
+        "value": "780 / 1470",
+        "id_feature": "45",
+        "position": "42"
+      },
+      {
+        "name": "Размери вътрешно тяло ШxВxД (мм)",
+        "value": "834 × 270 × 222",
+        "id_feature": "29",
+        "position": "48"
+      },
+      {
+        "name": "Размери външно тяло ШxВxД (мм)",
+        "value": "663 × 541 × 290",
+        "id_feature": "30",
+        "position": "50"
+      },
+      {
+        "name": "Тегло вътрешно тяло (кг)",
+        "value": "10",
+        "id_feature": "31",
+        "position": "53"
+      },
+      {
+        "name": "Тегло външно тяло (кг)",
+        "value": "24",
+        "id_feature": "32",
+        "position": "54"
+      },
+      {
+        "name": "Тръбни връзки - течност / газ (мм)",
+        "value": "6.35 / 9.52",
+        "id_feature": "33",
+        "position": "56"
+      },
+      {
+        "name": "Диаметър на дренажна тръба (мм)",
+        "value": "11.8 / 15.0 - 16.8",
+        "id_feature": "34",
+        "position": "57"
+      },
+      {
+        "name": "Максимална дължина на тръбите (м)",
+        "value": "20",
+        "id_feature": "35",
+        "position": "58"
+      },
+      {
+        "name": "Максимална денивелация (м)",
+        "value": "15",
+        "id_feature": "41",
+        "position": "62"
+      },
+      {
+        "name": "Работен диапазон при охлаждане (°C)",
+        "value": "-10 ~ 46",
+        "id_feature": "38",
+        "position": "65"
+      },
+      {
+        "name": "Работен диапазон при отопление (°C)",
+        "value": "-15 ~ 24",
+        "id_feature": "39",
+        "position": "66"
+      },
+      {
+        "name": "Фреон (тип)",
+        "value": "R32",
+        "id_feature": "40",
+        "position": "70"
+      },
+      {
+        "name": "Гаранция",
+        "value": "5 години",
+        "id_feature": "108",
+        "position": "82"
+      }
+    ],
+    "images": [
+      {
+        "bySize": {
+          "cart_default": {
+            "url": "https://tempex.bg/631-cart_default/invertoren-stenen-klimatik-fuji-electric-rsg12kmcc.jpg",
+            "width": 150,
+            "height": 150
+          },
+          "medium_default": {
+            "url": "https://tempex.bg/631-medium_default/invertoren-stenen-klimatik-fuji-electric-rsg12kmcc.jpg",
+            "width": 300,
+            "height": 200
+          },
+          "small_default": {
+            "url": "https://tempex.bg/631-small_default/invertoren-stenen-klimatik-fuji-electric-rsg12kmcc.jpg",
+            "width": 300,
+            "height": 200
+          },
+          "home_default": {
+            "url": "https://tempex.bg/631-home_default/invertoren-stenen-klimatik-fuji-electric-rsg12kmcc.jpg",
+            "width": 300,
+            "height": 300
+          },
+          "thickbox_default": {
+            "url": "https://tempex.bg/631-thickbox_default/invertoren-stenen-klimatik-fuji-electric-rsg12kmcc.jpg",
+            "width": 550,
+            "height": 550
+          },
+          "large_default": {
+            "url": "https://tempex.bg/631-large_default/invertoren-stenen-klimatik-fuji-electric-rsg12kmcc.jpg",
+            "width": 900,
+            "height": 487
+          }
+        },
+        "small": {
+          "url": "https://tempex.bg/631-cart_default/invertoren-stenen-klimatik-fuji-electric-rsg12kmcc.jpg",
+          "width": 150,
+          "height": 150
+        },
+        "medium": {
+          "url": "https://tempex.bg/631-home_default/invertoren-stenen-klimatik-fuji-electric-rsg12kmcc.jpg",
+          "width": 300,
+          "height": 300
+        },
+        "large": {
+          "url": "https://tempex.bg/631-large_default/invertoren-stenen-klimatik-fuji-electric-rsg12kmcc.jpg",
+          "width": 900,
+          "height": 487
+        },
+        "legend": "Инверторен стенен климатик Fuji Electric RSG12KMCE",
+        "id_image": "631",
+        "cover": "1",
+        "position": "1",
+        "associatedVariants": []
+      },
+      {
+        "bySize": {
+          "cart_default": {
+            "url": "https://tempex.bg/533-cart_default/invertoren-stenen-klimatik-fuji-electric-rsg12kmcc.jpg",
+            "width": 150,
+            "height": 150
+          },
+          "medium_default": {
+            "url": "https://tempex.bg/533-medium_default/invertoren-stenen-klimatik-fuji-electric-rsg12kmcc.jpg",
+            "width": 300,
+            "height": 200
+          },
+          "small_default": {
+            "url": "https://tempex.bg/533-small_default/invertoren-stenen-klimatik-fuji-electric-rsg12kmcc.jpg",
+            "width": 300,
+            "height": 200
+          },
+          "home_default": {
+            "url": "https://tempex.bg/533-home_default/invertoren-stenen-klimatik-fuji-electric-rsg12kmcc.jpg",
+            "width": 300,
+            "height": 300
+          },
+          "thickbox_default": {
+            "url": "https://tempex.bg/533-thickbox_default/invertoren-stenen-klimatik-fuji-electric-rsg12kmcc.jpg",
+            "width": 550,
+            "height": 550
+          },
+          "large_default": {
+            "url": "https://tempex.bg/533-large_default/invertoren-stenen-klimatik-fuji-electric-rsg12kmcc.jpg",
+            "width": 900,
+            "height": 487
+          }
+        },
+        "small": {
+          "url": "https://tempex.bg/533-cart_default/invertoren-stenen-klimatik-fuji-electric-rsg12kmcc.jpg",
+          "width": 150,
+          "height": 150
+        },
+        "medium": {
+          "url": "https://tempex.bg/533-home_default/invertoren-stenen-klimatik-fuji-electric-rsg12kmcc.jpg",
+          "width": 300,
+          "height": 300
+        },
+        "large": {
+          "url": "https://tempex.bg/533-large_default/invertoren-stenen-klimatik-fuji-electric-rsg12kmcc.jpg",
+          "width": 900,
+          "height": 487
+        },
+        "legend": "Инверторен стенен климатик Fuji Electric RSG12KMCE",
+        "id_image": "533",
+        "cover": null,
+        "position": "2",
+        "associatedVariants": []
+      },
+      {
+        "bySize": {
+          "cart_default": {
+            "url": "https://tempex.bg/534-cart_default/invertoren-stenen-klimatik-fuji-electric-rsg12kmcc.jpg",
+            "width": 150,
+            "height": 150
+          },
+          "medium_default": {
+            "url": "https://tempex.bg/534-medium_default/invertoren-stenen-klimatik-fuji-electric-rsg12kmcc.jpg",
+            "width": 300,
+            "height": 200
+          },
+          "small_default": {
+            "url": "https://tempex.bg/534-small_default/invertoren-stenen-klimatik-fuji-electric-rsg12kmcc.jpg",
+            "width": 300,
+            "height": 200
+          },
+          "home_default": {
+            "url": "https://tempex.bg/534-home_default/invertoren-stenen-klimatik-fuji-electric-rsg12kmcc.jpg",
+            "width": 300,
+            "height": 300
+          },
+          "thickbox_default": {
+            "url": "https://tempex.bg/534-thickbox_default/invertoren-stenen-klimatik-fuji-electric-rsg12kmcc.jpg",
+            "width": 550,
+            "height": 550
+          },
+          "large_default": {
+            "url": "https://tempex.bg/534-large_default/invertoren-stenen-klimatik-fuji-electric-rsg12kmcc.jpg",
+            "width": 900,
+            "height": 487
+          }
+        },
+        "small": {
+          "url": "https://tempex.bg/534-cart_default/invertoren-stenen-klimatik-fuji-electric-rsg12kmcc.jpg",
+          "width": 150,
+          "height": 150
+        },
+        "medium": {
+          "url": "https://tempex.bg/534-home_default/invertoren-stenen-klimatik-fuji-electric-rsg12kmcc.jpg",
+          "width": 300,
+          "height": 300
+        },
+        "large": {
+          "url": "https://tempex.bg/534-large_default/invertoren-stenen-klimatik-fuji-electric-rsg12kmcc.jpg",
+          "width": 900,
+          "height": 487
+        },
+        "legend": "Инверторен стенен климатик Fuji Electric RSG12KMCE",
+        "id_image": "534",
+        "cover": null,
+        "position": "3",
+        "associatedVariants": []
+      }
+    ],
+    "attributes": {
+      "6": {
+        "id_attribute": "33",
+        "id_attribute_group": "6",
+        "name": "Без монтаж",
+        "group": "Монтаж",
+        "reference": "",
+        "ean13": "",
+        "isbn": "",
+        "upc": "",
+        "mpn": ""
+      }
+    },
+    "attachments": [
+      {
+        "id_product": "27",
+        "id_attachment": "35",
+        "file": "b8d83dab3738163654d15e5d770a20fc96b99925",
+        "file_name": "1.jpg",
+        "file_size": "78259",
+        "mime": "image/jpeg",
+        "id_lang": "2",
+        "name": "Енергиен етикет за Fuji Electric RSG12KMCC",
+        "description": "",
+        "file_size_formatted": "76.42k"
+      },
+      {
+        "id_product": "27",
+        "id_attachment": "335",
+        "file": "da8adba1560913373dc3600e159fcd6c4b71f7aa",
+        "file_name": "RSG-KMCC-BG.pdf",
+        "file_size": "4329340",
+        "mime": "application/pdf",
+        "id_lang": "2",
+        "name": "Упътване за употреба на инверторен стенен климатик Fuji Electric серия KMCC",
+        "description": "",
+        "file_size_formatted": "4.13M"
+      },
+      {
+        "id_product": "27",
+        "id_attachment": "336",
+        "file": "86a6e957b5a98fb79d3649fca8af39d1869073ed",
+        "file_name": "KM-web.pdf",
+        "file_size": "1265053",
+        "mime": "application/pdf",
+        "id_lang": "2",
+        "name": "Брошура за инверторен стенен климатик Fuji Electric серия KM",
+        "description": "",
+        "file_size_formatted": "1.21M"
+      },
+      {
+        "id_product": "27",
+        "id_attachment": "343",
+        "file": "add4791e505241f01d7c4d2595e73726f8e5e1d3",
+        "file_name": "CE_RSG_KGTB_KETA_KMCC_KPCA_KMTB_KMTA_KLCA.pdf",
+        "file_size": "253211",
+        "mime": "application/pdf",
+        "id_lang": "2",
+        "name": "Декларация за съответствие на Fuji Electric серия KG/ KE / KMT / KP / KMC / KL",
+        "description": "",
+        "file_size_formatted": "247.28k"
+      }
+    ]
+  },
+  "icons": "<li title=\"<strong>All DC инвертор</strong><br/> Климатичната система използва DC инверторен роторен компресор, DC инверторни мотори на всички вентилатори и интелигентно синусоидно DC инверторно управление.\" id=\"icon_1\" id=\"AllAvailableProductTicons_394\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/fuji-electric/all-dc-invertor.png\"/>\n                                </div>\n                                                                        </li>\n<li title=\"<strong>Икономичен режим</strong><br/> Ограничава разхода на електроенергия чрез прецизен контрол над системата.\" id=\"icon_6\" id=\"AllAvailableProductTicons_167\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/fuji-electric/ikonomichen-rezhim.png\"/>\n                                </div>\n                                                                        </li>\n<li title=\"<strong>Мощен режим</strong><br/> Продължителна работа на максимален въздушен поток и максимални обороти на компресора.\" id=\"icon_12\" id=\"AllAvailableProductTicons_168\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/fuji-electric/moshten-rezhim.png\"/>\n                                </div>\n                                                                        </li>\n<li title=\"<strong>Режим 10°С отопление</strong><br/> В този режим температурата в помещението ще бъде поддържана на 10°С, за да се предотврати прекомерно изстудяване (замръзване на тръби).\" id=\"icon_13\" id=\"AllAvailableProductTicons_169\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/fuji-electric/rezhim-10-gradusa-otoplenie.png\"/>\n                                </div>\n                                                                        </li>\n<li title=\"<strong>Тих режим на външното тяло</strong><br/> Климатичната система позволява да намалите шума на външното тяло с натискането на един бутон. Функцията е много полезна през нощта, за да осигури спокойствие на Вас и Вашите съседи.\" id=\"icon_14\" id=\"AllAvailableProductTicons_170\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/fuji-electric/tih-rezhim.png\"/>\n                                </div>\n                                                                        </li>\n<li title=\"<strong>Автоматично превключване</strong><br/> Климатичната система автоматично избира режима на работа (охлаждане / отопление) на база зададената температура, температурата в помещението и външната температура.\" id=\"icon_15\" id=\"AllAvailableProductTicons_171\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/fuji-electric/avtomatichno-prevklyuchvane.png\"/>\n                                </div>\n                                                                        </li>\n<li title=\"<strong>Реене на вертикалните жалузи</strong><br/> Вертикалните жалузи се реят автоматично нагоре-надолу.\" id=\"icon_16\" id=\"AllAvailableProductTicons_172\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/fuji-electric/reene-na-vertikalnite-zhaluzi.png\"/>\n                                </div>\n                                                                        </li>\n<li title=\"<strong>Автоматично регулиране на въздушния поток</strong><br/> Микрокомпютър автоматично настройва въздушната струя, като следва промените в температурата на помещението.\" id=\"icon_18\" id=\"AllAvailableProductTicons_173\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/fuji-electric/avtomatichno-regulirane-na-vazdushniya-potok.png\"/>\n                                </div>\n                                                                        </li>\n<li title=\"<strong>Автоматичен рестарт</strong><br/> В случай на временно прекъсване на захранването, климатикът ще се рестартира автоматично в същия работен режим, както преди, след като захранването бъде възстановено.\" id=\"icon_19\" id=\"AllAvailableProductTicons_174\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/fuji-electric/avtomatichen-restart.png\"/>\n                                </div>\n                                                                        </li>\n<li title=\"<strong>Таймер Сън</strong><br/> Микрокомпютърът автоматично променя температурата, като целта му е да осигури комфортен и здравословен сън.\" id=\"icon_25\" id=\"AllAvailableProductTicons_175\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/fuji-electric/taymer-san.png\"/>\n                                </div>\n                                                                        </li>\n<li title=\"<strong>Таймер Програма</strong><br/> Този таймер дава възможност за настройка на включване и изключване на системата в рамките на едно денонощие. Възможните опции са както следва: Включване, Изключване, Изключване след включване, Включване след изключване.\" id=\"icon_26\" id=\"AllAvailableProductTicons_176\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/fuji-electric/taymer-programa.png\"/>\n                                </div>\n                                                                        </li>\n<li title=\"<strong>Индикация за филтър</strong><br/> Светлинен индикатор показва дали филтърът на системата се нуждае от почистване.\" id=\"icon_29\" id=\"AllAvailableProductTicons_177\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/fuji-electric/indikaciya-za-filtar.png\"/>\n                                </div>\n                                                                        </li>\n<li title=\"<strong>Йонно-дезодориращ филтър</strong><br/> Филтърът функционира, като ефективно неутрализира наслоените миризми и привежда в действие окислителните и отслабващи ефекти на йоните, генерирани от керамиката със свръхфини частици.\" id=\"icon_33\" id=\"AllAvailableProductTicons_178\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/fuji-electric/yonno-deodozirasht-filtar.png\"/>\n                                </div>\n                                                                        </li>\n<li title=\"<strong>Ябълково-катехинов филтър</strong><br/> Ябълково-катехиновият филтър използва статично електричество, за да прихване и унищожи фините микрорганизми и спорите, като по този начин пречиства въздуха в помещението.\" id=\"icon_34\" id=\"AllAvailableProductTicons_179\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/fuji-electric/yabalkovo-katehinov-filtar.png\"/>\n                                </div>\n                                                                        </li>\n<li title=\"<strong>Миещ се панел</strong><br/> Лесен за измиване лицев панел на вътрешното тяло на климатичната система.\" id=\"icon_35\" id=\"AllAvailableProductTicons_180\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/fuji-electric/miesht-se-panel.png\"/>\n                                </div>\n                                                                        </li>"
+}

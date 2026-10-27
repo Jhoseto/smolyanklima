@@ -6,6 +6,7 @@ import { RefreshCw, Save, Database, Download, FolderOpen, CloudDownload, Layers,
 import type { BulclimaSyncProgressEvent } from "@/lib/import/bulclima/bulclimaSyncProgress";
 import type { ClimacomSyncProgressEvent } from "@/lib/import/climacom/climacomSyncProgress";
 import type { CondexSyncProgressEvent } from "@/lib/import/condex/condexSyncProgress";
+import type { TempexSyncProgressEvent } from "@/lib/import/tempex/syncTempexCatalog";
 import type { BittelSyncProgressEvent } from "@/lib/import/bittel/bittelSyncProgress";
 import {
   isLocalFolderPickerSupported,
@@ -22,12 +23,14 @@ const ALL_CATALOG_SYNC_STEPS = [
   { id: "climacom", label: "Климаком" },
   { id: "condex", label: "Кондекс" },
   { id: "bittel", label: "Биттел" },
+  { id: "tempex", label: "Темпекс" },
 ] as const;
 
 /** Очакван брой Condex продукти (за crawl прогрес преди финален брой). */
 const CONDEX_ESTIMATED_PRODUCTS = 95;
 /** ~267 инверторни + ~64 мулти + ~18 колонни + аксесоари. */
 const BITTEL_ESTIMATED_PRODUCTS = 350;
+const TEMPEX_ESTIMATED_PRODUCTS = 400;
 const CATALOG_CRAWL_PERCENT = 28;
 
 type CondexProgressView = {
@@ -382,6 +385,16 @@ export default function SettingsPageClient() {
     status: string | null;
     summary: Record<string, unknown> | null;
   } | null>(null);
+  const [tempexSyncing, setTempexSyncing] = useState(false);
+  const [tempexProgress, setTempexProgress] = useState<CondexProgressView | null>(null);
+  const [tempexNowMs, setTempexNowMs] = useState(() => Date.now());
+  const [tempexLog, setTempexLog] = useState<string[]>([]);
+  const tempexLogContainerRef = useRef<HTMLDivElement>(null);
+  const [tempexStatus, setTempexStatus] = useState<{
+    at: string | null;
+    status: string | null;
+    summary: Record<string, unknown> | null;
+  } | null>(null);
   const [allCatalogSyncing, setAllCatalogSyncing] = useState(false);
   const [allCatalogSyncStep, setAllCatalogSyncStep] = useState(0);
   const [allCatalogSyncLog, setAllCatalogSyncLog] = useState<string[]>([]);
@@ -389,7 +402,7 @@ export default function SettingsPageClient() {
   const syncAllLockRef = useRef(false);
 
   const anyCatalogSyncing =
-    bulclimaSyncing || climacomSyncing || condexSyncing || bittelSyncing || allCatalogSyncing;
+    bulclimaSyncing || climacomSyncing || condexSyncing || bittelSyncing || tempexSyncing || allCatalogSyncing;
 
   function appendAllCatalogSyncLog(line: string) {
     setAllCatalogSyncLog((prev) => {
@@ -542,6 +555,57 @@ export default function SettingsPageClient() {
         at: d?.bittel_last_sync_at ?? null,
         status: d?.bittel_last_sync_status ?? null,
         summary: (d?.bittel_last_sync_summary as Record<string, unknown> | null) ?? null,
+      });
+    } catch {
+      /* optional */
+    }
+  }
+
+  function appendTempexLog(line: string) {
+    setTempexLog((prev) => {
+      const next = [...prev, line];
+      return next.length > MAX_SYNC_LOG_LINES ? next.slice(-MAX_SYNC_LOG_LINES) : next;
+    });
+  }
+
+  function handleTempexProgress(ev: TempexSyncProgressEvent) {
+    const ts = new Date().toLocaleTimeString("bg-BG");
+    const msg = ev.message?.trim() || "";
+    if (msg) appendTempexLog(`[${ts}] ${msg}`);
+    setTempexProgress((prev) => {
+      const startedAt = prev?.startedAt ?? Date.now();
+      const base = {
+        discovered: ev.discovered ?? prev?.discovered ?? 0,
+        current: ev.current ?? prev?.current ?? 0,
+        total: ev.total ?? prev?.total ?? 0,
+        created: ev.created ?? prev?.created ?? 0,
+        updated: ev.updated ?? prev?.updated ?? 0,
+        skipped: ev.skipped ?? prev?.skipped ?? 0,
+        startedAt,
+        message: msg || prev?.message,
+      };
+      if (ev.phase === "done") {
+        return { ...base, phase: "done" as const, current: ev.total ?? base.current, total: ev.total ?? base.total };
+      }
+      if (ev.phase === "import" || (ev.total != null && ev.total > 0)) {
+        return { ...base, phase: "import" as const, current: ev.current ?? base.current, total: ev.total ?? base.total };
+      }
+      return { ...base, phase: "crawl" as const, discovered: ev.discovered ?? base.discovered, total: 0 };
+    });
+  }
+
+  async function loadTempexStatus() {
+    try {
+      const res = await fetch("/api/admin/catalog/sync-tempex", { credentials: "include" });
+      const json = (await res.json().catch(() => ({}))) as {
+        data?: { at: string | null; status: string | null; summary: Record<string, unknown> | null } | null;
+      };
+      if (!res.ok) return;
+      const d = json.data;
+      setTempexStatus({
+        at: d?.at ?? null,
+        status: d?.status ?? null,
+        summary: (d?.summary as Record<string, unknown> | null) ?? null,
       });
     } catch {
       /* optional */
@@ -815,6 +879,58 @@ export default function SettingsPageClient() {
     }
   }
 
+  async function syncTempexCatalog(): Promise<boolean> {
+    setTempexSyncing(true);
+    setError(null);
+    const startedAt = Date.now();
+    const ts = new Date().toLocaleTimeString("bg-BG");
+    setTempexLog([`[${ts}] Старт на синхронизация с tempex.bg…`]);
+    setTempexNowMs(startedAt);
+    setTempexProgress({
+      phase: "crawl",
+      discovered: 0,
+      current: 0,
+      total: 0,
+      created: 0,
+      updated: 0,
+      skipped: 0,
+      startedAt,
+      message: "Старт на синхронизация с tempex.bg…",
+    });
+    try {
+      const res = await fetch("/api/admin/catalog/sync-tempex?stream=1", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(json.error || "Грешка при синхронизация");
+      }
+      const contentType = res.headers.get("Content-Type") ?? "";
+      if (contentType.includes("text/event-stream")) {
+        const summary = await consumeCatalogSyncStream(res, handleTempexProgress);
+        if (Array.isArray(summary.errors) && summary.errors.length) {
+          throw new Error(`Tempex: ${summary.errors.length} продукта не са синхронизирани. Вижте дневника.`);
+        }
+      } else {
+        const json = (await res.json()) as { error?: string; data?: { errors?: string[] } };
+        if (json.error) throw new Error(json.error);
+        if (json.data?.errors?.length) throw new Error(`Tempex: ${json.data.errors.length} грешки при синхронизация.`);
+        appendTempexLog("Синхронизацията приключи.");
+      }
+      await loadTempexStatus();
+      return true;
+    } catch (e: unknown) {
+      const msg = String(e instanceof Error ? e.message : e);
+      await loadTempexStatus();
+      setError(msg);
+      appendTempexLog(`Грешка: ${msg}`);
+      return false;
+    } finally {
+      setTempexSyncing(false);
+    }
+  }
+
   async function syncBulclimaCatalog(): Promise<boolean> {
     setBulclimaSyncing(true);
     setError(null);
@@ -859,6 +975,8 @@ export default function SettingsPageClient() {
         return syncCondexCatalog();
       case "bittel":
         return syncBittelCatalog();
+      case "tempex":
+        return syncTempexCatalog();
       default:
         return false;
     }
@@ -941,6 +1059,11 @@ export default function SettingsPageClient() {
   }, [bittelLog]);
 
   useEffect(() => {
+    const c = tempexLogContainerRef.current;
+    if (c) c.scrollTop = c.scrollHeight;
+  }, [tempexLog]);
+
+  useEffect(() => {
     if (!condexSyncing) return;
     const id = window.setInterval(() => setCondexNowMs(Date.now()), 1000);
     return () => window.clearInterval(id);
@@ -960,10 +1083,24 @@ export default function SettingsPageClient() {
   }, [bittelSyncing]);
 
   useEffect(() => {
+    if (!tempexSyncing) return;
+    const id = window.setInterval(() => setTempexNowMs(Date.now()), 1000);
+    // След mount на конзолата — скролваме я в изглед
+    const t = window.setTimeout(() => {
+      tempexLogContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 80);
+    return () => {
+      window.clearInterval(id);
+      window.clearTimeout(t);
+    };
+  }, [tempexSyncing]);
+
+  useEffect(() => {
     void loadBulclimaStatus();
     void loadClimacomStatus();
     void loadCondexStatus();
     void loadBittelStatus();
+    void loadTempexStatus();
   }, []);
 
   useEffect(() => {
@@ -1822,6 +1959,93 @@ export default function SettingsPageClient() {
                   bittelLog.map((line, i) => (
                     <div
                       key={`b-${i}`}
+                      className={`whitespace-pre-wrap break-all py-0.5 ${
+                        /грешка|error/i.test(line)
+                          ? "text-red-300"
+                          : /нов\b/i.test(line)
+                            ? "text-emerald-300"
+                            : /обновен/i.test(line)
+                              ? "text-sky-300"
+                              : "text-slate-100"
+                      }`}
+                    >
+                      {line}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </Card>
+
+        <Card className="p-3 md:p-4 border-emerald-200 bg-gradient-to-br from-white to-emerald-50/30 mt-4">
+          <div className="flex items-start gap-3 mb-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+              <CloudDownload className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-black text-slate-900 tracking-tight">Каталог от Темпекс (Tempex)</div>
+              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                Стенни, подови, колонни климатици и мулти-сплит системи от tempex.bg, включително вътрешни и външни тела.
+                Цени в евро само без монтаж, пълни характеристики, функции, документи и продуктови снимки.
+              </p>
+            </div>
+          </div>
+          {tempexStatus?.at && (
+            <p className="text-[11px] text-slate-600 mb-2">
+              Последна синхронизация: {new Date(tempexStatus.at).toLocaleString("bg-BG")}
+              {tempexStatus.status ? ` · ${({ running: "изпълнява се", ok: "успешна", partial: "частично завършена", error: "прекъсната" } as Record<string, string>)[tempexStatus.status] ?? tempexStatus.status}` : ""}
+              {formatCatalogSyncStats(tempexStatus.summary, "productUrls")}
+            </p>
+          )}
+          {typeof tempexStatus?.summary?.error === "string" && (
+            <p role="alert" className="text-xs text-red-700 mb-3">{tempexStatus.summary.error}</p>
+          )}
+          <Button
+            variant="primary"
+            onClick={() => void syncTempexCatalog()}
+            disabled={anyCatalogSyncing || reclassifying}
+            className="gap-2"
+          >
+            {tempexSyncing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CloudDownload className="w-4 h-4" />}
+            Обнови каталог от Темпекс
+          </Button>
+          <p className="text-[10px] text-slate-500 mt-2">
+            Новите модели се добавят като „по поръчка“, скрити за преглед. Публикувайте избраните от Каталог → Продукти.
+          </p>
+          {(tempexSyncing || tempexProgress || tempexLog.length > 0) && (
+            <div className="mt-4 space-y-3 border-t border-emerald-200/60 pt-4">
+              {tempexProgress && (tempexSyncing || tempexProgress.phase === "done") && (
+                <CatalogSyncProgressBar
+                  progress={tempexProgress}
+                  syncing={tempexSyncing}
+                  nowMs={tempexNowMs}
+                  siteLabel="tempex.bg"
+                  estimatedProducts={TEMPEX_ESTIMATED_PRODUCTS}
+                />
+              )}
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+                  Дневник / конзола
+                </div>
+                <div className="text-[10px] text-slate-500 tabular-nums">
+                  {tempexLog.length > 0 ? `${tempexLog.length} реда` : tempexSyncing ? "чакане…" : ""}
+                </div>
+              </div>
+              <div
+                ref={tempexLogContainerRef}
+                className="h-64 max-h-[40vh] overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 p-3 font-mono text-[11px] leading-relaxed text-emerald-100 shadow-inner"
+              >
+                {tempexLog.length === 0 ? (
+                  <div className="text-slate-400">
+                    {tempexSyncing
+                      ? "Очакване на събития от tempex.bg…"
+                      : "Няма записи. Стартирайте синхронизацията."}
+                  </div>
+                ) : (
+                  tempexLog.map((line, i) => (
+                    <div
+                      key={`t-${i}`}
                       className={`whitespace-pre-wrap break-all py-0.5 ${
                         /грешка|error/i.test(line)
                           ? "text-red-300"

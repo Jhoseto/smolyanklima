@@ -1,0 +1,422 @@
+{
+  "product": {
+    "id": 377,
+    "name": "Трифазен инверторен колонен климатик Samsung AC140BNPDKH/EU",
+    "price_amount": 3624.55,
+    "price": "3624,55 €",
+    "show_price": "1",
+    "description": "",
+    "description_short": "<ul class=\"small-desc\">\n<li><span class=\"features\">Охлаждане</span><br />\n<div class=\"blockHead cooling\"><span class=\"blocktext\">13.40 kW</span></div>\n</li>\n<li><span class=\"features\">Отопление</span><br />\n<div class=\"blockHead heating\"><span class=\"blocktext\">15.50 kW</span></div>\n</li>\n<li><span class=\"features\">SEER</span><br />\n<div class=\"blockHead a2\"><span class=\"blocktext\">5.80 A+</span></div>\n</li>\n<li><span class=\"features\">SCOP</span><br />\n<div class=\"blockHead a2\"><span class=\"blocktext\">4.00 A+</span></div>\n</li>\n<li><span class=\"features\">Шум</span><br />\n<div class=\"blockHead noise\"><span class=\"blocktext\">45 dB</span></div>\n</li>\n</ul>",
+    "category": "kolonni-klimatici",
+    "category_name": "Колонни климатици",
+    "features": [
+      {
+        "name": "Производител",
+        "value": "Samsung",
+        "id_feature": "8",
+        "position": "0"
+      },
+      {
+        "name": "Тип",
+        "value": "Колонни климатици",
+        "id_feature": "10",
+        "position": "1"
+      },
+      {
+        "name": "Технология",
+        "value": "Инвертор",
+        "id_feature": "9",
+        "position": "2"
+      },
+      {
+        "name": "Вътрешно тяло",
+        "value": "AC140BNPDKH/EU",
+        "id_feature": "4",
+        "position": "4"
+      },
+      {
+        "name": "Външно тяло",
+        "value": "AC140BXPDNH/EU",
+        "id_feature": "5",
+        "position": "5"
+      },
+      {
+        "name": "Захранване (V/ø/Hz)",
+        "value": "380-415 / 3 / 50",
+        "id_feature": "7",
+        "position": "8"
+      },
+      {
+        "name": "Капацитет (BTU)",
+        "value": "48 000 BTU",
+        "id_feature": "6",
+        "position": "9"
+      },
+      {
+        "name": "Мощност на охлаждане (kW)",
+        "value": "13.40 (4.20 ~ 16.70)",
+        "id_feature": "12",
+        "position": "11"
+      },
+      {
+        "name": "Мощност на отопление (kW)",
+        "value": "15.50 (4.00 ~ 20.00)",
+        "id_feature": "13",
+        "position": "12"
+      },
+      {
+        "name": "Консумация при охлаждане/отоплениe (kW)",
+        "value": "4.32 / 4.50",
+        "id_feature": "14",
+        "position": "14"
+      },
+      {
+        "name": "EER (енергийна ефективност при охлаждане)",
+        "value": "3.10",
+        "id_feature": "16",
+        "position": "20"
+      },
+      {
+        "name": "COP (енергийна ефективност при отопление)",
+        "value": "3.44",
+        "id_feature": "17",
+        "position": "21"
+      },
+      {
+        "name": "SEER (сезонна ефективност на охлаждане)",
+        "value": "5.80",
+        "id_feature": "18",
+        "position": "22"
+      },
+      {
+        "name": "SCOP (сезонна ефективност на отопление)",
+        "value": "4.00",
+        "id_feature": "19",
+        "position": "23"
+      },
+      {
+        "name": "Енергиен клас (охлаждане)",
+        "value": "A+",
+        "id_feature": "20",
+        "position": "25"
+      },
+      {
+        "name": "Енергиен клас (отопление)",
+        "value": "A+",
+        "id_feature": "21",
+        "position": "26"
+      },
+      {
+        "name": "Звуково налягане вътрешно тяло - охлаждане dB(A)",
+        "value": "45",
+        "id_feature": "24",
+        "position": "34"
+      },
+      {
+        "name": "Звуково налягане вътрешно тяло - отопление dB(A)",
+        "value": "45",
+        "id_feature": "25",
+        "position": "35"
+      },
+      {
+        "name": "Звуково налягане външно тяло - охлаждане/отопление dB(A)",
+        "value": "54 / 54",
+        "id_feature": "26",
+        "position": "36"
+      },
+      {
+        "name": "Звукова мощност вътрешно тяло - охлаждане/отопление dB(A)",
+        "value": "63 / 63",
+        "id_feature": "27",
+        "position": "38"
+      },
+      {
+        "name": "Звукова мощност външно тяло - охлаждане/отопление dB(A)",
+        "value": "70 / 70",
+        "id_feature": "43",
+        "position": "39"
+      },
+      {
+        "name": "Размери вътрешно тяло ШxВxД (мм)",
+        "value": "610 x 1850 x 400",
+        "id_feature": "29",
+        "position": "48"
+      },
+      {
+        "name": "Размери външно тяло ШxВxД (мм)",
+        "value": "940 x 1210 x 330",
+        "id_feature": "30",
+        "position": "50"
+      },
+      {
+        "name": "Тегло вътрешно тяло (кг)",
+        "value": "46",
+        "id_feature": "31",
+        "position": "53"
+      },
+      {
+        "name": "Тегло външно тяло (кг)",
+        "value": "85",
+        "id_feature": "32",
+        "position": "54"
+      },
+      {
+        "name": "Тръбни връзки - течност / газ (мм)",
+        "value": "9.52 / 15.88",
+        "id_feature": "33",
+        "position": "56"
+      },
+      {
+        "name": "Работен диапазон при охлаждане (°C)",
+        "value": "-15 ~ 50",
+        "id_feature": "38",
+        "position": "65"
+      },
+      {
+        "name": "Работен диапазон при отопление (°C)",
+        "value": "-20 ~ 24",
+        "id_feature": "39",
+        "position": "66"
+      },
+      {
+        "name": "Гаранция",
+        "value": "3 години",
+        "id_feature": "108",
+        "position": "82"
+      }
+    ],
+    "images": [
+      {
+        "bySize": {
+          "cart_default": {
+            "url": "https://tempex.bg/1635-cart_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+            "width": 150,
+            "height": 150
+          },
+          "medium_default": {
+            "url": "https://tempex.bg/1635-medium_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+            "width": 300,
+            "height": 200
+          },
+          "small_default": {
+            "url": "https://tempex.bg/1635-small_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+            "width": 300,
+            "height": 200
+          },
+          "home_default": {
+            "url": "https://tempex.bg/1635-home_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+            "width": 300,
+            "height": 300
+          },
+          "thickbox_default": {
+            "url": "https://tempex.bg/1635-thickbox_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+            "width": 550,
+            "height": 550
+          },
+          "large_default": {
+            "url": "https://tempex.bg/1635-large_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+            "width": 900,
+            "height": 487
+          }
+        },
+        "small": {
+          "url": "https://tempex.bg/1635-cart_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+          "width": 150,
+          "height": 150
+        },
+        "medium": {
+          "url": "https://tempex.bg/1635-home_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+          "width": 300,
+          "height": 300
+        },
+        "large": {
+          "url": "https://tempex.bg/1635-large_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+          "width": 900,
+          "height": 487
+        },
+        "legend": "Инверторен колонен климатик Samsung AC140KNPDEH/EU",
+        "id_image": "1635",
+        "cover": "1",
+        "position": "1",
+        "associatedVariants": []
+      },
+      {
+        "bySize": {
+          "cart_default": {
+            "url": "https://tempex.bg/1638-cart_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+            "width": 150,
+            "height": 150
+          },
+          "medium_default": {
+            "url": "https://tempex.bg/1638-medium_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+            "width": 300,
+            "height": 200
+          },
+          "small_default": {
+            "url": "https://tempex.bg/1638-small_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+            "width": 300,
+            "height": 200
+          },
+          "home_default": {
+            "url": "https://tempex.bg/1638-home_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+            "width": 300,
+            "height": 300
+          },
+          "thickbox_default": {
+            "url": "https://tempex.bg/1638-thickbox_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+            "width": 550,
+            "height": 550
+          },
+          "large_default": {
+            "url": "https://tempex.bg/1638-large_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+            "width": 900,
+            "height": 487
+          }
+        },
+        "small": {
+          "url": "https://tempex.bg/1638-cart_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+          "width": 150,
+          "height": 150
+        },
+        "medium": {
+          "url": "https://tempex.bg/1638-home_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+          "width": 300,
+          "height": 300
+        },
+        "large": {
+          "url": "https://tempex.bg/1638-large_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+          "width": 900,
+          "height": 487
+        },
+        "legend": "Инверторен колонен климатик Samsung AC140KNPDEH/EU",
+        "id_image": "1638",
+        "cover": null,
+        "position": "2",
+        "associatedVariants": []
+      },
+      {
+        "bySize": {
+          "cart_default": {
+            "url": "https://tempex.bg/1637-cart_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+            "width": 150,
+            "height": 150
+          },
+          "medium_default": {
+            "url": "https://tempex.bg/1637-medium_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+            "width": 300,
+            "height": 200
+          },
+          "small_default": {
+            "url": "https://tempex.bg/1637-small_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+            "width": 300,
+            "height": 200
+          },
+          "home_default": {
+            "url": "https://tempex.bg/1637-home_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+            "width": 300,
+            "height": 300
+          },
+          "thickbox_default": {
+            "url": "https://tempex.bg/1637-thickbox_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+            "width": 550,
+            "height": 550
+          },
+          "large_default": {
+            "url": "https://tempex.bg/1637-large_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+            "width": 900,
+            "height": 487
+          }
+        },
+        "small": {
+          "url": "https://tempex.bg/1637-cart_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+          "width": 150,
+          "height": 150
+        },
+        "medium": {
+          "url": "https://tempex.bg/1637-home_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+          "width": 300,
+          "height": 300
+        },
+        "large": {
+          "url": "https://tempex.bg/1637-large_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+          "width": 900,
+          "height": 487
+        },
+        "legend": "Инверторен колонен климатик Samsung AC140KNPDEH/EU",
+        "id_image": "1637",
+        "cover": null,
+        "position": "3",
+        "associatedVariants": []
+      },
+      {
+        "bySize": {
+          "cart_default": {
+            "url": "https://tempex.bg/1634-cart_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+            "width": 150,
+            "height": 150
+          },
+          "medium_default": {
+            "url": "https://tempex.bg/1634-medium_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+            "width": 300,
+            "height": 200
+          },
+          "small_default": {
+            "url": "https://tempex.bg/1634-small_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+            "width": 300,
+            "height": 200
+          },
+          "home_default": {
+            "url": "https://tempex.bg/1634-home_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+            "width": 300,
+            "height": 300
+          },
+          "thickbox_default": {
+            "url": "https://tempex.bg/1634-thickbox_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+            "width": 550,
+            "height": 550
+          },
+          "large_default": {
+            "url": "https://tempex.bg/1634-large_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+            "width": 900,
+            "height": 487
+          }
+        },
+        "small": {
+          "url": "https://tempex.bg/1634-cart_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+          "width": 150,
+          "height": 150
+        },
+        "medium": {
+          "url": "https://tempex.bg/1634-home_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+          "width": 300,
+          "height": 300
+        },
+        "large": {
+          "url": "https://tempex.bg/1634-large_default/trifazen-invertoren-kolonen-klimatik-samsung-ac140bnpdkheu.jpg",
+          "width": 900,
+          "height": 487
+        },
+        "legend": "Инверторен колонен климатик Samsung AC140KNPDEH/EU",
+        "id_image": "1634",
+        "cover": null,
+        "position": "4",
+        "associatedVariants": []
+      }
+    ],
+    "attributes": {
+      "6": {
+        "id_attribute": "33",
+        "id_attribute_group": "6",
+        "name": "Без монтаж",
+        "group": "Монтаж",
+        "reference": "",
+        "ean13": "",
+        "isbn": "",
+        "upc": "",
+        "mpn": ""
+      }
+    },
+    "attachments": []
+  },
+  "icons": ""
+}

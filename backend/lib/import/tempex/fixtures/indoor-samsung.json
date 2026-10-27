@@ -1,0 +1,313 @@
+{
+  "product": {
+    "id": 854,
+    "name": "Вътрешно тяло за мулти сплит система Samsung Cebu AR07TXFYAWKN/EU",
+    "price_amount": 290.41,
+    "price": "290,41 €",
+    "show_price": "0",
+    "description": "<ul>\n<li>AI автоматичен комфорт</li>\n<li>Wi-Fi управление със Samsung SmartThings и гласов контрол чрез Bixby.</li>\n<li>Съвместими с кабелно дистанционно управление и с централизиран контролер.</li>\n</ul>\n<table class=\"table table-responsive\">\n<thead>\n<tr><th colspan=\"3\">Вътрешно тяло</th><th>AR07TXFYAWKN/EU</th></tr>\n</thead>\n<tbody>\n<tr>\n<td colspan=\"4\">Капацитет</td>\n</tr>\n<tr>\n<td rowspan=\"2\">Капацитет</td>\n<td>Охлаждане</td>\n<td>kW</td>\n<td>2.0</td>\n</tr>\n<tr>\n<td>Отопление @ +7 °C</td>\n<td>kW</td>\n<td>2.2</td>\n</tr>\n<tr>\n<td colspan=\"4\">Производителност</td>\n</tr>\n<tr>\n<td colspan=\"2\">Дебит на въздушния поток</td>\n<td>m<sup>3</sup>/min</td>\n<td>9.9</td>\n</tr>\n<tr>\n<td>Звукова сила</td>\n<td>Охлаждане</td>\n<td>dB(A)</td>\n<td>54</td>\n</tr>\n<tr>\n<td>Звуково налягане</td>\n<td>H/L</td>\n<td>dB(A)</td>\n<td>36/19</td>\n</tr>\n<tr>\n<td colspan=\"4\">Електрически данни</td>\n</tr>\n<tr>\n<td colspan=\"2\">Захранващо напрежение</td>\n<td>Φ, V, Hz</td>\n<td>1Φ, 220~240 V, 50 Hz</td>\n</tr>\n<tr>\n<td rowspan=\"2\">Консумация на енергия</td>\n<td>Охлаждане</td>\n<td>W</td>\n<td>30</td>\n</tr>\n<tr>\n<td>Отопление</td>\n<td>W</td>\n<td>30</td>\n</tr>\n<tr>\n<td rowspan=\"2\">Електрозахранване</td>\n<td>Охлаждане</td>\n<td>A</td>\n<td>0.3</td>\n</tr>\n<tr>\n<td>Отопление</td>\n<td>A</td>\n<td>0.3</td>\n</tr>\n<tr>\n<td colspan=\"4\">Размери</td>\n</tr>\n<tr>\n<td colspan=\"2\">Нетни размери (Ш x В x Д)</td>\n<td>mm</td>\n<td>820 x 299 x 215</td>\n</tr>\n<tr>\n<td colspan=\"2\">Нетно тегло</td>\n<td>kg</td>\n<td>8.9</td>\n</tr>\n<tr>\n<td colspan=\"4\">Хладилен агент</td>\n</tr>\n<tr>\n<td rowspan=\"2\">Тръбни връзки</td>\n<td>Тръба фреон течна фаза</td>\n<td>ø, inch</td>\n<td>1/4</td>\n</tr>\n<tr>\n<td>Тръба фреон газова фаза</td>\n<td>ø, inch</td>\n<td>3/8</td>\n</tr>\n<tr>\n<td>Тръбни връзки</td>\n<td>Дренажна тръба</td>\n<td>ø, mm</td>\n<td>ID 16</td>\n</tr>\n<tr>\n<td colspan=\"4\">Функции</td>\n</tr>\n<tr>\n<td rowspan=\"4\">Въздушен поток</td>\n<td colspan=\"2\">Охлаждане WindFree™</td>\n<td> </td>\n</tr>\n<tr>\n<td colspan=\"2\">Контрол на посоката на въздуха (нагоре/надолу)</td>\n<td>Автоматичен</td>\n</tr>\n<tr>\n<td colspan=\"2\">Контрол на посоката на въздуха (наляво/надясно)</td>\n<td>Ръчен</td>\n</tr>\n<tr>\n<td colspan=\"2\">Автоматична скорост на вентилатора</td>\n<td>•</td>\n</tr>\n<tr>\n<td rowspan=\"3\">Пречистване на въздуха</td>\n<td colspan=\"2\">Филтър Tri-Care</td>\n<td> </td>\n</tr>\n<tr>\n<td colspan=\"2\">Филтър Easy Filter Plus</td>\n<td>•</td>\n</tr>\n<tr>\n<td colspan=\"2\">Автоматично почистване (самопочистване)</td>\n<td>•</td>\n</tr>\n<tr>\n<td rowspan=\"9\">Работен режим</td>\n<td colspan=\"2\">AI автоматичен комфорт с Wi-Fi и MDS (директно/индиректно)</td>\n<td></td>\n</tr>\n<tr>\n<td colspan=\"2\">AI автоматичен комфорт с Wi-Fi</td>\n<td>•</td>\n</tr>\n<tr>\n<td colspan=\"2\">Автоматичен режим (без Wi-Fi)</td>\n<td></td>\n</tr>\n<tr>\n<td colspan=\"2\">Бързо охлаждане</td>\n<td>•</td>\n</tr>\n<tr>\n<td colspan=\"2\">Good Sleep (Качествен сън)</td>\n<td>•</td>\n</tr>\n<tr>\n<td colspan=\"2\">Еко</td>\n<td>•</td>\n</tr>\n<tr>\n<td colspan=\"2\">Изсушаване</td>\n<td>•</td>\n</tr>\n<tr>\n<td colspan=\"2\">Вентилатор</td>\n<td>•</td>\n</tr>\n<tr>\n<td colspan=\"2\">Тих режим</td>\n<td>•</td>\n</tr>\n<tr>\n<td rowspan=\"7\">Други функции</td>\n<td colspan=\"2\">Samsung SmartThings</td>\n<td>•</td>\n</tr>\n<tr>\n<td colspan=\"2\">MDS (Сензор за движение)</td>\n<td></td>\n</tr>\n<tr>\n<td>Дисплей за вътрешната температура</td>\n<td>88 Дисплей</td>\n<td>•</td>\n</tr>\n<tr>\n<td colspan=\"2\">Вкл./изкл. на дисплея</td>\n<td>•</td>\n</tr>\n<tr>\n<td colspan=\"2\">Вкл./изкл. на звуковия сигнал</td>\n<td>•</td>\n</tr>\n<tr>\n<td colspan=\"2\">Автоматична смяна на режима</td>\n<td>•</td>\n</tr>\n<tr>\n<td colspan=\"2\">Автоматично рестартиране</td>\n<td>•</td>\n</tr>\n</tbody>\n</table>\n<ol>\n<li>Отоплителна мощност при +7°C</li>\n</ol>",
+    "description_short": "<ul class=\"small-desc\">\n<li><span class=\"features\">Охлаждане</span><br />\n<div class=\"blockHead cooling\"><span class=\"blocktext\">2.00 kW</span></div>\n</li>\n<li><span class=\"features\">Отопление<sup>1</sup></span><br />\n<div class=\"blockHead heating\"><span class=\"blocktext\">2.20 kW</span></div>\n</li>\n<li><span class=\"features\">Шум</span><br />\n<div class=\"blockHead noise\"><span class=\"blocktext\">19 dB</span></div>\n</li>\n</ul>",
+    "category": "vatreshni-tela",
+    "category_name": "Вътрешни тела",
+    "features": [
+      {
+        "name": "Серия",
+        "value": "Cebu",
+        "id_feature": "3",
+        "position": "3"
+      },
+      {
+        "name": "Вътрешно тяло",
+        "value": "AR07TXFYAWKN/EU",
+        "id_feature": "4",
+        "position": "4"
+      },
+      {
+        "name": "Захранване (V/ø/Hz)",
+        "value": "230 / 1 / 50",
+        "id_feature": "7",
+        "position": "8"
+      },
+      {
+        "name": "Мощност на охлаждане (kW)",
+        "value": "2.0",
+        "id_feature": "12",
+        "position": "11"
+      },
+      {
+        "name": "Мощност на отопление (kW)",
+        "value": "2.2",
+        "id_feature": "13",
+        "position": "12"
+      },
+      {
+        "name": "Консумация при охлаждане/отоплениe (kW)",
+        "value": "0.03 / 0.03",
+        "id_feature": "14",
+        "position": "14"
+      },
+      {
+        "name": "Работен ток при охлаждане/отопление (A)",
+        "value": "0.3 / 0.3",
+        "id_feature": "47",
+        "position": "30"
+      },
+      {
+        "name": "Звуково налягане вътрешно тяло - охлаждане dB(A)",
+        "value": "36 / 19",
+        "id_feature": "24",
+        "position": "34"
+      },
+      {
+        "name": "Звуково налягане вътрешно тяло - отопление dB(A)",
+        "value": "36 / 19",
+        "id_feature": "25",
+        "position": "35"
+      },
+      {
+        "name": "Звукова мощност вътрешно тяло - охлаждане/отопление dB(A)",
+        "value": "54 / 54",
+        "id_feature": "27",
+        "position": "38"
+      },
+      {
+        "name": "Размери вътрешно тяло ШxВxД (мм)",
+        "value": "820 x 299 x 215",
+        "id_feature": "29",
+        "position": "48"
+      },
+      {
+        "name": "Тегло вътрешно тяло (кг)",
+        "value": "8.9",
+        "id_feature": "31",
+        "position": "53"
+      },
+      {
+        "name": "Тръбни връзки - течност / газ (мм)",
+        "value": "1/4 / 3/8",
+        "id_feature": "33",
+        "position": "56"
+      }
+    ],
+    "images": [
+      {
+        "bySize": {
+          "cart_default": {
+            "url": "https://tempex.bg/3186-cart_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+            "width": 150,
+            "height": 150
+          },
+          "medium_default": {
+            "url": "https://tempex.bg/3186-medium_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+            "width": 300,
+            "height": 200
+          },
+          "small_default": {
+            "url": "https://tempex.bg/3186-small_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+            "width": 300,
+            "height": 200
+          },
+          "home_default": {
+            "url": "https://tempex.bg/3186-home_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+            "width": 300,
+            "height": 300
+          },
+          "thickbox_default": {
+            "url": "https://tempex.bg/3186-thickbox_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+            "width": 550,
+            "height": 550
+          },
+          "large_default": {
+            "url": "https://tempex.bg/3186-large_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+            "width": 900,
+            "height": 487
+          }
+        },
+        "small": {
+          "url": "https://tempex.bg/3186-cart_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+          "width": 150,
+          "height": 150
+        },
+        "medium": {
+          "url": "https://tempex.bg/3186-home_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+          "width": 300,
+          "height": 300
+        },
+        "large": {
+          "url": "https://tempex.bg/3186-large_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+          "width": 900,
+          "height": 487
+        },
+        "legend": "Вътрешно тяло за мулти сплит система Samsung Cebu AR07TXFYAWKN/EU",
+        "id_image": "3186",
+        "cover": "1",
+        "position": "1",
+        "associatedVariants": []
+      },
+      {
+        "bySize": {
+          "cart_default": {
+            "url": "https://tempex.bg/3187-cart_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+            "width": 150,
+            "height": 150
+          },
+          "medium_default": {
+            "url": "https://tempex.bg/3187-medium_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+            "width": 300,
+            "height": 200
+          },
+          "small_default": {
+            "url": "https://tempex.bg/3187-small_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+            "width": 300,
+            "height": 200
+          },
+          "home_default": {
+            "url": "https://tempex.bg/3187-home_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+            "width": 300,
+            "height": 300
+          },
+          "thickbox_default": {
+            "url": "https://tempex.bg/3187-thickbox_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+            "width": 550,
+            "height": 550
+          },
+          "large_default": {
+            "url": "https://tempex.bg/3187-large_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+            "width": 900,
+            "height": 487
+          }
+        },
+        "small": {
+          "url": "https://tempex.bg/3187-cart_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+          "width": 150,
+          "height": 150
+        },
+        "medium": {
+          "url": "https://tempex.bg/3187-home_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+          "width": 300,
+          "height": 300
+        },
+        "large": {
+          "url": "https://tempex.bg/3187-large_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+          "width": 900,
+          "height": 487
+        },
+        "legend": "Вътрешно тяло за мулти сплит система Samsung Cebu AR07TXFYAWKN/EU",
+        "id_image": "3187",
+        "cover": null,
+        "position": "2",
+        "associatedVariants": []
+      },
+      {
+        "bySize": {
+          "cart_default": {
+            "url": "https://tempex.bg/3188-cart_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+            "width": 150,
+            "height": 150
+          },
+          "medium_default": {
+            "url": "https://tempex.bg/3188-medium_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+            "width": 300,
+            "height": 200
+          },
+          "small_default": {
+            "url": "https://tempex.bg/3188-small_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+            "width": 300,
+            "height": 200
+          },
+          "home_default": {
+            "url": "https://tempex.bg/3188-home_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+            "width": 300,
+            "height": 300
+          },
+          "thickbox_default": {
+            "url": "https://tempex.bg/3188-thickbox_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+            "width": 550,
+            "height": 550
+          },
+          "large_default": {
+            "url": "https://tempex.bg/3188-large_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+            "width": 900,
+            "height": 487
+          }
+        },
+        "small": {
+          "url": "https://tempex.bg/3188-cart_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+          "width": 150,
+          "height": 150
+        },
+        "medium": {
+          "url": "https://tempex.bg/3188-home_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+          "width": 300,
+          "height": 300
+        },
+        "large": {
+          "url": "https://tempex.bg/3188-large_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+          "width": 900,
+          "height": 487
+        },
+        "legend": "Вътрешно тяло за мулти сплит система Samsung Cebu AR07TXFYAWKN/EU",
+        "id_image": "3188",
+        "cover": null,
+        "position": "3",
+        "associatedVariants": []
+      },
+      {
+        "bySize": {
+          "cart_default": {
+            "url": "https://tempex.bg/3189-cart_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+            "width": 150,
+            "height": 150
+          },
+          "medium_default": {
+            "url": "https://tempex.bg/3189-medium_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+            "width": 300,
+            "height": 200
+          },
+          "small_default": {
+            "url": "https://tempex.bg/3189-small_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+            "width": 300,
+            "height": 200
+          },
+          "home_default": {
+            "url": "https://tempex.bg/3189-home_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+            "width": 300,
+            "height": 300
+          },
+          "thickbox_default": {
+            "url": "https://tempex.bg/3189-thickbox_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+            "width": 550,
+            "height": 550
+          },
+          "large_default": {
+            "url": "https://tempex.bg/3189-large_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+            "width": 900,
+            "height": 487
+          }
+        },
+        "small": {
+          "url": "https://tempex.bg/3189-cart_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+          "width": 150,
+          "height": 150
+        },
+        "medium": {
+          "url": "https://tempex.bg/3189-home_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+          "width": 300,
+          "height": 300
+        },
+        "large": {
+          "url": "https://tempex.bg/3189-large_default/vtreshno-tyalo-za-multi-split-sistema-samsung-cebu-ar07txfyawkneu.jpg",
+          "width": 900,
+          "height": 487
+        },
+        "legend": "Вътрешно тяло за мулти сплит система Samsung Cebu AR07TXFYAWKN/EU",
+        "id_image": "3189",
+        "cover": null,
+        "position": "4",
+        "associatedVariants": []
+      }
+    ],
+    "attachments": []
+  },
+  "icons": ""
+}

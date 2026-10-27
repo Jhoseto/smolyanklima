@@ -1,5 +1,7 @@
 node_modules
 .next
+.cache/tempex
+.tmp-tempex-audit
 .git
 .env*.local
 *.md

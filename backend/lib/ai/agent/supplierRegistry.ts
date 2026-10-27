@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { extractWebsiteUrls, hostnameFromUrl } from "@/lib/ai/agent/extractWebsiteUrls";
 import { isPrivateOrLocalHost } from "@/lib/ai/agent/agentLimits";
 
-export type CatalogSlug = "bulclima" | "climacom" | "condex" | "bittel";
+export type CatalogSlug = "bulclima" | "climacom" | "condex" | "bittel" | "tempex";
 
 export type SupplierRegistryEntry = {
   contactId: string;
@@ -25,6 +25,8 @@ const CATALOG_HOST_MAP: Record<string, CatalogSlug> = {
   "www.condex.bg": "condex",
   "bittel.bg": "bittel",
   "www.bittel.bg": "bittel",
+  "tempex.bg": "tempex",
+  "www.tempex.bg": "tempex",
 };
 
 function slugFromHostnames(hostnames: string[]): CatalogSlug | null {

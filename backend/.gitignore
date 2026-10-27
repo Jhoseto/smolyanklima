@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+/.cache/tempex/
+/.tmp-tempex-audit/
 
 # next.js
 /.next/

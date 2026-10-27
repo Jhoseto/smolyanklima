@@ -163,10 +163,10 @@ export function planAutoTools(message: string): AutoToolPlan[] {
   }
 
   // --- Suppliers ---
-  if (/доставчик|bulclima|climacom|condex|bittel|синхрон|sync|каталог.*достав/.test(m)) {
+  if (/доставчик|bulclima|climacom|condex|bittel|tempex|темпекс|синхрон|sync|каталог.*достав/.test(m)) {
     addPlan(plans, seen, "query_suppliers", {});
-    if (/синхрон|sync|bulclima|climacom|condex|bittel/.test(m)) {
-      const slug = m.match(/bulclima|climacom|condex|bittel/)?.[0];
+    if (/синхрон|sync|bulclima|climacom|condex|bittel|tempex|темпекс/.test(m)) {
+      const slug = m.match(/bulclima|climacom|condex|bittel|tempex/)?.[0] ?? (/темпекс/.test(m) ? "tempex" : undefined);
       if (slug) addPlan(plans, seen, "get_supplier_sync_status", { catalogSlug: slug });
     }
   }

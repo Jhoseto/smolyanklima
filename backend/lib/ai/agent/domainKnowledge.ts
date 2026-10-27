@@ -11,7 +11,7 @@ WORK_ITEMS (централна таблица):
 
 ДОСТАВЧИЦИ:
 - CRM: contacts.contact_kind=supplier (Контакти → Доставчици). Сайтове в бележки.
-- Каталози с sync: Bulclima (bulclima.com), Climacom (climacom.com), Condex (condex.bg), Bittel (bittel.bg).
+- Каталози с sync: Bulclima (bulclima.com), Climacom (climacom.com), Condex (condex.bg), Bittel (bittel.bg), Tempex (tempex.bg).
 - products.supplier_id → contacts.id; products.source_url → страница при доставчик.
 
 INQUIRIES: status new|in_progress|done|cancelled|spam; source website|phone|etc.

@@ -1,0 +1,387 @@
+{
+  "product": {
+    "id": 951,
+    "name": "Инверторен подов климатик Midea MFA2U-12HRFNX(GA)",
+    "price_amount": 979,
+    "price": "979,00 €",
+    "show_price": "1",
+    "description": "<h2>Перфектен избор за Вашия интериор</h2>\n<p>Подовият климатик на Midea позволява да бъде монтиран на пода или ниско на стената. Той е отлично решение и Ви пести място, като в същото време осигурява повече функции.</p>\n<p><img src=\"/img/cms/midea/podovi/podov-2022-1.jpg\" alt=\"Инверторен подов климатик Midea MFA2U-12HRFNX(GA)\" title=\"Инверторен подов климатик Midea MFA2U-12HRFNX(GA)\" width=\"963\" height=\"446\" /> <img src=\"/img/cms/midea/podovi/podov-2022-2.jpg\" alt=\"Инверторен подов климатик Midea MFA2U-12HRFNX(GA)\" title=\"Инверторен подов климатик Midea MFA2U-12HRFNX(GA)\" width=\"963\" height=\"446\" /></p>\n<h2>Два отделни вентилатора</h2>\n<p>Двата отделни вентилатора осигуряват по-голям въздушен поток, като предоставят бързо охлаждане и отопление през цялата година.</p>\n<h2>По-тиха работа</h2>\n<p>Специално оптимизираният вентилатор осигурява висока енергийна ефективност при работа на едва доловимите 20.9dB(A) шум.</p>\n<p><img src=\"/img/cms/midea/podovi/podov-2022-3.jpg\" alt=\"\" width=\"963\" height=\"446\" /> <img src=\"/img/cms/midea/podovi/podov-2022-4.jpg\" alt=\"Инверторен подов климатик Midea MFA2U-12HRFNX(GA)\" title=\"Инверторен подов климатик Midea MFA2U-12HRFNX(GA)\" width=\"963\" height=\"446\" /></p>\n<h2>Супер йонизатор за подобрено качество на въздуха</h2>\n<p>Вграденият йонизатор на подовите климатици Midea предоставя множество положителни и отрицателни йони, които се свързват и неутрализират замърсителите във въздуха, за да се осигури по-чиста среда.</p>",
+    "description_short": "<ul class=\"small-desc\">\n<li><span class=\"features\">Охлаждане</span><br />\n<div class=\"blockHead cooling\"><span class=\"blocktext\">3.52 kW</span></div>\n</li>\n<li><span class=\"features\">Отопление</span><br />\n<div class=\"blockHead heating\"><span class=\"blocktext\">3.81 kW</span></div>\n</li>\n<li><span class=\"features\">SEER</span><br />\n<div class=\"blockHead a2\"><span class=\"blocktext\">7.30 A++</span></div>\n</li>\n<li><span class=\"features\">SCOP</span><br />\n<div class=\"blockHead a1\"><span class=\"blocktext\">4.00 A+</span></div>\n</li>\n<li><span class=\"features\">Шум</span><br />\n<div class=\"blockHead noise\"><span class=\"blocktext\">27 dB</span></div>\n</li>\n</ul>\n<p style=\"padding-top:20px;\"><strong>Изтеглете приложението Midea SmartHome:</strong></p>\n<div style=\"padding-bottom:20px;\"><a href=\"https://qrcode.msmartlife.net/MSmartLife/test/Download/html/download.html\" target=\"_blank\" rel=\"noreferrer noopener\"> <img src=\"/img/cms/midea/smart-home/download-midea-smart-home-app.jpg\" alt=\"Изтеглете приложението Midea SmartHome\" width=\"350\" /></a></div>",
+    "category": "podovi-klimatici",
+    "category_name": "Подови климатици",
+    "features": [
+      {
+        "name": "Производител",
+        "value": "Midea",
+        "id_feature": "8",
+        "position": "0"
+      },
+      {
+        "name": "Тип",
+        "value": "Подови климатици",
+        "id_feature": "10",
+        "position": "1"
+      },
+      {
+        "name": "Технология",
+        "value": "Инвертор",
+        "id_feature": "9",
+        "position": "2"
+      },
+      {
+        "name": "Вътрешно тяло",
+        "value": "MFA2U-12HRFNX(GA)",
+        "id_feature": "4",
+        "position": "4"
+      },
+      {
+        "name": "Външно тяло",
+        "value": "MOX230-12HFN8-Q(GA)",
+        "id_feature": "5",
+        "position": "5"
+      },
+      {
+        "name": "Захранване (V/ø/Hz)",
+        "value": "230 / 1 / 50",
+        "id_feature": "7",
+        "position": "8"
+      },
+      {
+        "name": "Капацитет (BTU)",
+        "value": "12 000 BTU",
+        "id_feature": "6",
+        "position": "9"
+      },
+      {
+        "name": "Мощност на охлаждане (kW)",
+        "value": "3.52 (0.76 ~ 4.25)",
+        "id_feature": "12",
+        "position": "11"
+      },
+      {
+        "name": "Мощност на отопление (kW)",
+        "value": "3.81 (0.45 ~ 4.69)",
+        "id_feature": "13",
+        "position": "12"
+      },
+      {
+        "name": "Консумация при охлаждане/отоплениe (kW)",
+        "value": "1.00 (0.17 - 1.35) / 0.98 (0.15 - 1.30)",
+        "id_feature": "14",
+        "position": "14"
+      },
+      {
+        "name": "SEER (сезонна ефективност на охлаждане)",
+        "value": "7.30",
+        "id_feature": "18",
+        "position": "22"
+      },
+      {
+        "name": "SCOP (сезонна ефективност на отопление)",
+        "value": "4.00",
+        "id_feature": "19",
+        "position": "23"
+      },
+      {
+        "name": "Енергиен клас (охлаждане)",
+        "value": "A++",
+        "id_feature": "20",
+        "position": "25"
+      },
+      {
+        "name": "Енергиен клас (отопление)",
+        "value": "A+",
+        "id_feature": "21",
+        "position": "26"
+      },
+      {
+        "name": "Работен ток при охлаждане/отопление (A)",
+        "value": "4.52（1.40 ~ 5.90) / 4.43（1.25 ~ 5.95)",
+        "id_feature": "47",
+        "position": "30"
+      },
+      {
+        "name": "Звуково налягане вътрешно тяло - охлаждане dB(A)",
+        "value": "37 / 34 / 27",
+        "id_feature": "24",
+        "position": "34"
+      },
+      {
+        "name": "Звуково налягане вътрешно тяло - отопление dB(A)",
+        "value": "37 / 34 / 27",
+        "id_feature": "25",
+        "position": "35"
+      },
+      {
+        "name": "Звуково налягане външно тяло - охлаждане/отопление dB(A)",
+        "value": "54 / 54",
+        "id_feature": "26",
+        "position": "36"
+      },
+      {
+        "name": "Звукова мощност вътрешно тяло - охлаждане/отопление dB(A)",
+        "value": "54 / 54",
+        "id_feature": "27",
+        "position": "38"
+      },
+      {
+        "name": "Звукова мощност външно тяло - охлаждане/отопление dB(A)",
+        "value": "62 / 62",
+        "id_feature": "43",
+        "position": "39"
+      },
+      {
+        "name": "Въздушен поток  за вътрешно/външно тяло - охлаждане (m3/h)",
+        "value": "650 / 580 / 490 / 2200",
+        "id_feature": "44",
+        "position": "41"
+      },
+      {
+        "name": "Размери вътрешно тяло ШxВxД (мм)",
+        "value": "794 x 621 x 206",
+        "id_feature": "29",
+        "position": "48"
+      },
+      {
+        "name": "Размери външно тяло ШxВxД (мм)",
+        "value": "765 x 555 x 303",
+        "id_feature": "30",
+        "position": "50"
+      },
+      {
+        "name": "Тегло вътрешно тяло (кг)",
+        "value": "14.9",
+        "id_feature": "31",
+        "position": "53"
+      },
+      {
+        "name": "Тегло външно тяло (кг)",
+        "value": "26.6",
+        "id_feature": "32",
+        "position": "54"
+      },
+      {
+        "name": "Тръбни връзки - течност / газ (мм)",
+        "value": "6.35 / 9.52",
+        "id_feature": "33",
+        "position": "56"
+      },
+      {
+        "name": "Максимална дължина на тръбите (м)",
+        "value": "25",
+        "id_feature": "35",
+        "position": "58"
+      },
+      {
+        "name": "Максимална денивелация (м)",
+        "value": "10",
+        "id_feature": "41",
+        "position": "62"
+      },
+      {
+        "name": "Работен диапазон при охлаждане (°C)",
+        "value": "-15 ~ 50",
+        "id_feature": "38",
+        "position": "65"
+      },
+      {
+        "name": "Работен диапазон при отопление (°C)",
+        "value": "-15 ~ 24",
+        "id_feature": "39",
+        "position": "66"
+      },
+      {
+        "name": "Фреон (тип)",
+        "value": "R32",
+        "id_feature": "40",
+        "position": "70"
+      },
+      {
+        "name": "Фреон - фабрично зареждане (кг)",
+        "value": "0.72",
+        "id_feature": "112",
+        "position": "71"
+      },
+      {
+        "name": "Гаранция",
+        "value": "3 години",
+        "id_feature": "108",
+        "position": "82"
+      }
+    ],
+    "images": [
+      {
+        "bySize": {
+          "cart_default": {
+            "url": "https://tempex.bg/3628-cart_default/invertoren-podov-klimatik-midea-mfa2u-12hrfnxga.jpg",
+            "width": 150,
+            "height": 150
+          },
+          "medium_default": {
+            "url": "https://tempex.bg/3628-medium_default/invertoren-podov-klimatik-midea-mfa2u-12hrfnxga.jpg",
+            "width": 300,
+            "height": 200
+          },
+          "small_default": {
+            "url": "https://tempex.bg/3628-small_default/invertoren-podov-klimatik-midea-mfa2u-12hrfnxga.jpg",
+            "width": 300,
+            "height": 200
+          },
+          "home_default": {
+            "url": "https://tempex.bg/3628-home_default/invertoren-podov-klimatik-midea-mfa2u-12hrfnxga.jpg",
+            "width": 300,
+            "height": 300
+          },
+          "thickbox_default": {
+            "url": "https://tempex.bg/3628-thickbox_default/invertoren-podov-klimatik-midea-mfa2u-12hrfnxga.jpg",
+            "width": 550,
+            "height": 550
+          },
+          "large_default": {
+            "url": "https://tempex.bg/3628-large_default/invertoren-podov-klimatik-midea-mfa2u-12hrfnxga.jpg",
+            "width": 900,
+            "height": 487
+          }
+        },
+        "small": {
+          "url": "https://tempex.bg/3628-cart_default/invertoren-podov-klimatik-midea-mfa2u-12hrfnxga.jpg",
+          "width": 150,
+          "height": 150
+        },
+        "medium": {
+          "url": "https://tempex.bg/3628-home_default/invertoren-podov-klimatik-midea-mfa2u-12hrfnxga.jpg",
+          "width": 300,
+          "height": 300
+        },
+        "large": {
+          "url": "https://tempex.bg/3628-large_default/invertoren-podov-klimatik-midea-mfa2u-12hrfnxga.jpg",
+          "width": 900,
+          "height": 487
+        },
+        "legend": "Инверторен подов климатик Midea MFA2U-12HRFNX(GA)",
+        "id_image": "3628",
+        "cover": "1",
+        "position": "1",
+        "associatedVariants": []
+      },
+      {
+        "bySize": {
+          "cart_default": {
+            "url": "https://tempex.bg/3625-cart_default/invertoren-podov-klimatik-midea-mfa2u-12hrfnxga.jpg",
+            "width": 150,
+            "height": 150
+          },
+          "medium_default": {
+            "url": "https://tempex.bg/3625-medium_default/invertoren-podov-klimatik-midea-mfa2u-12hrfnxga.jpg",
+            "width": 300,
+            "height": 200
+          },
+          "small_default": {
+            "url": "https://tempex.bg/3625-small_default/invertoren-podov-klimatik-midea-mfa2u-12hrfnxga.jpg",
+            "width": 300,
+            "height": 200
+          },
+          "home_default": {
+            "url": "https://tempex.bg/3625-home_default/invertoren-podov-klimatik-midea-mfa2u-12hrfnxga.jpg",
+            "width": 300,
+            "height": 300
+          },
+          "thickbox_default": {
+            "url": "https://tempex.bg/3625-thickbox_default/invertoren-podov-klimatik-midea-mfa2u-12hrfnxga.jpg",
+            "width": 550,
+            "height": 550
+          },
+          "large_default": {
+            "url": "https://tempex.bg/3625-large_default/invertoren-podov-klimatik-midea-mfa2u-12hrfnxga.jpg",
+            "width": 900,
+            "height": 487
+          }
+        },
+        "small": {
+          "url": "https://tempex.bg/3625-cart_default/invertoren-podov-klimatik-midea-mfa2u-12hrfnxga.jpg",
+          "width": 150,
+          "height": 150
+        },
+        "medium": {
+          "url": "https://tempex.bg/3625-home_default/invertoren-podov-klimatik-midea-mfa2u-12hrfnxga.jpg",
+          "width": 300,
+          "height": 300
+        },
+        "large": {
+          "url": "https://tempex.bg/3625-large_default/invertoren-podov-klimatik-midea-mfa2u-12hrfnxga.jpg",
+          "width": 900,
+          "height": 487
+        },
+        "legend": "Инверторен подов климатик Midea MFA2U-12HRFNX(GA)",
+        "id_image": "3625",
+        "cover": null,
+        "position": "2",
+        "associatedVariants": []
+      }
+    ],
+    "attributes": {
+      "6": {
+        "id_attribute": "33",
+        "id_attribute_group": "6",
+        "name": "Без монтаж",
+        "group": "Монтаж",
+        "reference": "",
+        "ean13": "",
+        "isbn": "",
+        "upc": "",
+        "mpn": ""
+      }
+    },
+    "attachments": [
+      {
+        "id_product": "951",
+        "id_attachment": "525",
+        "file": "49f3488058b38451cd3c691d068547ced25463d9",
+        "file_name": "Podovi-web.pdf",
+        "file_size": "2176610",
+        "mime": "application/pdf",
+        "id_lang": "2",
+        "name": "Брошура за инверторен подов климатик Midea MFA2U-12HRFNX(GA)",
+        "description": "",
+        "file_size_formatted": "2.08M"
+      },
+      {
+        "id_product": "951",
+        "id_attachment": "582",
+        "file": "d191664c5f79d72307c64af00cbfb9712fcee94a",
+        "file_name": "midea-mfa2u-12hrfnx-ga.jpg",
+        "file_size": "85899",
+        "mime": "image/jpeg",
+        "id_lang": "2",
+        "name": "Енергиен етикет за Midea MFA2U-12HRFNX(GA)",
+        "description": "",
+        "file_size_formatted": "83.89k"
+      },
+      {
+        "id_product": "951",
+        "id_attachment": "584",
+        "file": "9fb327520189a57d9237667491a86897eb6d622a",
+        "file_name": "installation manual for console BG_compressed.pdf",
+        "file_size": "4191963",
+        "mime": "application/pdf",
+        "id_lang": "2",
+        "name": "Ръководство за потребителя за Midea MFA2U-12HRFNX(GA)",
+        "description": "",
+        "file_size_formatted": "4M"
+      },
+      {
+        "id_product": "951",
+        "id_attachment": "585",
+        "file": "31cb59680bd0c83dd600156bb4fb897910a7cb7e",
+        "file_name": "remote manual for console BG_compressed.pdf",
+        "file_size": "2082113",
+        "mime": "application/pdf",
+        "id_lang": "2",
+        "name": "Упътване за употреба за Midea MFA2U-12HRFNX(GA)",
+        "description": "",
+        "file_size_formatted": "1.99M"
+      }
+    ]
+  },
+  "icons": "<li title=\"<strong>Bio филтър (HEPA)</strong><br/> Bio филтърът се състои от специален биологичен ензим и HEPA филтър. HEPA филтърът улавя много малките частици прах, бактерии, гъбички и микроби. Биологичният ензим убива бактериите чрез разграждане на клетъчната им стена, като по този начин елиминира проблема с повторно замърсяване.\" id=\"icon_69\" id=\"AllAvailableProductTicons_7957\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/midea/bio-filtar.png\"/>\n                                </div>\n                                                                        </li>\n<li title=\"<strong>Филтър със сребърни йони</strong><br/> Филтърът ефективно отстранява бактерии и вируси чрез действието на сребърните йони върху тяхната клетъчна структура и разрушава клетъчната им стена.\" id=\"icon_301\" id=\"AllAvailableProductTicons_7958\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/midea/filtar-sas-srebarni-ioni.png\"/>\n                                </div>\n                                                                        </li>\n<li title=\"<strong>Вертикално реене на жалузите</strong><br/> Вертикалните жалузи се реят под ъгъл 110°, докато при обикновените климатици това става само при 80°. По този начин се получава охлаждане, което е по-широко и равномерно.\" id=\"icon_100\" id=\"AllAvailableProductTicons_7960\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/midea/vertikalno-reene.png\"/>\n                                </div>\n                                                                        </li>\n<li title=\"<strong>3D въздушен поток</strong><br/> Клапите на вътрешното тяло на климатика се движат автоматично във всички посоки, осигурявайки равномерно разпределение на климатизирания въздух във всички краища на помещението.\" id=\"icon_45\" id=\"AllAvailableProductTicons_7961\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/midea/3d-vazdushen-potok.png\"/>\n                                </div>\n                                                                        </li>\n<li title=\"<strong>Нощен режим</strong><br/> При активиране на нощния режим по време на охлаждане климатикът автоматично повишава температурата в помещението с 1°C през първите два часа, след което остава фиксирана. При активиране на нощния режим по време на отопление  климатикът автоматично понижава температурата в помещението с 1°C през първите два часа, след което остава фиксирана.\" id=\"icon_43\" id=\"AllAvailableProductTicons_7962\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/midea/noshten-rezhim.png\"/>\n                                </div>\n                                                                        </li>\n<li title=\"<strong>ECO режим</strong><br/> Този икономичен режим интегрира в себе си нова иновативна ECO технология на енергоспестяване. Когато бутонът “ECO” е активиран, климатикът намалява консумацията на енергия с 60% в рамките на 8 часа при непрекъсната работа.\" id=\"icon_39\" id=\"AllAvailableProductTicons_7963\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/midea/ieco-rezhim.png\"/>\n                                </div>\n                                                                        </li>\n<li title=\"<strong>Gear Shift</strong><br/> Възможност за настройка на работната мощност на компресора на 50%, 75% или 100%, което позволява директно регулиране консумацията на електроенергия. Функция Gear Change е налична само в режим на охлаждане.\" id=\"icon_41\" id=\"AllAvailableProductTicons_7964\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/midea/gear-change.png\"/>\n                                </div>\n                                                                        </li>\n<li title=\"<strong>i-Clean</strong><br/> Функцията за самопочистване i-Clean използва подобрен алгоритъм, надграждайки стандартното самопочистване. iClean редува режим охлаждане и отопление, за да обледи и обезскрежи топлообменника на вътрешното тяло, кaто по този начин постига много по-добро почистване и елиминира повече вредни организми. Функцията i-Clean се изпълнява двойно по-дълго време от обикновеното самопочистване - около 30-35 минути.\" id=\"icon_300\" id=\"AllAvailableProductTicons_7965\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/midea/i-clean.png\"/>\n                                </div>\n                                                                        </li>\n<li title=\"<strong>Функция “Follow Me”</strong><br/> Дистанционното управление е с вграден сензор за температура, който автоматично регулира работата на климатика в зависимост от измерената температура в областта, в която се намира.\" id=\"icon_44\" id=\"AllAvailableProductTicons_7966\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/midea/funkciya-follow-me.png\"/>\n                                </div>\n                                                                        </li>\n<li title=\"<strong>Тих режим</strong><br/> Вентилаторът на вътрешното тяло работи при много ниски обороти, като намалява шума и осигурява тишина и спокойствие.\" id=\"icon_47\" id=\"AllAvailableProductTicons_7967\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/midea/tih-rezhim.png\"/>\n                                </div>\n                                                                        </li>\n<li title=\"<strong>LЕD дисплей</strong><br/> Вътрешното тяло разполага с голям LЕD дисплей, даващ информация за работата на климатичната система.\" id=\"icon_85\" id=\"AllAvailableProductTicons_7968\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/midea/led-displei.png\"/>\n                                </div>\n                                                                        </li>\n<li title=\"<strong>Супер йонизатор</strong><br/> Супер йонизаторът освобождава множество положителни и отрицателни йони за премахване на неприятни миризми, прах, тютюнев дим и полени. По този начин се осигурява чист и здравословен въздух за обитателите на климатизираното помещение.\" id=\"icon_68\" id=\"AllAvailableProductTicons_7969\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/midea/super-yonizator.png\"/>\n                                </div>\n                                                                        </li>\n<li title=\"<strong>Кабелно дистанционно управление (опционaлно)</strong><br/> За разлика от обикновеното инфрачервено дистанционно управление кабелният контролер може да бъде фиксиран върху стената. Използва се често в големи търговски обекти за лесно и удобно управление.\" id=\"icon_323\" id=\"AllAvailableProductTicons_8234\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/midea/kabelno-distancionno-upravlenie.png\"/>\n                                </div>\n                                                                        </li>\n<li title=\"<strong>Wi-Fi управление</strong><br/> Wi-Fi управлението позволява лесен контрол над  климатичната система чрез смарт устройства -  смартфон или таблет. Управлението на климатика може да се осъществи отдалечено от всяка точка на света.\" id=\"icon_94\" id=\"AllAvailableProductTicons_7972\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/midea/wi-fi-upravlenie.png\"/>\n                                </div>\n                                                                        </li>\n<li title=\"<strong>Нискотемпературен кит</strong><br/> Нискотемпературният кит позволява на климатичната системата да работи в режим на охлаждане при външна температура -15°C.\" id=\"icon_60\" id=\"AllAvailableProductTicons_7974\">\n                                                                                    <div class=\"ticon_img\">\n                                    <img src=\"https://tempex.bg/img/cms/icons/midea/niskotemperaturen-kit.png\"/>\n                                </div>\n                                                                        </li>"
+}

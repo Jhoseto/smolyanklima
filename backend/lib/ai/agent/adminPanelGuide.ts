@@ -142,7 +142,7 @@ URL база: /admin (backend Next.js app, порт 3001 в dev).
 
 === ЕКРАН: /admin/settings — СИНХРОН КАТАЛОЗИ ===
 
-- Bulclima, Climacom, Condex, Bittel sync status
+- Bulclima, Climacom, Condex, Bittel, Tempex sync status
 - След sync → нови продукти в /admin/products
 - AI Agent може да провери get_supplier_sync_status tool
 
