@@ -10,8 +10,16 @@ import { mapProductDbError } from "@/lib/admin/productDbErrors";
 import { findSerialConflicts, formatSerialConflictError } from "@/lib/admin/productDeliveryValidation";
 import { insertProductCatalogStockCalendarEvent } from "@/lib/admin/productCatalogWorkItems";
 import { replaceProductImages, upsertProductSpecs, type ImageInput, type SpecsInput } from "@/lib/admin/syncProductChildren";
-import * as catalogBtu from "@/lib/catalog/productBtu";
-import { listAdminAccessories, listAdminCatalogMerged } from "@/lib/admin/adminCatalogList";
+import { parseBtuCsvParam } from "@/lib/catalog/productBtu";
+import {
+  canIncludeAccessories,
+  listAdminAccessories,
+  listAdminCatalogMerged,
+  readCatalogRowsByIds,
+  readWithAdminBtuFallback,
+  selectAdminProducts,
+  type ProductCatalogStub,
+} from "@/lib/admin/adminCatalogList";
 import { applyAdminProductListChipFilters, parseProductListChipFilters } from "@/lib/admin/productListQueryFilters";
 import { adminProductsStockOrFilter } from "@/lib/admin/productCatalogDisplay";
 import { applyAdminProductSearchFilter } from "@/lib/admin/productSearchFilter";
@@ -201,30 +209,18 @@ export async function GET(req: NextRequest) {
     publicCatalog,
   });
   const stockOrFilter = adminProductsStockOrFilter(chipFilters.stockStatuses);
-  const btuFilters = catalogBtu.parseBtuCsvParam(btuRaw);
+  const btuFilters = parseBtuCsvParam(btuRaw);
   const supabase = await adminDb();
 
-  let btuProductIds: string[] | null = null;
-  if (btuFilters.length > 0) {
-    btuProductIds = await catalogBtu.resolveProductIdsForBtuList(supabase, btuFilters);
-    if (btuProductIds.length === 0 && catalogKind !== "all") {
-      return withCors(
-        req,
-        NextResponse.json({
-          data: [],
-          meta: { page, perPage, total: 0 },
-        }),
-      );
-    }
+  const includeAccessories = canIncludeAccessories({ ...parsed.data, ...chipFilters, btuFilters });
+  if (catalogKind === "accessories" && !includeAccessories) {
+    return withCors(req, NextResponse.json({ data: [], meta: { page, perPage, total: 0 } }));
   }
 
   const sharedListFilters = {
     q,
-    stockStatuses:
-      chipFilters.stockStatuses.length > 0 &&
-      chipFilters.stockStatuses.length < 4
-        ? chipFilters.stockStatuses
-        : undefined,
+    stockStatuses: chipFilters.stockStatuses,
+    publicCatalogFlags: chipFilters.publicCatalogFlags,
     brandId,
     priceMin,
     priceMax,
@@ -243,14 +239,14 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const runList = (
+  const buildProductQuery = (
     selectCols: string,
     applyStockLocationFilter: boolean,
     applyRegionFilter: boolean,
     applySupplyFields = true,
+    hasBtuColumn = true,
   ) => {
-    let query = supabase.from("products").select(selectCols, { count: "exact" });
-    if (btuProductIds) query = query.in("id", btuProductIds);
+    let query = selectAdminProducts(supabase, selectCols, btuFilters, hasBtuColumn);
     if (q?.trim()) {
       query = applyAdminProductSearchFilter(query, q, applySupplyFields);
     }
@@ -277,66 +273,8 @@ export async function GET(req: NextRequest) {
     // директно с ISO дата (YYYY-MM-DD), което Postgres приема нативно.
     if (applySupplyFields && purchasedFrom) query = query.gte("purchased_at", purchasedFrom);
     if (applySupplyFields && purchasedTo) query = query.lte("purchased_at", purchasedTo);
-    const from = (page - 1) * perPage;
-    const to = from + perPage - 1;
-    const orderCol =
-      !applySupplyFields && (sortBy === "purchase_price" || sortBy === "purchased_at") ? "name" : sortBy;
-    // Допълнителното подреждане по `name` гарантира стабилен ред при
-    // равни стойности (напр. еднакви цени → азбучен ред по име).
-    return query
-      .order(orderCol, { ascending: sortDir === "asc" })
-      .order("name", { ascending: true })
-      .range(from, to);
+    return query;
   };
-
-  if (catalogKind === "all") {
-    try {
-      const stubSelect = "id,name,price,product_condition,purchased_at,stock_location";
-      let stubQuery = supabase.from("products").select(stubSelect, { count: "exact" });
-      if (btuProductIds) stubQuery = stubQuery.in("id", btuProductIds);
-      if (q?.trim()) {
-        stubQuery = applyAdminProductSearchFilter(stubQuery, q, true);
-      }
-      stubQuery = applyAdminProductListChipFilters(stubQuery, chipFilters) as typeof stubQuery;
-      if (stockOrFilter) stubQuery = stubQuery.or(stockOrFilter);
-      if (stockLocation) stubQuery = stubQuery.eq("stock_location", stockLocation);
-      if (regionFilter) stubQuery = stubQuery.eq("product_region", regionFilter);
-      if (brandId) stubQuery = stubQuery.eq("brand_id", brandId);
-      if (typeId) stubQuery = stubQuery.eq("type_id", typeId);
-      if (supplierId) stubQuery = stubQuery.eq("supplier_id", supplierId);
-      if (containerId) stubQuery = stubQuery.eq("container_id", containerId);
-      if (priceMin !== undefined) stubQuery = stubQuery.gte("price", priceMin);
-      if (priceMax !== undefined) stubQuery = stubQuery.lte("price", priceMax);
-      if (hasSerial === "with") {
-        stubQuery = stubQuery.or("indoor_unit_serial.not.is.null,outdoor_unit_serial.not.is.null");
-      }
-      if (hasSerial === "without") {
-        stubQuery = stubQuery.is("indoor_unit_serial", null).is("outdoor_unit_serial", null);
-      }
-      if (hasPurchasePrice === "with") stubQuery = stubQuery.not("purchase_price", "is", null);
-      if (hasPurchasePrice === "without") stubQuery = stubQuery.is("purchase_price", null);
-      if (purchasedFrom) stubQuery = stubQuery.gte("purchased_at", purchasedFrom);
-      if (purchasedTo) stubQuery = stubQuery.lte("purchased_at", purchasedTo);
-      const stubRes = await stubQuery.limit(4000);
-      if (stubRes.error) return withCors(req, NextResponse.json({ error: stubRes.error.message }, { status: 500 }));
-      const productStubs = ((stubRes.data ?? []) as { id: string; name: string; price: number; product_condition: string; purchased_at: string | null; stock_location?: string | null }[]).map(
-        (r) => ({
-          catalog_item: "product" as const,
-          id: r.id,
-          name: r.name,
-          price: r.price,
-          product_condition: r.product_condition,
-          purchased_at: r.purchased_at,
-          stock_location: r.stock_location ?? null,
-        }),
-      );
-      const productTotal = btuProductIds && btuProductIds.length === 0 ? 0 : (stubRes.count ?? 0);
-      const { data, total } = await listAdminCatalogMerged(supabase, sharedListFilters, productStubs, productTotal);
-      return withCors(req, NextResponse.json({ data, meta: { page, perPage, total } }));
-    } catch (e) {
-      return withCors(req, NextResponse.json({ error: String(e) }, { status: 500 }));
-    }
-  }
 
   // Опитваме първо с `featured_position`+`featured_badge` (миграция 0035),
   // и при липсващи колони падаме до старите варианти. Това запазва обратна
@@ -369,70 +307,77 @@ export async function GET(req: NextRequest) {
     [stripSupplyCols(ADMIN_PRODUCT_LIST_SELECT_NO_MODEL_CODE_MIN), false, false, false],
   ];
 
-  let data: unknown[] | null = null;
-  let error: { message?: string; code?: string } | null = null;
-  let count: number | null = null;
-  for (const [sel, locF, regF, supplyF = true] of listAttempts) {
-    const res = await runList(sel, locF, regF, supplyF);
-    data = res.data as unknown[] | null;
-    error = res.error as { message?: string; code?: string } | null;
-    count = res.count;
-    if (!error) break;
-  }
-  if (error) return withCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
-
-  const list = (data ?? []) as unknown as Record<string, unknown>[];
-  const rows = list.map((r) => ({
-    ...r,
-    catalog_item: "product" as const,
-    stock_location: normalizeProductStockLocation((r as { stock_location?: unknown }).stock_location),
-    product_region: normalizeProductRegion((r as { product_region?: unknown }).product_region),
-  }));
-
-  // `container_id` и името на контейнера идват от отделни леки заявки
-  // (вместо join/колона в основния SELECT по-горе), за да не се разраства
-  // комбинаторно списъкът с fallback варианти и да не се чупи списъкът
-  // за всички, докато миграция 0097 още не е приложена навсякъде.
-  try {
-    const rowIds = rows.map((r) => (r as { id?: unknown }).id).filter((v): v is string => typeof v === "string");
-    if (rowIds.length > 0) {
-      const { data: containerIdRows, error: containerIdErr } = await supabase
-        .from("products")
-        .select("id,container_id")
-        .in("id", rowIds);
-      if (!containerIdErr) {
-        const containerIdByProduct = new Map(
-          (containerIdRows ?? [])
-            .filter((p) => p.container_id)
-            .map((p) => [p.id as string, p.container_id as string]),
-        );
-        const containerIds = Array.from(new Set(containerIdByProduct.values()));
-        let nameById = new Map<string, string>();
-        if (containerIds.length > 0) {
-          const { data: containerRows } = await supabase.from("containers").select("id,name").in("id", containerIds);
-          nameById = new Map((containerRows ?? []).map((c) => [c.id as string, c.name as string]));
+  async function readProductDetails(ids?: string[]) {
+    let lastError = "Грешка при зареждане на продуктите";
+    for (const [sel, locF, regF, supplyF = true] of listAttempts) {
+      if ((!locF && stockLocation) || (!regF && regionFilter)) continue;
+      if (!supplyF && (supplierId || hasSerial || hasPurchasePrice || purchasedFrom || purchasedTo
+          || sortBy === "purchase_price" || sortBy === "purchased_at")) continue;
+      const { data, count, error } = await readWithAdminBtuFallback(btuFilters, (hasBtuColumn) => {
+        let query = buildProductQuery(sel, locF, regF, supplyF, hasBtuColumn);
+        if (ids) {
+          query = query.in("id", ids);
+        } else {
+          const from = (page - 1) * perPage;
+          query = query.order(sortBy, { ascending: sortDir === "asc" });
+          if (sortBy !== "name") query = query.order("name");
+          query = query.order("id").range(from, from + perPage - 1);
         }
-        for (const r of rows as Record<string, unknown>[]) {
-          const pid = (r as { id?: unknown }).id;
-          const cid = typeof pid === "string" ? containerIdByProduct.get(pid) : undefined;
-          if (cid) {
-            r.container_id = cid;
-            if (nameById.has(cid)) r.container = { name: nameById.get(cid) };
-          }
-        }
+        return query.returns<Record<string, unknown>[]>();
+      });
+      if (!error) {
+        const rows = (data ?? []).map((row) => ({
+          ...row,
+          id: row.id as string,
+          catalog_item: "product" as const,
+          stock_location: normalizeProductStockLocation(row.stock_location),
+          product_region: normalizeProductRegion(row.product_region),
+        }));
+        return { data: rows, total: count ?? 0 };
       }
+      lastError = error.message;
     }
-  } catch {
-    // Неблокиращо — списъкът с продукти работи и без обогатяване с контейнер.
+    throw new Error(lastError);
   }
 
-  return withCors(
-    req,
-    NextResponse.json({
-      data: rows,
-      meta: { page, perPage, total: count ?? 0 },
-    }),
-  );
+  try {
+    let result: { data: Record<string, unknown>[]; total: number };
+    if (catalogKind === "all" && includeAccessories) {
+      const stubSelect = "id,name,price,purchase_price,product_condition,purchased_at,stock_location";
+      result = await listAdminCatalogMerged(
+        supabase,
+        sharedListFilters,
+        (from, to) => buildProductQuery(stubSelect, true, true)
+          .order(sortBy, { ascending: sortDir === "asc" }).order("id")
+          .range(from, to).returns<ProductCatalogStub[]>(),
+        (ids) => readCatalogRowsByIds(ids, async (batch) => ({
+          data: (await readProductDetails(batch)).data,
+          error: null,
+        })),
+      );
+    } else {
+      result = await readProductDetails();
+    }
+
+    // The optional container relationship was introduced separately in migration 0097.
+    const products = result.data.filter((r) => r.catalog_item === "product");
+    try {
+      const containers = await readCatalogRowsByIds(products.map((p) => p.id as string), (batch) =>
+        supabase.from("products").select("id,container_id,container:container_id(name)").in("id", batch),
+      );
+      const byProduct = new Map(containers.map((r) => [r.id, r]));
+      for (const product of products) {
+        const fields = byProduct.get(product.id);
+        if (fields?.container_id) Object.assign(product, fields);
+      }
+    } catch {
+      // Older databases can still return all product rows.
+    }
+
+    return withCors(req, NextResponse.json({ data: result.data, meta: { page, perPage, total: result.total } }));
+  } catch (e) {
+    return withCors(req, NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 }));
+  }
 }
 
 export async function POST(req: NextRequest) {

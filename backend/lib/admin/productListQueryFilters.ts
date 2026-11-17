@@ -40,11 +40,6 @@ export function toggleChipFilter<T>(current: readonly T[], value: T): T[] {
   return current.includes(value) ? current.filter((x) => x !== value) : [...current, value];
 }
 
-function effectiveEnumFilter<T extends string>(selected: readonly T[], all: readonly T[]): T[] | null {
-  if (selected.length === 0 || selected.length >= all.length) return null;
-  return [...selected];
-}
-
 type FilterQuery = {
   eq: (column: string, value: unknown) => FilterQuery;
   in: (column: string, values: readonly unknown[]) => FilterQuery;
@@ -56,12 +51,11 @@ function applyEnumInFilter(
   query: FilterQuery,
   column: string,
   selected: readonly string[],
-  all: readonly string[],
+  all?: readonly string[],
 ): FilterQuery {
-  const effective = effectiveEnumFilter(selected, all);
-  if (!effective) return query;
-  if (effective.length === 1) return query.eq(column, effective[0]);
-  return query.in(column, effective);
+  if (!selected.length || (all && selected.length >= all.length)) return query;
+  if (selected.length === 1) return query.eq(column, selected[0]);
+  return query.in(column, selected);
 }
 
 function applyBooleanPairFilter(
@@ -94,7 +88,8 @@ function applyAdminPublicCatalogFilter(query: FilterQuery, flags: readonly strin
     return query
       .eq("show_in_public_catalog", false)
       .is("indoor_unit_serial", null)
-      .is("outdoor_unit_serial", null);
+      .is("outdoor_unit_serial", null)
+      .is("supplier_order_work_item_id", null);
   }
   return query;
 }
@@ -124,7 +119,8 @@ export function applyProductListChipFilters(query: unknown, filters: ProductList
 /** Админ списък продукти — складовите бройки не се скриват от филтъра „В публичен каталог“. */
 export function applyAdminProductListChipFilters(query: unknown, filters: ProductListChipFilters): unknown {
   let next = applyEnumInFilter(query as FilterQuery, "product_condition", filters.conditions, ALL_CONDITIONS);
-  next = applyEnumInFilter(next, "stock_status", filters.stockStatuses, ALL_STOCK_STATUSES);
+  // Sold units have a fifth status outside the four selectable in the admin list.
+  next = applyEnumInFilter(next, "stock_status", filters.stockStatuses);
   next = applyBooleanPairFilter(next, "is_featured", filters.featuredFlags, "featured", "regular");
   next = applyAdminPublicCatalogFilter(next, filters.publicCatalogFlags);
   return next;

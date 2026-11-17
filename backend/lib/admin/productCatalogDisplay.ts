@@ -105,11 +105,12 @@ export function isGroupedExhaustedSelectable(entry: CatalogDisplayRow): boolean 
  */
 export function buildProductCatalogDisplayRows<T extends ProductCatalogListRow>(
   items: T[],
+  opts?: FilterProductsCatalogItemsOpts,
 ): CatalogDisplayRow<T>[] {
   const result: CatalogDisplayRow<T>[] = [];
   const exhaustedGroups = new Map<string, CatalogDisplayRow<T>>();
 
-  for (const row of filterProductsCatalogItems(items)) {
+  for (const row of filterProductsCatalogItems(items, opts)) {
     if (!isExhaustedProduct(row)) {
       result.push({
         row,

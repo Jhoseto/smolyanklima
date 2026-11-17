@@ -17,7 +17,7 @@ type ProductQuickViewData = {
   price_with_mount?: number | null;
   old_price?: number | null;
   product_condition?: "new" | "used";
-  stock_status?: "in_stock" | "out_of_stock" | "on_order";
+  stock_status?: "in_stock" | "out_of_stock" | "on_order" | "reserved" | "scrapped";
   stock_quantity?: number | null;
   rating?: number | null;
   reviews_count?: number | null;
@@ -536,8 +536,8 @@ export function ProductQuickViewModal({ productId, onClose }: { productId: strin
                   <h4 className="mb-3 text-xs font-bold uppercase text-gray-500">Наличност</h4>
                   <div className="flex items-start gap-3">
                     <div className="relative mt-1">
-                      <div className={`h-2.5 w-2.5 rounded-full ${product.stock_status === "out_of_stock" ? "bg-red-500" : "bg-green-500"}`} />
-                      {product.stock_status !== "out_of_stock" && <div className="absolute inset-0 h-2.5 w-2.5 animate-ping rounded-full bg-green-500" />}
+                      <div className={`h-2.5 w-2.5 rounded-full ${product.stock_status === "scrapped" || product.stock_status === "out_of_stock" ? "bg-red-500" : "bg-green-500"}`} />
+                      {product.stock_status === "in_stock" && <div className="absolute inset-0 h-2.5 w-2.5 animate-ping rounded-full bg-green-500" />}
                     </div>
                     <div>
                       <p className="text-sm font-bold text-gray-900">{stockLabel(product.stock_status)}</p>
@@ -577,6 +577,7 @@ function warranty(value: unknown) {
 }
 
 function stockLabel(value: string | null | undefined) {
+  if (value === "scrapped") return "Бракуван";
   if (value === "out_of_stock") return "Изчерпан";
   if (value === "on_order") return "По поръчка";
   if (value === "reserved") return "Резервиран";

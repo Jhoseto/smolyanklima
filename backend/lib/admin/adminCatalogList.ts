@@ -1,11 +1,37 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { applyAdminAccessorySearchFilter } from "@/lib/admin/productSearchFilter";
+import type { ProductListChipFilters } from "@/lib/admin/productListQueryFilters";
+import { isPostgrestMissingColumn } from "@/lib/admin/pgMissingColumn";
+import { coolingKwRangeForBtu } from "@/lib/catalog/productBtu";
 
 export type AdminCatalogKind = "climatics" | "accessories" | "all";
 
+export function selectAdminProducts(supabase: SupabaseClient, columns: string, btus: number[], hasBtuColumn = true) {
+  const select = btus.length ? `${columns},product_specs!inner()` : columns;
+  const query = supabase.from("products").select(select, { count: "exact" });
+  if (!btus.length) return query;
+  const coolingRanges = btus.flatMap((btu) => {
+    const range = coolingKwRangeForBtu(btu);
+    return range ? [`and(cooling_power_kw.gte.${range.min},cooling_power_kw.lte.${range.max})`] : [];
+  }).join(",");
+  const matches = hasBtuColumn
+    ? `btu.in.(${btus.join(",")}),and(btu.is.null,or(${coolingRanges}))`
+    : coolingRanges;
+  return query.or(matches, { referencedTable: "product_specs" });
+}
+
+export async function readWithAdminBtuFallback<T extends { error: { code?: string; message?: string } | null }>(
+  btus: number[],
+  read: (hasBtuColumn: boolean) => PromiseLike<T>,
+): Promise<T> {
+  const response = await read(true);
+  return btus.length && isPostgrestMissingColumn(response.error, "btu") ? read(false) : response;
+}
+
 export type AdminCatalogListFilters = {
   q?: string;
-  stockStatuses?: ("in_stock" | "on_order" | "reserved" | "scrapped")[];
+  stockStatuses?: ProductListChipFilters["stockStatuses"];
+  publicCatalogFlags?: ProductListChipFilters["publicCatalogFlags"];
   brandId?: string;
   priceMin?: number;
   priceMax?: number;
@@ -15,10 +41,31 @@ export type AdminCatalogListFilters = {
   perPage: number;
 };
 
+/** Accessories have a new condition, are never featured, and have no climate or supply fields. */
+export function canIncludeAccessories(filters: ProductListChipFilters & {
+  typeId?: string;
+  supplierId?: string;
+  containerId?: string;
+  stockLocation?: string;
+  productRegion?: string;
+  purchasedFrom?: string;
+  purchasedTo?: string;
+  hasSerial?: "with" | "without";
+  hasPurchasePrice?: "with" | "without";
+  btuFilters: number[];
+}): boolean {
+  return (!filters.conditions.length || filters.conditions.includes("new"))
+    && (!filters.featuredFlags.length || filters.featuredFlags.includes("regular"))
+    && !filters.typeId && !filters.supplierId && !filters.containerId
+    && !filters.stockLocation && !filters.productRegion && !filters.btuFilters.length
+    && !filters.purchasedFrom && !filters.purchasedTo
+    && filters.hasSerial !== "with" && filters.hasPurchasePrice !== "with";
+}
+
 const ACCESSORY_SELECT =
   "id,slug,name,price,stock_status,stock_quantity,is_active,source_url,created_at,brand_id,kind,brands:brand_id(name)";
 
-const ACCESSORY_STUB_SELECT = "id,name,price,created_at";
+const ACCESSORY_STUB_SELECT = "id,name,price";
 
 type AccessoryRow = {
   id: string;
@@ -94,13 +141,12 @@ function applyAccessoryFilters(
     }
   }
   if (filters.brandId) query = query.eq("brand_id", filters.brandId);
+  if (filters.publicCatalogFlags?.length === 1) {
+    query = query.eq("is_active", filters.publicCatalogFlags[0] === "visible");
+  }
   if (filters.priceMin !== undefined) query = query.gte("price", filters.priceMin);
   if (filters.priceMax !== undefined) query = query.lte("price", filters.priceMax);
   return query;
-}
-
-function accessoryOrderCol(sortBy: AdminCatalogListFilters["sortBy"]) {
-  return sortBy === "price" ? "price" : "name";
 }
 
 export async function listAdminAccessories(
@@ -109,123 +155,153 @@ export async function listAdminAccessories(
 ): Promise<{ data: ReturnType<typeof mapAccessoryToAdminListRow>[]; total: number }> {
   const from = (filters.page - 1) * filters.perPage;
   const to = from + filters.perPage - 1;
-  const orderCol = accessoryOrderCol(filters.sortBy);
-  const res = await applyAccessoryFilters(supabase, filters, ACCESSORY_SELECT, true)
-    .order(orderCol, { ascending: filters.sortDir === "asc" })
-    .order("name", { ascending: true })
-    .range(from, to);
+  let query = applyAccessoryFilters(supabase, filters, ACCESSORY_SELECT, true);
+  if (filters.sortBy === "price" || filters.sortBy === "name") {
+    query = query.order(filters.sortBy, { ascending: filters.sortDir === "asc" });
+  }
+  if (filters.sortBy !== "name") query = query.order("name", { ascending: true });
+  const res = await query.order("id").range(from, to);
   if (res.error) throw new Error(res.error.message);
   const rows = ((res.data ?? []) as unknown as AccessoryRow[]).map(mapAccessoryToAdminListRow);
   return { data: rows, total: res.count ?? 0 };
 }
 
-type MergeStub = {
-  catalog_item: "product" | "accessory";
+export type ProductCatalogStub = {
   id: string;
   name: string;
   price: number;
-  product_condition?: string | null;
-  purchased_at?: string | null;
-  created_at?: string | null;
-  stock_location?: string | null;
+  product_condition: string;
+  purchased_at: string | null;
+  purchase_price: number | null;
+  stock_location: string | null;
 };
 
-function sortValue(row: MergeStub, sortBy: AdminCatalogListFilters["sortBy"]): string | number {
-  switch (sortBy) {
-    case "price":
-      return row.price;
-    case "product_condition":
-      return row.product_condition ?? "";
-    case "purchased_at":
-      return row.purchased_at ?? "";
-    case "stock_location":
-      return row.stock_location ?? "";
-    default:
-      return row.name;
+type MergeStub = ProductCatalogStub & {
+  catalog_item: "product" | "accessory";
+};
+
+function compareStubs(a: MergeStub, b: MergeStub, sortBy: AdminCatalogListFilters["sortBy"], sortDir: "asc" | "desc") {
+  const av = a[sortBy];
+  const bv = b[sortBy];
+  if (av == null && bv != null) return sortDir === "asc" ? 1 : -1;
+  if (av != null && bv == null) return sortDir === "asc" ? -1 : 1;
+  if (av != null && bv != null) {
+    const cmp = typeof av === "number" && typeof bv === "number"
+      ? av - bv
+      : String(av).localeCompare(String(bv), "bg");
+    if (cmp !== 0) return sortDir === "asc" ? cmp : -cmp;
+  }
+  return a.name.localeCompare(b.name, "bg") || a.id.localeCompare(b.id);
+}
+
+type ReadCatalogPage<T> = (from: number, to: number) => PromiseLike<{
+  data: T[] | null;
+  count: number | null;
+  error: { message: string } | null;
+}>;
+
+/** Include all rows tied at the page boundary before applying Bulgarian name ordering. */
+export async function readCatalogStubs<T>(
+  readPage: ReadCatalogPage<T>,
+  pageEnd: number,
+  sortGroup?: (row: T) => string | number | null,
+): Promise<{ rows: T[]; total: number }> {
+  const rows: T[] = [];
+  const chunkSize = 1000;
+  while (true) {
+    const take = sortGroup && rows.length <= pageEnd
+      ? Math.min(chunkSize, pageEnd + 1 - rows.length)
+      : chunkSize;
+    const { data, count, error } = await readPage(rows.length, rows.length + take - 1);
+    if (error) throw new Error(error.message);
+    if (!data?.length) return { rows, total: count ?? rows.length };
+    rows.push(...data);
+    if (count !== null) {
+      if (rows.length >= count || (sortGroup && rows.length > pageEnd
+          && sortGroup(rows[pageEnd - 1]) !== sortGroup(rows[rows.length - 1]))) {
+        return { rows, total: count };
+      }
+    } else if (data.length < take) {
+      return { rows, total: rows.length };
+    }
   }
 }
 
-function compareStubs(a: MergeStub, b: MergeStub, sortBy: AdminCatalogListFilters["sortBy"], sortDir: "asc" | "desc") {
-  const av = sortValue(a, sortBy);
-  const bv = sortValue(b, sortBy);
-  let cmp = 0;
-  if (typeof av === "number" && typeof bv === "number") cmp = av - bv;
-  else cmp = String(av).localeCompare(String(bv), "bg");
-  if (cmp === 0) cmp = a.name.localeCompare(b.name, "bg");
-  return sortDir === "asc" ? cmp : -cmp;
+/** Keep PostgREST GET URLs below common gateway limits even for a full 500-row page. */
+export async function readCatalogRowsByIds<T>(
+  ids: string[],
+  readBatch: (batch: string[]) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+): Promise<T[]> {
+  const batches = [];
+  for (let start = 0; start < ids.length; start += 100) {
+    batches.push(readBatch(ids.slice(start, start + 100)));
+  }
+  const responses = await Promise.all(batches);
+  return responses.flatMap(({ data, error }) => {
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  });
 }
-
-const MERGE_LIST_CAP = 4000;
 
 export async function listAdminCatalogMerged(
   supabase: SupabaseClient,
   filters: AdminCatalogListFilters,
-  productStubs: MergeStub[],
-  productTotal: number,
-): Promise<{ data: ReturnType<typeof mapAccessoryToAdminListRow>[]; total: number }> {
-  const accRes = await applyAccessoryFilters(supabase, filters, ACCESSORY_STUB_SELECT, true).limit(MERGE_LIST_CAP);
-  if (accRes.error) throw new Error(accRes.error.message);
+  readProducts: ReadCatalogPage<ProductCatalogStub>,
+  readProductDetails: (ids: string[]) => Promise<Record<string, unknown>[]>,
+) {
+  const pageEnd = filters.page * filters.perPage;
+  const sortBy = filters.sortBy;
+  const [productIndex, accessoryIndex] = await Promise.all([
+    // Names can have a different database collation. Compare the whole name index in Bulgarian.
+    readCatalogStubs(readProducts, pageEnd, sortBy === "name" ? undefined : (row) => row[sortBy]),
+    readCatalogStubs((from, to) => {
+      let query = applyAccessoryFilters(supabase, filters, ACCESSORY_STUB_SELECT, true);
+      if (sortBy === "price") query = query.order("price", { ascending: filters.sortDir === "asc" });
+      return query.order("id").range(from, to).returns<Pick<AccessoryRow, "id" | "name" | "price">[]>();
+    }, pageEnd, sortBy === "price" ? (row) => row.price : undefined),
+  ]);
 
-  const accessoryStubs: MergeStub[] = ((accRes.data ?? []) as unknown as { id: string; name: string; price: number; created_at: string }[]).map(
-    (r) => ({
-      catalog_item: "accessory" as const,
-      id: r.id,
-      name: r.name,
-      price: r.price,
-      product_condition: "new",
-      purchased_at: null,
-      created_at: r.created_at,
-    }),
-  );
+  const accessoryStubs: MergeStub[] = accessoryIndex.rows.map((row) => ({
+    ...row,
+    catalog_item: "accessory",
+    product_condition: "new",
+    purchase_price: null,
+    purchased_at: null,
+    stock_location: null,
+  }));
 
-  const cappedProducts = productStubs.length >= MERGE_LIST_CAP;
-  const cappedAccessories = (accRes.data?.length ?? 0) >= MERGE_LIST_CAP;
-  const total = productTotal + (accRes.count ?? 0);
+  const productStubs = productIndex.rows.map((row) => ({ ...row, catalog_item: "product" as const }));
   const merged = [...productStubs, ...accessoryStubs].sort((a, b) => compareStubs(a, b, filters.sortBy, filters.sortDir));
+  const total = productIndex.total + accessoryIndex.total;
 
   const from = (filters.page - 1) * filters.perPage;
   const pageStubs = merged.slice(from, from + filters.perPage);
   if (pageStubs.length === 0) {
-    return { data: [], total: cappedProducts || cappedAccessories ? Math.min(total, MERGE_LIST_CAP * 2) : total };
+    return { data: [], total };
   }
 
   const productIds = pageStubs.filter((s) => s.catalog_item === "product").map((s) => s.id);
   const accessoryIds = pageStubs.filter((s) => s.catalog_item === "accessory").map((s) => s.id);
 
-  const [productsRes, accessoriesRes] = await Promise.all([
-    productIds.length
-      ? supabase
-          .from("products")
-          .select(
-            "id,slug,name,price,purchase_price,product_condition,is_featured,is_active,show_in_public_catalog,stock_status,stock_quantity,sold_quantity,created_at,purchased_at,brand_id,brands:brand_id(name),product_types:type_id(name)",
-          )
-          .in("id", productIds)
-      : Promise.resolve({ data: [], error: null }),
-    accessoryIds.length
-      ? supabase.from("accessories").select(ACCESSORY_SELECT).in("id", accessoryIds)
-      : Promise.resolve({ data: [], error: null }),
+  const [products, accessories] = await Promise.all([
+    readProductDetails(productIds),
+    readCatalogRowsByIds(accessoryIds, (batch) =>
+      supabase.from("accessories").select(ACCESSORY_SELECT).in("id", batch).returns<AccessoryRow[]>(),
+    ),
   ]);
 
-  if (productsRes.error) throw new Error(productsRes.error.message);
-  if (accessoriesRes.error) throw new Error(accessoriesRes.error.message);
-
   const productById = new Map(
-    ((productsRes.data ?? []) as Record<string, unknown>[]).map((r) => [
+    products.map((r) => [
       r.id as string,
-      { ...r, catalog_item: "product" as const },
+      { ...r, id: r.id as string, catalog_item: "product" as const },
     ]),
   );
   const accessoryById = new Map(
-    ((accessoriesRes.data ?? []) as unknown as AccessoryRow[]).map((r) => [r.id, mapAccessoryToAdminListRow(r)]),
+    accessories.map((r) => [r.id, mapAccessoryToAdminListRow(r)]),
   );
 
-  const data = pageStubs.map((stub) => {
-    if (stub.catalog_item === "accessory") return accessoryById.get(stub.id)!;
-    return productById.get(stub.id)!;
-  });
-
-  return {
-    data: data as ReturnType<typeof mapAccessoryToAdminListRow>[],
-    total: cappedProducts || cappedAccessories ? Math.min(total, MERGE_LIST_CAP * 2) : total,
-  };
+  const data = pageStubs.map((stub) =>
+    stub.catalog_item === "accessory" ? accessoryById.get(stub.id) : productById.get(stub.id),
+  ).filter((row) => row !== undefined);
+  return { data, total };
 }

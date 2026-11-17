@@ -1,9 +1,12 @@
-/** Сигнал към други табове/устройства в същия браузър, че каталогът е променен. */
+import { invalidateAllProductsSessionCache } from "./productsListSessionCache";
+
+/** Сигнал към отворените раздели в същия браузър, че каталогът е променен. */
 const BC_CHANNEL = "sk-admin-products-catalog";
 const EVENT = "sk-admin-products-catalog-reload";
 
 export function notifyAdminProductsCatalogChanged(): void {
   if (typeof window === "undefined") return;
+  invalidateAllProductsSessionCache();
   try {
     const bc = new BroadcastChannel(BC_CHANNEL);
     bc.postMessage({ t: Date.now() });

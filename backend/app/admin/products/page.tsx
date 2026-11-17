@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { CATALOG_BTU_OPTIONS } from "@/lib/catalog/productBtu";
 import {
   SectionTitle,
@@ -99,7 +99,6 @@ import {
   getProductsListSessionCache,
   getProductsMetaSessionCache,
   invalidateAllProductsSessionCache,
-  invalidateProductsListSessionCache,
   patchProductsListSessionRepairProtocols,
   setProductsListSessionCache,
   setProductsMetaSessionCache,
@@ -107,7 +106,6 @@ import {
 import {
   ADMIN_PRODUCTS_LIST_PER_PAGE,
   buildAdminProductsListQueryString,
-  clearAdminProductsListFilters,
   DEFAULT_ADMIN_PRODUCTS_LIST_FILTERS,
   loadAdminProductsListFilters,
   saveAdminProductsListFilters,
@@ -122,13 +120,7 @@ import {
   isGroupedExhaustedSelectable,
   productShowsSupplierInvoice,
 } from "@/lib/admin/productCatalogDisplay";
-import {
-  toggleChipFilter,
-  type FeaturedFilter,
-  type ProductConditionFilter,
-  type PublicCatalogFilter,
-  type StockStatusFilter,
-} from "@/lib/admin/productListQueryFilters";
+import { toggleChipFilter } from "@/lib/admin/productListQueryFilters";
 
 export const dynamic = "force-dynamic";
 
@@ -613,23 +605,37 @@ function truncCell(s: string | null | undefined, max = 16) {
   return `${t.slice(0, max)}…`;
 }
 
-function bootstrapProductsPageSession() {
-  /** SSR + първи client render — само defaults; localStorage се зарежда в useEffect (без hydration mismatch). */
-  const filters = DEFAULT_ADMIN_PRODUCTS_LIST_FILTERS;
-  const qs = buildAdminProductsListQueryString(filters, { page: 1 });
-  return {
-    filters,
-    listCache: getProductsListSessionCache(qs),
-    metaCache: getProductsMetaSessionCache(),
-  };
+export default function AdminProductsPage() {
+  const [savedFilters, setSavedFilters] = useState<AdminProductsListFiltersSnapshot | null>(null);
+  useEffect(() => {
+    setSavedFilters(loadAdminProductsListFilters());
+  }, []);
+  if (!savedFilters) return <AdminTableLoading label="Зареждане на продуктите…" />;
+  return <ProductsList savedFilters={savedFilters} />;
 }
 
-export default function AdminProductsPage() {
+function ProductsList({ savedFilters }: { savedFilters: AdminProductsListFiltersSnapshot }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const focusProductHandledRef = useRef(false);
-  const [pageBootstrap] = useState(bootstrapProductsPageSession);
-  const initialFilters = pageBootstrap.filters;
+  const linkedContainerId = searchParams.get("containerId");
+  const linkedProductId = searchParams.get("focusProductId") || searchParams.get("highlight");
+  const [focusedProductId, setFocusedProductId] = useState(linkedProductId);
+  const [filters, setFilters] = useState(() =>
+    linkedContainerId ? { ...savedFilters, containerId: linkedContainerId } : savedFilters,
+  );
+  const {
+    q, catalogKind, conditions, featuredFlags, publicCatalogFlags, stockStatuses,
+    stockLocationFilter, productRegionFilter, brandId, btuFilters, typeId, supplierId,
+    containerId, priceRange, hasSerial, hasPurchasePrice, purchasedFrom, purchasedTo,
+    sortBy, sortDir, filtersOpen,
+  } = filters;
+  function updateFilters(patch: Partial<AdminProductsListFiltersSnapshot>) {
+    setFilters((current) => ({ ...current, ...patch }));
+  }
+  const [pageBootstrap] = useState(() => ({
+    listCache: getProductsListSessionCache(buildAdminProductsListQueryString(filters)),
+    metaCache: getProductsMetaSessionCache(),
+  }));
   const [items, setItems] = useState<ProductRow[]>(
     () => (pageBootstrap.listCache?.items as ProductRow[] | undefined) ?? [],
   );
@@ -638,42 +644,14 @@ export default function AdminProductsPage() {
   const [selected, setSelected] = useState<string[]>([]);
   const [shareProduct, setShareProduct] = useState<ProductRow | null>(null);
   const [featuredFor, setFeaturedFor] = useState<ProductRow | null>(null);
-  const [q, setQ] = useState(initialFilters.q);
-  const [conditions, setConditions] = useState<ProductConditionFilter[]>(initialFilters.conditions);
-  const [featuredFlags, setFeaturedFlags] = useState<FeaturedFilter[]>(initialFilters.featuredFlags);
-  const [publicCatalogFlags, setPublicCatalogFlags] = useState<PublicCatalogFilter[]>(
-    initialFilters.publicCatalogFlags,
-  );
-  const [stockStatuses, setStockStatuses] = useState<StockStatusFilter[]>(initialFilters.stockStatuses);
-  const [stockLocationFilter, setStockLocationFilter] = useState<"" | ProductStockLocation>(
-    initialFilters.stockLocationFilter,
-  );
-  const [productRegionFilter, setProductRegionFilter] = useState<"" | ProductRegion>(
-    initialFilters.productRegionFilter,
-  );
-  const [catalogKind, setCatalogKind] = useState<CatalogKindFilter>(initialFilters.catalogKind);
-  const [brandId, setBrandId] = useState(initialFilters.brandId);
-  const [btuFilters, setBtuFilters] = useState<string[]>(initialFilters.btuFilters);
-  const [typeId, setTypeId] = useState(initialFilters.typeId);
-  const [supplierId, setSupplierId] = useState(initialFilters.supplierId);
-  const [containerId, setContainerId] = useState("");
   const [containers, setContainers] = useState<OptionRow[]>(
     () => pageBootstrap.metaCache?.containers ?? [],
   );
-  const containerIdHandledRef = useRef(false);
-  const [priceRange, setPriceRange] = useState<[number, number]>(initialFilters.priceRange);
-  const [hasSerial, setHasSerial] = useState<"" | "with" | "without">(initialFilters.hasSerial);
-  const [hasPurchasePrice, setHasPurchasePrice] = useState<"" | "with" | "without">(
-    initialFilters.hasPurchasePrice,
-  );
-  const [purchasedFrom, setPurchasedFrom] = useState(initialFilters.purchasedFrom);
-  const [purchasedTo, setPurchasedTo] = useState(initialFilters.purchasedTo);
-  const [sortBy, setSortBy] = useState<SortField>(initialFilters.sortBy);
-  const [sortDir, setSortDir] = useState<SortDir>(initialFilters.sortDir);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(() => pageBootstrap.listCache?.totalCount ?? 0);
   const [loading, setLoading] = useState(() => !pageBootstrap.listCache);
   const [error, setError] = useState<string | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
   const [saleFor, setSaleFor] = useState<ProductRow | null>(null);
   useAdminBackHandler(Boolean(saleFor), () => setSaleFor(null), "catalog-product-sale");
   const [orderFor, setOrderFor] = useState<ProductRow | null>(null);
@@ -707,8 +685,6 @@ export default function AdminProductsPage() {
   } | null>(null);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [bulkDeleteActiveLinkWarning, setBulkDeleteActiveLinkWarning] = useState<string | null>(null);
-  const [filtersOpen, setFiltersOpen] = useState(initialFilters.filtersOpen);
-  const [listFiltersReady, setListFiltersReady] = useState(false);
   const [catalogSettingsOpen, setCatalogSettingsOpen] = useState(false);
   const [locationBusyId, setLocationBusyId] = useState<string | null>(null);
   // Промяна на място в „Сервиз“ при продукт без серийни номера — изисква
@@ -749,157 +725,35 @@ export default function AdminProductsPage() {
    * При липса на права API връща грешка и UI я показва в червената лента горе.
    */
 
-  const listFiltersKey = useMemo(
-    () =>
-      JSON.stringify({
-        debouncedQ,
-        catalogKind,
-        conditions,
-        featuredFlags,
-        publicCatalogFlags,
-        stockStatuses,
-        stockLocationFilter,
-        productRegionFilter,
-        brandId,
-        btuFilters,
-        typeId,
-        supplierId,
-        containerId,
-        priceRange,
-        hasSerial,
-        hasPurchasePrice,
-        purchasedFrom,
-        purchasedTo,
-        sortBy,
-        sortDir,
-      }),
-    [
-      debouncedQ,
-      catalogKind,
-      conditions,
-      featuredFlags,
-      publicCatalogFlags,
-      stockStatuses,
-      stockLocationFilter,
-      productRegionFilter,
-      brandId,
-      btuFilters,
-      typeId,
-      supplierId,
-      containerId,
-      priceRange,
-      hasSerial,
-      hasPurchasePrice,
-      purchasedFrom,
-      purchasedTo,
-      sortBy,
-      sortDir,
-    ],
-  );
-
-  const listFiltersKeyRef = useRef(listFiltersKey);
-  const queryPage = listFiltersKeyRef.current !== listFiltersKey ? 1 : page;
-
-  const qs = useMemo(() => {
-    const snapshot: AdminProductsListFiltersSnapshot = {
-      version: 3,
-      q: debouncedQ,
-      catalogKind,
-      conditions,
-      featuredFlags,
-      publicCatalogFlags,
-      stockStatuses,
-      stockLocationFilter,
-      productRegionFilter,
-      brandId,
-      btuFilters,
-      typeId,
-      supplierId,
-      priceRange,
-      hasSerial,
-      hasPurchasePrice,
-      purchasedFrom,
-      purchasedTo,
-      sortBy,
-      sortDir,
-      filtersOpen,
-    };
-    return buildAdminProductsListQueryString(snapshot, { page: queryPage, containerId });
-  }, [
-    debouncedQ,
-    catalogKind,
-    conditions,
-    featuredFlags,
-    publicCatalogFlags,
-    stockStatuses,
-    stockLocationFilter,
-    productRegionFilter,
-    brandId,
-    btuFilters,
-    typeId,
-    supplierId,
-    containerId,
-    priceRange,
-    hasSerial,
-    hasPurchasePrice,
-    purchasedFrom,
-    purchasedTo,
-    sortBy,
-    sortDir,
-    filtersOpen,
-    queryPage,
-  ]);
+  const queryFilters = useMemo(() => ({ ...filters, q: debouncedQ }), [filters, debouncedQ]);
+  const firstPageQuery = useMemo(() => buildAdminProductsListQueryString(queryFilters), [queryFilters]);
+  const previousQuery = useRef(firstPageQuery);
+  const queryPage = previousQuery.current === firstPageQuery ? page : 1;
+  const qs = queryPage === 1 ? firstPageQuery : buildAdminProductsListQueryString(queryFilters, { page: queryPage });
 
   useEffect(() => {
-    if (listFiltersKeyRef.current === listFiltersKey) return;
-    listFiltersKeyRef.current = listFiltersKey;
+    if (previousQuery.current === firstPageQuery) return;
+    previousQuery.current = firstPageQuery;
     setPage(1);
-  }, [listFiltersKey]);
+  }, [firstPageQuery]);
 
-  function snapshotListFilters() {
-    return {
-      version: 3 as const,
-      q,
-      catalogKind,
-      conditions,
-      featuredFlags,
-      publicCatalogFlags,
-      stockStatuses,
-      stockLocationFilter,
-      productRegionFilter,
-      brandId,
-      btuFilters,
-      typeId,
-      supplierId,
-      priceRange,
-      hasSerial,
-      hasPurchasePrice,
-      purchasedFrom,
-      purchasedTo,
-      sortBy,
-      sortDir,
-      filtersOpen,
-    };
-  }
+  useLayoutEffect(() => {
+    saveAdminProductsListFilters(filters);
+  }, [filters]);
 
-  async function loadMeta(opts?: { background?: boolean }) {
-    const cached = !opts?.background ? getProductsMetaSessionCache() : null;
-    if (cached) {
-      setBrands(cached.brands);
-      setTypes(cached.types);
-      setSuppliersById(cached.suppliersById);
-      setContainers(cached.containers);
-      setAdminRole(cached.adminRole);
-      setCanEditMasterPricesInline(cached.canEditMasterPricesInline);
-      setCanMutateProductRows(cached.canMutateProductRows);
-    }
+  const metaRequest = useRef<AbortController | null>(null);
+  const loadMeta = useCallback(async () => {
+    metaRequest.current?.abort();
+    const request = new AbortController();
+    metaRequest.current = request;
+    const options: RequestInit = { credentials: "include", signal: request.signal };
     try {
       const [bRes, tRes, sRes, cRes, wRes] = await Promise.all([
-        fetch("/api/admin/meta/brands?usedInProducts=1", { credentials: "include" }),
-        fetch("/api/admin/meta/product-types", { credentials: "include" }),
-        fetch("/api/admin/contacts?kind=supplier&perPage=500", { credentials: "include" }),
-        fetch("/api/admin/containers?perPage=200", { credentials: "include" }),
-        fetch("/api/admin/whoami", { credentials: "include" }),
+        fetch("/api/admin/meta/brands?usedInProducts=1", options),
+        fetch("/api/admin/meta/product-types", options),
+        fetch("/api/admin/contacts?kind=supplier&perPage=500", options),
+        fetch("/api/admin/containers?perPage=200", options),
+        fetch("/api/admin/whoami", options),
       ]);
       const [bJson, tJson, sJson, cJson, wJson] = await Promise.all([
         bRes.json().catch(() => ({})),
@@ -908,6 +762,7 @@ export default function AdminProductsPage() {
         cRes.json().catch(() => ({})),
         wRes.json().catch(() => ({})),
       ]);
+      if (request.signal.aborted) return;
       const brands = bRes.ok ? (((bJson as { data?: OptionRow[] }).data ?? []) as OptionRow[]) : [];
       const types = tRes.ok ? (((tJson as { data?: OptionRow[] }).data ?? []) as OptionRow[]) : [];
       let suppliersById: Record<string, string> = {};
@@ -922,21 +777,19 @@ export default function AdminProductsPage() {
         ? (((cJson as { data?: { id: string; name: string }[] }).data ?? []) as { id: string; name: string }[])
             .map((r) => ({ id: r.id, name: r.name }))
         : [];
-      let adminRole = "";
-      let canEditMasterPricesInline = false;
-      let canMutateProductRows = true;
+      const adminRole = (wJson as { data?: { admin?: { role?: string } | null } }).data?.admin?.role ?? "";
+      const canEditMasterPricesInline = adminRole === "master_admin";
+      const canMutateProductRows = adminRole === "master_admin" || adminRole === "office_staff";
+      if (bRes.ok) setBrands(brands);
+      if (tRes.ok) setTypes(types);
+      if (sRes.ok) setSuppliersById(suppliersById);
+      if (cRes.ok) setContainers(containers);
       if (wRes.ok) {
-        adminRole = (wJson as { data?: { admin?: { role?: string } | null } }).data?.admin?.role ?? "";
-        canEditMasterPricesInline = adminRole === "master_admin";
-        canMutateProductRows = adminRole === "master_admin" || adminRole === "office_staff";
+        setAdminRole(adminRole);
+        setCanEditMasterPricesInline(canEditMasterPricesInline);
+        setCanMutateProductRows(canMutateProductRows);
       }
-      setBrands(brands);
-      setTypes(types);
-      setSuppliersById(suppliersById);
-      setContainers(containers);
-      setAdminRole(adminRole);
-      setCanEditMasterPricesInline(canEditMasterPricesInline);
-      setCanMutateProductRows(canMutateProductRows);
+      if (![bRes, tRes, sRes, cRes, wRes].every((res) => res.ok)) return;
       setProductsMetaSessionCache({
         brands,
         types,
@@ -949,7 +802,7 @@ export default function AdminProductsPage() {
     } catch {
       // non-blocking for products table
     }
-  }
+  }, []);
 
   function supplierLabel(p: Pick<ProductRow, "supplier_id" | "supplier">) {
     const joined = p.supplier
@@ -967,10 +820,22 @@ export default function AdminProductsPage() {
     return joined?.trim() || null;
   }
 
+  const activeQuery = useRef<string | null>(null);
+  const listRequest = useRef<AbortController | null>(null);
   const repairProtocolLoadSeq = useRef(0);
-  const catalogSyncDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  async function loadRepairProtocolMap(rows: ProductRow[], cacheQs = qs) {
+  useLayoutEffect(() => {
+    activeQuery.current = qs;
+    return () => {
+      activeQuery.current = null;
+      listRequest.current?.abort();
+      repairProtocolLoadSeq.current++;
+    };
+  }, [qs]);
+
+  const loadRepairProtocolMap = useCallback(async (rows: ProductRow[], cacheQs: string) => {
+    if (activeQuery.current !== cacheQs) return;
+    const seq = ++repairProtocolLoadSeq.current;
     const ids = rows
       .filter((p) => !isAccessoryRow(p) && p.stock_status === "in_stock")
       .map((p) => p.id);
@@ -979,7 +844,6 @@ export default function AdminProductsPage() {
       patchProductsListSessionRepairProtocols(cacheQs, {});
       return;
     }
-    const seq = ++repairProtocolLoadSeq.current;
     try {
       const res = await fetch(
         `/api/admin/products/repair-protocol-ids?ids=${ids.join(",")}`,
@@ -994,7 +858,7 @@ export default function AdminProductsPage() {
     } catch {
       /* non-blocking */
     }
-  }
+  }, []);
 
   async function openServiceProtocol(p: ProductRow) {
     if (!canProductServiceProtocol(p)) return;
@@ -1039,204 +903,107 @@ export default function AdminProductsPage() {
     return `${d}.${m}.${y}`;
   }
 
-  async function load(opts?: { force?: boolean; background?: boolean }) {
-    const cacheQs = qs;
-    const cached = !opts?.force ? getProductsListSessionCache(cacheQs) : null;
-    const showSpinner = !opts?.background && !cached;
+  const load = useCallback(async (opts?: { background?: boolean }) => {
+    const cacheQs = activeQuery.current;
+    if (cacheQs === null) return;
+    listRequest.current?.abort();
+    const request = new AbortController();
+    listRequest.current = request;
+    repairProtocolLoadSeq.current++;
+    const cached = getProductsListSessionCache(cacheQs);
 
-    if (cached) {
-      setItems(cached.items as ProductRow[]);
-      setTotalCount(cached.totalCount);
-      setRepairProtocolByProductId(cached.repairProtocolByProductId);
+    if (!opts?.background) {
+      setItems((cached?.items as ProductRow[] | undefined) ?? []);
+      setTotalCount(cached?.totalCount ?? 0);
+      setRepairProtocolByProductId(cached?.repairProtocolByProductId ?? {});
       setSelected([]);
       setError(null);
-      setLoading(false);
-    } else if (showSpinner) {
-      setLoading(true);
-      setError(null);
+      setListError(null);
+      setLoading(!cached);
     }
 
     try {
-      const res = await fetch(`/api/admin/products?${cacheQs}`, { credentials: "include" });
+      const res = await fetch(`/api/admin/products?${cacheQs}`, { credentials: "include", signal: request.signal });
       const json = await res.json();
+      if (request.signal.aborted) return;
       if (!res.ok) throw new Error(json.error || "Грешка");
       const rows: ProductRow[] = json.data ?? [];
-      const total = json.meta?.total ?? (rows.length ?? 0);
+      const total = json.meta?.total ?? rows.length;
       setItems(rows);
       setTotalCount(total);
-      setSelected([]);
+      setPage((current) => Math.min(current, Math.max(1, Math.ceil(total / ADMIN_PRODUCTS_LIST_PER_PAGE))));
+      setListError(null);
+      if (opts?.background) {
+        setSelected((prev) => prev.filter((id) => rows.some((row) => row.id === id)));
+      }
       setProductsListSessionCache(cacheQs, {
         items: rows,
         totalCount: total,
         repairProtocolByProductId: cached?.repairProtocolByProductId ?? {},
       });
       setLoading(false);
-      window.setTimeout(() => void loadRepairProtocolMap(rows, cacheQs), 0);
+      void loadRepairProtocolMap(rows, cacheQs);
     } catch (e: any) {
+      if (request.signal.aborted) return;
       if (!cached) {
-        setError(String(e?.message ?? e));
+        setListError(String(e?.message ?? e));
       }
       setLoading(false);
     }
-  }
-
-  async function reloadProductsList() {
-    invalidateAllProductsSessionCache();
-    await load({ force: true });
-  }
+  }, [loadRepairProtocolMap]);
 
   useEffect(() => {
     void loadMeta();
-  }, []);
+    return () => metaRequest.current?.abort();
+  }, [loadMeta]);
 
-  /** Друг таб / доставчик / продажба — винаги свежи данни от сървъра. */
   useEffect(() => {
-    const syncFromServer = () => {
-      if (catalogSyncDebounceRef.current) clearTimeout(catalogSyncDebounceRef.current);
-      catalogSyncDebounceRef.current = setTimeout(() => {
-        catalogSyncDebounceRef.current = null;
-        invalidateAllProductsSessionCache();
-        void load({ force: true, background: true });
-        void loadMeta({ background: true });
-      }, 250);
-    };
-    return subscribeAdminProductsCatalogReload(syncFromServer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  /** localStorage филтри — след mount, за да съвпада SSR HTML с първия client render. */
-  useEffect(() => {
-    const saved = loadAdminProductsListFilters();
-    setQ(saved.q);
-    setCatalogKind(saved.catalogKind);
-    setConditions(saved.conditions);
-    setFeaturedFlags(saved.featuredFlags);
-    setPublicCatalogFlags(saved.publicCatalogFlags);
-    setStockStatuses(saved.stockStatuses);
-    setStockLocationFilter(saved.stockLocationFilter);
-    setProductRegionFilter(saved.productRegionFilter);
-    setBrandId(saved.brandId);
-    setBtuFilters(saved.btuFilters);
-    setTypeId(saved.typeId);
-    setSupplierId(saved.supplierId);
-    setPriceRange(saved.priceRange);
-    setHasSerial(saved.hasSerial);
-    setHasPurchasePrice(saved.hasPurchasePrice);
-    setPurchasedFrom(saved.purchasedFrom);
-    setPurchasedTo(saved.purchasedTo);
-    setSortBy(saved.sortBy);
-    setSortDir(saved.sortDir);
-    setFiltersOpen(saved.filtersOpen);
-    setListFiltersReady(true);
-  }, []);
-
-  /** Телефон / друг таб — при връщане на фокуса презареждаме тихо. */
-  useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState !== "visible" || !listFiltersReady) return;
+    const refresh = () => {
       void load({ background: true });
-      void loadMeta({ background: true });
+      void loadMeta();
     };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const unsubscribe = subscribeAdminProductsCatalogReload(() => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        invalidateAllProductsSessionCache();
+        refresh();
+      }, 250);
+    });
     document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listFiltersReady]);
-
-  /** След запис от редакция — маха филтри, които крият новата/запазената бройка. */
-  useEffect(() => {
-    if (!listFiltersReady || focusProductHandledRef.current) return;
-    const focusId = searchParams.get("focusProductId");
-    if (!focusId) return;
-    focusProductHandledRef.current = true;
-    setPublicCatalogFlags([]);
-    setStockStatuses([]);
-    setBtuFilters([]);
-    setHasSerial("");
-    setHasPurchasePrice("");
-    setPage(1);
-    router.replace("/admin/products");
-  }, [listFiltersReady, searchParams, router]);
-
-  /** Дълбока връзка от екрана „Контейнери“ — предварително филтрира по контейнер. */
-  useEffect(() => {
-    if (!listFiltersReady || containerIdHandledRef.current) return;
-    const cid = searchParams.get("containerId");
-    if (!cid) return;
-    containerIdHandledRef.current = true;
-    setContainerId(cid);
-    setPage(1);
-    router.replace("/admin/products");
-  }, [listFiltersReady, searchParams, router]);
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [load, loadMeta]);
 
   useEffect(() => {
-    if (!listFiltersReady) return;
-    saveAdminProductsListFilters(snapshotListFilters());
-  }, [
-    listFiltersReady,
-    q,
-    catalogKind,
-    conditions,
-    featuredFlags,
-    publicCatalogFlags,
-    stockStatuses,
-    stockLocationFilter,
-    productRegionFilter,
-    brandId,
-    btuFilters,
-    typeId,
-    supplierId,
-    priceRange,
-    hasSerial,
-    hasPurchasePrice,
-    purchasedFrom,
-    purchasedTo,
-    sortBy,
-    sortDir,
-    filtersOpen,
-  ]);
+    if (!linkedContainerId && !linkedProductId) return;
+    if (linkedContainerId) {
+      setFilters((current) => current.containerId === linkedContainerId
+        ? current
+        : { ...current, containerId: linkedContainerId });
+      setPage(1);
+    }
+    if (linkedProductId) setFocusedProductId(linkedProductId);
+    router.replace("/admin/products", { scroll: false });
+  }, [linkedContainerId, linkedProductId, router]);
 
   useEffect(() => {
-    if (!listFiltersReady) return;
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qs, listFiltersReady]);
+    void load();
+  }, [qs, load]);
 
   function resetFilters() {
-    const d = DEFAULT_ADMIN_PRODUCTS_LIST_FILTERS;
-    setQ(d.q);
-    setCatalogKind(d.catalogKind);
-    setConditions(d.conditions);
-    setFeaturedFlags(d.featuredFlags);
-    setPublicCatalogFlags(d.publicCatalogFlags);
-    setStockStatuses(d.stockStatuses);
-    setStockLocationFilter(d.stockLocationFilter);
-    setProductRegionFilter(d.productRegionFilter);
-    setBrandId(d.brandId);
-    setBtuFilters(d.btuFilters);
-    setTypeId(d.typeId);
-    setSupplierId(d.supplierId);
-    setContainerId("");
-    setPriceRange(d.priceRange);
-    setHasSerial(d.hasSerial);
-    setHasPurchasePrice(d.hasPurchasePrice);
-    setPurchasedFrom(d.purchasedFrom);
-    setPurchasedTo(d.purchasedTo);
-    setSortBy(d.sortBy);
-    setSortDir(d.sortDir);
+    setFilters({ ...DEFAULT_ADMIN_PRODUCTS_LIST_FILTERS, filtersOpen });
     setPage(1);
-    clearAdminProductsListFilters();
   }
 
-  // Превключване на сортирането от клик върху заглавие на колона:
-  //   • клик върху същата колона → обръща посоката (asc ↔ desc);
-  //   • клик върху нова колона   → започва възходящо.
   function handleSort(field: SortField) {
-    if (sortBy === field) {
-      setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
-    } else {
-      setSortBy(field);
-      setSortDir("asc");
-    }
+    updateFilters({ sortBy: field, sortDir: sortBy === field && sortDir === "asc" ? "desc" : "asc" });
   }
 
   // Масовите действия са нарочно сведени до едно — изтриване. Останалите
@@ -1269,7 +1036,7 @@ export default function AdminProductsPage() {
     setConfirmBulkDelete(false);
     setBulkDeleteActiveLinkWarning(null);
     setSelected([]);
-    await reloadProductsList();
+    notifyAdminProductsCatalogChanged();
   }
 
   async function bulkSetPublicCatalog(visible: boolean) {
@@ -1293,7 +1060,7 @@ export default function AdminProductsPage() {
       return;
     }
     setSelected([]);
-    await reloadProductsList();
+    notifyAdminProductsCatalogChanged();
   }
 
   async function togglePublicCatalog(p: ProductRow) {
@@ -1315,6 +1082,7 @@ export default function AdminProductsPage() {
           x.id === p.id ? { ...x, is_active: next, show_in_public_catalog: next } : x,
         ),
       );
+      notifyAdminProductsCatalogChanged();
       return;
     }
     const next = !p.show_in_public_catalog;
@@ -1330,6 +1098,7 @@ export default function AdminProductsPage() {
       return;
     }
     setItems((prev) => prev.map((x) => (x.id === p.id ? { ...x, show_in_public_catalog: next } : x)));
+    notifyAdminProductsCatalogChanged();
   }
 
   useEffect(() => {
@@ -1455,7 +1224,6 @@ export default function AdminProductsPage() {
         }),
       );
 
-      invalidateProductsListSessionCache();
       notifyAdminProductsCatalogChanged();
       if (withInstallation) notifyAdminCalendarReload();
       return true;
@@ -1500,7 +1268,6 @@ export default function AdminProductsPage() {
         amount: Number(prod.price) || 0,
         isReservationCancel: true,
       });
-      invalidateProductsListSessionCache();
       notifyAdminProductsCatalogChanged();
       return true;
     } catch (e: unknown) {
@@ -1538,6 +1305,7 @@ export default function AdminProductsPage() {
       setItems((prev) => prev.map((x) => (x.id === p.id ? { ...x, price: nextPrice } : x)));
       setEditingPriceId(null);
       setPriceDraft("");
+      notifyAdminProductsCatalogChanged();
     } catch (e: any) {
       setError(String(e?.message ?? e));
     } finally {
@@ -1588,6 +1356,7 @@ export default function AdminProductsPage() {
             : x,
         ),
       );
+      notifyAdminProductsCatalogChanged();
     } catch (e: any) {
       setError(String(e?.message ?? e));
     } finally {
@@ -1629,6 +1398,7 @@ export default function AdminProductsPage() {
       setItems((prev) => prev.map((x) => (x.id === p.id ? { ...x, purchase_price: nextPurchase } : x)));
       setEditingPurchaseId(null);
       setPurchaseDraft("");
+      notifyAdminProductsCatalogChanged();
     } catch (e: any) {
       setError(String(e?.message ?? e));
     } finally {
@@ -1655,7 +1425,10 @@ export default function AdminProductsPage() {
     () => filterProductsCatalogItems(items, { showScrapped: showScrappedInList }),
     [items, showScrappedInList],
   );
-  const displayRows = useMemo(() => buildProductCatalogDisplayRows(catalogVisibleItems), [catalogVisibleItems]);
+  const displayRows = useMemo(
+    () => buildProductCatalogDisplayRows(items, { showScrapped: showScrappedInList }),
+    [items, showScrappedInList],
+  );
   const selectableDisplayIds = useMemo(
     () => displayRows.filter(isGroupedExhaustedSelectable).map((d) => d.row.id),
     [displayRows],
@@ -1673,7 +1446,7 @@ export default function AdminProductsPage() {
       key: "q",
       label: `Търсене: „${q.trim()}“`,
       onClear: () => {
-        setQ("");
+        updateFilters({ q: "" });
       },
     });
   }
@@ -1681,28 +1454,28 @@ export default function AdminProductsPage() {
     activeFilters.push({
       key: "catalogKind",
       label: catalogKind === "accessories" ? "Само аксесоари" : "Климатици и аксесоари",
-      onClear: () => setCatalogKind("climatics"),
+      onClear: () => updateFilters({ catalogKind: "climatics" }),
     });
   }
   for (const c of conditions) {
     activeFilters.push({
       key: `condition-${c}`,
       label: `Състояние: ${c === "new" ? "Нови" : "Втора употреба"}`,
-      onClear: () => setConditions((prev) => prev.filter((x) => x !== c)),
+      onClear: () => updateFilters({ conditions: conditions.filter((x) => x !== c) }),
     });
   }
   for (const flag of featuredFlags) {
     activeFilters.push({
       key: `featured-${flag}`,
       label: flag === "featured" ? "Топ продукти" : "Без топ",
-      onClear: () => setFeaturedFlags((prev) => prev.filter((x) => x !== flag)),
+      onClear: () => updateFilters({ featuredFlags: featuredFlags.filter((x) => x !== flag) }),
     });
   }
   for (const flag of publicCatalogFlags) {
     activeFilters.push({
       key: `publicCatalog-${flag}`,
       label: flag === "visible" ? "В публичен каталог" : "Скрит от каталог",
-      onClear: () => setPublicCatalogFlags((prev) => prev.filter((x) => x !== flag)),
+      onClear: () => updateFilters({ publicCatalogFlags: publicCatalogFlags.filter((x) => x !== flag) }),
     });
   }
   for (const status of stockStatuses) {
@@ -1719,60 +1492,60 @@ export default function AdminProductsPage() {
     activeFilters.push({
       key: `stockStatus-${status}`,
       label: `Наличност: ${label}`,
-      onClear: () => setStockStatuses((prev) => prev.filter((x) => x !== status)),
+      onClear: () => updateFilters({ stockStatuses: stockStatuses.filter((x) => x !== status) }),
     });
   }
   if (stockLocationFilter) {
     activeFilters.push({
       key: "stockLocation",
       label: `Място: ${productStockLocationLabelCompact(stockLocationFilter)}`,
-      onClear: () => setStockLocationFilter(""),
+      onClear: () => updateFilters({ stockLocationFilter: "" }),
     });
   }
   if (productRegionFilter) {
     activeFilters.push({
       key: "region",
       label: `Страна: ${productRegionFilter === "europe" ? "EUROPE" : "JAPAN"}`,
-      onClear: () => setProductRegionFilter(""),
+      onClear: () => updateFilters({ productRegionFilter: "" }),
     });
   }
-  if (brandId) activeFilters.push({ key: "brand", label: `Марка: ${brandName ?? "—"}`, onClear: () => setBrandId("") });
+  if (brandId) activeFilters.push({ key: "brand", label: `Марка: ${brandName ?? "—"}`, onClear: () => updateFilters({ brandId: "" }) });
   for (const btu of btuFilters) {
     activeFilters.push({
       key: `btu-${btu}`,
       label: `BTU: ${btu} 000`,
-      onClear: () => setBtuFilters((prev) => prev.filter((x) => x !== btu)),
+      onClear: () => updateFilters({ btuFilters: btuFilters.filter((x) => x !== btu) }),
     });
   }
-  if (typeId) activeFilters.push({ key: "type", label: `Тип: ${typeName ?? "—"}`, onClear: () => setTypeId("") });
-  if (supplierId) activeFilters.push({ key: "supplier", label: `Доставчик: ${supplierName ?? "—"}`, onClear: () => setSupplierId("") });
-  if (containerId) activeFilters.push({ key: "container", label: `Контейнер: ${containerName ?? "—"}`, onClear: () => setContainerId("") });
+  if (typeId) activeFilters.push({ key: "type", label: `Тип: ${typeName ?? "—"}`, onClear: () => updateFilters({ typeId: "" }) });
+  if (supplierId) activeFilters.push({ key: "supplier", label: `Доставчик: ${supplierName ?? "—"}`, onClear: () => updateFilters({ supplierId: "" }) });
+  if (containerId) activeFilters.push({ key: "container", label: `Контейнер: ${containerName ?? "—"}`, onClear: () => updateFilters({ containerId: "" }) });
   if (isAdminPriceFilterActive(priceRange)) {
     activeFilters.push({
       key: "price",
       label: `Цена: ${formatAdminPriceEuro(priceRange[0])} – ${formatAdminPriceEuro(priceRange[1])} €`,
-      onClear: () => setPriceRange([ADMIN_PRICE_FILTER_MIN, ADMIN_PRICE_FILTER_MAX]),
+      onClear: () => updateFilters({ priceRange: [ADMIN_PRICE_FILTER_MIN, ADMIN_PRICE_FILTER_MAX] }),
     });
   }
   if (hasSerial) {
     activeFilters.push({
       key: "hasSerial",
       label: hasSerial === "with" ? "Само със сериен №" : "Само без сериен №",
-      onClear: () => setHasSerial(""),
+      onClear: () => updateFilters({ hasSerial: "" }),
     });
   }
   if (hasPurchasePrice) {
     activeFilters.push({
       key: "hasPurchase",
       label: hasPurchasePrice === "with" ? "Само със закупна цена" : "Само без закупна цена",
-      onClear: () => setHasPurchasePrice(""),
+      onClear: () => updateFilters({ hasPurchasePrice: "" }),
     });
   }
   if (purchasedFrom || purchasedTo) {
     activeFilters.push({
       key: "purchasedRange",
       label: `Закупени: ${purchasedFrom || "…"} → ${purchasedTo || "…"}`,
-      onClear: () => { setPurchasedFrom(""); setPurchasedTo(""); },
+      onClear: () => updateFilters({ purchasedFrom: "", purchasedTo: "" }),
     });
   }
   const activeFiltersCount = activeFilters.length;
@@ -1795,7 +1568,10 @@ export default function AdminProductsPage() {
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2">
+          {focusedProductId && (
+            <CatalogItemQuickViewButton itemId={focusedProductId} itemName="Преглед на продукта" className="text-sm" />
+          )}
           {(canEditMasterPricesInline || adminRole === "service_staff") && (
             <button
               type="button"
@@ -1829,7 +1605,7 @@ export default function AdminProductsPage() {
       <ProductCatalogSettingsModal
         open={catalogSettingsOpen}
         onClose={() => setCatalogSettingsOpen(false)}
-        onApplied={() => reloadProductsList()}
+        onApplied={notifyAdminProductsCatalogChanged}
         readOnly={!canEditMasterPricesInline}
       />
 
@@ -1838,14 +1614,14 @@ export default function AdminProductsPage() {
         <div className="flex-1 min-w-0">
           <ProductSearchBox
             value={q}
-            onChange={(next) => { setQ(next); }}
+            onChange={(next) => updateFilters({ q: next })}
             items={catalogVisibleItems}
             placeholder="Търси име, сериен №, фактура…"
           />
         </div>
         <button
           type="button"
-          onClick={() => setFiltersOpen((o) => !o)}
+          onClick={() => updateFilters({ filtersOpen: !filtersOpen })}
           className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border font-bold text-xs shrink-0 transition-colors ${filtersOpen ? "bg-brand-blue-50 border-brand-blue-200 text-brand-blue-700" : "bg-white border-slate-200 text-slate-700"}`}
         >
           <Filter className="w-4 h-4" />
@@ -1881,7 +1657,7 @@ export default function AdminProductsPage() {
           <div className="flex-1 hidden md:block min-w-0">
             <ProductSearchBox
               value={q}
-              onChange={(next) => { setQ(next); }}
+              onChange={(next) => updateFilters({ q: next })}
               items={catalogVisibleItems}
               placeholder="Търси по име, slug, сериен номер (вътрешен/външен) или № на фактура от доставчик…"
             />
@@ -1906,16 +1682,16 @@ export default function AdminProductsPage() {
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 md:gap-x-4 md:gap-y-2">
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mr-0.5">Състояние:</span>
-              <ChipToggle active={conditions.length === 0} onClick={() => { setConditions([]); }}>Всички</ChipToggle>
+              <ChipToggle active={conditions.length === 0} onClick={() => updateFilters({ conditions: [] })}>Всички</ChipToggle>
               <ChipToggle
                 active={conditions.includes("new")}
-                onClick={() => { setConditions((prev) => toggleChipFilter(prev, "new")); }}
+                onClick={() => updateFilters({ conditions: toggleChipFilter(conditions, "new") })}
               >
                 Нови
               </ChipToggle>
               <ChipToggle
                 active={conditions.includes("used")}
-                onClick={() => { setConditions((prev) => toggleChipFilter(prev, "used")); }}
+                onClick={() => updateFilters({ conditions: toggleChipFilter(conditions, "used") })}
               >
                 Втора употреба
               </ChipToggle>
@@ -1923,32 +1699,32 @@ export default function AdminProductsPage() {
             <span className="hidden md:inline-block h-5 w-px bg-slate-200" aria-hidden />
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mr-0.5">Наличност:</span>
-              <ChipToggle active={stockStatuses.length === 0} onClick={() => { setStockStatuses([]); }}>Всички</ChipToggle>
+              <ChipToggle active={stockStatuses.length === 0} onClick={() => updateFilters({ stockStatuses: [] })}>Всички</ChipToggle>
               <ChipToggle
                 active={stockStatuses.includes("in_stock")}
                 tone="success"
-                onClick={() => { setStockStatuses((prev) => toggleChipFilter(prev, "in_stock")); }}
+                onClick={() => updateFilters({ stockStatuses: toggleChipFilter(stockStatuses, "in_stock") })}
               >
                 <PackageCheck className="w-3 h-3" /> В наличност
               </ChipToggle>
               <ChipToggle
                 active={stockStatuses.includes("on_order")}
                 tone="warning"
-                onClick={() => { setStockStatuses((prev) => toggleChipFilter(prev, "on_order")); }}
+                onClick={() => updateFilters({ stockStatuses: toggleChipFilter(stockStatuses, "on_order") })}
               >
                 <Clock4 className="w-3 h-3" /> По поръчка
               </ChipToggle>
               <ChipToggle
                 active={stockStatuses.includes("reserved")}
                 tone="brand"
-                onClick={() => { setStockStatuses((prev) => toggleChipFilter(prev, "reserved")); }}
+                onClick={() => updateFilters({ stockStatuses: toggleChipFilter(stockStatuses, "reserved") })}
               >
                 <Bookmark className="w-3 h-3" /> Резервиран
               </ChipToggle>
               <ChipToggle
                 active={stockStatuses.includes("scrapped")}
                 tone="neutral"
-                onClick={() => { setStockStatuses((prev) => toggleChipFilter(prev, "scrapped")); }}
+                onClick={() => updateFilters({ stockStatuses: toggleChipFilter(stockStatuses, "scrapped") })}
               >
                 <Ban className="w-3 h-3" /> Бракувани
               </ChipToggle>
@@ -1956,14 +1732,14 @@ export default function AdminProductsPage() {
               <ChipToggle
                 active={featuredFlags.includes("featured")}
                 tone="brand"
-                onClick={() => { setFeaturedFlags((prev) => toggleChipFilter(prev, "featured")); }}
+                onClick={() => updateFilters({ featuredFlags: toggleChipFilter(featuredFlags, "featured") })}
               >
                 <Star className="w-3 h-3 fill-current" /> Топ продукти
               </ChipToggle>
               <ChipToggle
                 active={publicCatalogFlags.includes("visible")}
                 tone="brand"
-                onClick={() => { setPublicCatalogFlags((prev) => toggleChipFilter(prev, "visible")); }}
+                onClick={() => updateFilters({ publicCatalogFlags: toggleChipFilter(publicCatalogFlags, "visible") })}
               >
                 <Eye className="w-3 h-3" /> В публичен каталог
               </ChipToggle>
@@ -1975,7 +1751,7 @@ export default function AdminProductsPage() {
         <div className="space-y-1.5 md:space-y-2">
           <div className="text-[10px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500">Мощност (BTU)</div>
           <div className="flex flex-wrap items-center gap-1.5">
-            <ChipToggle active={btuFilters.length === 0} onClick={() => { setBtuFilters([]); }}>
+            <ChipToggle active={btuFilters.length === 0} onClick={() => updateFilters({ btuFilters: [] })}>
               Всички
             </ChipToggle>
             {CATALOG_BTU_OPTIONS.map((btu) => (
@@ -1983,7 +1759,7 @@ export default function AdminProductsPage() {
                 <ChipToggle
                   active={btuFilters.includes(String(btu))}
                   onClick={() => {
-                    setBtuFilters((prev) => toggleChipFilter(prev, String(btu)));
+                    updateFilters({ btuFilters: toggleChipFilter(btuFilters, String(btu)) });
                   }}
                 >
                   {btu}
@@ -1999,21 +1775,21 @@ export default function AdminProductsPage() {
           <div className="grid grid-cols-2 md:grid-cols-6 gap-1.5 md:gap-3 [&_select]:text-xs md:[&_select]:text-sm">
             <Select
               value={catalogKind}
-              onChange={(e) => { setCatalogKind(e.target.value as CatalogKindFilter); }}
+              onChange={(e) => updateFilters({ catalogKind: e.target.value as CatalogKindFilter })}
             >
               <option value="climatics">Климатици</option>
               <option value="accessories">Аксесоари</option>
               <option value="all">Всички</option>
             </Select>
-            <Select value={brandId} onChange={(e) => { setBrandId(e.target.value); }}>
+            <Select value={brandId} onChange={(e) => updateFilters({ brandId: e.target.value })}>
               <option value="">Марка: всички</option>
               {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
             </Select>
-            <Select value={typeId} onChange={(e) => { setTypeId(e.target.value); }}>
+            <Select value={typeId} onChange={(e) => updateFilters({ typeId: e.target.value })}>
               <option value="">Тип: всички</option>
               {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </Select>
-            <Select value={supplierId} onChange={(e) => { setSupplierId(e.target.value); }}>
+            <Select value={supplierId} onChange={(e) => updateFilters({ supplierId: e.target.value })}>
               <option value="">Доставчик: всички</option>
               {Object.entries(suppliersById)
                 .sort((a, b) => a[1].localeCompare(b[1], "bg"))
@@ -2021,19 +1797,19 @@ export default function AdminProductsPage() {
                   <option key={id} value={id}>{name}</option>
                 ))}
             </Select>
-            <Select value={containerId} onChange={(e) => { setContainerId(e.target.value); }}>
+            <Select value={containerId} onChange={(e) => updateFilters({ containerId: e.target.value })}>
               <option value="">Контейнер: всички</option>
               {containers.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </Select>
-            <Select value={stockLocationFilter} onChange={(e) => { setStockLocationFilter(e.target.value as "" | ProductStockLocation); }}>
+            <Select value={stockLocationFilter} onChange={(e) => updateFilters({ stockLocationFilter: e.target.value as "" | ProductStockLocation })}>
               <option value="">Място: всички</option>
               <option value="showroom">В магазин</option>
               <option value="warehouse">В склада</option>
               <option value="service">В сервиз</option>
             </Select>
-            <Select value={productRegionFilter} onChange={(e) => { setProductRegionFilter(e.target.value as "" | ProductRegion); }}>
+            <Select value={productRegionFilter} onChange={(e) => updateFilters({ productRegionFilter: e.target.value as "" | ProductRegion })}>
               <option value="">Страна: всички</option>
               <option value="europe">EUROPE</option>
               <option value="japan">JAPAN</option>
@@ -2050,7 +1826,7 @@ export default function AdminProductsPage() {
             <PriceRangeSlider
               value={priceRange}
               onChange={(next) => {
-                setPriceRange(next);
+                updateFilters({ priceRange: next });
               }}
             />
           </div>
@@ -2060,7 +1836,7 @@ export default function AdminProductsPage() {
               <Input
                 type="date"
                 value={purchasedFrom}
-                onChange={(e) => { setPurchasedFrom(e.target.value); }}
+                onChange={(e) => updateFilters({ purchasedFrom: e.target.value })}
                 max={purchasedTo || undefined}
                 className="!pt-4 !pb-1.5 !text-xs"
               />
@@ -2070,17 +1846,17 @@ export default function AdminProductsPage() {
               <Input
                 type="date"
                 value={purchasedTo}
-                onChange={(e) => { setPurchasedTo(e.target.value); }}
+                onChange={(e) => updateFilters({ purchasedTo: e.target.value })}
                 min={purchasedFrom || undefined}
                 className="!pt-4 !pb-1.5 !text-xs"
               />
             </div>
-            <Select value={hasSerial} onChange={(e) => { setHasSerial(e.target.value as "" | "with" | "without"); }}>
+            <Select value={hasSerial} onChange={(e) => updateFilters({ hasSerial: e.target.value as "" | "with" | "without" })}>
               <option value="">Сериен №: всички</option>
               <option value="with">Само със сериен №</option>
               <option value="without">Само без сериен №</option>
             </Select>
-            <Select value={hasPurchasePrice} onChange={(e) => { setHasPurchasePrice(e.target.value as "" | "with" | "without"); }}>
+            <Select value={hasPurchasePrice} onChange={(e) => updateFilters({ hasPurchasePrice: e.target.value as "" | "with" | "without" })}>
               <option value="">Закупна цена: всички</option>
               <option value="with">Само с попълнена</option>
               <option value="without">Само без попълнена</option>
@@ -2135,7 +1911,7 @@ export default function AdminProductsPage() {
         </div>
       )}
 
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm font-medium">{error}</div>}
+      {(error || listError) && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm font-medium">{error || listError}</div>}
 
       {/* Desktop table — компактна, table-fixed за ширина на екрана */}
       <div className="hidden md:block rounded-xl border border-slate-200 bg-white shadow-sm max-w-full overflow-hidden">
@@ -2574,8 +2350,7 @@ export default function AdminProductsPage() {
             value={`${sortBy}:${sortDir}`}
             onChange={(e) => {
               const [field, dir] = e.target.value.split(":");
-              setSortBy(field as SortField);
-              setSortDir(dir as SortDir);
+              updateFilters({ sortBy: field as SortField, sortDir: dir as SortDir });
             }}
             className="flex-1 !text-xs"
           >
@@ -2585,6 +2360,8 @@ export default function AdminProductsPage() {
             <option value="price:desc">Продажна ↓</option>
             <option value="purchase_price:asc">Закупна ↑</option>
             <option value="purchase_price:desc">Закупна ↓</option>
+            <option value="product_condition:asc">Състояние ↑</option>
+            <option value="product_condition:desc">Състояние ↓</option>
             <option value="purchased_at:desc">Дата ↓ (нови)</option>
             <option value="purchased_at:asc">Дата ↑ (стари)</option>
             <option value="stock_location:asc">Място А→Я</option>
@@ -3251,6 +3028,7 @@ export default function AdminProductsPage() {
             amount: result.amount,
             isReservation: true,
           });
+          notifyAdminProductsCatalogChanged();
         }}
       />
 
@@ -3472,7 +3250,7 @@ export default function AdminProductsPage() {
             is_active: featuredFor.is_active ?? null,
           }}
           onClose={() => setFeaturedFor(null)}
-          onSaved={() => { reloadProductsList(); }}
+          onSaved={notifyAdminProductsCatalogChanged}
         />
       )}
 
@@ -3483,13 +3261,13 @@ export default function AdminProductsPage() {
           role={(adminRole || "office_staff") as AdminRole}
           onClose={() => {
             setServiceProtocolWizard(null);
-            void loadRepairProtocolMap(items);
+            void loadRepairProtocolMap(items, qs);
           }}
           onSaved={(id) => {
             setServiceProtocolWizard((prev) =>
               prev ? { ...prev, editId: id } : null,
             );
-            reloadProductsList();
+            notifyAdminProductsCatalogChanged();
           }}
         />
       )}
@@ -3504,7 +3282,7 @@ export default function AdminProductsPage() {
           role={(adminRole || "office_staff") as AdminRole}
           onClose={() => {
             setServiceProtocolPreview(null);
-            void loadRepairProtocolMap(items);
+            void loadRepairProtocolMap(items, qs);
           }}
           onEdit={() => {
             const preview = serviceProtocolPreview;

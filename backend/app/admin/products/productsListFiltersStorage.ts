@@ -35,6 +35,7 @@ export type AdminProductsListFiltersSnapshot = {
   btuFilters: string[];
   typeId: string;
   supplierId: string;
+  containerId: string;
   priceRange: [number, number];
   hasSerial: "" | "with" | "without";
   hasPurchasePrice: "" | "with" | "without";
@@ -59,6 +60,7 @@ export const DEFAULT_ADMIN_PRODUCTS_LIST_FILTERS: AdminProductsListFiltersSnapsh
   btuFilters: [],
   typeId: "",
   supplierId: "",
+  containerId: "",
   priceRange: [ADMIN_PRICE_FILTER_MIN, ADMIN_PRICE_FILTER_MAX],
   hasSerial: "",
   hasPurchasePrice: "",
@@ -119,27 +121,21 @@ function parsePriceRange(raw: unknown): [number, number] {
   if (!Number.isFinite(lo) || !Number.isFinite(hi)) {
     return [ADMIN_PRICE_FILTER_MIN, ADMIN_PRICE_FILTER_MAX];
   }
-  const min = Math.max(ADMIN_PRICE_FILTER_MIN, Math.min(lo, hi));
-  const max = Math.min(ADMIN_PRICE_FILTER_MAX, Math.max(lo, hi));
-  return [Math.min(min, max), Math.max(min, max)];
+  const clamp = (n: number) => Math.max(ADMIN_PRICE_FILTER_MIN, Math.min(n, ADMIN_PRICE_FILTER_MAX));
+  return [clamp(Math.min(lo, hi)), clamp(Math.max(lo, hi))];
 }
 
-function readStoredFiltersRaw(): string | null {
-  if (typeof window === "undefined") return null;
-  return (
-    localStorage.getItem(ADMIN_PRODUCTS_LIST_FILTERS_KEY) ??
-    localStorage.getItem(LEGACY_FILTERS_V1_KEY)
-  );
-}
-
-export function loadAdminProductsListFilters(): AdminProductsListFiltersSnapshot {
-  if (typeof window === "undefined") return { ...DEFAULT_ADMIN_PRODUCTS_LIST_FILTERS };
-
+function readStorage(storage: "localStorage" | "sessionStorage", key: string): string | null {
   try {
-    const raw = readStoredFiltersRaw();
-    if (!raw) {
-      return { ...DEFAULT_ADMIN_PRODUCTS_LIST_FILTERS };
-    }
+    return window[storage].getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function parseStoredFilters(raw: string | null): AdminProductsListFiltersSnapshot | null {
+  if (!raw) return null;
+  try {
     const parsed = JSON.parse(raw) as Partial<AdminProductsListFiltersSnapshot> & {
       page?: number;
       perPage?: number;
@@ -150,6 +146,7 @@ export function loadAdminProductsListFilters(): AdminProductsListFiltersSnapshot
       stockStatus?: string;
       btuFilter?: string;
     };
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return null;
     const stockLoc = parsed.stockLocationFilter;
     const region = parsed.productRegionFilter;
 
@@ -160,7 +157,7 @@ export function loadAdminProductsListFilters(): AdminProductsListFiltersSnapshot
     const stockStatuses =
       parsed.version === 3 && Array.isArray(parsed.stockStatuses)
         ? parseStockStatusArray(parsed.stockStatuses)
-        : migrateSingleToArray(parsed.stockStatus, ["in_stock", "on_order"] as const);
+        : migrateSingleToArray(parsed.stockStatus, ["in_stock", "on_order", "reserved", "scrapped"] as const);
     const featuredFlags =
       parsed.version === 3 && Array.isArray(parsed.featuredFlags)
         ? parseFeaturedArray(parsed.featuredFlags)
@@ -191,6 +188,7 @@ export function loadAdminProductsListFilters(): AdminProductsListFiltersSnapshot
       btuFilters,
       typeId: typeof parsed.typeId === "string" ? parsed.typeId : "",
       supplierId: typeof parsed.supplierId === "string" ? parsed.supplierId : "",
+      containerId: typeof parsed.containerId === "string" ? parsed.containerId : "",
       priceRange: parsePriceRange(parsed.priceRange),
       hasSerial: parsed.hasSerial === "with" || parsed.hasSerial === "without" ? parsed.hasSerial : "",
       hasPurchasePrice:
@@ -204,34 +202,58 @@ export function loadAdminProductsListFilters(): AdminProductsListFiltersSnapshot
       filtersOpen: Boolean(parsed.filtersOpen),
     };
   } catch {
-    return { ...DEFAULT_ADMIN_PRODUCTS_LIST_FILTERS };
+    return null;
   }
+}
+
+// Preserve the tab's choices across client-side navigation even if the browser refuses a write.
+const memoryFallback = new WeakMap<Window, string>();
+
+function readTabFiltersRaw(): string | null {
+  return memoryFallback.get(window) ?? readStorage("sessionStorage", ADMIN_PRODUCTS_LIST_FILTERS_KEY);
+}
+
+function writeTabFilters(serialized: string): void {
+  try {
+    window.sessionStorage.setItem(ADMIN_PRODUCTS_LIST_FILTERS_KEY, serialized);
+    memoryFallback.delete(window);
+  } catch {
+    memoryFallback.set(window, serialized);
+  }
+}
+
+export function loadAdminProductsListFilters(): AdminProductsListFiltersSnapshot {
+  if (typeof window === "undefined") return { ...DEFAULT_ADMIN_PRODUCTS_LIST_FILTERS };
+  const tabRaw = readTabFiltersRaw();
+  const saved =
+    parseStoredFilters(tabRaw) ??
+    parseStoredFilters(readStorage("localStorage", ADMIN_PRODUCTS_LIST_FILTERS_KEY)) ??
+    parseStoredFilters(readStorage("localStorage", LEGACY_FILTERS_V1_KEY)) ??
+    { ...DEFAULT_ADMIN_PRODUCTS_LIST_FILTERS };
+  const serialized = JSON.stringify(saved);
+  if (serialized !== tabRaw) writeTabFilters(serialized);
+  return saved;
 }
 
 export function saveAdminProductsListFilters(snapshot: AdminProductsListFiltersSnapshot): void {
   if (typeof window === "undefined") return;
+  // Canonical field order also makes restoring a tab a no-op for the shared starting preferences.
+  const serialized = JSON.stringify({ ...DEFAULT_ADMIN_PRODUCTS_LIST_FILTERS, ...snapshot });
+  if (serialized === readTabFiltersRaw()) return;
+  writeTabFilters(serialized);
   try {
-    localStorage.setItem(ADMIN_PRODUCTS_LIST_FILTERS_KEY, JSON.stringify(snapshot));
-    localStorage.removeItem(LEGACY_FILTERS_V1_KEY);
-    localStorage.removeItem(LEGACY_PER_PAGE_KEY);
+    window.localStorage.setItem(ADMIN_PRODUCTS_LIST_FILTERS_KEY, serialized);
+    window.localStorage.removeItem(LEGACY_FILTERS_V1_KEY);
+    window.localStorage.removeItem(LEGACY_PER_PAGE_KEY);
   } catch {
-    /* quota / private mode */
-  }
-}
-
-export function clearAdminProductsListFilters(): void {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.removeItem(ADMIN_PRODUCTS_LIST_FILTERS_KEY);
-  } catch {
-    /* ignore */
+    /* The current tab still has its preferences. */
   }
 }
 
 /** Query string за GET /api/admin/products — споделен между страницата и session cache. */
 export function buildAdminProductsListQueryString(
   snapshot: AdminProductsListFiltersSnapshot,
-  opts?: { page?: number; containerId?: string },
+  opts?: { page?: number },
 ): string {
   const sp = new URLSearchParams();
   if (snapshot.q.trim()) sp.set("q", snapshot.q.trim());
@@ -248,7 +270,7 @@ export function buildAdminProductsListQueryString(
   if (snapshot.btuFilters.length) sp.set("btu", snapshot.btuFilters.join(","));
   if (snapshot.typeId) sp.set("typeId", snapshot.typeId);
   if (snapshot.supplierId) sp.set("supplierId", snapshot.supplierId);
-  const containerId = opts?.containerId?.trim();
+  const containerId = snapshot.containerId.trim();
   if (containerId) sp.set("containerId", containerId);
   if (snapshot.priceRange[0] > ADMIN_PRICE_FILTER_MIN) sp.set("priceMin", String(snapshot.priceRange[0]));
   if (snapshot.priceRange[1] < ADMIN_PRICE_FILTER_MAX) sp.set("priceMax", String(snapshot.priceRange[1]));
