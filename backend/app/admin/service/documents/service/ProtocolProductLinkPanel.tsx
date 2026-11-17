@@ -56,23 +56,19 @@ export function ProtocolProductLinkPanel({ protocolId, productId, disabled, onLi
     void loadSuggestions();
   }, [protocolId, productId, loadSuggestions]);
 
-  if (!protocolId) return null;
-
   if (productId) {
     return (
       <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-900 flex items-start justify-between gap-2">
         <div className="flex items-start gap-2 min-w-0">
           <Link2 className="w-4 h-4 shrink-0 mt-0.5" />
           <span className="min-w-0">
-            Свързан с продукт от каталога.
-            {" "}
             <a
               href={`/admin/products?highlight=${productId}`}
               target="_blank"
               rel="noopener noreferrer"
               className="underline font-medium"
             >
-              Отвори в Продукти
+              Отвори бройката в Продукти
             </a>
           </span>
         </div>
@@ -90,6 +86,8 @@ export function ProtocolProductLinkPanel({ protocolId, productId, disabled, onLi
       </div>
     );
   }
+
+  if (!protocolId) return null;
 
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 space-y-2">
@@ -119,7 +117,7 @@ export function ProtocolProductLinkPanel({ protocolId, productId, disabled, onLi
         </div>
       )}
       {!loading && loaded && suggestions.length === 0 && (
-        <p className="text-sm text-slate-500">Няма автоматични съвпадения — избери ръчно от „Марка и модел“.</p>
+        <p className="text-sm text-slate-500">Няма автоматични съвпадения. Избери бройката от „Модел и бройка“.</p>
       )}
       {!loading && suggestions.length > 0 && (
         <ul className="space-y-1.5">

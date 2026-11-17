@@ -5,6 +5,7 @@ import { corsPreflight, withCors } from "@/lib/http/cors";
 import { adminSession, requireRole } from "@/lib/admin/db";
 import { assertRepairProtocolVisible } from "@/lib/admin/repairProtocolAccess";
 import { RepairProtocolPDF } from "@/lib/repair-protocol-pdf";
+import { repairProtocolDisplayStage } from "@/lib/repair-protocol-presentation";
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflight(req);
@@ -40,8 +41,8 @@ export async function GET(
   );
 
   const protocolNumber = String(data.protocol_number ?? id);
-  const status = data.status;
-  const prefix = status === "signed" ? "servizen-protokol" : "chernova-servizen-protokol";
+  const stage = repairProtocolDisplayStage(data);
+  const prefix = stage === "intake" || stage === "issuing" ? "chernova-servizen-protokol" : "servizen-protokol";
   const safeNumber = protocolNumber.replace(/[^\w.-]+/g, "_");
   const filename = `${prefix}-${safeNumber}.pdf`;
 

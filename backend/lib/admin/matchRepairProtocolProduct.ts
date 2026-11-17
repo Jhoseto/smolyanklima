@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isPostgrestMissingColumn } from "./pgMissingColumn";
 
 export type ProductMatchConfidence = "high" | "medium" | "low";
 
@@ -315,6 +316,16 @@ export function hydrateRepairProtocolClientFields(data: {
   };
 }
 
+const LEGACY_SUMMARY_SELECT = "id,protocol_number,status,date,service_kind,ac_brand,ac_model,serial_number,product_id,client_name";
+const SUMMARY_SELECT = `${LEGACY_SUMMARY_SELECT},workflow_stage` as const;
+
+async function readProtocolSummary<T extends { error: { code?: string; message?: string } | null }>(
+  read: (columns: string) => PromiseLike<T>,
+): Promise<T> {
+  const result = await read(SUMMARY_SELECT);
+  return isPostgrestMissingColumn(result.error, "workflow_stage") ? read(LEGACY_SUMMARY_SELECT) : result;
+}
+
 /** Търси сервизен протокол за продажба — product_id, work_item или серийни/марка-модел. */
 export async function findRepairProtocolForSale(
   db: SupabaseClient,
@@ -330,17 +341,15 @@ export async function findRepairProtocolForSale(
     } | null;
   },
 ): Promise<Record<string, unknown> | null> {
-  const serviceSelect =
-    "id,protocol_number,status,date,service_kind,ac_brand,ac_model,serial_number,product_id,client_name";
-
   if (opts.saleProductId) {
-    const { data: byProduct, error: byProductErr } = await db
+    const { data: byProduct, error: byProductErr } = await readProtocolSummary((columns) => db
       .from("service_repair_protocols")
-      .select(serviceSelect)
+      .select(columns)
       .eq("product_id", opts.saleProductId)
       .order("date", { ascending: false })
       .limit(1)
-      .maybeSingle();
+      .returns<Record<string, unknown>[]>()
+      .maybeSingle());
     if (!byProductErr && byProduct) return byProduct as Record<string, unknown>;
     if (
       byProductErr &&
@@ -351,13 +360,14 @@ export async function findRepairProtocolForSale(
   }
 
   if (opts.installWorkItemId) {
-    const { data: byInstall } = await db
+    const { data: byInstall } = await readProtocolSummary((columns) => db
       .from("service_repair_protocols")
-      .select(serviceSelect)
+      .select(columns)
       .eq("work_item_id", opts.installWorkItemId)
       .order("date", { ascending: false })
       .limit(1)
-      .maybeSingle();
+      .returns<Record<string, unknown>[]>()
+      .maybeSingle());
     if (byInstall) return byInstall as Record<string, unknown>;
   }
 
@@ -372,19 +382,15 @@ export async function findRepairProtocolForSale(
     .filter(Boolean);
 
   if (serialTokens.length > 0) {
-    let query = db
-      .from("service_repair_protocols")
-      .select(serviceSelect)
-      .is("product_id", null)
-      .order("date", { ascending: false })
-      .limit(5);
-
-    for (const token of serialTokens) {
-      const esc = token.replace(/[%_]/g, "");
-      if (esc) query = query.ilike("serial_number", `%${esc}%`);
-    }
-
-    const { data: candidates } = await query;
+    const { data: candidates } = await readProtocolSummary((columns) => {
+      let query = db.from("service_repair_protocols").select(columns)
+        .is("product_id", null).order("date", { ascending: false }).limit(5);
+      for (const token of serialTokens) {
+        const esc = token.replace(/[%_]/g, "");
+        if (esc) query = query.ilike("serial_number", `%${esc}%`);
+      }
+      return query.returns<Record<string, unknown>[]>();
+    });
     const best = (candidates ?? []).find((row) => {
       const parsed = parseProtocolSerialPair((row as { serial_number?: string }).serial_number);
       const productIndoor = normalizeToken(p.indoor_unit_serial ?? "");
@@ -405,22 +411,20 @@ export async function findRepairProtocolForSale(
     const filters: string[] = [];
     if (brand) filters.push(`ac_brand.ilike.%${brand.replace(/[%_]/g, "")}%`);
     if (model) filters.push(`ac_model.ilike.%${model.replace(/[%_]/g, "")}%`);
-    const { data: byBrandModel } = await db
+    const { data: byBrandModel } = await readProtocolSummary((columns) => db
       .from("service_repair_protocols")
-      .select(serviceSelect)
+      .select(columns)
       .or(filters.join(","))
       .is("product_id", null)
       .order("date", { ascending: false })
       .limit(1)
-      .maybeSingle();
+      .returns<Record<string, unknown>[]>()
+      .maybeSingle());
     if (byBrandModel) return byBrandModel as Record<string, unknown>;
   }
 
   return null;
 }
-
-const REPAIR_PROTOCOL_LIST_SELECT =
-  "id,protocol_number,status,date,service_kind,ac_brand,ac_model,serial_number,product_id,client_name";
 
 /**
  * Batch lookup на сервизни протоколи за списък продукти.
@@ -435,12 +439,13 @@ export async function findRepairProtocolsForProductIds(
   const ids = [...new Set(productIds.filter(Boolean))];
   if (ids.length === 0) return map;
 
-  const { data: linkedRows, error: linkErr } = await db
+  const { data: linkedRows, error: linkErr } = await readProtocolSummary((columns) => db
     .from("service_repair_protocols")
-    .select(REPAIR_PROTOCOL_LIST_SELECT)
+    .select(columns)
     .in("product_id", ids)
     .order("date", { ascending: false })
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .returns<Record<string, unknown>[]>());
 
   if (linkErr) {
     const missingCol = /product_id|42703|does not exist|undefined_column/i.test(linkErr.message ?? "");

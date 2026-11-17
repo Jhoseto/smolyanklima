@@ -5,13 +5,15 @@ import { useDebounce } from "@/lib/hooks/useDebounce";
 import Link from "next/link";
 import {
   Plus, FileText, ChevronRight, Download,
-  ClipboardCheck, Wrench, CheckCircle, Loader2, Search, ArrowLeft, Trash2, Star, FilterX,
+  Wrench, Loader2, Search, ArrowLeft, Trash2, Star, FilterX,
 } from "lucide-react";
 import { ServiceProtocolFormWizard } from "./ServiceProtocolFormWizard";
 import { ServiceProtocolPreview } from "./ServiceProtocolPreview";
+import { RepairProtocolStageBadge } from "./RepairProtocolStageBadge";
 import { AdminTableLoading } from "../../../ui";
 import type { AdminRole } from "@/lib/admin/db";
-import { FREON_CHARGE_LABEL, SERVICE_KIND_LABEL, type FreonChargeMethod, type RepairServiceKind } from "@/lib/repair-protocol-fields";
+import { FREON_CHARGE_LABEL, SERVICE_KIND_LABEL, type FreonChargeMethod, type RepairServiceKind, type RepairProtocolPhase, type RepairWorkflowStage } from "@/lib/repair-protocol-fields";
+import { repairProtocolDisplayStage } from "@/lib/repair-protocol-presentation";
 
 type ProtocolStatus = "prepared" | "in_progress" | "signed";
 type KindFilter = "" | RepairServiceKind;
@@ -28,16 +30,11 @@ interface RepairProtocol {
   is_japanese_brand: boolean | null;
   freon_charge_method: FreonChargeMethod | null;
   status: ProtocolStatus;
+  workflow_stage?: RepairWorkflowStage;
   service_kind?: RepairServiceKind | null;
   service_rating: number | null;
   created_at: string;
 }
-
-const STATUS_CONFIG: Record<ProtocolStatus, { label: string; icon: React.ComponentType<{ className?: string }>; cls: string }> = {
-  prepared:    { label: "Подготвен",              icon: ClipboardCheck, cls: "bg-brand-orange-100  text-brand-orange-900"  },
-  in_progress: { label: "В процес на изпълнение", icon: Wrench,         cls: "bg-brand-blue-100   text-brand-blue-900"   },
-  signed:      { label: "Подписан",               icon: CheckCircle,    cls: "bg-brand-blue-100 text-brand-blue-900"},
-};
 
 const KIND_FILTERS: { value: KindFilter; label: string }[] = [
   { value: "", label: "Всички" },
@@ -47,6 +44,8 @@ const KIND_FILTERS: { value: KindFilter; label: string }[] = [
 
 interface Props {
   role: AdminRole;
+  initialEditId?: string;
+  initialPhase?: RepairProtocolPhase;
 }
 
 interface ListFilters {
@@ -56,7 +55,7 @@ interface ListFilters {
   dateTo: string;
 }
 
-export function ServiceDocumentsClient({ role }: Props) {
+export function ServiceDocumentsClient({ role, initialEditId, initialPhase }: Props) {
   const [protocols, setProtocols] = useState<RepairProtocol[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -67,17 +66,23 @@ export function ServiceDocumentsClient({ role }: Props) {
   const [dateTo, setDateTo] = useState("");
   const debouncedSearch = useDebounce(search, 300);
   const isFirstRender = useRef(true);
-  const [openForm, setOpenForm] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
+  const [openForm, setOpenForm] = useState(Boolean(initialEditId));
+  const [editId, setEditId] = useState<string | null>(initialEditId ?? null);
+  const [editPhase, setEditPhase] = useState(initialPhase);
   const [preview, setPreview] = useState<RepairProtocol | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const perPage = 20;
+  const requestRef = useRef<AbortController | null>(null);
+  useEffect(() => () => requestRef.current?.abort(), []);
 
   const canDelete = role === "master_admin";
   const hasActiveFilters = Boolean(kindFilter || dateFrom || dateTo || debouncedSearch.trim());
 
   const load = useCallback(async (p = 1, filters: ListFilters) => {
+    requestRef.current?.abort();
+    const request = new AbortController();
+    requestRef.current = request;
     setLoading(true);
     setErrorMsg(null);
     try {
@@ -86,14 +91,16 @@ export function ServiceDocumentsClient({ role }: Props) {
       if (filters.kind) params.set("kind", filters.kind);
       if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
       if (filters.dateTo) params.set("dateTo", filters.dateTo);
-      const res = await fetch(`/api/admin/service/repair-protocols?${params}`, { credentials: "include" });
+      const res = await fetch(`/api/admin/service/repair-protocols?${params}`, { credentials: "include", signal: request.signal });
       if (res.ok) {
         const json = await res.json();
+        if (request.signal.aborted) return;
         const rows: RepairProtocol[] = json.data ?? [];
         setProtocols((prev) => (p === 1 ? rows : [...prev, ...rows]));
         setTotal(json.meta?.total ?? 0);
       } else if (p === 1) {
         const json = await res.json().catch(() => ({}));
+        if (request.signal.aborted) return;
         setProtocols([]);
         setTotal(0);
         setErrorMsg(
@@ -102,13 +109,13 @@ export function ServiceDocumentsClient({ role }: Props) {
         );
       }
     } catch {
-      if (p === 1) {
+      if (p === 1 && !request.signal.aborted) {
         setProtocols([]);
         setTotal(0);
         setErrorMsg("Грешка при зареждане на протоколите. Проверете връзката.");
       }
     } finally {
-      setLoading(false);
+      if (!request.signal.aborted) setLoading(false);
     }
   }, [perPage]);
 
@@ -138,12 +145,13 @@ export function ServiceDocumentsClient({ role }: Props) {
     setDateFrom("");
     setDateTo("");
   };
-  const handleNew = () => { setPreview(null); setEditId(null); setOpenForm(true); };
+  const handleNew = () => { setPreview(null); setEditId(null); setEditPhase(undefined); setOpenForm(true); };
   const openPreview = (p: RepairProtocol) => { setPreview(p); };
-  const openEdit = (id: string) => { setPreview(null); setEditId(id); setOpenForm(true); };
+  const openEdit = (id: string, phase?: RepairProtocolPhase) => { setPreview(null); setEditId(id); setEditPhase(phase); setOpenForm(true); };
 
   const handleSaved = (id: string) => {
     setEditId(id);
+    setPage(1);
     void load(1, { q: search, kind: kindFilter, dateFrom, dateTo });
   };
 
@@ -212,8 +220,7 @@ export function ServiceDocumentsClient({ role }: Props) {
   };
 
   const renderProtocolRow = (p: RepairProtocol) => {
-    const st = STATUS_CONFIG[p.status];
-    const Icon = st.icon;
+    const stage = repairProtocolDisplayStage(p);
     const brandModel = [p.ac_brand, p.ac_model].filter(Boolean).join(" ").trim();
     const kind = p.service_kind === "recycle" ? "recycle" : "client";
     const title =
@@ -253,12 +260,9 @@ export function ServiceDocumentsClient({ role }: Props) {
             >
               {SERVICE_KIND_LABEL[kind]}
             </span>
-            <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${st.cls}`}>
-              <Icon className="w-3 h-3" />
-              {st.label}
-            </span>
+            <RepairProtocolStageBadge stage={stage} />
             {p.service_rating != null && (
-              <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-brand-orange-800 bg-brand-orange-50 px-1.5 py-0.5 rounded shrink-0">
+              <span title={stage === "legacy_signed" ? "Сервизна оценка" : "Оценка при завеждането"} className="inline-flex items-center gap-0.5 text-[11px] font-bold text-brand-orange-800 bg-brand-orange-50 px-1.5 py-0.5 rounded shrink-0">
                 <Star className="w-3 h-3 fill-brand-orange-500 text-brand-orange-500" />
                 {p.service_rating}/5
               </span>
@@ -301,9 +305,11 @@ export function ServiceDocumentsClient({ role }: Props) {
     return (
       <ServiceProtocolFormWizard
         protocolId={editId ?? undefined}
+        initialPhase={editPhase}
         role={role}
         onClose={() => {
           setOpenForm(false);
+          setPage(1);
           void load(1, { q: search, kind: kindFilter, dateFrom, dateTo });
         }}
         onSaved={handleSaved}
@@ -328,7 +334,7 @@ export function ServiceDocumentsClient({ role }: Props) {
         dateLabel={formatDate(preview.date)}
         role={role}
         onClose={() => setPreview(null)}
-        onEdit={() => openEdit(preview.id)}
+        onEdit={(phase) => openEdit(preview.id, phase)}
       />
     );
   }

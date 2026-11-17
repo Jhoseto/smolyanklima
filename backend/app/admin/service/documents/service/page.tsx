@@ -11,7 +11,9 @@ export const metadata = { title: "Сервизни протоколи | Смол
  * документ — със собствена таблица в БД (service_repair_protocols)
  * и собствени полета (Japanese flag, фреон, лагери, налягания и т.н.).
  */
-export default async function ServiceProtocolsPage() {
+export default async function ServiceProtocolsPage({ searchParams }: {
+  searchParams: Promise<{ edit?: string; phase?: string }>;
+}) {
   let session;
   try {
     session = await adminSession();
@@ -19,5 +21,7 @@ export default async function ServiceProtocolsPage() {
     redirect("/login");
   }
 
-  return <ServiceDocumentsClient role={session.role} />;
+  const { edit, phase } = await searchParams;
+  return <ServiceDocumentsClient role={session.role} initialEditId={typeof edit === "string" ? edit : undefined}
+    initialPhase={phase === "issue" || phase === "intake" ? phase : undefined} />;
 }

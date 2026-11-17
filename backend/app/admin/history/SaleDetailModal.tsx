@@ -13,6 +13,7 @@ import type { AdminRole } from "@/lib/admin/db";
 import { ProtocolPreview } from "../service/documents/acceptance/ProtocolPreview";
 import { ServiceProtocolPreview } from "../service/documents/service/ServiceProtocolPreview";
 import { SERVICE_KIND_LABEL, type RepairServiceKind } from "@/lib/repair-protocol-fields";
+import { repairProtocolDisplayStage, REPAIR_STAGE_LABELS } from "@/lib/repair-protocol-presentation";
 
 type ProductEmbed = {
   id: string;
@@ -85,6 +86,7 @@ type LinkedProtocol = {
 };
 
 type LinkedServiceProtocol = {
+  workflow_stage?: string;
   id: string;
   protocol_number: string;
   status: string;
@@ -656,7 +658,7 @@ export function SaleDetailModal({ saleId, onClose, onChanged }: Props) {
                     {serviceProtocol.service_kind && SERVICE_KIND_LABEL[serviceProtocol.service_kind as RepairServiceKind]
                       ? `${SERVICE_KIND_LABEL[serviceProtocol.service_kind as RepairServiceKind]} · `
                       : ""}
-                    Дата: {fmtBgDate(serviceProtocol.date)} · Статус: {protocolStatusLabel(serviceProtocol.status)}
+                    Дата: {fmtBgDate(serviceProtocol.date)} · Статус: {REPAIR_STAGE_LABELS[repairProtocolDisplayStage(serviceProtocol)]}
                   </div>
                   {(serviceProtocol.ac_brand || serviceProtocol.ac_model) && (
                     <div className="text-xs text-slate-600 mt-1">
@@ -777,8 +779,10 @@ export function SaleDetailModal({ saleId, onClose, onChanged }: Props) {
         dateLabel={fmtBgDate(serviceProtocol.date)}
         role={adminRole}
         onClose={() => setPreviewService(false)}
-        onEdit={() => {
-          window.open(`/admin/service/documents/service?edit=${serviceProtocol.id}`, "_blank", "noopener,noreferrer");
+        onEdit={(phase) => {
+          const params = new URLSearchParams({ edit: serviceProtocol.id });
+          if (phase) params.set("phase", phase);
+          window.open(`/admin/service/documents/service?${params}`, "_blank", "noopener,noreferrer");
         }}
       />
     )}

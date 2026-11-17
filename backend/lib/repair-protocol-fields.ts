@@ -45,6 +45,10 @@ export type NoiseLevel = "quiet" | "normal" | "elevated" | "loud" | "very_loud";
 
 export type RepairProtocolStatus = "prepared" | "in_progress" | "signed";
 
+export const REPAIR_WORKFLOW_STAGES = ["intake", "received", "issuing", "issued", "legacy_signed"] as const;
+export type RepairWorkflowStage = (typeof REPAIR_WORKFLOW_STAGES)[number];
+export type RepairProtocolPhase = "intake" | "issue";
+
 /** Тип сервизен протокол: клиентски сервиз или рециклиране за магазина. */
 export type RepairServiceKind = "client" | "recycle";
 
@@ -57,7 +61,7 @@ export const SERVICE_KIND_OPTIONS: { value: RepairServiceKind; label: string; hi
   {
     value: "recycle",
     label: "Сервиз рециклиране",
-    hint: "Втора употреба за магазина — без клиент, с избор на бройка от партидата",
+    hint: "Климатик за магазина с избор на модел и конкретна бройка",
   },
 ];
 

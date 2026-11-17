@@ -91,6 +91,7 @@ const QuerySchema = z.object({
   /** Само видими / само скрити в публичния каталог (`show_in_public_catalog`). */
   publicCatalog: z.string().optional(),
   stockStatus: z.string().optional(),
+  stockScope: z.enum(["catalog", "all"]).optional(),
   stockLocation: z.enum(["showroom", "warehouse", "service"]).optional(),
   productRegion: z.enum(["europe", "japan"]).optional(),
   brandId: z.string().uuid().optional(),
@@ -208,7 +209,8 @@ export async function GET(req: NextRequest) {
     featured,
     publicCatalog,
   });
-  const stockOrFilter = adminProductsStockOrFilter(chipFilters.stockStatuses);
+  // Сервизът обслужва и продадени бройки. В списъка „Продукти“ остава обичайният складов изглед.
+  const stockOrFilter = parsed.data.stockScope === "all" ? null : adminProductsStockOrFilter(chipFilters.stockStatuses);
   const btuFilters = parseBtuCsvParam(btuRaw);
   const supabase = await adminDb();
 

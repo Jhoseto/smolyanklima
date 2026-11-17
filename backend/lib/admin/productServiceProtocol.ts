@@ -1,3 +1,6 @@
+import { REPAIR_STAGE_LABELS, repairProtocolDisplayStage } from "@/lib/repair-protocol-presentation";
+import type { RepairWorkflowStage } from "@/lib/repair-protocol-fields";
+
 /** Само налични климатици (не аксесоари) могат да отварят сервизен протокол. */
 export function canProductServiceProtocol(p: {
   catalog_item?: "product" | "accessory";
@@ -13,7 +16,8 @@ export function serviceProtocolButtonState(
   protocol: LinkedRepairProtocolSummary | null | undefined,
 ): ServiceProtocolButtonState {
   if (!protocol) return "none";
-  return protocol.status === "signed" ? "signed" : "draft";
+  const stage = repairProtocolDisplayStage(protocol);
+  return stage === "issued" || stage === "legacy_signed" ? "signed" : "draft";
 }
 
 export function serviceProtocolButtonTitle(
@@ -23,12 +27,8 @@ export function serviceProtocolButtonTitle(
   if (!canProductServiceProtocol(p)) {
     return "Само за налични климатици";
   }
-  const state = serviceProtocolButtonState(protocol);
-  if (state === "signed") {
-    return "Сервизен протокол — завършен. Отвори за преглед";
-  }
-  if (state === "draft") {
-    return "Сервизен протокол — започнат, не е финализиран. Продължи попълването";
+  if (protocol) {
+    return `Сервизен протокол · ${REPAIR_STAGE_LABELS[repairProtocolDisplayStage(protocol)]}`;
   }
   return "Създай сервизен протокол с попълнени марка, модел и серийни №";
 }
@@ -117,6 +117,7 @@ export type LinkedRepairProtocolSummary = {
   client_name: string | null;
   service_kind: "client" | "recycle" | null;
   status: string;
+  workflow_stage?: RepairWorkflowStage;
 };
 
 export function repairProtocolRowToSummary(
@@ -131,5 +132,6 @@ export function repairProtocolRowToSummary(
     client_name: (row.client_name as string | null) ?? null,
     service_kind: row.service_kind === "recycle" ? "recycle" : "client",
     status: String(row.status ?? ""),
+    workflow_stage: repairProtocolDisplayStage(row),
   };
 }

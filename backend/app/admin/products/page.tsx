@@ -711,6 +711,7 @@ function ProductsList({ savedFilters }: { savedFilters: AdminProductsListFilters
   >(() => pageBootstrap.listCache?.repairProtocolByProductId ?? {});
   const [serviceProtocolWizard, setServiceProtocolWizard] = useState<{
     editId?: string;
+    initialPhase?: "intake" | "issue";
     initialData?: ReturnType<typeof productToServiceProtocolInitialData>;
   } | null>(null);
   const [serviceProtocolPreview, setServiceProtocolPreview] = useState<LinkedRepairProtocolSummary | null>(null);
@@ -3257,6 +3258,7 @@ function ProductsList({ savedFilters }: { savedFilters: AdminProductsListFilters
       {serviceProtocolWizard && (
         <ServiceProtocolFormWizard
           protocolId={serviceProtocolWizard.editId}
+          initialPhase={serviceProtocolWizard.initialPhase}
           initialData={serviceProtocolWizard.initialData}
           role={(adminRole || "office_staff") as AdminRole}
           onClose={() => {
@@ -3284,10 +3286,10 @@ function ProductsList({ savedFilters }: { savedFilters: AdminProductsListFilters
             setServiceProtocolPreview(null);
             void loadRepairProtocolMap(items, qs);
           }}
-          onEdit={() => {
+          onEdit={(phase) => {
             const preview = serviceProtocolPreview;
             setServiceProtocolPreview(null);
-            setServiceProtocolWizard({ editId: preview.id });
+            setServiceProtocolWizard({ editId: preview.id, initialPhase: phase });
           }}
         />
       )}
